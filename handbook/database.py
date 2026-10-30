@@ -455,6 +455,8 @@ class HandbookDB:
                 },
                 "sidebar_order": ["collection", "schedule", "timeline", "statistics", "ranking", "settings"],
                 "sidebar_labels": {},
+                "schedule_source": "yuc",
+                "show_schedule_source_switch": True,
                 "schedule_sort": "time",
                 "schedule_grouping": {"mode": "none", "collection_order": ["collected", "uncollected"], "status_order": ["1", "2", "3", "4", "5", "uncollected"], "sorts": {}},
                 "schedule_statuses": [1, 2, 3, 4, 5],

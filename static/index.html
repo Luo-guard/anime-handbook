@@ -201,6 +201,7 @@
           <div class="overview-panel schedule-toolbar">
             <button type="button" id="scheduleSeasonButton" class="schedule-season"><strong></strong><span>更换季度 ▾</span></button>
             <div class="schedule-toolbar-right">
+              <button type="button" class="secondary-button" id="scheduleSourceSwitch">長門番堂 ▾</button>
               <input type="search" id="scheduleSearch" placeholder="搜索本季番剧" aria-label="搜索本季番剧" />
             </div>
           </div>
@@ -619,6 +620,8 @@
             <span class="switch-row compact"><input type="checkbox" id="showSavedVideoListInput" /><span class="switch"></span></span>
           </label>
           <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
+          <div class="setting-row"><span><strong>周表来源</strong><small>两套周表独立展示；Kazumi 使用 Bangumi 放送列表，不提供具体时刻。</small></span><select id="scheduleSourceInput"><option value="yuc">長門番堂（有C）</option><option value="kazumi">Kazumi / Bangumi</option></select></div>
+          <div class="setting-row"><span><strong>显示来源切换按钮</strong><small>隐藏后仍可在此处选择来源。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleSourceSwitchInput"><span class="switch"></span></span></div>
           <h3 class="settings-subsection-title">排序与显示范围</h3>
           <div class="setting-row stacked"><span><strong>排列方式</strong><small>先调整分组顺序，再选择各组内的排列方式；与周表筛选窗口同步。</small></span><div id="scheduleSortingSettings" class="schedule-sorting-editor"></div></div>
           <div class="setting-row stacked"><span><strong>显示收藏状态</strong><small>支持多选，也可以全部取消。</small></span><div class="schedule-status-options" id="scheduleStatusInputs"></div></div>
@@ -861,7 +864,7 @@
       </form>
     </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261025-sort-save-check" defer></script>
+    <script src="/schedule.js?v=source-20261030-20261025-sort-save-check" defer></script>
     <script src="/modules/core.js?v=20261029-toast-layer" defer></script>
     <script src="/modules/network.js?v=20261025-shutdown" defer></script>
     <script src="/modules/collection.js?v=20261023-modules" defer></script>
@@ -875,7 +878,7 @@
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
     <script src="/modules/lifecycle.js?v=20261029-video-confirm" defer></script>
     <script src="/modules/settings.js?v=20261029-sidebar-state" defer></script>
-    <script src="/modules/events.js?v=20261029-sidebar-state" defer></script>
+    <script src="/modules/events.js?v=source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>

@@ -82,3 +82,9 @@ run('verifyScheduleSortingSaved({schedule_sort:"time",schedule_grouping:sortingR
  await run('requireScheduleSortingSupport()');
  console.log('Save checks: old backend blocked before writes; ignored settings rejected; supported backend accepted.');
 })().catch(e=>{console.error(e);process.exitCode=1});
+
+state.settings={schedule_source:'kazumi'};
+assert.equal(run('scheduleSource()'),'kazumi');
+assert.equal(run('scheduleTimeLabel({kind:"weekly",time:""})'),'未提供具体时刻');
+state.settings={};assert.equal(run('scheduleSource()'),'yuc');
+console.log('Schedule sources: default selection and explicit missing-time label passed.');

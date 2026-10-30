@@ -155,14 +155,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
             elif path == "/api/schedule":
                 season = season_key(query.get("season", [""])[0])
-                document = self.schedule.get(season, refresh=query.get("refresh", [""])[0] == "true")
+                source = query.get("source", ["yuc"])[0]
+                document = self.schedule.for_source(source).get(season, refresh=query.get("refresh", [""])[0] == "true")
+                if source == "yuc":
+                    document = {**document, "items": [row for row in document["items"] if not row["key"].startswith("bgm-")]}
                 with self.database.connect() as db:
                     local = [dict(row) for row in db.execute(
                         "SELECT id,name,name_cn,collection_type,bgm_score,bgm_rating_total FROM anime WHERE active=1"
                     )]
                 self.send_json(attach_collection(document, local))
             elif path == "/api/schedule/cover":
-                body, mime = self.schedule.cover(season_key(query.get("season", [""])[0]), query.get("key", [""])[0])
+                body, mime = self.schedule.for_source(query.get("source", ["yuc"])[0]).cover(season_key(query.get("season", [""])[0]), query.get("key", [""])[0])
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", mime)
                 self.send_header("Content-Length", str(len(body)))
@@ -710,6 +713,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "sidebar_visibility",
                     "sidebar_order",
                     "sidebar_labels",
+                    "schedule_source",
+                    "show_schedule_source_switch",
                     "schedule_sort",
                     "schedule_grouping",
                     "schedule_statuses",
@@ -735,6 +740,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                             continue
                         if key == "schedule_grouping":
                             value = normalize_schedule_grouping(value)
+                        elif key == "schedule_source":
+                            if value not in {"yuc", "kazumi"}:
+                                raise ValueError("周表来源无效")
+                        elif key == "show_schedule_source_switch":
+                            value = bool(value)
                         elif key == "schedule_sort":
                             if value not in {"time", "score", "popularity"}:
                                 raise ValueError("周表排序无效")

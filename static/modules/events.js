@@ -729,6 +729,8 @@ $("#saveSettings").addEventListener("click", async () => {
         custom_background_overlay_opacity: Number($("#customBackgroundOpacityInput").value),
         default_view: $("#defaultViewInput").value,
         ...scheduleSorting,
+        schedule_source: $("#scheduleSourceInput").value,
+        show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
         schedule_statuses: $$("#scheduleStatusInputs input:checked").map((input) => Number(input.value)),
         schedule_uncollected: $("#scheduleUncollectedInput").checked,
         schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
@@ -768,6 +770,7 @@ $("#saveSettings").addEventListener("click", async () => {
       }),
     });
     verifyScheduleSortingSaved(payload.settings, scheduleSorting);
+    if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
     if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
     state.settings = payload.settings;
     state.stats = payload.stats || state.stats;

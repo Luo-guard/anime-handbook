@@ -322,6 +322,16 @@ class ScheduleService:
                 raise ValueError("周表来源响应过大")
             return data
 
+    def for_source(self, source):
+        if source == "yuc":
+            return self
+        if source != "kazumi":
+            raise ValueError("周表来源无效")
+        with self.lock:
+            if not hasattr(self, "_kazumi_service"):
+                self._kazumi_service = KazumiScheduleService(self.root / "kazumi")
+            return self._kazumi_service
+
     def load(self, season):
         season_key(season)
         try:
@@ -561,3 +571,36 @@ def attach_collection(document, local):
                       "votes": row.get("votes") or (match or {}).get("bgm_rating_total", 0),
                       "votes_known": row.get("votes_known", False) or bool((match or {}).get("bgm_rating_total"))})
     return {**document, "items": items}
+
+
+class KazumiScheduleService(ScheduleService):
+    """Independent ID-based calendar; never invent precise airing times."""
+
+    def _refresh(self, season):
+        try:
+            now = datetime.now(BEIJING)
+            current = f"{now.year}{((now.month - 1) // 3) * 3 + 1:02d}"
+            year, month = int(season[:4]), int(season[4:])
+            end = f"{year + (month == 10)}-{(month + 2) % 12 + 1:02d}-01"
+            url = ("https://api.bgm.tv/calendar" if season == current else
+                   f"https://api.kazumi.fyi/kazumi/v1/calendar/season?start={year}-{month:02d}-01&end={end}")
+            document = json.loads(self.fetch(url))
+            if isinstance(document, list):
+                document = {str(day["weekday"]["id"]): day["items"] for day in document}
+            items = merge_sources([], parse_bangumi(document))
+            if not items:
+                raise ValueError("Kazumi 周表暂未取得数据")
+            data = {"season": season, "items": items, "fetched_at": time.time(),
+                    "schema_version": self.SCHEMA_VERSION, "sources": [url], "warnings": []}
+            self.root.mkdir(parents=True, exist_ok=True)
+            temp = self.root / f"{season}.tmp"
+            temp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            temp.replace(self.root / f"{season}.json")
+            with self.lock:
+                self.errors.pop(season, None)
+        except Exception as error:
+            with self.lock:
+                self.errors[season] = str(error)
+        finally:
+            with self.lock:
+                self.jobs.discard(season)

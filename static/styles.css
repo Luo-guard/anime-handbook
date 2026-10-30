@@ -3143,3 +3143,5 @@ dialog::backdrop {
 @media(max-width:600px){.keyboard-binding { grid-template-columns:minmax(0,1fr) 110px 40px;gap:8px;font-size:13px; }}
 
 .keyboard-binding.hidden { display:none; }
+
+#scheduleSourceSwitch[hidden] { display: none; }

@@ -1,3 +1,4 @@
+function scheduleSource() { return state.settings.schedule_source === "kazumi" ? "kazumi" : "yuc"; }
 /* Public season metadata is small; poster images and DOM cards load on demand. */
 const scheduleState = {season: "", day: 1, data: null, search: "", timer: null, abort: null, request: 0, shown: 30, initialized: false};
 const scheduleDays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -195,15 +196,16 @@ async function loadSchedule(refresh = false) {
   stopSchedulePolling();
   const request = scheduleState.request;
   scheduleState.abort = new AbortController();
-  if (scheduleState.data?.season !== scheduleState.season) scheduleState.data = null;
+  if (scheduleState.data?.season !== scheduleState.season || scheduleState.dataSource !== scheduleSource()) scheduleState.data = null;
   renderSchedule();
   $("#scheduleRefresh").disabled = true;
   try {
-    const query = new URLSearchParams({season: scheduleState.season});
+    const query = new URLSearchParams({season: scheduleState.season, source: scheduleSource()});
     if (refresh) query.set("refresh", "true");
     const data = await api(`/api/schedule?${query}`, {signal: scheduleState.abort.signal});
     if (request !== scheduleState.request) return;
     scheduleState.data = data;
+    scheduleState.dataSource = scheduleSource();
     renderSchedule();
     if (data.loading && state.activeView === "schedule") scheduleState.timer = setTimeout(() => loadSchedule(), 1800);
   } catch (error) {
@@ -218,7 +220,7 @@ async function loadSchedule(refresh = false) {
 
 function scheduleTimeLabel(item) {
   if (item.kind === "network") return item.release || "上线日期待公布";
-  if (!item.time) return "时间待公布";
+  if (!item.time) return scheduleSource() === "kazumi" ? "未提供具体时刻" : "时间待公布";
   return `${item.calendar_weekday !== item.weekday ? "次日 " : ""}${item.time}`;
 }
 
@@ -231,7 +233,7 @@ function scheduleVotesLabel(item) {
 function scheduleCard(item) {
   const show = scheduleCardVisibility();
   const category = CATEGORIES.find((c) => c.id === item.collection_type);
-  const image = `/api/schedule/cover?${new URLSearchParams({season: scheduleState.season, key: item.key})}`;
+  const image = `/api/schedule/cover?source=${scheduleSource()}&${new URLSearchParams({season: scheduleState.season, key: item.key})}`;
   const release = item.kind === "weekly" ? (item.release ? `${item.release.replace(/~$/, "")} 起` : "") : item.platforms?.[0]?.name || "";
   const votesHtml = show.votes ? `<span>${scheduleVotesLabel(item)}</span>` : "";
   const releaseHtml = show.release && release ? `<span class="schedule-card-release">${escapeHtml(release)}</span>` : "";
@@ -247,6 +249,8 @@ function scheduleCard(item) {
 }
 
 function renderSchedule() {
+  $("#scheduleSourceSwitch").hidden = state.settings.show_schedule_source_switch === false;
+  $("#scheduleSourceSwitch").textContent = scheduleSource() === "kazumi" ? "Kazumi / Bangumi ▾" : "長門番堂 ▾";
   if (!scheduleState.season) return;
   const items = scheduleFilteredItems(), today = scheduleToday();
   $("#scheduleSeasonButton strong").textContent = scheduleSeasonName(scheduleState.season);
@@ -268,6 +272,7 @@ function renderSchedule() {
   $("#scheduleMore")?.addEventListener("click", () => {scheduleState.shown += 30; renderSchedule();});
   $$("[data-schedule-key]", $("#scheduleGrid")).forEach((button) => button.onclick = () => showScheduleDetail(button.dataset.scheduleKey));
   $("#scheduleSource").innerHTML = `<span>播出日按北京时间 04:00—次日 03:59 划分；时间采用来源页面标注，不代表字幕上线时间。</span><span>时间：<a href="https://yuc.wiki/${scheduleState.season}/" target="_blank" rel="noopener noreferrer">長門番堂</a> · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>　评分：Bangumi / Kazumi${data?.fetched_at ? `　缓存更新 ${new Date(data.fetched_at * 1000).toLocaleString("zh-CN")}` : ""}</span>`;
+  if (scheduleSource() === "kazumi") $("#scheduleSource").textContent = "来源：Kazumi / Bangumi 放送列表。仅提供星期，不提供具体放送时刻；不推算更新集数。";
 }
 
 function scheduleStatusMarkup(statuses, name) {
@@ -275,6 +280,8 @@ function scheduleStatusMarkup(statuses, name) {
 }
 
 function renderScheduleSettings() {
+  $("#scheduleSourceInput").value = scheduleSource();
+  $("#scheduleSourceSwitchInput").checked = state.settings.show_schedule_source_switch !== false;
   const prefs = schedulePreferences();
   renderScheduleSorting("#scheduleSortingSettings");
   $("#scheduleStatusInputs").innerHTML = scheduleStatusMarkup(prefs.statuses, "scheduleSettingsStatus");
@@ -310,6 +317,18 @@ function initializeSchedule() {
   const today = scheduleToday();
   scheduleState.day = today.day;
   scheduleState.season = `${today.year}${String(Math.floor((today.month - 1) / 3) * 3 + 1).padStart(2, "0")}`;
+  $("#scheduleSourceSwitch").onclick = async () => {
+    const source = scheduleSource() === "yuc" ? "kazumi" : "yuc";
+    try {
+      const payload = await api("/api/settings", {method: "PATCH", body: JSON.stringify({schedule_source: source})});
+      if (payload.settings?.schedule_source !== source) throw new Error("当前后台不支持周表来源切换，请重启后台后刷新页面。");
+      state.settings = payload.settings;
+      scheduleState.data = null;
+      scheduleState.shown = 30;
+      renderScheduleSettings();
+      loadSchedule();
+    } catch (error) { toast(error.message, "error"); }
+  };
   $("#scheduleRefresh").onclick = () => loadSchedule(true);
   $("#scheduleFilterButton").onclick = openScheduleFilters;
   $("#scheduleCloseDetail").onclick = () => $("#scheduleDetailModal").close();
