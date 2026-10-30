@@ -1,0 +1,8 @@
+name: kazumi_reader
+description: Read-only Kazumi Hive collectible exporter for Anime Handbook.
+version: 1.0.0
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+dependencies:
+  hive_ce: ^2.16.0
+

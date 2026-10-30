@@ -1,0 +1,25 @@
+[Unit]
+Description=Anime Handbook Online
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=animehandbook
+Group=animehandbook
+WorkingDirectory=/opt/animehandbook
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Asia/Shanghai
+EnvironmentFile=/etc/animehandbook.env
+ExecStart=/opt/animehandbook/.venv/bin/python -m server --data-dir /var/lib/animehandbook --origin ${HANDBOOK_ORIGIN}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/animehandbook
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

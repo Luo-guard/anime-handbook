@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#173f2d" />
+    <title>动漫手账</title>
+    <script id="initialAppearance" type="application/json">{}</script>
+    <script src="/appearance.js?v=20261029-sidebar-state"></script>
+  <link rel="stylesheet" href="/styles.css?v=20261029-sidebar-state" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand" aria-label="动漫手账">
+          <span class="brand-mark">手</span>
+          <span class="brand-name">动漫手账</span>
+          <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="收起侧边栏" title="收起侧边栏">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+          </button>
+        </div>
+        <nav class="main-nav">
+          <button class="nav-item active" data-view="collection" data-nav-id="collection">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/>
+            </svg>
+            <span data-page-label="collection">收藏夹</span>
+          </button>
+          <button class="nav-item" data-view="schedule" data-nav-id="schedule">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2ZM7 14h3M14 14h3M7 17h3"/></svg>
+            <span data-page-label="schedule">周表</span>
+          </button>
+          <button class="nav-item" data-view="timeline" data-nav-id="timeline">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 8v4l3 2M21 12a9 9 0 1 1-9-9 9 9 0 0 1 9 9Z"/>
+            </svg>
+            <span data-page-label="timeline">看番记录</span>
+          </button>
+          <button class="nav-item" data-view="statistics" data-nav-id="statistics">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19V10M12 19V5M20 19v-7M3 19h18"/>
+            </svg>
+            <span data-page-label="statistics">记录统计</span>
+          </button>
+          <button class="nav-item" data-view="ranking" data-nav-id="ranking">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10M8 4v5a4 4 0 0 0 8 0V4M12 13v7M8 20h8M5 6l3 5M19 6l-3 5"/></svg>
+            <span data-page-label="ranking">排名</span>
+          </button>
+          <button class="nav-item" id="settingsButton" data-nav-id="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1A1.7 1.7 0 0 0 4.3 7l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>
+            </svg>
+            <span>设置</span>
+          </button>
+        </nav>
+        <div class="sidebar-power-area desktop-only">
+          <button type="button" id="shutdownBackendButton" data-desktop-shutdown class="sidebar-power-button" title="关闭手账后台" aria-label="关闭手账后台"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 5.8a8.5 8.5 0 1 0 11.4 0"/></svg></button>
+        </div>
+      </aside>
+
+      <button class="sidebar-reopen hidden" id="sidebarReopenButton" type="button" aria-label="展开侧边栏" title="展开侧边栏">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg>
+      </button>
+
+      <button type="button" id="shutdownBackendCompact" data-desktop-shutdown class="sidebar-power-button sidebar-power-compact desktop-only" title="关闭手账后台" aria-label="关闭手账后台"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 5.8a8.5 8.5 0 1 0 11.4 0"/></svg></button>
+
+      <main class="main-content">
+        <section class="view active" id="collectionView">
+          <header class="page-header">
+            <div>
+              <p class="eyebrow">KAZUMI COLLECTION</p>
+              <h1 data-page-label="collection">我的收藏</h1>
+              <p class="page-subtitle" id="collectionSubtitle">正在读取本地收藏…</p>
+            </div>
+            <button class="primary-button" id="syncButton">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 7h-5V2M4 17h5v5M19 7a8 8 0 0 0-13.5-2M5 17a8 8 0 0 0 13.5 2"/>
+              </svg>
+              <span>同步坚果云</span>
+            </button>
+          </header>
+
+          <div class="overview-panel summary-strip">
+            <div class="summary-item">
+              <span class="summary-value" id="animeTotal">0</span>
+              <span class="summary-label">收藏番剧</span>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-item">
+              <span class="summary-value" id="episodeTotal">0</span>
+              <span class="summary-label">已看集数</span>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-item accent">
+              <span class="summary-value" id="todayTotal">0</span>
+              <span class="summary-label">今日观看</span>
+            </div>
+            <div class="sync-indicator" id="syncIndicator">
+              <span class="status-dot"></span>
+              <span id="syncText">尚未同步</span>
+            </div>
+          </div>
+
+          <div class="category-tabs" id="categoryTabs" role="tablist"></div>
+
+          <div class="collection-toolbar">
+            <label class="search-box">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>
+              </svg>
+              <input id="searchInput" type="search" placeholder="搜索收藏" />
+            </label>
+            <label class="switch-row compact" id="collectionRatingControl">
+              <input type="checkbox" id="collectionRatingToggle" />
+              <span class="switch"></span>
+              <span>显示评分</span>
+            </label>
+            <label class="switch-row compact" id="collectionProgressControl">
+              <input type="checkbox" id="progressBarToggle" />
+              <span class="switch"></span>
+              <span>显示进度</span>
+            </label>
+            <button class="secondary-button compact-button" id="createCollectionButton" type="button">新建收藏夹</button>
+          </div>
+
+          <div class="anime-grid" id="animeGrid"></div>
+          <div class="empty-state hidden" id="collectionEmpty">
+            <div class="empty-mark">手</div>
+            <h2>这里还没有收藏</h2>
+            <p id="emptyMessage">关闭 Kazumi 后点击“同步收藏”，手账会只读导入本地收藏。</p>
+            <button class="secondary-button" id="emptySyncButton">立即同步</button>
+          </div>
+        </section>
+
+        <section class="view" id="timelineView">
+          <header class="page-header">
+            <div>
+              <p class="eyebrow">WATCHING JOURNAL</p>
+              <h1 data-page-label="timeline">看番记录</h1>
+              <p class="page-subtitle">每天从凌晨 <span id="dayStartLabel">4</span> 点开始计算</p>
+            </div>
+            <button class="primary-button" id="writeNoteButton">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>
+              </svg>
+              <span>写感想</span>
+            </button>
+          </header>
+
+          <div class="timeline-toolbar">
+            <label class="search-box timeline-search-box">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>
+              </svg>
+              <input id="timelineSearchInput" type="search" placeholder="搜索番剧或记录内容" />
+            </label>
+            <div class="timeline-theme-filter" id="timelineThemeFilter">
+              <button type="button" class="secondary-button compact-button" id="timelineThemeFilterButton" aria-expanded="false">主题筛选 <span>▾</span></button>
+              <div class="timeline-theme-menu hidden" id="timelineThemeFilterMenu"></div>
+            </div>
+          </div>
+
+          <form class="note-composer hidden" id="noteComposer">
+            <div class="composer-heading">
+              <div>
+                <p class="eyebrow">NEW THOUGHT</p>
+                <h2>记下这一刻</h2>
+              </div>
+              <button type="button" class="icon-button" id="closeComposer" aria-label="关闭">×</button>
+            </div>
+            <textarea id="noteContent" rows="4" placeholder="刚看完这一集，你在想什么？" required></textarea>
+            <div class="composer-footer">
+              <div class="note-theme-picker">
+                <button type="button" class="secondary-button compact-button composer-tool-button" id="noteThemeButton">选择主题 ▾</button>
+                <div class="note-theme-menu hidden" id="noteThemeMenu"></div>
+              </div>
+              <label class="secondary-button compact-button note-image-button composer-tool-button">批量插入图片<input id="noteImageInput" type="file" accept="image/png,image/jpeg,image/webp" multiple /></label>
+              <div class="composer-anime-picker">
+                <button type="button" class="secondary-button" id="noteAnimeButton" aria-haspopup="listbox">不关联动漫 ▾</button>
+                <div id="noteAnimeMenu" class="note-theme-menu anime-association-menu hidden" role="listbox" aria-label="关联动漫"></div>
+                <select id="noteAnime" class="hidden" aria-hidden="true" tabindex="-1">
+                <option value="">不关联动漫</option>
+              </select></div>
+              <button class="primary-button" type="submit">保存感想</button>
+            </div>
+          </form>
+
+          <div class="timeline" id="timeline"></div>
+          <div class="empty-state hidden" id="timelineEmpty">
+            <div class="empty-mark">记</div>
+            <h2>时间线还是空的</h2>
+            <p>在收藏卡片里点选刚看完的集数，或写下第一条感想。</p>
+          </div>
+        </section>
+
+        <section class="view" id="scheduleView">
+          <header class="page-header">
+            <div><p class="eyebrow">WEEKLY AIRING</p><h1 data-page-label="schedule">放送周表</h1><p class="page-subtitle">把每周的期待，留在这里。北京时间 · 凌晨 4 点换日</p></div>
+            <button type="button" class="primary-button" id="scheduleRefresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-5V2M4 17h5v5M19 7a8 8 0 0 0-13.5-2M5 17a8 8 0 0 0 13.5 2"/></svg><span>刷新周表</span></button>
+          </header>
+          <div class="overview-panel schedule-toolbar">
+            <button type="button" id="scheduleSeasonButton" class="schedule-season"><strong></strong><span>更换季度 ▾</span></button>
+            <div class="schedule-toolbar-right">
+              <input type="search" id="scheduleSearch" placeholder="搜索本季番剧" aria-label="搜索本季番剧" />
+            </div>
+          </div>
+          <div class="schedule-week" id="scheduleWeek" aria-label="选择星期"></div>
+          <div id="scheduleNotice" class="schedule-notice" role="status"></div>
+          <div class="schedule-grid" id="scheduleGrid"></div>
+          <footer class="schedule-source" id="scheduleSource"></footer>
+        </section>
+
+        <section class="view" id="statisticsView">
+          <header class="page-header">
+            <div>
+              <p class="eyebrow">WATCHING INSIGHTS</p>
+              <h1 data-page-label="statistics">记录统计</h1>
+              <p class="page-subtitle">看见每一段追番与记录留下的轨迹</p>
+            </div>
+          </header>
+          <div class="statistics-controls">
+            <div class="statistics-button-group" aria-label="统计周期">
+              <button type="button" class="statistics-button active" data-stat-period="day">每日</button>
+              <button type="button" class="statistics-button" data-stat-period="week">每周</button>
+              <button type="button" class="statistics-button" data-stat-period="month">每月</button>
+              <button type="button" class="statistics-button" data-stat-period="year">每年</button>
+            </div>
+            <label class="statistics-theme-select" aria-label="记录筛选">
+              <span>记录筛选</span>
+              <select id="statisticsTypeSelect"></select>
+            </label>
+          </div>
+          <div class="statistics-summary" id="statisticsSummary"></div>
+          <div class="statistics-chart" id="statisticsChart" aria-live="polite"></div>
+        </section>
+
+        <section class="view" id="rankingView">
+          <header class="page-header"><div><p class="eyebrow">ANIME RANKING</p><h1 data-page-label="ranking">排名</h1><p class="page-subtitle">只保存在手账本地的个人封面排行榜</p></div><button type="button" class="primary-button" id="createRankingButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6M9 15h6"/></svg><span>新增表单</span></button></header>
+          <div class="ranking-layout">
+            <aside class="ranking-board-list" id="rankingBoardList"></aside>
+            <div class="ranking-workspace" id="rankingWorkspace"></div>
+          </div>
+        </section>
+      </main>
+
+      <div class="collection-floating-controls" id="collectionFloatingControls" data-floating-view="collection">
+        <dialog class="collection-controls-modal" id="collectionFloatingPanel">
+          <div class="collection-controls-modal-frame">
+            <button type="button" class="collection-controls-close" id="closeCollectionFloatingPanel" aria-label="关闭">×</button>
+            <h3>筛选与排序</h3>
+            <section class="collection-control-section">
+              <h4>季度筛选</h4>
+              <div class="season-filter-panel" id="seasonFilterPanel"></div>
+            </section>
+            <section class="collection-control-section">
+              <h4>排序方式</h4>
+              <div class="sort-picker-menu" id="collectionSortPickerMenu">
+                <div data-sort-mode="name"><span>名称</span><button data-sort-direction="asc">↑</button><button data-sort-direction="desc">↓</button></div>
+                <div data-sort-mode="rank"><span>评分</span><button data-sort-direction="asc">↑</button><button data-sort-direction="desc">↓</button></div>
+                <div data-sort-mode="popularity"><span>热度</span><button data-sort-direction="asc">↑</button><button data-sort-direction="desc">↓</button></div>
+                <div data-sort-mode="airdate"><span>时间</span><button data-sort-direction="asc">↑</button><button data-sort-direction="desc">↓</button></div>
+                <div data-sort-mode="kazumi"><span>入库时间</span><button data-sort-direction="asc">↑</button><button data-sort-direction="desc">↓</button></div>
+                <div data-sort-mode="custom"><span>自定义</span><button data-sort-direction="asc">↑</button><button data-sort-direction="desc">↓</button></div>
+              </div>
+            </section>
+          </div>
+        </dialog>
+        <button type="button" class="collection-floating-button" id="collectionFloatingButton" aria-label="筛选和排序" title="筛选和排序">☷</button>
+      </div>
+      <div class="collection-floating-controls hidden" data-floating-view="schedule">
+        <button type="button" class="collection-floating-button" id="scheduleFilterButton" aria-label="排序与筛选" title="排序与筛选" aria-haspopup="dialog" aria-controls="scheduleFilterModal">☷</button>
+      </div>
+    </div>
+
+    <dialog class="modal progress-modal" id="progressModal">
+      <form method="dialog" class="modal-frame" id="progressForm">
+        <button class="modal-close" value="cancel" aria-label="关闭">×</button>
+        <div class="progress-hero">
+          <img id="progressCover" alt="" />
+          <div>
+            <span class="category-chip" id="progressCategory"></span>
+            <h2 id="progressTitle"></h2>
+            <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><a id="bgmMirrorLink" target="_blank" rel="noreferrer"></a><a id="savedVideoDefaultLink" class="hidden" target="_blank" rel="noreferrer">打开已存视频 ↗</a><a id="bilibiliSearchLink" target="_blank" rel="noreferrer">B站搜索 ↗</a><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
+            <div class="anime-rating hidden" id="animeRating"></div>
+            <div class="personal-rating hidden" id="personalRating"></div>
+            <input id="episodeCountInput" type="hidden" />
+          </div>
+        </div>
+        <details class="saved-video-links hidden" id="savedVideoSection"><summary class="saved-video-heading"><span>已存视频</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedVideoLinks"></div></details>
+        <div class="detail-tabs" role="tablist">
+          <button type="button" class="detail-tab active" data-detail-tab="overview" role="tab" aria-selected="true">概览</button>
+          <button type="button" class="detail-tab" data-detail-tab="characters" id="charactersDetailTab" role="tab" aria-selected="false">人物</button>
+        </div>
+        <section class="detail-panel" id="overviewDetailPanel">
+        <div class="episode-grid" id="episodeGrid"></div>
+        <section class="age-related hidden" id="ageRelatedSection">
+          <div class="age-related-heading">
+            <div>
+              <h3>相关番剧</h3>
+              <p id="ageRelatedMeta"></p>
+            </div>
+          </div>
+          <div class="age-related-grid" id="ageRelatedGrid"></div>
+        </section>
+        <section class="anime-comments">
+          <div class="anime-comments-heading">
+            <h3>番剧评论</h3>
+            <div class="anime-comment-tools"><button type="button" class="comment-trigger" id="openAnimeComment">写评论</button><button type="button" class="comment-trigger" id="openAnimeRating">评分</button></div>
+          </div>
+          <div class="anime-comment-composer hidden" id="animeCommentForm">
+            <textarea id="animeCommentContent" rows="3" placeholder="写下对这部番的评论…" required></textarea>
+            <div class="comment-composer-actions">
+              <button type="button" class="text-button" id="cancelAnimeComment">取消</button>
+              <button type="button" class="primary-button" id="saveAnimeComment">发布评论</button>
+            </div>
+          </div>
+          <div class="anime-comment-list" id="animeCommentList"></div>
+        </section>
+        </section>
+        <section class="detail-panel hidden" id="charactersDetailPanel">
+          <div class="characters-heading"><div><h3>人物</h3><p id="charactersStatus" role="status" aria-live="polite">首次打开时从 Bangumi 获取，并保存到本地。</p></div><button type="button" class="secondary-button compact-button" id="refreshCharacters">刷新人物</button></div>
+          <div class="character-grid" id="characterGrid"></div>
+          <div class="empty-state hidden" id="charactersEmpty"><p>点击人物分栏后加载角色资料。</p></div>
+        </section>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" id="cancelProgress">取消</button>
+          <button type="button" class="primary-button" id="saveProgress">确认记录</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal settings-modal" id="settingsModal">
+      <form method="dialog" class="modal-frame">
+        <button class="modal-close" value="cancel" aria-label="关闭">×</button>
+        <p class="eyebrow">PREFERENCES</p>
+        <h2>手账设置</h2>
+        <div class="settings-layout">
+          <aside class="settings-side-nav" id="settingsSideNav" aria-label="设置分类">
+<button type="button" class="active" data-settings-tab="theme">主界面设置</button>
+<button type="button" data-settings-tab="collection" data-page-label="collection">收藏夹</button>
+<button type="button" data-settings-tab="schedule" data-page-label="schedule">周表</button>
+<button type="button" data-settings-tab="record" data-page-label="timeline">看番记录</button>
+<button type="button" data-settings-tab="statistics" data-page-label="statistics">记录统计</button>
+<button type="button" data-settings-tab="ranking" data-page-label="ranking">排名</button>
+<button type="button" data-settings-tab="keyboard">快捷键</button>
+<button type="button" data-settings-tab="data">数据来源</button>
+<button type="button" data-settings-tab="sharing">账号与同步</button>
+</aside>
+          <div class="settings-list">
+          <div class="settings-section-title" data-settings-section="theme">主界面设置</div>
+          <h3 class="settings-subsection-title">配色与主题方案</h3>
+          <div class="setting-row stacked">
+            <span><strong>主题方案</strong><small>保存多套颜色、背景和遮罩设置，随后可快速切换。</small></span>
+            <div class="theme-profile-controls"><select id="themeProfileInput"></select><button type="button" class="secondary-button compact-button" id="newThemeProfileButton">新建</button><button type="button" class="secondary-button compact-button" id="renameThemeProfileButton">重命名</button><button type="button" class="primary-button compact-button" id="saveThemeProfileButton">保存当前方案</button><button type="button" class="text-button danger" id="deleteThemeProfileButton">删除</button></div>
+          </div>
+          <label class="setting-row">
+            <span>
+              <strong>主题颜色</strong>
+              <small>切换手账的主色调，设置会保留。</small>
+            </span>
+            <div class="theme-picker" id="themeColorInput" role="radiogroup" aria-label="主题颜色">
+              <button type="button" class="theme-option" data-theme-value="forest" role="radio"><i style="--swatch:#2e6d4e"></i>森野绿</button>
+              <button type="button" class="theme-option" data-theme-value="ocean" role="radio"><i style="--swatch:#2784aa"></i>海蓝</button>
+              <button type="button" class="theme-option" data-theme-value="violet" role="radio"><i style="--swatch:#7c60ae"></i>暮紫</button>
+              <button type="button" class="theme-option" data-theme-value="amber" role="radio"><i style="--swatch:#aa7833"></i>暖琥珀</button>
+              <button type="button" class="theme-option" data-theme-value="rose" role="radio"><i style="--swatch:#b85670"></i>蔷薇粉</button>
+              <button type="button" class="theme-option" data-theme-value="indigo" role="radio"><i style="--swatch:#5269b6"></i>靛蓝</button>
+              <button type="button" class="theme-option" data-theme-value="teal" role="radio"><i style="--swatch:#23807a"></i>青碧</button>
+              <button type="button" class="theme-option" data-theme-value="slate" role="radio"><i style="--swatch:#58677a"></i>雾灰蓝</button>
+            </div>
+          </label>
+          <label class="setting-row custom-theme-row">
+            <span>
+              <strong>自定义主题色</strong>
+              <small>输入 6 位 HEX 色值；保存后会自动生成配套浅色、高光与阴影。</small>
+            </span>
+            <span class="custom-theme-input">
+              <input id="customThemeColorInput" type="text" inputmode="text" maxlength="7" placeholder="#2E6D4E" aria-label="自定义主题色 HEX" />
+              <input id="customThemeColorPreview" type="color" aria-label="自定义主题色预览" />
+              <button type="button" class="text-button" id="useCustomThemeButton">使用</button>
+            </span>
+          </label>
+          <h3 class="settings-subsection-title">背景图片</h3>
+          <label class="setting-row custom-background-row">
+            <span><strong>自定义背景</strong><small>选择本机照片作为手账背景；会保存在手账本地。</small></span>
+            <span class="custom-background-input"><input id="customBackgroundInput" type="file" accept="image/png,image/jpeg,image/webp" /><button type="button" class="text-button" id="clearCustomBackgroundButton">移除</button></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>背景遮罩透明度</strong><small>数值越高，背景图前面的浅色遮罩越明显。</small></span>
+            <span class="background-opacity-input"><input id="customBackgroundOpacityInput" type="range" min="0" max="100" step="1" /><output id="customBackgroundOpacityValue">82%</output></span>
+          </label>
+          
+          <h3 class="settings-subsection-title">打开与启动</h3>
+          <label class="setting-row">
+            <span>
+              <strong>打开时默认页面</strong>
+              <small>每次打开手账首先显示的页面</small>
+            </span>
+            <select id="defaultViewInput">
+              <option value="collection" data-page-label="collection">收藏夹</option>
+              <option value="timeline" data-page-label="timeline">看番记录</option>
+              <option value="statistics" data-page-label="statistics">记录统计</option>
+              <option value="ranking" data-page-label="ranking">排名</option>
+              <option value="schedule" data-page-label="schedule">周表</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>开机自启手账</strong>
+              <small id="launchAtLoginHint">仅当前账号绑定的 Kazumi 路径与本机一致时生效；其他账号的设置不会影响本机自启。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="launchAtLoginInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row desktop-only">
+            <span><strong>显示关闭后台按钮</strong><small>控制左下角的关闭后台入口，包括侧边栏收起时的悬浮按钮；设置中的关闭按钮始终保留。</small></span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showShutdownButtonInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <div class="setting-row desktop-only">
+            <span><strong>关闭手账后台</strong><small>停止本机后台服务；重新使用时需运行启动快捷方式。请先保存当前修改。</small></span>
+            <button type="button" class="secondary-button compact-button" id="shutdownBackendSettings" data-desktop-shutdown>关闭后台</button>
+          </div>
+          <h3 class="settings-subsection-title">侧边栏</h3>
+<div class="setting-row stacked"><span><strong>页面名称</strong><small>自定义五个页面的名称，侧边栏、页面标题和相关设置会统一更新；留空使用默认名称，最多 20 个字符。</small></span><div id="sidebarNameInputs"></div></div>
+          <label class="setting-row">
+            <span>
+              <strong>显示侧边栏开关</strong>
+              <small>显示用于收起或展开侧边栏的按钮。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showSidebarToggleInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <div class="setting-row stacked">
+            <span>
+              <strong>侧边栏显示与顺序</strong>
+              <small data-page-text="可调整{collection}、{schedule}、{statistics}等页面的显示和顺序；设置始终保留，避免无法改回设置。">可调整收藏夹、周表、记录统计等页面的显示和顺序；设置始终保留，避免无法改回设置。</small>
+            </span>
+            <div class="sidebar-settings-list" id="sidebarSettingsList"></div>
+          </div>
+          <div class="settings-section-title" data-settings-section="collection" data-page-label="collection">收藏夹</div>
+          <h3 class="settings-subsection-title">主页与分类</h3>
+          <label class="setting-row">
+            <span>
+              <strong>收藏夹主页</strong>
+              <small data-page-text="打开{collection}页面时默认显示的收藏夹。">打开收藏夹页面时默认显示的收藏夹。</small>
+            </span>
+            <select id="collectionHomeInput"></select>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>显示全部收藏夹</strong>
+              <small>在标签最后显示所有收藏内容。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showAllCollectionTabInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <div class="setting-row stacked">
+            <span>
+              <strong>Kazumi 收藏夹显示</strong>
+              <small>隐藏你用不到的原始收藏夹；这不会修改 Kazumi 数据</small>
+            </span>
+            <div class="settings-check-list" id="builtinVisibilityList"></div>
+          </div>
+          <div class="setting-row stacked">
+            <span>
+              <strong>Kazumi 收藏夹顺序</strong>
+              <small>与上方显示设置放在一起；只调整手账标签顺序，不会修改 Kazumi 数据。</small>
+            </span>
+            <div class="sidebar-settings-list" id="builtinCollectionOrderList"></div>
+          </div>
+          <h3 class="settings-subsection-title">卡片评分与工具栏</h3>
+          <label class="setting-row">
+            <span>
+              <strong>收藏夹显示评分与排名</strong>
+              <small data-page-text="在{collection}番剧卡片显示评分、排名与评分人数。">在收藏夹番剧卡片显示评分、排名与评分人数。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showCollectionBgmRatingInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span><strong>卡片评分来源</strong><small data-page-text="选择{collection}卡片右下角显示 BGM 评分或个人评分。">选择收藏夹卡片右下角显示 BGM 评分或个人评分。</small></span>
+            <select id="collectionRatingSourceInput"><option value="bgm">BGM 评分</option><option value="personal">个人评分</option></select>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示“显示评分”开关</strong><small data-page-text="控制{collection}工具栏中是否出现“显示评分”开关。">控制收藏夹工具栏中是否出现“显示评分”开关。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showCollectionRatingControlInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示“显示进度”开关</strong><small data-page-text="控制{collection}工具栏中是否出现“显示进度”开关。">控制收藏夹工具栏中是否出现“显示进度”开关。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showCollectionProgressControlInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示“新建收藏夹”按钮</strong><small data-page-text="控制{collection}页面工具栏中是否出现“新建收藏夹”按钮。">控制收藏夹工具栏中是否出现“新建收藏夹”按钮。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showCreateCollectionControlInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>无自定义收藏夹时显示移入按钮</strong>
+              <small>关闭后，没有自定义收藏夹时番名旁不显示“移入”按钮</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showMoveButtonWithoutCollectionsInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <h3 class="settings-subsection-title">自定义收藏夹</h3>
+          <label class="setting-row">
+            <span>
+              <strong>加入自定义后隐藏原分类</strong>
+              <small>番剧加入自定义收藏夹后，不再显示在 Kazumi 原收藏夹中</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="hideCustomizedInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <div class="setting-row stacked">
+            <span>
+              <strong>自定义收藏夹</strong>
+              <small>本地收藏夹，可删除；删除不会影响番剧进度和 Kazumi</small>
+            </span>
+            <div class="settings-custom-list" id="settingsCustomCollections"></div>
+          </div>
+          
+          <h3 class="settings-subsection-title">番剧详情 · 评分与资料</h3>
+          <label class="setting-row">
+            <span>
+              <strong>显示 Bangumi 评分与排名</strong>
+              <small>在单个番剧界面显示镜像同步的评分、排名与评分人数。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showBgmRatingInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示人物分栏</strong><small>详情页显示“人物”分栏；人物资料仅在点击该分栏时请求 Bangumi 并缓存到本地。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showCharacterTabInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>单集名称悬浮提示</strong>
+              <small>开启后，鼠标停在剧集方块上会显示 Bangumi 单集名称；名称按需缓存到本地。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showEpisodeTitlesOnHoverInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <h3 class="settings-subsection-title">番剧详情 · 单集快捷操作</h3>
+          <label class="setting-row">
+            <span>
+              <strong>显示单集评价入口</strong>
+              <small>控制详情页剧集快捷操作中的“评价”入口；不影响已有记录、记录主题选择和主题筛选。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showEpisodeReviewRecordInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>显示单集评分入口</strong>
+              <small>控制详情页剧集快捷操作中的“评分”入口；不影响已有记录、记录主题选择和主题筛选。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showEpisodeRatingRecordInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>显示 OP/ED 记录入口</strong>
+              <small>控制详情页剧集快捷操作中的 OP 和 ED 入口；不影响已有记录、记录主题选择和主题筛选。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showOpedRecordInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <h3 class="settings-subsection-title">番剧详情 · 外部查询链接</h3>
+          <label class="setting-row">
+            <span>
+              <strong>显示相关番剧按钮</strong>
+              <small>在单个番剧界面显示 AGE 相关番剧查询按钮。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showAgeRelatedButtonInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>显示 B站搜索链接</strong>
+              <small>在单个番剧界面显示按番剧标题跳转到 B站搜索结果的链接。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showBilibiliSearchButtonInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span><strong>合并 B站入口</strong><small>开启后只显示一个入口：未存视频时为“B站搜索”，已存视频时为“B站已存”，点击打开默认视频；关闭后分开显示。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="mergeBilibiliLinksInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示已存视频列表</strong><small>在番剧详情中显示视频卡片和管理操作；关闭后仍保留上方“打开已存视频”入口。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showSavedVideoListInput" /><span class="switch"></span></span>
+          </label>
+          <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
+          <h3 class="settings-subsection-title">排序与显示范围</h3>
+          <div class="setting-row stacked"><span><strong>排列方式</strong><small>先调整分组顺序，再选择各组内的排列方式；与周表筛选窗口同步。</small></span><div id="scheduleSortingSettings" class="schedule-sorting-editor"></div></div>
+          <div class="setting-row stacked"><span><strong>显示收藏状态</strong><small>支持多选，也可以全部取消。</small></span><div class="schedule-status-options" id="scheduleStatusInputs"></div></div>
+          <label class="setting-row"><span><strong>显示未收藏的番剧</strong><small data-page-text="开启后可以在{schedule}发现尚未加入收藏的作品。">开启后可以在周表发现尚未加入收藏的作品。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleUncollectedInput" /><span class="switch"></span></span></label>
+          <h3 class="settings-subsection-title">卡片内容</h3>
+          <div class="setting-row stacked"><span><strong>卡片信息显示</strong><small>各项独立开关；关闭后不会影响排序、筛选或详细信息。</small></span></div>
+          <div id="scheduleCardFieldInputs"></div>
+          <div class="schedule-settings-note">时间与网络上线日期来自長門番堂，评分和评分人数来自 Bangumi（经 Kazumi 季度接口）。未公布的时间保留空缺；固定按北京时间凌晨 4 点划分播出日。周表只读展示，不修改收藏。</div>
+          <div class="settings-section-title" data-settings-section="record" data-page-label="timeline">看番记录</div>
+          <h3 class="settings-subsection-title">记录习惯</h3>
+          <label class="setting-row">
+            <span>
+              <strong>一天开始的时间</strong>
+              <small>此时间之前的记录归入前一天</small>
+            </span>
+            <span class="inline-input">
+              <input id="dayStartInput" type="number" min="0" max="23" />
+              点
+            </span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>新增记录默认其他记录</strong>
+              <small>开启后，写记录时不显示番剧选择，内容将直接保存为其他记录。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="newRecordDefaultsToOtherInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <div class="settings-section-title" data-settings-section="statistics" data-page-label="statistics">记录统计</div>
+          <h3 class="settings-subsection-title">统计默认选项</h3>
+          <label class="setting-row">
+            <span>
+              <strong>统计页默认记录筛选</strong>
+              <small data-page-text="每次打开{statistics}时，自动显示这个主题的数据。">每次打开记录统计时，自动显示这个主题的数据。</small>
+            </span>
+            <select id="statisticsDefaultThemeInput"></select>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示数量为 0 的统计周期</strong><small>关闭后，跳过当前筛选下数量为 0 的日期、周、月和年；不影响记录数据和统计总数。</small></span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showZeroStatisticsInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <h3 class="settings-subsection-title">追番计划与余额</h3>
+          <label class="setting-row">
+            <span>
+              <strong>显示追番余额</strong>
+              <small>按每日计划累加应看集数；每记录一集观看，余额就减少一集。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showEpisodeBalanceInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>当前追番余额</strong>
+              <small>正数表示还欠多少集，负数表示已经超出计划多少集。</small>
+            </span>
+            <span class="inline-input">
+              <input id="episodeBalanceInitialInput" type="number" step="1" />
+              集
+            </span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>每日计划集数</strong>
+              <small>每到新的一天自动加入计划；分界时间在“观看记录”中设置。</small>
+            </span>
+            <span class="inline-input">
+              <input id="episodeBalanceDailyTargetInput" type="number" min="0" max="100" step="1" />
+              集
+            </span>
+          </label>
+          <div class="settings-section-title" data-settings-section="ranking" data-page-label="ranking">排名</div>
+          <h3 class="settings-subsection-title">封面名称提示</h3>
+          <label class="setting-row">
+            <span><strong>排名封面悬浮名称</strong><small>在排名版面悬停封面后显示动漫名称。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showRankingHoverTitlesInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>排名名称悬停时间</strong><small>停留多久后显示封面对应的动漫名称。</small></span>
+            <span class="background-opacity-input"><input id="rankingHoverDelayInput" type="range" min="0" max="10" step="1" /><output id="rankingHoverDelayValue">2 秒</output></span>
+          </label>
+          <div class="settings-section-title" data-settings-section="keyboard">快捷键</div>
+          <label class="setting-row"><span><strong>启用快捷键</strong><small>仅在手账页面生效；输入、输入法选字和弹窗编辑期间不响应。按住组合键时请一起按下。</small></span><span class="switch-row compact"><input type="checkbox" id="keyboardEnabledInput" /><span class="switch"></span></span></label>
+          <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，首尾循环。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
+          <div class="settings-section-title" data-settings-section="data">数据来源</div>
+          <h3 class="settings-subsection-title">Bangumi 资料来源</h3>
+          <div class="setting-row stacked">
+            <span>
+              <strong>Bangumi 站点与镜像</strong>
+              <small>当前默认使用 Bangumi 官方站点。站点地址用于详情页跳转；API 地址用于同步评分、剧集与人物资料。新增的镜像会保存在本地，可随时切换。</small>
+            </span>
+            <div class="theme-profile-controls bgm-source-controls">
+              <select id="bgmSourceInput" aria-label="当前 Bangumi 站点"></select>
+              <button type="button" class="secondary-button compact-button" id="activateBgmSourceButton">切换到此站点</button>
+              <button type="button" class="secondary-button compact-button" id="newBgmSourceButton">新增站点</button>
+              <button type="button" class="text-button danger" id="deleteBgmSourceButton">删除站点</button>
+            </div>
+            <div class="bgm-source-editor" role="group" aria-label="站点资料">
+              <label class="bgm-source-name" for="bgmSourceNameInput">
+                <span>站点名称</span>
+                <input id="bgmSourceNameInput" type="text" maxlength="50" placeholder="例如：Bangumi 官方" />
+              </label>
+              <label for="bgmSourceSiteInput">
+                <span>站点地址</span>
+                <input id="bgmSourceSiteInput" type="url" placeholder="https://bgm.tv" spellcheck="false" />
+                <small>用于打开番剧详情页</small>
+              </label>
+              <label for="bgmSourceApiInput">
+                <span>API 地址</span>
+                <input id="bgmSourceApiInput" type="url" placeholder="https://api.bgm.tv" spellcheck="false" />
+                <small>用于获取评分、剧集与人物资料</small>
+              </label>
+              <div class="bgm-source-editor-actions">
+                <button type="button" class="secondary-button compact-button" id="saveBgmSourceButton">保存站点</button>
+              </div>
+            </div>
+          </div>
+          <h3 class="settings-subsection-title">本机数据位置</h3>
+          <div class="setting-row">
+            <span>
+              <strong>Kazumi 数据</strong>
+              <small id="kazumiPath">正在查找…</small>
+            </span>
+            <span class="read-only-badge">只读</span>
+          </div>
+          <div class="setting-row">
+            <span>
+              <strong>手账数据库</strong>
+              <small>项目目录 data/handbook.db</small>
+            </span>
+            <span class="read-only-badge green">本地</span>
+          </div>
+          <div class="settings-section-title" data-settings-section="sharing">账号与同步</div>
+          <h3 class="settings-subsection-title">本机账号</h3>
+          <div class="setting-row stacked"><span><strong>本机手账账号</strong><small>切换、新建或管理本机账号。新账号可绑定这台电脑自己的 Kazumi 数据库。</small></span><div class="theme-profile-controls">
+                  <select id="handbookProfileInput" aria-label="手账账号"></select>
+                  <button type="button" class="secondary-button compact-button" id="activateHandbookProfileButton">打开账号</button>
+                  <button type="button" class="secondary-button compact-button" id="createHandbookProfileButton">新建账号</button>
+                  <button type="button" class="secondary-button compact-button" id="renameHandbookProfileButton">重命名账号</button>
+                  <button type="button" class="secondary-button compact-button danger-button" id="deleteHandbookProfileButton">删除账号</button>
+                </div></div>
+          <h3 class="settings-subsection-title">电脑与手机同步</h3>
+          <label class="setting-row">
+            <span>
+              <strong>右上角同步按钮</strong>
+              <small>选择按钮的同步功能。刷新页面会自动同步 Kazumi 收藏。</small>
+            </span>
+            <select id="topSyncActionInput">
+              <option value="webdav">同步坚果云（电脑与手机互通）</option>
+              <option value="kazumi">同步 Kazumi 收藏</option>
+            </select>
+          </label>
+          <div class="setting-row stacked sharing-settings">
+            <span>
+              <strong>坚果云多端同步</strong>
+              <small id="webdavStatus">将当前账号同步到坚果云；同一账号在另一台设备填入同一“云端账号标识”即可互通。不会上传 Kazumi 数据库、封面和角色缓存。</small>
+            </span>
+            <div class="sharing-workflow">
+              <section class="sharing-step">
+                <div class="sharing-step-heading"><b>1</b><span><strong>连接坚果云 WebDAV</strong><small>密码请填写坚果云的“应用密码”，只保存在本机，不会显示或上传到手账云端文件。</small></span></div>
+                <div class="theme-profile-controls webdav-fields">
+                  <input id="webdavUrlInput" type="url" placeholder="https://dav.jianguoyun.com/dav/" />
+                  <input id="webdavUsernameInput" type="text" placeholder="坚果云账号" autocomplete="username" />
+                  <input id="webdavPasswordInput" type="password" placeholder="坚果云应用密码（留空则保留已保存密码）" autocomplete="current-password" />
+                </div>
+              </section>
+              <section class="sharing-step">
+                <div class="sharing-step-heading"><b>2</b><span><strong>绑定云端账号</strong><small>首台设备保留自动生成的标识；另一台设备新建本机账号后，粘贴同一个标识再同步，即会下载这份账号数据。</small></span></div>
+                <div class="theme-profile-controls">
+                  <input id="webdavAccountIdInput" type="text" placeholder="云端账号标识" />
+                  <button type="button" class="secondary-button compact-button" id="copyWebdavAccountIdButton">复制标识</button>
+                </div>
+              </section>
+              <section class="sharing-step">
+                <div class="sharing-step-heading"><b>3</b><span><strong>保存并同步</strong><small>首次同步会上传当前账号；新设备首次绑定同一标识时会下载云端账号。新增记录自动合并，同一番剧同一集保留较早观看时间。</small></span></div>
+                <div class="theme-profile-controls">
+                  <button type="button" class="secondary-button compact-button" id="saveWebdavButton">保存坚果云配置</button>
+                  <button type="button" class="secondary-button compact-button" id="testWebdavButton">测试连接</button>
+                  <button type="button" class="primary-button compact-button" id="syncWebdavButton">立即同步当前账号</button>
+                  <label class="compact-check"><input id="autoWebdavSyncInput" type="checkbox" checked /> 每 30 分钟自动同步</label>
+                </div>
+              </section>
+            </div>
+          </div>
+          <h3 class="settings-subsection-title">好友共享</h3>
+          <div class="setting-row stacked sharing-settings">
+            <span>
+              <strong>好友共享（Syncthing）</strong>
+              <small id="sharingStatus">先运行“设置共享同步.cmd”，再将脚本创建的 shared 文件夹填在下方。手账只同步已发布的账号快照，不直接同步 Kazumi。</small>
+            </span>
+            <div class="sharing-workflow">
+              
+              <section class="sharing-step">
+                <div class="sharing-step-heading"><b>1</b><span><strong>连接 Syncthing 共享文件夹</strong><small>这里填写脚本自动创建的 <code>shared</code> 文件夹，不是 Kazumi 路径，也不是 <code>data</code> 文件夹。</small></span></div>
+                <div class="theme-profile-controls">
+                  <input id="sharingFolderInput" type="text" placeholder="例如 D:\\动漫\\动漫手账\\shared" />
+                  <button type="button" class="secondary-button compact-button" id="configureSharingButton">保存共享文件夹</button>
+                </div>
+              </section>
+              <section class="sharing-step">
+                <div class="sharing-step-heading"><b>2</b><span><strong>发布或读取好友数据</strong><small>发布：把当前账号的快照交给 Syncthing。加载：读取好友已同步过来的账号。</small></span></div>
+                <div class="theme-profile-controls">
+                  <button type="button" class="primary-button compact-button" id="publishSharingButton">立即发布当前账号</button>
+                  <label class="compact-check"><input id="autoPublishSharingInput" type="checkbox" checked /> 每 30 分钟自动发布</label>
+                  <button type="button" class="secondary-button compact-button" id="loadSharedProfilesButton">刷新好友账号列表</button>
+                </div>
+                <div class="settings-custom-list" id="sharedProfileList"></div>
+              </section>
+            </div>
+          </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button" type="button" id="saveSettings">保存设置</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal schedule-dialog" id="scheduleSeasonModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">SEASON ARCHIVE</p><h2>选择放送季度</h2><p class="page-subtitle">按年份回看，按季节寻找。</p><div class="schedule-years" id="scheduleYears"></div></form></dialog>
+    <dialog class="modal schedule-dialog" id="scheduleFilterModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">MAKE IT YOURS</p><h2>排序与筛选</h2><p class="schedule-field-title">排列方式</p><div class="schedule-sorting-editor" id="scheduleSortOptions"></div><p class="schedule-field-title">显示收藏状态 · 可多选</p><div class="schedule-status-options" id="scheduleFilterStatuses"></div><label class="schedule-uncollected"><input type="checkbox" id="scheduleFilterUncollected" />也显示未收藏的番剧</label><p class="schedule-filter-note" data-page-text="这些选项会记住，并与“设置 → {schedule}”保持一致。">这些选项会记住，并与“设置 → 周表”保持一致。</p><div class="modal-actions"><button type="button" class="primary-button" id="scheduleApplyFilter">应用筛选</button></div></form></dialog>
+    <dialog class="modal schedule-dialog" id="scheduleDetailModal"><div class="modal-frame"><button type="button" class="modal-close" id="scheduleCloseDetail" aria-label="关闭">×</button><div id="scheduleDetail"></div></div></dialog>
+
+    <dialog class="modal backend-closed-dialog" id="backendClosedDialog"><div class="modal-frame"><h2 id="backendClosedTitle">后台已关闭</h2><p id="backendClosedMessage">再次使用时，请运行“启动动漫手账”快捷方式，然后刷新此页面。</p></div></dialog>
+    <dialog class="modal" id="videoCaptureModal">
+      <form class="modal-frame" id="videoCaptureForm">
+        <button type="button" class="modal-close" id="videoCaptureClose" aria-label="关闭">×</button>
+        <p class="eyebrow">SAVE VIDEO</p><h2>保存 B 站视频</h2>
+        <p id="videoCaptureTitle"></p><p class="page-subtitle" id="videoCaptureUploader"></p>
+        <div class="video-capture-field"><label for="videoCaptureSearch">保存到哪部番</label><div class="video-anime-picker" id="videoAnimePicker"><div class="video-anime-input"><input id="videoCaptureSearch" type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="videoAnimeOptions" autocomplete="off" placeholder="选择或输入番剧名称" required /><button type="button" id="videoAnimeToggle" aria-label="展开番剧选项">⌄</button></div><input type="hidden" id="videoCaptureAnime" /><div id="videoAnimeOptions" role="listbox" aria-label="番剧选项" hidden></div></div></div>
+        <label class="video-capture-field">字幕 / 备注<input id="videoCaptureNote" maxlength="200" placeholder="例如：简体 · 喜欢的字幕组" /></label>
+        <label class="switch-row"><input type="checkbox" id="videoCaptureDefault" /><span class="switch"></span><span>设为默认视频</span></label>
+        <p id="videoCaptureStatus" role="status">正在读取当前账号的番剧…</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" id="videoCaptureCancel">取消</button><button type="submit" class="primary-button" id="videoCaptureSave" disabled>保存视频</button></div>
+      </form>
+    </dialog>
+    <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
+    <script src="/schedule.js?v=20261025-sort-save-check" defer></script>
+    <script src="/modules/core.js?v=20261029-toast-layer" defer></script>
+    <script src="/modules/network.js?v=20261025-shutdown" defer></script>
+    <script src="/modules/collection.js?v=20261023-modules" defer></script>
+    <script src="/modules/presentation.js?v=20261029-sidebar-state" defer></script>
+    <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
+    <script src="/modules/composer.js?v=20261023-modules" defer></script>
+    <script src="/modules/video-links.js?v=20261029-default-version" defer></script>
+    <script src="/modules/details.js?v=20261029-video-disclosure" defer></script>
+    <script src="/modules/records.js?v=20261025-floating-sort" defer></script>
+    <script src="/modules/ranking.js?v=20261023-modules" defer></script>
+    <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
+    <script src="/modules/lifecycle.js?v=20261029-video-confirm" defer></script>
+    <script src="/modules/settings.js?v=20261029-sidebar-state" defer></script>
+    <script src="/modules/events.js?v=20261029-sidebar-state" defer></script>
+    <script src="/modules/keyboard.js?v=20261029-configurable" defer></script>
+    <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
+    <script src="/app.js?v=20261023-modules" defer></script>
+  </body>
+</html>

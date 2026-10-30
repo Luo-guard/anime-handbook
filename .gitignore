@@ -1,0 +1,36 @@
+# Private data and credentials
+data/
+shared/
+共享/
+.online-data/
+.online-test-data/
+.online-public-test-data/
+.test-data/
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.log
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+# Build products and local configuration
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+node_modules/
+android/.gradle/
+android/**/build/
+android/local.properties
+tools/kazumi_reader/.dart_tool/
+tools/kazumi_reader.exe
+releases/
+archive/
