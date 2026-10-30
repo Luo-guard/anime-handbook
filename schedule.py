@@ -13,6 +13,7 @@ import urllib.error
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -220,6 +221,18 @@ def best_match(aliases, candidates):
     return None
 
 
+def decode_metadata_text(row):
+    """Decode source entities as text; the frontend still escapes HTML on render."""
+    result = dict(row)
+    for key in ("title", "summary"):
+        if isinstance(result.get(key), str):
+            result[key] = unescape(result[key])
+    for key in ("aliases", "tags"):
+        if isinstance(result.get(key), list):
+            result[key] = [unescape(value) if isinstance(value, str) else value for value in result[key]]
+    return result
+
+
 def parse_bangumi(document) -> list[dict]:
     rows = []
     for weekday in range(1, 8):
@@ -249,7 +262,7 @@ def parse_bangumi(document) -> list[dict]:
                          "summary": str(item.get("summary") or "")[:1800],
                          "tags": [(t.get("name", "") if isinstance(t, dict) else str(t)) for t in tags[:5]],
                          "release": "", "release_note": "", "platforms": []})
-    return list({r["id"]: r for r in rows}.values())
+    return [decode_metadata_text(row) for row in {r["id"]: r for r in rows}.values()]
 
 
 def metadata_catalog(*sources):
@@ -301,7 +314,7 @@ def merge_sources(yuc, bangumi, supplemental=()):
 
 class ScheduleService:
     TTL = 6 * 60 * 60
-    SCHEMA_VERSION = 5
+    SCHEMA_VERSION = 6
 
     def __init__(self, root: Path):
         self.root = root
@@ -335,7 +348,10 @@ class ScheduleService:
     def load(self, season):
         season_key(season)
         try:
-            return json.loads((self.root / f"{season}.json").read_text(encoding="utf-8"))
+            data = json.loads((self.root / f"{season}.json").read_text(encoding="utf-8"))
+            if data.get("schema_version", 0) < 6:
+                data["items"] = [decode_metadata_text(row) for row in data.get("items", [])]
+            return data
         except (OSError, ValueError):
             return None
 
