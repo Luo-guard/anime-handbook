@@ -6,7 +6,7 @@ function renderBilibiliEntrypoints(anime, preferred = null) {
   search.href=`https://search.bilibili.com/all?keyword=${encodeURIComponent(keyword)}`;
   search.textContent="B站搜索 ↗";
   search.classList.toggle("hidden",!enabledSetting("show_bilibili_search_button")||!keyword||(merged&&Boolean(preferred)));
-  saved.textContent=merged?"B站已存 ↗":"打开已存视频 ↗";
+  saved.textContent="已存视频 ↗";
   saved.classList.toggle("hidden",!preferred);
   if(preferred)saved.href=preferred.url;else saved.removeAttribute("href");
 }
