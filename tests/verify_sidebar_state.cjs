@@ -18,3 +18,17 @@ page=boot();assert.equal(page.root.dataset.sidebarCollapsed,'false');
 page=boot(true);vm.runInContext('setSidebarCollapsed(true)',page.context);
 assert.equal(page.root.dataset.sidebarCollapsed,'true');
 console.log('Sidebar collapse/expand survives fresh page loads; blocked storage degrades safely.');
+
+// Reproduce full startup with toggle buttons hidden, rather than only reading storage.
+page=boot();vm.runInContext('setSidebarCollapsed(true)',page.context);
+page=boot();
+Object.assign(page.context, {state:{activeView:'collection'}, enabledSetting:()=>true,
+ applyPageLabels(){},syncSettingsNavigation(){},sidebarVisibility:()=>({}),
+ sidebarOrder:()=>[],showSidebarToggle:()=>false,$$:()=>[]});
+vm.runInContext(presentation.slice(presentation.indexOf('function applySidebarLayout()')), page.context);
+vm.runInContext('applySidebarLayout()',page.context);
+assert.equal(page.root.dataset.sidebarCollapsed,'true');
+assert.equal(page.classes.get('.app-shellsidebar-collapsed'),true);
+page=boot();assert.equal(page.root.dataset.sidebarCollapsed,'true');
+assert.ok(!fs.readFileSync('static/modules/events.js','utf8').includes('if (!showSidebarToggle()) setSidebarCollapsed(false)'));
+console.log('Hidden toggle does not expand or overwrite collapsed state during startup/settings save.');

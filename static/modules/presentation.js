@@ -204,6 +204,6 @@ function applySidebarLayout() {
   if (visibility[state.activeView] === false) {
     state.activeView = sidebarOrder().find((id) => id !== "settings" && visibility[id] !== false) || "collection";
   }
-  setSidebarCollapsed(document.documentElement.dataset.sidebarCollapsed === "true" && showSidebarToggle());
+  setSidebarCollapsed(document.documentElement.dataset.sidebarCollapsed === "true");
 }
 

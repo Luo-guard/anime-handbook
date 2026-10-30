@@ -788,7 +788,6 @@ $("#saveSettings").addEventListener("click", async () => {
     ensureVisibleCollection();
     applySidebarLayout();
     applyNoteComposerMode();
-    if (!showSidebarToggle()) setSidebarCollapsed(false);
     switchView(state.activeView);
     renderStats();
     renderTabs();
