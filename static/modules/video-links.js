@@ -57,7 +57,7 @@ function parseVideoCapture(fragment) {
   return {url:url.href,title:String(payload.title||"B站视频").slice(0,200),uploader:String(payload.uploader||"").slice(0,100),anime_id:Number(payload.anime_id)||null};
 }
 let videoAnimePickerController=null;
-function createVideoAnimePicker(animes, preferredId, dialog) {
+function createVideoAnimePicker(animes, preferredId, dialog, onSelect = () => {}) {
   videoAnimePickerController?.abort();
   const root=$("#videoAnimePicker"),input=$("#videoCaptureSearch"),value=$("#videoCaptureAnime"),list=$("#videoAnimeOptions");
   const controller=new AbortController(),options={signal:controller.signal};
@@ -69,7 +69,7 @@ function createVideoAnimePicker(animes, preferredId, dialog) {
     const node=list.children[active];
     if(node){input.setAttribute("aria-activedescendant",node.id);node.scrollIntoView({block:"nearest"});}
   };
-  const choose=anime=>{value.value=String(anime.id);input.value=anime.name;input.setCustomValidity("");hide();};
+  const choose=anime=>{value.value=String(anime.id);input.value=anime.name;input.setCustomValidity("");hide();onSelect(anime.id);};
   const show=(query="")=>{
     matches=animes.filter(a=>a.name.toLowerCase().includes(query.trim().toLowerCase()));active=-1;
     list.replaceChildren();
@@ -84,7 +84,7 @@ function createVideoAnimePicker(animes, preferredId, dialog) {
   const preferred=animes.find(a=>a.id===preferredId);if(preferred)choose(preferred);
   input.addEventListener("focus",()=>show(),options);
   input.addEventListener("click",()=>{if(list.hidden)show();},options);
-  input.addEventListener("input",()=>{value.value="";input.setCustomValidity("请从下拉选项中选择番剧");show(input.value);},options);
+  input.addEventListener("input",()=>{value.value="";onSelect(null);input.setCustomValidity("请从下拉选项中选择番剧");show(input.value);},options);
   input.addEventListener("keydown",event=>{
     if(event.isComposing)return;
     if(event.key==="ArrowDown"||event.key==="ArrowUp") {event.preventDefault();if(list.hidden)show(input.value);if(matches.length){active=active<0?(event.key==="ArrowDown"?0:matches.length-1):(active+(event.key==="ArrowDown"?1:-1)+matches.length)%matches.length;highlight();}}
@@ -108,25 +108,40 @@ async function openVideoCaptureFromLocation() {
   // Fragment transports the selection, never a write command. Saving requires confirmation.
   history.replaceState(null,"",location.pathname+location.search);
   const dialog=$("#videoCaptureModal"),form=$("#videoCaptureForm"),save=$("#videoCaptureSave"),status=$("#videoCaptureStatus"),select=$("#videoCaptureAnime");
-  $("#videoCaptureTitle").textContent=capture.title;
+  $("#videoCaptureTitle").value=capture.title;
   $("#videoCaptureUploader").textContent=capture.uploader;
   const detailAnimeId=$("#progressModal")?.open ? Number(state.progressAnime?.id) : null;
   dialog.showModal();
   const version=++videoCaptureVersion;
   $("#videoCaptureSearch").value="";$("#videoCaptureNote").value="";$("#videoCaptureDefault").checked=false;
   save.disabled=true;select.value="";status.textContent="正在读取当前账号的番剧…";
-  let catalog=null,saving=false;
+  let catalog=null,saving=false,selectionVersion=0,selectionReady=false;
+  const defaultSwitch=$("#videoCaptureDefault");
+  defaultSwitch.disabled=true;
+  const selectAnime=async animeId=>{
+    const selection=++selectionVersion;
+    selectionReady=false;save.disabled=true;defaultSwitch.checked=false;defaultSwitch.disabled=true;
+    status.textContent="";
+    if(!animeId)return;
+    try {
+      const result=await api(`/api/video-links?anime_id=${encodeURIComponent(animeId)}`);
+      if(selection!==selectionVersion||version!==videoCaptureVersion||!dialog.open||Number(select.value)!==Number(animeId))return;
+      if(result.scope!==catalog.scope)throw new Error("手账账号已切换，请重新打开保存窗口。");
+      defaultSwitch.checked=!result.items.some(item=>Boolean(item.is_default));
+      defaultSwitch.disabled=false;selectionReady=true;save.disabled=false;
+    }catch(error){if(selection===selectionVersion&&version===videoCaptureVersion&&dialog.open)status.textContent=`无法检查默认视频：${error.message}，请重新选择番剧重试。`;}
+  };
   const close=()=>{if(!saving)dialog.close();};
   $("#videoCaptureClose").onclick=close;$("#videoCaptureCancel").onclick=close;
   form.onsubmit=async event=>{
-    event.preventDefault();if(!catalog||saving||!select.value)return;
+    event.preventDefault();if(!catalog||saving||!select.value||!selectionReady)return;
     if(!$("#videoCaptureDefault").checked && !catalog.features?.optional_video_default) {
       status.textContent="当前运行的是旧后台，尚不支持只收藏而不设默认。请重启手账后台并刷新页面后再保存。";return;
     }
     saving=true;videoCaptureSaving=true;save.disabled=true;
     try {
       const animeId=Number(select.value);
-      await api("/api/video-links",{method:"POST",body:JSON.stringify({...capture,anime_id:animeId,scope:catalog.scope,note:$("#videoCaptureNote").value,make_default:$("#videoCaptureDefault").checked})});
+      await api("/api/video-links",{method:"POST",body:JSON.stringify({...capture,title:$("#videoCaptureTitle").value.trim() || capture.title,anime_id:animeId,scope:catalog.scope,note:$("#videoCaptureNote").value,make_default:$("#videoCaptureDefault").checked})});
       dialog.close();toast("视频已保存");openProgress(animeId);
     }catch(error){status.textContent=error.message;}
     finally{saving=false;videoCaptureSaving=false;save.disabled=false;}
@@ -135,9 +150,8 @@ async function openVideoCaptureFromLocation() {
     catalog=await api("/api/video-links");
     if(version!==videoCaptureVersion||!dialog.open)return;
     const preferredId=catalog.animes.some(a=>a.id===detailAnimeId)?detailAnimeId:capture.anime_id;
-    createVideoAnimePicker(catalog.animes,preferredId,dialog);
-    save.disabled=!catalog.animes.length;
-    status.textContent=catalog.animes.length?"请确认当前账号和番剧后保存。":"当前账号没有可选择的番剧。";
+    createVideoAnimePicker(catalog.animes,preferredId,dialog,selectAnime);
+    if(!catalog.animes.length)status.textContent="当前账号没有可选择的番剧。";
   }catch(error){status.textContent=`无法读取番剧：${error.message}`;}
 }
 

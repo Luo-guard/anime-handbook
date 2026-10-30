@@ -855,7 +855,7 @@
       <form class="modal-frame" id="videoCaptureForm">
         <button type="button" class="modal-close" id="videoCaptureClose" aria-label="关闭">×</button>
         <p class="eyebrow">SAVE VIDEO</p><h2>保存 B 站视频</h2>
-        <p id="videoCaptureTitle"></p><p class="page-subtitle" id="videoCaptureUploader"></p>
+        <div class="video-capture-field"><label for="videoCaptureTitle">视频名称</label><input id="videoCaptureTitle" type="text" maxlength="200" required /></div><p class="page-subtitle" id="videoCaptureUploader"></p>
         <div class="video-capture-field"><label for="videoCaptureSearch">保存到哪部番</label><div class="video-anime-picker" id="videoAnimePicker"><div class="video-anime-input"><input id="videoCaptureSearch" type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="videoAnimeOptions" autocomplete="off" placeholder="选择或输入番剧名称" required /><button type="button" id="videoAnimeToggle" aria-label="展开番剧选项">⌄</button></div><input type="hidden" id="videoCaptureAnime" /><div id="videoAnimeOptions" role="listbox" aria-label="番剧选项" hidden></div></div></div>
         <label class="video-capture-field">字幕 / 备注<input id="videoCaptureNote" maxlength="200" placeholder="例如：简体 · 喜欢的字幕组" /></label>
         <label class="switch-row"><input type="checkbox" id="videoCaptureDefault" /><span class="switch"></span><span>设为默认视频</span></label>
@@ -871,7 +871,7 @@
     <script src="/modules/presentation.js?v=sidebar-restore-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
     <script src="/modules/composer.js?v=20261023-modules" defer></script>
-    <script src="/modules/video-links.js?v=20261030-video-label" defer></script>
+    <script src="/modules/video-links.js?v=20261030-capture-title-default-20261030-video-label" defer></script>
     <script src="/modules/details.js?v=20261029-video-disclosure" defer></script>
     <script src="/modules/records.js?v=20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>

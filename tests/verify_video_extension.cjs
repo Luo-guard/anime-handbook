@@ -9,7 +9,7 @@ try{
  await context.route('http://127.0.0.1:43127/**',route=>{
   if(new URL(route.request().url()).pathname==='/api/video-links'){
    if(route.request().method()==='POST'){const body=route.request().postDataJSON();writes.push(body);return route.fulfill({json:{ok:true,items:[]}});}
-   return route.fulfill({json:{features:{optional_video_default:1},scope:'test-scope',animes:[{id:123,name:'测试番剧'},{id:456,name:'另一部番剧'}],items:[]}});
+   return route.fulfill({json:{features:{optional_video_default:1},scope:'test-scope',animes:[{id:123,name:'测试番剧'},{id:456,name:'另一部番剧'}],items:new URL(route.request().url()).searchParams.get('anime_id')==='456'?[{id:9,is_default:1}]:[]}});
   }
   return route.fulfill({contentType:'text/html',body:html});
  });
@@ -23,7 +23,7 @@ try{
  },tab.id);
  const next=context.waitForEvent('page');await worker.evaluate(tab=>saveVideoFromTab(tab),{id:tab.id,url:video.url()});const capture=await next;await capture.waitForLoadState();
  await capture.locator('#videoCaptureModal').waitFor({state:'visible'});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
- assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'123');assert.equal(await capture.locator('#videoCaptureTitle img').count(),0);assert.equal(writes.length,0,'navigation must not save');assert.equal(new URL(capture.url()).hash,'');
+ assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'123');assert.equal(await capture.locator('#videoCaptureTitle img').count(),0);assert.equal(await capture.locator('#videoCaptureTitle').inputValue(),'<img src=x onerror=alert(1)>');assert.equal(await capture.locator('#videoCaptureDefault').isChecked(),true);assert.equal(writes.length,0,'navigation must not save');assert.equal(new URL(capture.url()).hash,'');
  await capture.locator('#videoCaptureCancel').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
  await capture.evaluate(()=>{window.reuseMarker='existing-state';state.progressAnime={id:456};document.querySelector('#progressModal').showModal();document.querySelector('#videoCaptureNote').value='old note';});
  const pageCount=context.pages().length;
@@ -39,7 +39,7 @@ try{
  await capture.locator('#videoCaptureSearch').fill('没有这个名字');assert.equal(await capture.getByRole('option').count(),0);assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'');
  await capture.locator('#videoCaptureSearch').fill('');await capture.locator('#videoCaptureSearch').press('ArrowUp');await capture.locator('#videoCaptureSearch').press('Enter');assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'456');
  await capture.locator('#videoCaptureSearch').click();await capture.locator('#videoCaptureTitle').click();assert.equal(await capture.getByRole('listbox').isVisible(),false);
- await capture.locator('#videoCaptureSearch').fill('另一');await capture.getByRole('option',{name:'另一部番剧',exact:true}).click();await capture.locator('#videoCaptureNote').fill('繁体');await capture.locator('#videoCaptureSave').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
- assert.equal(writes.length,1);assert.equal(writes[0].anime_id,456);assert.equal(writes[0].note,'繁体');assert(writes[0].url.includes('p=2'));assert.equal(writes[0].scope,'test-scope');assert.equal(writes[0].make_default,false,'save confirmation defaults to collection only');
+ await capture.locator('#videoCaptureSearch').fill('另一');await capture.getByRole('option',{name:'另一部番剧',exact:true}).click();await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);assert.equal(await capture.locator('#videoCaptureDefault').isChecked(),false);await capture.locator('#videoCaptureTitle').fill('自定义视频名');await capture.locator('#videoCaptureNote').fill('繁体');await capture.locator('#videoCaptureSave').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
+ assert.equal(writes.length,1);assert.equal(writes[0].anime_id,456);assert.equal(writes[0].note,'繁体');assert.equal(writes[0].title,'自定义视频名');assert(writes[0].url.includes('p=2'));assert.equal(writes[0].scope,'test-scope');assert.equal(writes[0].make_default,false,'save confirmation defaults to collection only');
  console.log('Extension capture -> same-origin handbook confirmation: first launch and existing-tab reuse without reload, catalog, association, reset, filter, explicit save and Part 2 passed.');
 }finally{if(context)await context.close();if(!path.resolve(dir).startsWith(path.join(os.tmpdir(),'handbook-extension-')))throw Error('Unexpected directory');fs.rmSync(dir,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exit(1)});
