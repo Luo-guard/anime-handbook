@@ -2,7 +2,7 @@
 // 逐条调用 Bangumi 搜索，确认收藏状态后自动跳到下一条。
 const IMPORT_HEADER_WORDS = new Set(["name", "title", "name_cn", "番剧", "番名", "名称", "标题", "动画", "动画名", "作品", "作品名", "anime", "subject"]);
 const IMPORT_JSON_KEYS = ["name", "title", "name_cn", "番剧", "名称", "标题", "番名", "anime", "subject"];
-const IMPORT_LIMIT = 300;
+const IMPORT_LIMIT = 2000;
 const importState = { names: [], index: 0, added: new Set(), skipped: new Set(), cache: new Map(), token: 0 };
 
 function importCleanName(value) {
@@ -171,7 +171,7 @@ if ($("#collectionImportButton")) {
       importSetStatus("没有读到番剧名称：请确认每行一个名称，或文件里有 name / title 字段。", true);
       return;
     }
-    importSetStatus(`识别到 ${names.length} 条${names.length >= IMPORT_LIMIT ? "（一次最多 300 条）" : ""}`);
+    importSetStatus(`识别到 ${names.length} 条${names.length >= IMPORT_LIMIT ? `（单次最多 ${IMPORT_LIMIT} 条，其余已忽略）` : ""}`);
     importStart(names);
   };
   $("#importSearchForm").onsubmit = (event) => {

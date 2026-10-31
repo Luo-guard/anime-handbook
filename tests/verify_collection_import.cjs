@@ -27,6 +27,9 @@ assert.deepEqual(await page.evaluate(()=>parseImportText('葬送的芙莉莲\n�
 assert.deepEqual(await page.evaluate(()=>parseImportText('番剧,状态\n葬送的芙莉莲,看过\n药屋少女的呢喃,在看')),['葬送的芙莉莲','药屋少女的呢喃']);
 assert.deepEqual(await page.evaluate(()=>parseImportText('葬送的芙莉莲\t1\n药屋少女的呢喃\t2')),['葬送的芙莉莲','药屋少女的呢喃']);
 assert.deepEqual(await page.evaluate(()=>parseImportText('[{"name":"葬送的芙莉莲"},{"title":"药屋少女的呢喃"},"进击的巨人"]')),['葬送的芙莉莲','药屋少女的呢喃','进击的巨人']);
+// Large lists are capped at 2000 entries instead of the old 300.
+const capped=await page.evaluate(()=>{const lines=Array.from({length:2500},(_,i)=>'番剧'+i).join('\n');return parseImportText(lines).length;});
+assert.equal(capped,2000);
 // Flow
 await page.locator('#collectionImportButton').click({force:true});
 // A picked file lands in the textarea, so the user can still edit it before importing.
@@ -64,5 +67,5 @@ const before=await page.evaluate(()=>queries.length);
 await page.locator('#importPrev').click();
 await page.waitForTimeout(200);
 assert.equal(await page.evaluate(()=>queries.length),before,'cached entry must not search again');
-console.log('Batch import: list parsing (txt/csv/tsv/json), entry switching, auto-advance after adding, skip and cache passed.');
+console.log('Batch import: list parsing (txt/csv/tsv/json) and the 2000-entry cap, entry switching, auto-advance after adding, skip and cache passed.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
