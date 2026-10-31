@@ -19,13 +19,15 @@ function keyboardPreferences(value=state.settings.keyboard_shortcuts) {
   return {enabled:value?.enabled!==false,bindings:Object.fromEntries(SHORTCUT_ACTIONS.map(action=>[action.id,{enabled:typeof value?.bindings?.[action.id]?.enabled==="boolean"?value.bindings[action.id].enabled:action.enabled,key:value?.bindings?.[action.id]?.key??action.key}]))};
 }
 function shortcutKey(event) {
+  if(event.button===3 || event.button===4) return [event.ctrlKey?"Ctrl":"",event.altKey?"Alt":"",event.shiftKey?"Shift":"",event.metaKey?"Meta":"",event.button===3?"MouseBack":"MouseForward"].filter(Boolean).join("+");
+  if(typeof event.key!=="string")return "";
   if(["Control","Alt","Shift","Meta","Dead","Unidentified","Process","Tab"].includes(event.key))return "";
   const key=event.key===" "?"Space":event.key.length===1?event.key.toLowerCase():event.key;
   if(key==="+" || !((key.length===1&&/^[\x21-\x7e]$/.test(key))||["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","PageUp","PageDown","Escape","Space","Backspace","Delete"].includes(key)||/^F(?:[1-9]|1[0-2])$/.test(key)))return "";
   return [event.ctrlKey?"Ctrl":"",event.altKey?"Alt":"",event.shiftKey?"Shift":"",event.metaKey?"Meta":"",key].filter(Boolean).join("+");
 }
 function shortcutLabel(key) {
-  const labels={ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",Space:"空格",Escape:"Esc"};
+  const labels={MouseBack:"鼠标后退侧键",MouseForward:"鼠标前进侧键",ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",Space:"空格",Escape:"Esc"};
   return key.split("+").map(part=>labels[part]||part).join(" + ");
 }
 function validateKeyboardPreferences(value) {
@@ -102,3 +104,33 @@ document.addEventListener("keydown",event=>{
   if(matches.length!==1)return;
   if(runShortcut(matches[0]))event.preventDefault();
 });
+
+// Claim only enabled bindings (or explicit recording), and suppress the matching
+// release/auxclick so the browser does not also navigate its history.
+const claimedShortcutMouseButtons=new Set();
+function handleShortcutMouse(event) {
+  if(event.button!==3&&event.button!==4)return;
+  if(event.type!=="mousedown") {
+    if(claimedShortcutMouseButtons.has(event.button)) {
+      event.preventDefault();event.stopPropagation();
+      if(event.type==="auxclick")claimedShortcutMouseButtons.delete(event.button);
+    }
+    return;
+  }
+  claimedShortcutMouseButtons.delete(event.button);
+  const input=document.activeElement;
+  if(input?.matches('[data-shortcut-key]')&&input.closest('dialog[open]')) {
+    event.preventDefault();event.stopPropagation();claimedShortcutMouseButtons.add(event.button);
+    const key=shortcutKey(event);input.dataset.key=key;input.value=shortcutLabel(key);
+    try{readKeyboardSettings();$("#keyboardStatus").textContent="";}catch(error){$("#keyboardStatus").textContent=error.message;}
+    return;
+  }
+  if(event.defaultPrevented||document.querySelector('dialog[open]')||isKeyboardEditingTarget(input)||event.composedPath().some(isKeyboardEditingTarget))return;
+  const prefs=keyboardPreferences();if(!prefs.enabled)return;
+  const key=shortcutKey(event);
+  const matches=SHORTCUT_ACTIONS.filter(action=>prefs.bindings[action.id].enabled&&prefs.bindings[action.id].key===key);
+  if(matches.length!==1)return;
+  if(runShortcut(matches[0])){claimedShortcutMouseButtons.add(event.button);event.preventDefault();event.stopPropagation();}
+}
+['mousedown','mouseup','auxclick'].forEach(type=>document.addEventListener(type,handleShortcutMouse,{capture:true,passive:false}));
+window.addEventListener('blur',()=>claimedShortcutMouseButtons.clear());

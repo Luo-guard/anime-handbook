@@ -14,7 +14,7 @@ def normalize_shortcuts(value):
         key=item["key"]
         parts=key.split("+")
         modifiers=parts[:-1];base=parts[-1]
-        valid_base=(len(base)==1 and base.isascii() and base.isprintable() and base not in {" ","+"}) or base in {"ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","PageUp","PageDown","Escape","Space","Backspace","Delete"} or re.fullmatch(r"F(?:[1-9]|1[0-2])",base)
+        valid_base=(len(base)==1 and base.isascii() and base.isprintable() and base not in {" ","+"}) or base in {"MouseBack","MouseForward","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","PageUp","PageDown","Escape","Space","Backspace","Delete"} or re.fullmatch(r"F(?:[1-9]|1[0-2])",base)
         if key and (not valid_base or modifiers != [m for m in ["Ctrl","Alt","Shift","Meta"] if m in modifiers]):
             raise ValueError("快捷键按键无效")
         if item["enabled"] and key:

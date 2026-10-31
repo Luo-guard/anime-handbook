@@ -1,0 +1,13 @@
+const fs=require('fs'),assert=require('node:assert/strict');
+const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+(async()=>{const b=await chromium.launch({headless:true});try{const p=await b.newPage();
+let html=fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'');
+await p.route('http://shortcut.test/**',r=>r.fulfill({contentType:'text/html',body:html}));await p.goto('http://shortcut.test/one');await p.goto('http://shortcut.test/two');
+await p.addScriptTag({content:`const $=s=>document.querySelector(s);const state={settings:{keyboard_shortcuts:{bindings:{previous:{enabled:true,key:'MouseBack'},next:{enabled:true,key:'MouseForward'}}}},activeView:'collection'};const pageLabel=id=>id;const sidebarOrder=()=>['collection','schedule','timeline'];const sidebarVisibility=()=>({});window.hits=[];document.querySelectorAll('[data-nav-id]').forEach(button=>button.onclick=()=>{hits.push(button.dataset.navId);state.activeView=button.dataset.navId;});`+fs.readFileSync('static/modules/keyboard.js','utf8')});
+const cdp=await p.context().newCDPSession(p);
+const side=async(button,modifier=0)=>{await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',x:20,y:20,button,buttons:button==='back'?8:16,clickCount:1,modifiers:modifier});await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:20,y:20,button,buttons:0,clickCount:1,modifiers:modifier});};
+await side('forward');assert.deepEqual(await p.evaluate(()=>hits),['schedule']);await side('back');assert.deepEqual(await p.evaluate(()=>hits),['schedule','collection']);assert(p.url().endsWith('/two'));
+await p.evaluate(()=>{document.querySelector('#searchInput').focus();state.settings.keyboard_shortcuts.bindings.previous.key='Alt+MouseBack';});await side('forward');assert.equal(await p.evaluate(()=>hits.length),2);
+await p.evaluate(()=>{renderKeyboardSettings();const modal=document.querySelector('#settingsModal');modal.showModal();const node=document.querySelector('[data-shortcut-action="previous"] input');node.focus();});await side('back',1);assert.equal(await p.locator('[data-shortcut-action="previous"] [data-shortcut-key]').getAttribute('data-key'),'Alt+MouseBack');assert.equal(await p.locator('[data-shortcut-action="previous"] [data-shortcut-key]').inputValue(),'Alt + 鼠标后退侧键');assert(p.url().endsWith('/two'));
+console.log('Mouse side buttons: CDP back/forward events trigger once, prevent history navigation, ignore editing, and record modifiers in settings.');
+}finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1)});
