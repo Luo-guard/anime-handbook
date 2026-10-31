@@ -3205,7 +3205,6 @@ dialog::backdrop {
 .collect-check svg { width: 15px; height: 15px; }
 .collect-option.is-current .collect-check { opacity: 1; }
 
-.collection-add-group { display: inline-flex; align-items: center; gap: 10px; flex: none; }
 .collection-add-button { display: inline-flex; align-items: center; gap: 7px; }
 .collection-add-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 
@@ -3213,6 +3212,9 @@ dialog::backdrop {
 .collect-search-modal > .modal-frame { display: flex; flex-direction: column; gap: 18px; }
 .collect-search-head h2 { margin: 6px 0 7px; font-size: 25px; }
 .collect-search-hint { margin: 0; max-width: 46ch; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
+.collect-search-head-row { display: flex; align-items: flex-start; gap: 14px; justify-content: space-between; flex-wrap: wrap; }
+.collect-search-head-row .collect-search-hint { flex: 1 1 260px; }
+.collect-search-head-row .compact-button { margin-top: -2px; white-space: nowrap; }
 .collect-search-form {
   display: flex; align-items: center; gap: 10px;
   padding: 5px 5px 5px 14px;

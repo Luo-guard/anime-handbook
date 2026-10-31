@@ -32,6 +32,8 @@ assert.deepEqual(await page.evaluate(()=>parseImportText('[{"name":"葬送的芙
 const capped=await page.evaluate(()=>{const lines=Array.from({length:2500},(_,i)=>'番剧'+i).join('\n');return parseImportText(lines).length;});
 assert.equal(capped,2000);
 // Flow
+// 批量搜索 lives inside the search dialog now.
+await page.locator('#collectionSearchButton').click({force:true});
 await page.locator('#collectionImportButton').click({force:true});
 // A picked file lands in the textarea, so the user can still edit it before importing.
 await page.locator('#importFile').setInputFiles({name:'list.csv',mimeType:'text/csv',buffer:Buffer.from('番剧,状态\n葬送的芙莉莲,看过','utf8')});

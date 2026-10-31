@@ -168,6 +168,7 @@ if ($("#collectionImportButton")) {
     importState.token++;
   };
   $("#collectionImportButton").onclick = () => {
+    $("#collectionSearchModal").close();
     $("#importSetup").classList.remove("hidden");
     $("#importWork").classList.add("hidden");
     $("#importPaste").value = "";
