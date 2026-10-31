@@ -8,6 +8,7 @@ function applyKazumiReadOnlyControls() {
 function renderSettingsPanels() {
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
   $("#kazumiWritebackInput").checked=state.settings.kazumi_writeback!==false;
+  $("#webdavKazumiSyncInput").checked=state.settings.webdav_kazumi_sync!==false;
   $("#kazumiConflictInput").value=state.settings.kazumi_conflict||"handbook";
   applyKazumiReadOnlyControls();
   renderKeyboardSettings();

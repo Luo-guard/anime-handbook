@@ -150,7 +150,7 @@ class HandbookDBTest(unittest.TestCase):
         # Construct without touching the real user's config or cloud account.
         service = object.__new__(webdav.WebDAVSyncService)
         service._lock = threading.RLock()
-        with patch.object(service, "_read", return_value=config), patch.object(service, "_profile_config", return_value=item), patch.object(service, "_ensure_remote_folder"), patch.object(service, "_write"), patch.object(service, "_remote_probe", side_effect=[(200, "changed"), (200, "merged"), (200, "merged")]), patch.object(service, "_remote_state", return_value=({"state": remote}, service._state_hash(remote))) as fetch, patch.object(service, "_upload_state", side_effect=lambda c, a, state: service._state_hash(state)) as upload:
+        with patch.object(service, "_read", return_value=config), patch.object(service, "_profile_config", return_value=item), patch.object(service, "_ensure_remote_folder"), patch.object(service, "_write"), patch.object(service, "_push_kazumi", return_value=None), patch.object(service, "_remote_probe", side_effect=[(200, "changed"), (200, "merged"), (200, "merged")]), patch.object(service, "_remote_state", return_value=({"state": remote}, service._state_hash(remote))) as fetch, patch.object(service, "_upload_state", side_effect=lambda c, a, state: service._state_hash(state)) as upload:
             result = service.sync(self.db)
             self.assertEqual(result["action"], "merged")
             self.assertNotIn("conflict", result)

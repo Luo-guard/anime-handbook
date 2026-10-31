@@ -29,6 +29,9 @@ class WebDAVSyncService:
     """
 
     ROOT = "AnimeHandbook-v1"
+    # Kazumi 自己的云同步目录；只推送本机 hive 的副本，绝不改写它的合并逻辑。
+    KAZUMI_ROOT = "kazumiSync"
+    KAZUMI_BOXES = ("collectibles", "collectchanges")
 
     def __init__(self, profiles: ProfileManager, config_path: Path = WEBDAV_CONFIG_PATH) -> None:
         self.profiles = profiles
@@ -332,6 +335,94 @@ class WebDAVSyncService:
         return merged
 
     def sync(self, database: HandbookDB, *, resolution: str = "") -> dict[str, Any]:
+        with self._lock:
+            result = self._sync_once(database, resolution=resolution)
+            if result.get("ok"):
+                kazumi = self._push_kazumi(database)
+                if kazumi:
+                    result["kazumi"] = kazumi
+            return result
+
+    @staticmethod
+    def _kazumi_running() -> bool:
+        import subprocess
+
+        options = {"creationflags": subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, "CREATE_NO_WINDOW") else {}
+        try:
+            processes = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq kazumi.exe", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                timeout=10,
+                **options,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return True
+        return b"kazumi.exe" in processes.stdout.lower()
+
+    @staticmethod
+    def _hive_dir() -> Path | None:
+        from .metadata import SyncService
+
+        hive = SyncService.find_kazumi_database()
+        return hive.parent if hive else None
+
+    def _push_kazumi(self, database: HandbookDB) -> dict[str, Any] | None:
+        """把本机 Kazumi 收藏库推到云端，等价于替 Kazumi 按一次同步。
+
+        只有在“云端自上次同步后没有任何第三方改动”时才会写入，否则只记录云端版本
+        并提示先打开 Kazumi 同步一次，避免覆盖手机等设备新增的数据。
+        """
+        if database.get_settings().get("webdav_kazumi_sync") is False:
+            return None
+        hive_dir = self._hive_dir()
+        if not hive_dir:
+            return {"ok": False, "action": "missing", "message": "未找到本机 Kazumi 收藏库，已跳过"}
+        if self._kazumi_running():
+            return {"ok": False, "action": "running", "message": "Kazumi 正在运行，已跳过 Kazumi 推送"}
+        config = self._read()
+        item = self._profile_config(config)
+        files = {name: hive_dir / f"{name}.hive" for name in self.KAZUMI_BOXES}
+        files = {name: path for name, path in files.items() if path.is_file()}
+        if not files:
+            return {"ok": False, "action": "missing", "message": "未找到 Kazumi 收藏库文件，已跳过"}
+        status, _ = self._request(config, "MKCOL", self.KAZUMI_ROOT)
+        if status not in {201, 405}:
+            return {"ok": False, "action": "error", "message": f"坚果云无法创建 Kazumi 目录（HTTP {status}）"}
+        remote: dict[str, str | None] = {}
+        for name in files:
+            code, body = self._request(config, "GET", f"{self.KAZUMI_ROOT}/{name}.tmp")
+            if code == 404:
+                remote[name] = None
+            elif code == 200:
+                remote[name] = hashlib.sha256(body).hexdigest()
+            else:
+                return {"ok": False, "action": "error", "message": f"读取云端 Kazumi 数据失败（HTTP {code}）"}
+        baseline = item.get("kazumi_sync") if isinstance(item.get("kazumi_sync"), dict) else {}
+        if baseline:
+            dirty = [name for name in remote if remote[name] != baseline.get(name)]
+            if dirty:
+                item["kazumi_sync"] = remote
+                self._write(config)
+                return {"ok": False, "action": "changed", "message": "云端 Kazumi 数据有更新（可能来自手机），本次未推送；打开一次 Kazumi 同步后再点同步即可"}
+        elif any(value is not None for value in remote.values()):
+            item["kazumi_sync"] = remote
+            self._write(config)
+            return {"ok": False, "action": "baseline", "message": "已记录云端 Kazumi 版本，下次同步会把本机收藏一起传上去"}
+        uploaded: dict[str, str | None] = {}
+        for name, path in files.items():
+            try:
+                data = path.read_bytes()
+            except OSError:
+                return {"ok": False, "action": "error", "message": f"读取 {name}.hive 失败，请关闭 Kazumi 后重试"}
+            code, _ = self._request(config, "PUT", f"{self.KAZUMI_ROOT}/{name}.tmp", data, "application/octet-stream")
+            if code not in {200, 201, 204}:
+                return {"ok": False, "action": "error", "message": f"上传 Kazumi 数据失败（HTTP {code}）"}
+            uploaded[name] = hashlib.sha256(data).hexdigest()
+        item["kazumi_sync"] = uploaded
+        self._write(config)
+        return {"ok": True, "action": "uploaded", "message": "已把本机 Kazumi 收藏同步到坚果云"}
+
+    def _sync_once(self, database: HandbookDB, *, resolution: str = "") -> dict[str, Any]:
         with self._lock:
             config = self._read()
             profile_item = self._profile_config(config)

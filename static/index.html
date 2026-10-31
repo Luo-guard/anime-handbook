@@ -774,6 +774,7 @@
           <div class="settings-section-title" data-settings-section="sharing">账号与同步</div>
           <label class="setting-row desktop-only"><span><strong>只读 Kazumi 数据</strong><small>开启后手账不再修改 Kazumi：搜索添加收藏、周表加入收藏、详情修改状态一并关闭，自动写回也会暂停，已有待写回任务保留。</small></span><span class="switch-row compact"><input type="checkbox" id="kazumiReadOnlyInput"><span class="switch"></span></span></label>
           <label class="setting-row desktop-only"><span><strong>自动写回 Kazumi 收藏</strong><small>Kazumi 关闭后执行；开启期间等待。手账后台须保持运行，仅同步收藏新增和状态，不写观看进度。</small></span><span class="switch-row compact"><input type="checkbox" id="kazumiWritebackInput"><span class="switch"></span></span></label>
+          <label class="setting-row desktop-only"><span><strong>同步坚果云时一并推送 Kazumi 收藏</strong><small>点“同步坚果云”时顺带把本机 Kazumi 收藏库传到云端（同等于在 Kazumi 里按一次同步）。只有在云端自上次同步后没有别的设备改动时才会写入；Kazumi 运行中会跳过。</small></span><span class="switch-row compact"><input type="checkbox" id="webdavKazumiSyncInput"><span class="switch"></span></span></label>
           <div class="setting-row desktop-only"><span><strong>Kazumi 冲突优先级</strong><small>两边都修改同一番剧状态时，采用选定来源。</small></span><select id="kazumiConflictInput"><option value="handbook">手账优先</option><option value="kazumi">Kazumi 优先</option></select><button type="button" class="secondary-button" id="collectionOutboxButton">查看待同步任务</button><p id="collectionOutboxStatus" role="status"></p></div>
           <h3 class="settings-subsection-title">本机账号</h3>
           <div class="setting-row stacked"><span><strong>本机手账账号</strong><small>切换、新建或管理本机账号。新账号可绑定这台电脑自己的 Kazumi 数据库。</small></span><div class="theme-profile-controls">
@@ -797,7 +798,7 @@
           <div class="setting-row stacked sharing-settings">
             <span>
               <strong>坚果云多端同步</strong>
-              <small id="webdavStatus">将当前账号同步到坚果云；同一账号在另一台设备填入同一“云端账号标识”即可互通。不会上传 Kazumi 数据库、封面和角色缓存。</small>
+              <small id="webdavStatus">将当前账号同步到坚果云；同一账号在另一台设备填入同一“云端账号标识”即可互通。默认只传手账账号数据，不含封面和角色缓存；打开上方“一并推送 Kazumi 收藏”后才会额外上传 Kazumi 收藏库。</small>
             </span>
             <div class="sharing-workflow">
               <section class="sharing-step">
@@ -958,8 +959,8 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
     <script src="/modules/lifecycle.js?v=20261031-readonly-20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261031-bgmlink-20261029-sidebar-state" defer></script>
-    <script src="/modules/events.js?v=20261031-bgmlink-20261030-source-20261030-20261029-sidebar-state" defer></script>
+    <script src="/modules/settings.js?v=20261031-kazumi-cloud-20261029-sidebar-state" defer></script>
+    <script src="/modules/events.js?v=20261031-kazumi-cloud-20261030-source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261031-nav-bounds-20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/collection-edit.js?v=20261031-batch-import" defer></script>

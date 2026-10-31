@@ -379,7 +379,7 @@ async function syncWebdav(options = {}) {
     });
     applyTheme(); renderStats(); renderTabs(); renderCollection(); renderSettingsPanels(); renderWebdavSettings();
     switchView(state.activeView);
-    toast(payload.message || "坚果云同步完成");
+    toast([payload.message, payload.kazumi && payload.kazumi.message].filter(Boolean).join(" · ") || "坚果云同步完成");
   } catch (error) { toast(error.message, "error"); }
   finally {
     state.webdavSyncRunning = false;
@@ -732,6 +732,7 @@ $("#saveSettings").addEventListener("click", async () => {
         default_view: $("#defaultViewInput").value,
         ...scheduleSorting,
         kazumi_writeback: $("#kazumiWritebackInput").checked,
+        webdav_kazumi_sync: $("#webdavKazumiSyncInput").checked,
         kazumi_read_only: $("#kazumiReadOnlyInput").checked,
         kazumi_conflict: $("#kazumiConflictInput").value,
         schedule_source: $("#scheduleSourceInput").value,

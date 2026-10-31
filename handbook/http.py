@@ -745,6 +745,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "sidebar_order",
                     "sidebar_labels",
                     "kazumi_read_only",
+                    "webdav_kazumi_sync",
                     "kazumi_writeback",
                     "kazumi_conflict",
                     "schedule_source",
@@ -777,6 +778,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                         elif key == "kazumi_read_only":
                             if type(value) is not bool:
                                 raise ValueError("只读开关无效")
+                        elif key == "webdav_kazumi_sync":
+                            if type(value) is not bool:
+                                raise ValueError("Kazumi 云端推送开关无效")
                         elif key == "kazumi_writeback":
                             if type(value) is not bool:
                                 raise ValueError("写回开关无效")
