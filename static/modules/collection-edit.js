@@ -216,14 +216,39 @@ function collectionSearchRow(row) {
   <div class="collect-result-action">${collectionControlMarkup(row.id, anime?.collection_type || 2)}</div>
 </article>`;
 }
-function renderCollectionSearchResults(result) {
+// Bangumi tokenises an unquoted keyword, so "少女前线" also returns 少女革命 and the
+// like. Keep the exact title matches on top and tuck the token-only matches away.
+function collectionSearchPhrase(keyword) {
+  return String(keyword || "").toLowerCase().replace(/\s+/g, "");
+}
+function collectionSearchTitleHit(row, phrase) {
+  if (!phrase) return true;
+  return [row.name_cn, row.name]
+    .filter(Boolean)
+    .some((title) => String(title).toLowerCase().replace(/\s+/g, "").includes(phrase));
+}
+function renderCollectionSearchResults(result, keyword) {
   const results = $("#collectionSearchResults");
   const items = (result.items || []).filter((row) => Number(row.id) > 0);
   if (!items.length) {
     results.innerHTML = `<div class="collect-search-empty">${COLLECT_SEARCH_ICON}<strong>没有找到匹配的动画条目</strong><p>换一个名称，或用简体、日文原名再试一次。</p></div>`;
     return;
   }
-  results.innerHTML = items.map(collectionSearchRow).join("");
+  const phrase = collectionSearchPhrase(keyword);
+  const exact = items.filter((row) => collectionSearchTitleHit(row, phrase));
+  const related = exact.length && exact.length < items.length ? items.filter((row) => !collectionSearchTitleHit(row, phrase)) : [];
+  results.innerHTML = (exact.length ? exact : items).map(collectionSearchRow).join("") +
+    (related.length ? `<div class="collect-more"><button type="button" class="collect-more-toggle" aria-expanded="false">显示其他 ${related.length} 条相关结果<small>Bangumi 会把关键词拆开匹配，可能只命中其中一个词</small></button><div class="collect-more-list" role="list" hidden>${related.map(collectionSearchRow).join("")}</div></div>` : "");
+  const toggle = results.querySelector(".collect-more-toggle");
+  if (toggle) {
+    toggle.onclick = () => {
+      const list = results.querySelector(".collect-more-list");
+      const open = list.hidden;
+      list.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.firstChild.textContent = open ? `收起其他 ${related.length} 条相关结果` : `显示其他 ${related.length} 条相关结果`;
+    };
+  }
 }
 if ($("#collectionSearchButton")) {
   applyCollectionEditingAvailability();
@@ -240,13 +265,14 @@ if ($("#collectionSearchButton")) {
     const version = ++collectionSearchVersion;
     const results = $("#collectionSearchResults");
     const button = $("#collectionSearchSubmit");
+    const query = $("#collectionSearchQuery").value;
     button.disabled = true;
     results.innerHTML = collectionSearchSkeleton();
     results.setAttribute("aria-busy", "true");
     try {
-      const result = await api(`/api/collection-search?q=${encodeURIComponent($("#collectionSearchQuery").value)}`);
+      const result = await api(`/api/collection-search?q=${encodeURIComponent(query)}`);
       if (version !== collectionSearchVersion || !$("#collectionSearchModal").open) return;
-      renderCollectionSearchResults(result);
+      renderCollectionSearchResults(result, query);
     } catch (error) {
       if (version === collectionSearchVersion) results.innerHTML = `<div class="collect-search-empty">${COLLECT_SEARCH_ICON}<strong>搜索没有完成</strong><p>${escapeHtml(error.message)}</p></div>`;
     } finally {
