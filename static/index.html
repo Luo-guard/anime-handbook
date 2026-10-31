@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261031-editor-height-20261031-collection-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261031-collect-ui-20261031-collection-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -110,7 +110,7 @@
               </svg>
               <input id="searchInput" type="search" placeholder="搜索收藏" />
             </label>
-            <button type="button" class="secondary-button" id="collectionSearchButton">搜索添加番剧</button>
+            <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>搜索添加番剧</button>
             <label class="switch-row compact" id="collectionRatingControl">
               <input type="checkbox" id="collectionRatingToggle" />
               <span class="switch"></span>
@@ -280,11 +280,11 @@
         <div class="progress-hero">
           <img id="progressCover" alt="" />
           <div>
-            <span class="category-chip" id="progressCategory"></span><div id="collectionDetailStatus"></div>
             <h2 id="progressTitle"></h2>
             <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><a id="bgmMirrorLink" target="_blank" rel="noreferrer"></a><a id="savedVideoDefaultLink" class="hidden" target="_blank" rel="noreferrer">已存视频 ↗</a><a id="bilibiliSearchLink" target="_blank" rel="noreferrer">B站搜索 ↗</a><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
             <div class="anime-rating hidden" id="animeRating"></div>
             <div class="personal-rating hidden" id="personalRating"></div>
+            <div class="collect-detail-row" id="collectionDetailStatus"></div>
             <input id="episodeCountInput" type="hidden" />
           </div>
         </div>
@@ -854,7 +854,22 @@
     <dialog class="modal schedule-dialog" id="scheduleDetailModal"><div class="modal-frame"><button type="button" class="modal-close" id="scheduleCloseDetail" aria-label="关闭">×</button><div id="scheduleDetail"></div></div></dialog>
 
     <dialog class="modal backend-closed-dialog" id="backendClosedDialog"><div class="modal-frame"><h2 id="backendClosedTitle">后台已关闭</h2><p id="backendClosedMessage">再次使用时，请运行“启动动漫手账”快捷方式，然后刷新此页面。</p></div></dialog>
-    <dialog class="modal" id="collectionSearchModal"><div class="modal-frame"><button type="button" class="modal-close" id="collectionSearchClose" aria-label="关闭">×</button><h2>搜索添加番剧</h2><form id="collectionSearchForm"><label for="collectionSearchQuery">番剧名称</label><input type="search" id="collectionSearchQuery" required maxlength="100"/><button class="primary-button" type="submit">搜索 Bangumi</button></form><div id="collectionSearchResults"></div></div></dialog>
+    <dialog class="modal collect-search-modal" id="collectionSearchModal">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="collectionSearchClose" aria-label="关闭">×</button>
+        <header class="collect-search-head">
+          <p class="eyebrow">BANGUMI</p>
+          <h2>搜索添加番剧</h2>
+          <p class="collect-search-hint">选择收藏状态即可加入手账，Kazumi 关闭后自动写回。</p>
+        </header>
+        <form id="collectionSearchForm" class="collect-search-form" role="search">
+          <span class="collect-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>
+          <input type="search" id="collectionSearchQuery" required maxlength="100" autocomplete="off" aria-label="搜索 Bangumi 番剧名称" placeholder="输入番剧名称，例如：芙莉莲" />
+          <button class="primary-button" type="submit" id="collectionSearchSubmit">搜索</button>
+        </form>
+        <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
+      </div>
+    </dialog>
     <dialog class="modal" id="videoCaptureModal">
       <form class="modal-frame" id="videoCaptureForm">
         <button type="button" class="modal-close" id="videoCaptureClose" aria-label="关闭">×</button>
@@ -868,7 +883,7 @@
       </form>
     </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261031-collection-source-20261030-20261025-sort-save-check" defer></script>
+    <script src="/schedule.js?v=20261031-collect-ui-20261030-20261025-sort-save-check" defer></script>
     <script src="/modules/core.js?v=20261029-toast-layer" defer></script>
     <script src="/modules/network.js?v=20261025-shutdown" defer></script>
     <script src="/modules/collection.js?v=20261023-modules" defer></script>
@@ -876,7 +891,7 @@
     <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
     <script src="/modules/composer.js?v=20261023-modules" defer></script>
     <script src="/modules/video-links.js?v=20261030-capture-title-default-20261030-video-label" defer></script>
-    <script src="/modules/details.js?v=20261031-collection-20261029-video-disclosure" defer></script>
+    <script src="/modules/details.js?v=20261031-collect-ui-20261029-video-disclosure" defer></script>
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
@@ -885,7 +900,7 @@
     <script src="/modules/events.js?v=20261031-collection-sidebar-restore-20261030-source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261031-mouse-20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
-    <script src="/modules/collection-edit.js?v=20261031-collection" defer></script>
+    <script src="/modules/collection-edit.js?v=20261031-collect-ui" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

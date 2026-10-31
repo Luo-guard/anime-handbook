@@ -3146,6 +3146,117 @@ dialog::backdrop {
 
 #scheduleSourceSwitch[hidden] { display: none; }
 
-.collection-edit-actions { display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0; }
-.collection-search-result { padding:16px 0;border-bottom:1px solid var(--border); }
+/* —— 收藏状态控件：沿用 Kazumi 的“一个状态按钮 + 五种状态菜单” —— */
+.collect-slot, .collect-detail-row, .schedule-detail-collect .collect-slot { display: inline-flex; }
+.collect-detail-row { margin-top: 12px; }
+.collect-control { position: relative; display: inline-flex; }
+.collect-trigger {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 11px 7px 10px; min-height: 36px;
+  border: 1px solid var(--green-100); border-radius: 12px;
+  background: var(--green-50); color: var(--green-800);
+  font: inherit; font-size: 13px; font-weight: 650; letter-spacing: .2px;
+  cursor: pointer; transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.collect-trigger:hover { background: var(--green-100); border-color: var(--active-inset); }
+.collect-trigger[aria-expanded="true"] { background: var(--green-100); border-color: var(--active-inset); box-shadow: 0 0 0 4px rgb(var(--theme-rgb) / .09); }
+.collect-trigger:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
+.collect-control[aria-busy="true"] .collect-trigger { opacity: .62; pointer-events: none; }
+.collect-glyph { display: inline-flex; width: 17px; height: 17px; }
+.collect-glyph svg { width: 17px; height: 17px; }
+.collect-glyph[data-glyph="1"] { color: var(--green-600); }
+.collect-glyph[data-glyph="2"] { color: var(--warm); }
+.collect-glyph[data-glyph="3"] { color: var(--blue); }
+.collect-glyph[data-glyph="4"] { color: var(--green-600); }
+.collect-glyph[data-glyph="5"] { color: var(--danger); }
+/* The page-wide svg rule forces outlines; the 在看 / 想看 marks stay solid like Kazumi. */
+.collect-glyph[data-glyph="1"] svg, .collect-glyph[data-glyph="2"] svg { fill: currentColor; stroke: none; }
+.collect-caret { display: inline-flex; margin-left: 1px; opacity: .5; }
+.collect-caret svg { width: 13px; height: 13px; }
+.collect-menu {
+  position: fixed; z-index: 90; top: 0; left: 0; min-width: 176px;
+  display: grid; gap: 2px; padding: 6px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--surface);
+  box-shadow: 0 18px 44px rgb(11 34 23 / .18);
+  animation: collect-menu-in .15s ease-out;
+}
+.collect-menu[hidden] { display: none; }
+@keyframes collect-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.collect-option {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border: 0; border-radius: 11px;
+  background: transparent; color: var(--ink);
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.collect-option:hover { background: var(--green-50); }
+.collect-option:focus-visible { outline: 2px solid var(--active-inset); outline-offset: -2px; }
+.collect-option.is-current { background: var(--green-50); color: var(--green-800); font-weight: 650; }
+.collect-check { display: inline-flex; margin-left: auto; color: var(--green-700); opacity: 0; }
+.collect-check svg { width: 15px; height: 15px; }
+.collect-option.is-current .collect-check { opacity: 1; }
+
+.collection-add-button { display: inline-flex; align-items: center; gap: 7px; }
+.collection-add-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+
+/* —— 搜索添加番剧：封面 + 信息 + 状态按钮的结果行 —— */
+.collect-search-modal > .modal-frame { display: flex; flex-direction: column; gap: 18px; }
+.collect-search-head h2 { margin: 6px 0 7px; font-size: 25px; }
+.collect-search-hint { margin: 0; max-width: 46ch; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
+.collect-search-form {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 5px 5px 14px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--surface);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.collect-search-form:focus-within { border-color: var(--active-inset); box-shadow: 0 0 0 4px rgb(var(--theme-rgb) / .1); }
+.collect-search-icon { display: inline-flex; color: var(--muted); }
+.collect-search-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+.collect-search-form input { flex: 1; min-width: 0; padding: 10px 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; }
+.collect-search-form input:focus { outline: none; }
+.collect-search-form .primary-button { flex: none; border-radius: 12px; padding: 9px 22px; }
+.collect-search-form .primary-button[disabled] { opacity: .6; cursor: progress; }
+.collect-results { display: grid; gap: 8px; align-content: start; min-height: 148px; max-height: min(56vh, 500px); overflow: auto; padding-right: 4px; overscroll-behavior: contain; }
+.collect-result {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  padding: 10px; border: 1px solid transparent; border-radius: 16px; background: var(--paper);
+  transition: background .18s ease, border-color .18s ease;
+}
+.collect-result:hover { background: var(--surface); border-color: var(--line); }
+.collect-result-cover { position: relative; width: 62px; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 10px; background: var(--green-50); }
+.collect-result-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.collect-result-cover.is-empty::before { content: "番"; display: grid; place-items: center; width: 100%; height: 100%; background: var(--green-50); color: var(--green-500); font-size: 17px; font-weight: 700; }
+.collect-result-score { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: 6px; background: rgb(11 34 23 / .78); color: #fff; font-size: 10.5px; font-weight: 700; }
+.collect-result-title { margin: 0; font-size: 14.5px; font-weight: 650; line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
+.collect-result-sub { margin: 3px 0 0; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.collect-result-facts { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 7px; font-size: 11px; color: var(--muted); }
+.collect-result-state { padding: 2px 9px; border-radius: 999px; background: var(--green-100); color: var(--green-800); font-weight: 650; }
+.collect-result-action { justify-self: end; }
+.collect-result-skeleton { grid-template-columns: 62px minmax(0, 1fr); background: transparent; }
+.collect-result-skeleton .collect-result-cover,
+.collect-result-skeleton .collect-result-body span { background: var(--green-100); animation: collect-pulse 1.4s ease-in-out infinite; }
+.collect-result-skeleton .collect-result-body { display: grid; gap: 9px; align-content: center; }
+.collect-result-skeleton .collect-result-body span { display: block; height: 11px; border-radius: 6px; }
+.collect-result-skeleton .collect-result-body span:first-child { width: 58%; height: 15px; }
+.collect-result-skeleton .collect-result-body span:last-child { width: 32%; }
+@keyframes collect-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+.collect-search-empty { display: grid; justify-items: center; gap: 6px; padding: 36px 12px; text-align: center; color: var(--muted); }
+.collect-search-empty svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; opacity: .55; }
+.collect-search-empty strong { color: var(--ink); font-size: 14px; }
+.collect-search-empty p { margin: 0; font-size: 12px; line-height: 1.6; }
+.schedule-detail-collect { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; }
+.schedule-detail-collect-label { font-size: 12px; color: var(--muted); letter-spacing: .4px; }
 #collectionOutboxStatus { overflow-wrap:anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .collect-menu { animation: none; }
+  .collect-result-skeleton .collect-result-cover,
+  .collect-result-skeleton .collect-result-body span { animation: none; }
+}
+@media (max-width: 640px) {
+  .collect-result { grid-template-columns: 52px minmax(0, 1fr); gap: 11px; }
+  .collect-result-cover { width: 52px; }
+  .collect-result-action { grid-column: 1 / -1; justify-self: stretch; }
+  .collect-result-action .collect-control { display: flex; }
+  .collect-result-action .collect-trigger { flex: 1; justify-content: space-between; }
+  .collect-search-modal > .modal-frame { gap: 14px; }
+  .collect-results { max-height: 52vh; }
+}
