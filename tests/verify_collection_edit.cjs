@@ -17,7 +17,7 @@ const harness=[
   "  const sort=sortMatch?decodeURIComponent(sortMatch[1]):'match';",
   "  return {sort,items:[",
   "    {id:123,name:'Original',name_cn:'测试番剧',date:'2023-09-29',eps:28,rating:{score:8.4,total:12345},images:{common:'https://api.bgm.tv/x.jpg'}},",
-  "    {id:456,name:'テスト2',name_cn:'测试番剧 第二季',date:'2024-01-05',eps:12,rating:{score:7.9,total:3210}},",
+  "    {id:456,name:'テスト2',name_cn:'测试番剧 第二季',date:'2018-01-05',eps:12,rating:{score:7.9,total:3210}},",
   "    {id:789,name:'少女革命ウテナ',name_cn:'少女革命',date:'1997-04-02',eps:39,rating:{score:8.8,total:6000}}",
   "  ]};",
   "}"
@@ -37,7 +37,7 @@ assert.equal(await page.locator('#collectionSearchSort').inputValue(),'match');
 assert.deepEqual(await titles(),['测试番剧','测试番剧 第二季']);
 await page.selectOption('#collectionSearchSort','time');
 await page.waitForTimeout(250);
-assert.deepEqual(await titles(),['测试番剧 第二季','测试番剧'],'放送时间按日期倒序');
+assert.deepEqual(await titles(),['测试番剧 第二季','测试番剧'],'放送时间按日期正序（旧的在前）');
 await page.selectOption('#collectionSearchSort','score');
 await page.waitForTimeout(250);
 assert.deepEqual(await titles(),['测试番剧','测试番剧 第二季'],'评分按分数倒序');

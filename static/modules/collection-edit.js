@@ -238,7 +238,15 @@ function collectionSearchSortRows(items, sort) {
   const rank = (row) => Number(row.rating?.rank) || 0;
   const score = (row) => Number(row.rating?.score) || 0;
   const heat = (row) => Object.values(row.collection || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
-  if (sort === "time") return rows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  // 按放送时间从早到晚；没有日期的排在最后。
+  if (sort === "time") {
+    return rows.sort((a, b) => {
+      const left = String(a.date || "");
+      const right = String(b.date || "");
+      if (!left || !right) return (left ? 0 : 1) - (right ? 0 : 1);
+      return left.localeCompare(right);
+    });
+  }
   if (sort === "score") return rows.sort((a, b) => score(b) - score(a));
   if (sort === "rank") return rows.sort((a, b) => (rank(a) || 1e9) - (rank(b) || 1e9));
   if (sort === "heat") return rows.sort((a, b) => heat(b) - heat(a));
