@@ -13,7 +13,9 @@ const harness=[
   "window.requests=[];",
   "async function api(path,options){",
   "  if(options){const body=JSON.parse(options.body);requests.push(body);return {animes:[{id:123,collection_type:body.status}],anime:{id:123,collection_type:body.status}};}",
-  "  return {items:[",
+  "  const sortMatch=/[?&]sort=([^&]*)/.exec(path);",
+  "  const sort=sortMatch?decodeURIComponent(sortMatch[1]):'match';",
+  "  return {sort,items:[",
   "    {id:123,name:'Original',name_cn:'测试番剧',date:'2023-09-29',eps:28,rating:{score:8.4,total:12345},images:{common:'https://api.bgm.tv/x.jpg'}},",
   "    {id:456,name:'テスト2',name_cn:'测试番剧 第二季',date:'2024-01-05',eps:12,rating:{score:7.9,total:3210}},",
   "    {id:789,name:'少女革命ウテナ',name_cn:'少女革命',date:'1997-04-02',eps:39,rating:{score:8.8,total:6000}}",
@@ -29,6 +31,19 @@ await page.locator('#collectionSearchQuery').fill('测试');
 await page.locator('#collectionSearchSubmit').click();
 const result=page.locator('.collect-result[data-result-id="123"]');
 await result.getByText('测试番剧',{exact:true}).waitFor();
+// Sorting: default is match, and the other modes re-order the returned page locally.
+const titles=()=>page.locator('.collect-result[data-result-id]:visible .collect-result-title').allTextContents();
+assert.equal(await page.locator('#collectionSearchSort').inputValue(),'match');
+assert.deepEqual(await titles(),['测试番剧','测试番剧 第二季']);
+await page.selectOption('#collectionSearchSort','time');
+await page.waitForTimeout(250);
+assert.deepEqual(await titles(),['测试番剧 第二季','测试番剧'],'放送时间按日期倒序');
+await page.selectOption('#collectionSearchSort','score');
+await page.waitForTimeout(250);
+assert.deepEqual(await titles(),['测试番剧','测试番剧 第二季'],'评分按分数倒序');
+await page.selectOption('#collectionSearchSort','match');
+await page.waitForTimeout(250);
+assert.deepEqual(await titles(),['测试番剧','测试番剧 第二季']);
 assert.equal(await result.locator('.collect-result-score').textContent(),'8.4');
 assert.match(await result.locator('.collect-result-sub').textContent(),/Original · 2023-09-29/);
 // Token-only matches stay collapsed: only the title hits are listed first.
@@ -75,5 +90,5 @@ assert.equal(await page.evaluate(()=>collectionAction(1,2).children.length),0,'r
 assert.equal(await page.evaluate(()=>collectionEditingSupported()),false);
 await page.evaluate(()=>{state.settings={kazumi_read_only:false};applyCollectionEditingAvailability();});
 assert.equal(await page.locator('#collectionSearchButton').evaluate(node=>node.classList.contains('hidden')),false,'turning read-only off restores the entry');
-console.log('Collection search dialog: cover/rating rows, exact-title grouping, Kazumi-style status popover, escape guard, status save, uncollected state and read-only gating passed.');
+console.log('Collection search dialog: cover/rating rows, exact-title grouping, Kazumi-style status popover, escape guard, status save, uncollected state, sorting and read-only gating passed.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

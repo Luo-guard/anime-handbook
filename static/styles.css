@@ -3225,6 +3225,12 @@ dialog::backdrop {
 .collect-search-form input:focus { outline: none; }
 .collect-search-form .primary-button { flex: none; border-radius: 12px; padding: 9px 22px; }
 .collect-search-form .primary-button[disabled] { opacity: .6; cursor: progress; }
+.collect-search-sort {
+  flex: none; padding: 4px 2px 4px 12px; border: 0; border-left: 1px solid var(--line);
+  border-radius: 0; background: transparent; color: var(--green-800);
+  font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.collect-search-sort:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 .collect-results { display: grid; gap: 8px; align-content: start; min-height: 148px; max-height: min(56vh, 500px); overflow: auto; padding-right: 4px; overscroll-behavior: contain; }
 .collect-result {
   display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 14px; align-items: center;

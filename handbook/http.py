@@ -191,9 +191,15 @@ class RequestHandler(BaseHTTPRequestHandler):
                 keyword = query.get("q", [""])[0].strip()[:100]
                 if not keyword:
                     raise ValueError("请输入番剧名称")
+                # Bangumi 只提供 match/heat/rank/score 四种排序，没有按放送时间；
+                # time 由前端对返回结果本地排序，这里仍然请求匹配度最高的 20 条。
+                sort = query.get("sort", ["match"])[0]
+                if sort not in {"match", "heat", "rank", "score", "time"}:
+                    sort = "match"
                 from schedule import ScheduleService
-                result = json.loads(ScheduleService.fetch("https://api.bgm.tv/v0/search/subjects?limit=20", body={"keyword": keyword, "filter": {"type": [2]}}))
-                self.send_json({"items": result.get("data", [])})
+                body = {"keyword": keyword, "filter": {"type": [2]}, "sort": "match" if sort == "time" else sort}
+                result = json.loads(ScheduleService.fetch("https://api.bgm.tv/v0/search/subjects?limit=20", body=body))
+                self.send_json({"items": result.get("data", []), "sort": sort})
             elif path == "/api/collection-outbox":
                 with self.database.connect() as db:
                     rows = [dict(row) for row in db.execute("SELECT anime_id,status,error FROM kazumi_outbox")]

@@ -229,9 +229,25 @@ function collectionSearchTitleHit(row, phrase) {
     .filter(Boolean)
     .some((title) => String(title).toLowerCase().replace(/\s+/g, "").includes(phrase));
 }
-function renderCollectionSearchResults(result, keyword) {
+// Bangumi 的搜索接口只有 match/heat/rank/score 四种排序，没有按放送时间；
+// 这里对返回的这一页结果再做一次本地排序，五种排序都能立刻生效。
+function collectionSearchSortRows(items, sort) {
+  const rows = [...items];
+  const rank = (row) => Number(row.rating?.rank) || 0;
+  const score = (row) => Number(row.rating?.score) || 0;
+  const heat = (row) => Object.values(row.collection || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  if (sort === "time") return rows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  if (sort === "score") return rows.sort((a, b) => score(b) - score(a));
+  if (sort === "rank") return rows.sort((a, b) => (rank(a) || 1e9) - (rank(b) || 1e9));
+  if (sort === "heat") return rows.sort((a, b) => heat(b) - heat(a));
+  return rows;
+}
+function renderCollectionSearchResults(result, keyword, sort) {
   const results = $("#collectionSearchResults");
-  const items = (result.items || []).filter((row) => Number(row.id) > 0);
+  const items = collectionSearchSortRows(
+    (result.items || []).filter((row) => Number(row.id) > 0),
+    sort || result.sort || "match",
+  );
   if (!items.length) {
     results.innerHTML = `<div class="collect-search-empty">${COLLECT_SEARCH_ICON}<strong>没有找到匹配的动画条目</strong><p>换一个名称，或用简体、日文原名再试一次。</p></div>`;
     return;
@@ -268,13 +284,14 @@ if ($("#collectionSearchButton")) {
     const results = $("#collectionSearchResults");
     const button = $("#collectionSearchSubmit");
     const query = $("#collectionSearchQuery").value;
+    const sort = $("#collectionSearchSort")?.value || "match";
     button.disabled = true;
     results.innerHTML = collectionSearchSkeleton();
     results.setAttribute("aria-busy", "true");
     try {
-      const result = await api(`/api/collection-search?q=${encodeURIComponent(query)}`);
+      const result = await api(`/api/collection-search?q=${encodeURIComponent(query)}&sort=${encodeURIComponent(sort)}`);
       if (version !== collectionSearchVersion || !$("#collectionSearchModal").open) return;
-      renderCollectionSearchResults(result, query);
+      renderCollectionSearchResults(result, query, sort);
     } catch (error) {
       if (version === collectionSearchVersion) results.innerHTML = `<div class="collect-search-empty">${COLLECT_SEARCH_ICON}<strong>搜索没有完成</strong><p>${escapeHtml(error.message)}</p></div>`;
     } finally {
@@ -282,6 +299,10 @@ if ($("#collectionSearchButton")) {
       button.disabled = false;
     }
   };
+  $("#collectionSearchSort")?.addEventListener("change", () => {
+    if (!$("#collectionSearchModal").open || !$("#collectionSearchQuery").value.trim()) return;
+    $("#collectionSearchForm").requestSubmit();
+  });
 }
 $("#collectionOutboxButton").onclick = async () => {
   try {

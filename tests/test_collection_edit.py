@@ -67,8 +67,19 @@ class CollectionTests(unittest.TestCase):
                     self.assertEqual(response["anime"]["collection_type"],2)
                     self.assertEqual(response["anime"]["episode_count"],12)
                 self.assertEqual(len(json.load(urllib.request.urlopen(base+"/api/collection-outbox"))["items"]),1)
-                with patch("schedule.ScheduleService.fetch",return_value=json.dumps({"data":[subject]}).encode()):
+                sent={}
+                def fake_fetch(url,*,body=None):
+                    sent.clear();sent.update(body or {})
+                    return json.dumps({"data":[subject]}).encode()
+                with patch("schedule.ScheduleService.fetch",side_effect=fake_fetch):
                     self.assertEqual(json.load(urllib.request.urlopen(base+"/api/collection-search?q=test"))["items"][0]["id"],123)
+                    self.assertEqual(sent["sort"],"match")
+                    self.assertEqual(json.load(urllib.request.urlopen(base+"/api/collection-search?q=test&sort=score"))["sort"],"score")
+                    self.assertEqual(sent["sort"],"score")
+                    # 放送时间在本地排序，接口侧仍然按匹配度取前 20 条。
+                    self.assertEqual(json.load(urllib.request.urlopen(base+"/api/collection-search?q=test&sort=time"))["sort"],"time")
+                    self.assertEqual(sent["sort"],"match")
+                    self.assertEqual(json.load(urllib.request.urlopen(base+"/api/collection-search?q=test&sort=bogus"))["sort"],"match")
             finally:
                 server.shutdown();server.server_close();thread.join()
 
