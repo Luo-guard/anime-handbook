@@ -45,7 +45,8 @@ await page.selectOption('#collectionSearchSort','match');
 await page.waitForTimeout(250);
 assert.deepEqual(await titles(),['测试番剧','测试番剧 第二季']);
 assert.equal(await result.locator('.collect-result-score').textContent(),'8.4');
-assert.match(await result.locator('.collect-result-sub').textContent(),/Original · 2023-09-29/);
+assert.equal(await result.locator('.collect-result-sub').textContent(),'Original');
+assert.match(await result.locator('.collect-result-facts').textContent(),/2023 · 共 28 话 · 1\.2 万 人评分/);
 // Token-only matches stay collapsed: only the title hits are listed first.
 assert.equal(await page.locator('.collect-result[data-result-id]:visible').count(),2);
 const more=page.locator('.collect-more-toggle');
@@ -90,5 +91,5 @@ assert.equal(await page.evaluate(()=>collectionAction(1,2).children.length),0,'r
 assert.equal(await page.evaluate(()=>collectionEditingSupported()),false);
 await page.evaluate(()=>{state.settings={kazumi_read_only:false};applyCollectionEditingAvailability();});
 assert.equal(await page.locator('#collectionSearchButton').evaluate(node=>node.classList.contains('hidden')),false,'turning read-only off restores the entry');
-console.log('Collection search dialog: cover/rating rows, exact-title grouping, Kazumi-style status popover, escape guard, status save, uncollected state, sorting and read-only gating passed.');
+console.log('Collection search dialog: poster cards, exact-title grouping, Kazumi-style status popover, escape guard, status save, uncollected state, sorting and read-only gating passed.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

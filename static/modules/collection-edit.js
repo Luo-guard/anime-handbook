@@ -119,7 +119,7 @@ function syncCollectControls(id, status) {
 function updateCollectionSearchBadges() {
   $$(".collect-result[data-result-id]").forEach((card) => {
     const anime = state.animes.find((item) => item.id === Number(card.dataset.resultId));
-    const facts = card.querySelector(".collect-result-facts");
+    const cover = card.querySelector(".collect-result-cover");
     const badge = card.querySelector(".collect-result-state");
     if (!anime) {
       badge?.remove();
@@ -132,7 +132,7 @@ function updateCollectionSearchBadges() {
     const node = document.createElement("span");
     node.className = "collect-result-state";
     node.textContent = "已收藏";
-    facts.prepend(node);
+    cover?.append(node);
   });
 }
 async function changeCollectionStatus(id, status) {
@@ -198,23 +198,25 @@ window.addEventListener("scroll", () => positionCollectMenu(), true);
 document.addEventListener("close", () => closeCollectMenus(), true);
 
 function collectionSearchSkeleton() {
-  return Array.from({ length: 3 }, () => '<div class="collect-result collect-result-skeleton" aria-hidden="true"><div class="collect-result-cover"></div><div class="collect-result-body"><span></span><span></span><span></span></div></div>').join("");
+  return `<div class="collect-card-grid">${Array.from({ length: 3 }, () => '<div class="collect-result collect-result-skeleton" aria-hidden="true"><div class="collect-result-cover"></div><span class="collect-skeleton-line"></span><span class="collect-skeleton-line short"></span><span class="collect-skeleton-line"></span></div>').join("")}</div>`;
 }
-function collectionSearchRow(row) {
+function collectionSearchCard(row) {
   const anime = state.animes.find((item) => item.id === Number(row.id));
   const title = row.name_cn || row.name || "未命名条目";
   const original = row.name && row.name !== title ? row.name : "";
   const score = Number(row.rating?.score);
   const votes = Number(row.rating?.total);
-  const cover = row.images?.common || row.images?.medium || row.images?.large || "";
+  const cover = row.images?.large || row.images?.common || row.images?.medium || "";
   const facts = [
-    anime ? '<span class="collect-result-state">已收藏</span>' : "",
-    Number(row.eps) > 0 ? `<span>共 ${Number(row.eps)} 话</span>` : "",
-    votes > 0 ? `<span>${votes >= 10000 ? `${(votes / 10000).toFixed(1)} 万` : votes} 人评分</span>` : "",
-  ].filter(Boolean).join("");
+    row.date ? String(row.date).slice(0, 4) : "",
+    Number(row.eps) > 0 ? `共 ${Number(row.eps)} 话` : "",
+    votes > 0 ? `${votes >= 10000 ? `${(votes / 10000).toFixed(1)} 万` : votes} 人评分` : "",
+  ].filter(Boolean).join(" · ");
   return `<article class="collect-result" data-result-id="${Number(row.id)}" role="listitem">
-  <div class="collect-result-cover${cover ? "" : " is-empty"}">${cover ? `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('is-empty');this.remove()" />` : ""}${score > 0 ? `<span class="collect-result-score">${score.toFixed(1)}</span>` : ""}</div>
-  <div class="collect-result-body"><h3 class="collect-result-title">${escapeHtml(title)}</h3>${original || row.date ? `<p class="collect-result-sub">${escapeHtml([original, row.date].filter(Boolean).join(" · "))}</p>` : ""}<div class="collect-result-facts">${facts}</div></div>
+  <div class="collect-result-cover${cover ? "" : " is-empty"}">${cover ? `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('is-empty');this.remove()" />` : ""}${score > 0 ? `<span class="collect-result-score">${score.toFixed(1)}</span>` : ""}${anime ? '<span class="collect-result-state">已收藏</span>' : ""}</div>
+  <h3 class="collect-result-title">${escapeHtml(title)}</h3>
+  ${original ? `<p class="collect-result-sub">${escapeHtml(original)}</p>` : ""}
+  <p class="collect-result-facts">${escapeHtml(facts)}</p>
   <div class="collect-result-action">${collectionControlMarkup(row.id, anime?.collection_type || 0)}</div>
 </article>`;
 }
@@ -255,8 +257,9 @@ function renderCollectionSearchResults(result, keyword, sort) {
   const phrase = collectionSearchPhrase(keyword);
   const exact = items.filter((row) => collectionSearchTitleHit(row, phrase));
   const related = exact.length && exact.length < items.length ? items.filter((row) => !collectionSearchTitleHit(row, phrase)) : [];
-  results.innerHTML = (exact.length ? exact : items).map(collectionSearchRow).join("") +
-    (related.length ? `<div class="collect-more"><button type="button" class="collect-more-toggle" aria-expanded="false">显示其他 ${related.length} 条相关结果<small>Bangumi 会把关键词拆开匹配，可能只命中其中一个词</small></button><div class="collect-more-list" role="list" hidden>${related.map(collectionSearchRow).join("")}</div></div>` : "");
+  const cardGrid = (rows) => `<div class="collect-card-grid">${rows.map(collectionSearchCard).join("")}</div>`;
+  results.innerHTML = cardGrid(exact.length ? exact : items) +
+    (related.length ? `<div class="collect-more"><button type="button" class="collect-more-toggle" aria-expanded="false">显示其他 ${related.length} 条相关结果<small>Bangumi 会把关键词拆开匹配，可能只命中其中一个词</small></button><div class="collect-more-list" role="list" hidden>${cardGrid(related)}</div></div>` : "");
   const toggle = results.querySelector(".collect-more-toggle");
   if (toggle) {
     toggle.onclick = () => {
