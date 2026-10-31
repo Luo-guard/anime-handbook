@@ -33,7 +33,8 @@ python app.py
 
 ## 数据安全
 
-- 收藏支持独立搜索添加和状态编辑；启用自动写回时，待同步任务会在 Kazumi 关闭后写入 `collectibles.hive`，写前备份、写后读回验证。设置中的“只读 Kazumi 数据”可一次性关闭这些编辑入口并暂停写回。详见 [Kazumi 写回说明](docs/kazumi-writeback.md)。- 手账自己的收藏快照、集数、进度、时间线与设置都保存在 `data/handbook.db`。
+- 收藏支持独立搜索添加和状态编辑；没有 Kazumi 收藏时可用“批量导入”按名单逐条搜索并加入；启用自动写回时，待同步任务会在 Kazumi 关闭后写入 `collectibles.hive`，写前备份、写后读回验证。设置中的“只读 Kazumi 数据”可一次性关闭这些编辑入口并暂停写回。详见 [Kazumi 写回说明](docs/kazumi-writeback.md)。
+- 手账自己的收藏快照、集数、进度、时间线与设置都保存在 `data/handbook.db`。
 - 封面缓存保存在 `data/covers/`。
 - Kazumi 运行时会独占数据库；关闭 Kazumi 后点击“同步收藏”即可导入，之后打开手账也会自动同步。
 

@@ -21,10 +21,13 @@ function collectionEditingSupported() {
   return !window.handbookOnline && !collectionReadOnly();
 }
 function applyCollectionEditingAvailability() {
-  $("#collectionSearchButton")?.classList.toggle("hidden", !collectionEditingSupported());
-  if (collectionEditingSupported()) return;
+  const supported = collectionEditingSupported();
+  $("#collectionSearchButton")?.classList.toggle("hidden", !supported);
+  $("#collectionImportButton")?.classList.toggle("hidden", !supported);
+  if (supported) return;
   closeCollectMenus();
   $$(".collect-slot").forEach((slot) => slot.replaceChildren());
+  $("#collectionImportModal")?.close();
 }
 function collectionStatusName(status) {
   const found = CATEGORIES.find((category) => category.id === Number(status));
@@ -151,6 +154,7 @@ async function changeCollectionStatus(id, status) {
   updateCollectionSearchBadges();
   closeCollectMenus();
   toast(window.handbookOnline ? "收藏已更新" : "收藏已更新，已加入 Kazumi 待写回队列");
+  document.dispatchEvent(new CustomEvent("collection-status-changed", { detail: { animeId: Number(id), status: Number(status) } }));
   return result.anime;
 }
 async function applyCollectStatus(control, status) {

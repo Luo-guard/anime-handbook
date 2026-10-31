@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261031-bgm-link-20261031-collect-ui-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261031-batch-import-20261031-collect-ui-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -110,7 +110,10 @@
               </svg>
               <input id="searchInput" type="search" placeholder="搜索收藏" />
             </label>
-            <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>搜索添加番剧</button>
+            <div class="collection-add-group">
+              <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>搜索添加番剧</button>
+              <button type="button" class="secondary-button compact-button" id="collectionImportButton">批量导入</button>
+            </div>
             <label class="switch-row compact" id="collectionRatingControl">
               <input type="checkbox" id="collectionRatingToggle" />
               <span class="switch"></span>
@@ -888,6 +891,46 @@
         <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
       </div>
     </dialog>
+    <dialog class="modal import-modal" id="collectionImportModal">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="collectionImportClose" aria-label="关闭">×</button>
+        <header class="collect-search-head">
+          <p class="eyebrow">BATCH IMPORT</p>
+          <h2>批量导入番剧</h2>
+          <p class="collect-search-hint">没有 Kazumi 收藏也能用：导入一份名单，手账会逐条搜索 Bangumi，确认状态后自动跳到下一条。</p>
+        </header>
+        <section id="importSetup" class="import-setup">
+          <label class="import-drop" id="importDrop">
+            <input type="file" id="importFile" accept=".csv,.tsv,.txt,.json" hidden />
+            <strong>拖入文件，或点击选择</strong>
+            <small>支持 CSV / TSV / TXT（每行一个番名，可含表头）与 JSON（字符串数组，或含 name / title 的对象）</small>
+          </label>
+          <textarea id="importPaste" rows="6" aria-label="番剧名单" placeholder="也可以直接粘贴：每行一个番剧名。从 Excel 复制整列粘贴进来也行。"></textarea>
+          <div class="import-actions">
+            <button type="button" class="primary-button" id="importParse">读取清单</button>
+            <p id="importStatus" role="status"></p>
+          </div>
+        </section>
+        <section id="importWork" class="import-work hidden">
+          <div class="import-bar">
+            <span class="import-count" id="importCount">1 / 1</span>
+            <button type="button" class="secondary-button compact-button" id="importPrev">上一条</button>
+            <button type="button" class="secondary-button compact-button" id="importNext">下一条</button>
+          </div>
+          <form class="collect-search-form import-search" id="importSearchForm" role="search">
+            <span class="collect-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>
+            <input id="importName" aria-label="当前番剧名称" autocomplete="off" />
+            <button class="primary-button" type="submit">搜索</button>
+          </form>
+          <div id="importResults" class="collect-results"></div>
+          <div class="import-actions">
+            <button type="button" class="secondary-button compact-button" id="importSkip">跳过这条</button>
+            <button type="button" class="secondary-button compact-button" id="importRestart">重新导入</button>
+            <p id="importProgress" role="status"></p>
+          </div>
+        </section>
+      </div>
+    </dialog>
     <dialog class="modal" id="videoCaptureModal">
       <form class="modal-frame" id="videoCaptureForm">
         <button type="button" class="modal-close" id="videoCaptureClose" aria-label="关闭">×</button>
@@ -918,7 +961,8 @@
     <script src="/modules/events.js?v=20261031-bgmlink-20261030-source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261031-nav-bounds-20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
-    <script src="/modules/collection-edit.js?v=20261031-bgm-link" defer></script>
+    <script src="/modules/collection-edit.js?v=20261031-batch-import" defer></script>
+    <script src="/modules/collection-import.js?v=20261031-batch-import" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>
