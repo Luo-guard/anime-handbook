@@ -14,7 +14,8 @@ const harness=[
   "window.queries=[];",
   "async function api(path,options){",
   "  if(options){const body=JSON.parse(options.body);requests.push(body);return {animes:[],anime:{id:body.anime_id,collection_type:body.status}};}",
-  "  const q=decodeURIComponent((/[?&]q=([^&]*)/.exec(path)||[])[1]||'');queries.push(q);",
+  "  const rawQ=decodeURIComponent((/[?&]q=([^&]*)/.exec(path)||[])[1]||'');",
+  "  const q=rawQ.replace(/^\"|\"$/g,'');queries.push(rawQ);",
   "  return {items:[{id:q==='葬送的芙莉莲'?100:200,name:'原名',name_cn:q,type:2,date:'2023-10-01',eps:12,rating:{score:8.1,total:900},images:{}}]};",
   "}"
 ].join("\n");
@@ -44,6 +45,9 @@ assert.equal(await page.locator('#importCount').textContent(),'1 / 2');
 assert.equal(await page.locator('#importName').inputValue(),'葬送的芙莉莲');
 await page.waitForSelector('#importResults .collect-result-title');
 assert.equal(await page.locator('#importResults .collect-result-title').textContent(),'葬送的芙莉莲');
+// The import search asks Bangumi for the exact phrase first (quoted keyword).
+assert.deepEqual(await page.evaluate(()=>queries.slice(0,1)),['"葬送的芙莉莲"']);
+assert.match(await page.locator('#importSearched').textContent(),/完整标题匹配/);
 // 下一条 / 上一条 switch the entry and re-search
 await page.locator('#importNext').click();
 await page.waitForFunction(()=>document.querySelector('#importName').value==='药屋少女的呢喃');

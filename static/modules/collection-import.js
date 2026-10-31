@@ -69,6 +69,32 @@ function importRenderResults(rows) {
   }
   box.innerHTML = `<div class="collect-card-grid">${rows.map(collectionSearchCard).join("")}</div>`;
 }
+function importSearchedLabel(name, strict) {
+  const node = $("#importSearched");
+  if (!node) return;
+  node.textContent = name ? `「${name}」${strict ? "的完整标题匹配" : "的分词结果（没有完整同名条目）"}` : "";
+}
+async function importSearchByName(name, token) {
+  // 先用引号做完整标题匹配（Bangumi 的短语搜索），没有结果再退回分词匹配。
+  const quoted = `"${name.replace(/"/g, "")}"`;
+  let rows = [];
+  try {
+    const strict = await api(`/api/collection-search?q=${encodeURIComponent(quoted)}&sort=match`);
+    if (token !== importState.token) return null;
+    rows = strict.items || [];
+  } catch (error) {
+    if (token !== importState.token) return null;
+    throw error;
+  }
+  if (rows.length) {
+    importSearchedLabel(name, true);
+    return rows;
+  }
+  const loose = await api(`/api/collection-search?q=${encodeURIComponent(name)}&sort=match`);
+  if (token !== importState.token) return null;
+  importSearchedLabel(name, false);
+  return loose.items || [];
+}
 async function importSearchCurrent() {
   const token = ++importState.token;
   const name = importCleanName($("#importName").value) || importState.names[importState.index] || "";
@@ -84,9 +110,8 @@ async function importSearchCurrent() {
   box.innerHTML = collectionSearchSkeleton();
   box.setAttribute("aria-busy", "true");
   try {
-    const result = await api(`/api/collection-search?q=${encodeURIComponent(name)}&sort=match`);
-    if (token !== importState.token) return;
-    const rows = result.items || [];
+    const rows = await importSearchByName(name, token);
+    if (rows === null) return;
     importState.cache.set(name, rows);
     importRenderResults(rows);
   } catch (error) {

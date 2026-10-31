@@ -3315,6 +3315,8 @@ dialog::backdrop {
 .import-bar { display: flex; align-items: center; gap: 10px; }
 .import-count { margin-right: auto; font-size: 13px; font-weight: 650; color: var(--green-800); }
 .import-search { padding: 5px 5px 5px 14px; }
+.import-searched { margin: 0; font-size: 11.5px; color: var(--muted); }
+.import-searched:empty { display: none; }
 .import-work #importResults { max-height: min(48vh, 460px); }
 @media (max-width: 640px) {
   .import-bar .compact-button { padding: 6px 10px; font-size: 12px; }
