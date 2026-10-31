@@ -729,6 +729,8 @@ $("#saveSettings").addEventListener("click", async () => {
         custom_background_overlay_opacity: Number($("#customBackgroundOpacityInput").value),
         default_view: $("#defaultViewInput").value,
         ...scheduleSorting,
+        kazumi_writeback: $("#kazumiWritebackInput").checked,
+        kazumi_conflict: $("#kazumiConflictInput").value,
         schedule_source: $("#scheduleSourceInput").value,
         show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
         schedule_statuses: $$("#scheduleStatusInputs input:checked").map((input) => Number(input.value)),

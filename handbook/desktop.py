@@ -44,7 +44,7 @@ def active_profile_write_issue(*, bind_unbound: bool = True) -> str | None:
         return "这是好友共享账号，只能查看；请切换回绑定本机 Kazumi 的账号后再修改。"
     local_kazumi = SyncService.find_kazumi_database()
     if local_kazumi is None:
-        return "未找到本机 Kazumi 数据库，当前账号不能修改。"
+        return None if not profile.get("kazumi_path") else "已绑定的 Kazumi 数据库暂不可用。"
     bound = str(profile.get("kazumi_path") or "").strip()
     if not bound:
         if bind_unbound:
@@ -88,6 +88,9 @@ def main(*, open_browser: bool = True) -> None:
             webbrowser.open(url)
         return
     server = DesktopHTTPServer((HOST, PORT), busy=lambda: bool(SYNC.status.get("running")))
+    from .kazumi_writeback import start_worker
+    writeback_stop = threading.Event()
+    start_worker(writeback_stop)
     SYNC.start_background()
     SHARING.start_resident_refresh()
     WEBDAV.start_background(lambda: DATABASE)
@@ -99,6 +102,7 @@ def main(*, open_browser: bool = True) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        writeback_stop.set()
         # Stop periodic writers before waiting for outstanding requests/tasks.
         WEBDAV._stop.set()
         WEBDAV._wake.set()

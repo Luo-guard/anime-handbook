@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261031-collection-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -110,6 +110,7 @@
               </svg>
               <input id="searchInput" type="search" placeholder="搜索收藏" />
             </label>
+            <button type="button" class="secondary-button" id="collectionSearchButton">搜索添加番剧</button>
             <label class="switch-row compact" id="collectionRatingControl">
               <input type="checkbox" id="collectionRatingToggle" />
               <span class="switch"></span>
@@ -127,7 +128,7 @@
           <div class="empty-state hidden" id="collectionEmpty">
             <div class="empty-mark">手</div>
             <h2>这里还没有收藏</h2>
-            <p id="emptyMessage">关闭 Kazumi 后点击“同步收藏”，手账会只读导入本地收藏。</p>
+            <p id="emptyMessage">可以搜索添加番剧，也可以从本机 Kazumi 导入收藏。</p>
             <button class="secondary-button" id="emptySyncButton">立即同步</button>
           </div>
         </section>
@@ -279,7 +280,7 @@
         <div class="progress-hero">
           <img id="progressCover" alt="" />
           <div>
-            <span class="category-chip" id="progressCategory"></span>
+            <span class="category-chip" id="progressCategory"></span><div id="collectionDetailStatus"></div>
             <h2 id="progressTitle"></h2>
             <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><a id="bgmMirrorLink" target="_blank" rel="noreferrer"></a><a id="savedVideoDefaultLink" class="hidden" target="_blank" rel="noreferrer">已存视频 ↗</a><a id="bilibiliSearchLink" target="_blank" rel="noreferrer">B站搜索 ↗</a><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
             <div class="anime-rating hidden" id="animeRating"></div>
@@ -629,7 +630,7 @@
           <h3 class="settings-subsection-title">卡片内容</h3>
           <div class="setting-row stacked"><span><strong>卡片信息显示</strong><small>各项独立开关；关闭后不会影响排序、筛选或详细信息。</small></span></div>
           <div id="scheduleCardFieldInputs"></div>
-          <div class="schedule-settings-note">时间与网络上线日期来自長門番堂，评分和评分人数来自 Bangumi（经 Kazumi 季度接口）。未公布的时间保留空缺；固定按北京时间凌晨 4 点划分播出日。周表只读展示，不修改收藏。</div>
+          <div class="schedule-settings-note">时间与网络上线日期来自長門番堂，评分和评分人数来自 Bangumi（经 Kazumi 季度接口）。未公布的时间保留空缺；固定按北京时间凌晨 4 点划分播出日。已关联 Bangumi ID 的条目可在详情中加入收藏。</div>
           <div class="settings-section-title" data-settings-section="record" data-page-label="timeline">看番记录</div>
           <h3 class="settings-subsection-title">记录习惯</h3>
           <label class="setting-row">
@@ -751,7 +752,7 @@
               <strong>Kazumi 数据</strong>
               <small id="kazumiPath">正在查找…</small>
             </span>
-            <span class="read-only-badge">只读</span>
+            <span class="read-only-badge">收藏同步</span>
           </div>
           <div class="setting-row">
             <span>
@@ -761,6 +762,8 @@
             <span class="read-only-badge green">本地</span>
           </div>
           <div class="settings-section-title" data-settings-section="sharing">账号与同步</div>
+          <label class="setting-row desktop-only"><span><strong>自动写回 Kazumi 收藏</strong><small>Kazumi 关闭后执行；开启期间等待。手账后台须保持运行，仅同步收藏新增和状态，不写观看进度。</small></span><span class="switch-row compact"><input type="checkbox" id="kazumiWritebackInput"><span class="switch"></span></span></label>
+          <div class="setting-row desktop-only"><span><strong>Kazumi 冲突优先级</strong><small>两边都修改同一番剧状态时，采用选定来源。</small></span><select id="kazumiConflictInput"><option value="handbook">手账优先</option><option value="kazumi">Kazumi 优先</option></select><button type="button" class="secondary-button" id="collectionOutboxButton">查看待同步任务</button><p id="collectionOutboxStatus" role="status"></p></div>
           <h3 class="settings-subsection-title">本机账号</h3>
           <div class="setting-row stacked"><span><strong>本机手账账号</strong><small>切换、新建或管理本机账号。新账号可绑定这台电脑自己的 Kazumi 数据库。</small></span><div class="theme-profile-controls">
                   <select id="handbookProfileInput" aria-label="手账账号"></select>
@@ -851,6 +854,7 @@
     <dialog class="modal schedule-dialog" id="scheduleDetailModal"><div class="modal-frame"><button type="button" class="modal-close" id="scheduleCloseDetail" aria-label="关闭">×</button><div id="scheduleDetail"></div></div></dialog>
 
     <dialog class="modal backend-closed-dialog" id="backendClosedDialog"><div class="modal-frame"><h2 id="backendClosedTitle">后台已关闭</h2><p id="backendClosedMessage">再次使用时，请运行“启动动漫手账”快捷方式，然后刷新此页面。</p></div></dialog>
+    <dialog class="modal" id="collectionSearchModal"><div class="modal-frame"><button type="button" class="modal-close" id="collectionSearchClose" aria-label="关闭">×</button><h2>搜索添加番剧</h2><form id="collectionSearchForm"><label for="collectionSearchQuery">番剧名称</label><input type="search" id="collectionSearchQuery" required maxlength="100"/><button class="primary-button" type="submit">搜索 Bangumi</button></form><div id="collectionSearchResults"></div></div></dialog>
     <dialog class="modal" id="videoCaptureModal">
       <form class="modal-frame" id="videoCaptureForm">
         <button type="button" class="modal-close" id="videoCaptureClose" aria-label="关闭">×</button>
@@ -864,7 +868,7 @@
       </form>
     </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=source-20261030-20261025-sort-save-check" defer></script>
+    <script src="/schedule.js?v=20261031-collection-source-20261030-20261025-sort-save-check" defer></script>
     <script src="/modules/core.js?v=20261029-toast-layer" defer></script>
     <script src="/modules/network.js?v=20261025-shutdown" defer></script>
     <script src="/modules/collection.js?v=20261023-modules" defer></script>
@@ -872,15 +876,16 @@
     <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
     <script src="/modules/composer.js?v=20261023-modules" defer></script>
     <script src="/modules/video-links.js?v=20261030-capture-title-default-20261030-video-label" defer></script>
-    <script src="/modules/details.js?v=20261029-video-disclosure" defer></script>
+    <script src="/modules/details.js?v=20261031-collection-20261029-video-disclosure" defer></script>
     <script src="/modules/records.js?v=20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
     <script src="/modules/lifecycle.js?v=20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261029-sidebar-state" defer></script>
-    <script src="/modules/events.js?v=sidebar-restore-20261030-source-20261030-20261029-sidebar-state" defer></script>
+    <script src="/modules/settings.js?v=20261031-collection-20261029-sidebar-state" defer></script>
+    <script src="/modules/events.js?v=20261031-collection-sidebar-restore-20261030-source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
+    <script src="/modules/collection-edit.js?v=20261031-collection" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

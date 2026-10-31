@@ -17,6 +17,7 @@ function openProgress(animeId) {
   $("#progressCover").alt = anime.display_name;
   $("#progressTitle").textContent = anime.display_name;
   $("#progressCategory").textContent = anime.category_name;
+  $("#collectionDetailStatus").replaceChildren(collectionAction(anime.id,anime.collection_type));
   $("#progressAirDate").textContent = anime.air_date || "";
   $("#progressMetaSeparator").classList.toggle("hidden", !anime.air_date);
   const mirrorLink = $("#bgmMirrorLink");

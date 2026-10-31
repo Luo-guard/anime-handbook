@@ -308,6 +308,8 @@ function showScheduleDetail(key) {
   const bilibiliSearch = `https://search.bilibili.com/all?keyword=${encodeURIComponent(keyword)}`;
   $("#scheduleDetail").innerHTML = `<p class="eyebrow">${item.kind === "network" ? "STREAMING RELEASE" : "WEEKLY AIRING"}</p><h2>${escapeHtml(item.title)}</h2><div class="schedule-detail-time">${item.kind === "weekly" ? `${scheduleDays[item.weekday - 1]} · ` : ""}${escapeHtml(scheduleTimeLabel(item))}</div><p>${escapeHtml(item.summary || "暂无匹配的 Bangumi 简介，可通过下方链接查看详细介绍。")}</p><div class="schedule-detail-facts"><span>评分 ${Number(item.score) > 0 ? Number(item.score).toFixed(1) : "暂无"}</span><span>${scheduleVotesLabel(item)}</span><span>${escapeHtml(item.release_note || "")}</span></div><div class="schedule-detail-links">${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Bangumi #${Number(item.id)} ↗</a>` : ""}${keyword ? `<a href="${escapeHtml(bilibiliSearch)}" target="_blank" rel="noopener noreferrer">B站搜索 ↗</a>` : ""}</div>${item.local_id && state.animes.some((a) => a.id === item.local_id) ? '<button type="button" class="primary-button" id="scheduleRecordProgress">记录观看进度</button>' : ""}`;
   $("#scheduleRecordProgress")?.addEventListener("click", () => {$("#scheduleDetailModal").close(); openProgress(item.local_id);});
+  if(item.id) $("#scheduleDetail").append(collectionAction(item.id,anime?.collection_type||2));
+  else {const note=document.createElement('p');note.textContent='该条目尚未关联 Bangumi ID，可在收藏夹的搜索添加中确认对应番剧。';$("#scheduleDetail").append(note);}
   $("#scheduleDetailModal").showModal();
 }
 

@@ -50,7 +50,7 @@ function renderCollection() {
     : state.animes.length
       ? "当前分类或搜索条件下没有番剧。"
       : state.sync.last_error ||
-        "关闭 Kazumi 后点击“同步收藏”，手账会只读导入本地收藏。";
+        "可以搜索添加番剧，也可以从本机 Kazumi 导入收藏。";
   $("#emptySyncButton").classList.toggle("hidden", state.collectionKind === "custom");
   $$(".anime-card").forEach((card) => {
     card.addEventListener("click", () => openProgress(Number(card.dataset.animeId)));

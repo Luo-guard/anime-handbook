@@ -263,7 +263,7 @@ function renderSync() {
   renderSyncButton();
   $("#collectionSubtitle").textContent = state.sync.running
     ? state.sync.message
-    : "从 Kazumi 只读同步，进度与想法留在自己的手账里";
+    : "在手账管理收藏，Kazumi 关闭后自动写回；进度与想法留在手账里";
   $("#kazumiPath").textContent =
     state.sync.kazumi_path || "未找到 Kazumi 收藏数据库";
 }

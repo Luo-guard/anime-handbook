@@ -1,35 +1,5 @@
 # 动漫手账
 
-> 公开源码版：桌面端、安卓端和独立线上入口共用手账数据与业务逻辑。支持收藏进度、观看记录、观后感、放送周表和多端同步。
->
-> 本仓库不包含任何个人收藏、账号、数据库、浏览器资料、共享设备信息、签名密钥或预编译安装包。
-
-## 快速开始（源码）
-
-需要 Python 3.12+。推荐在 conda 虚拟环境中安装依赖：
-
-```powershell
-conda create -n anime-handbook python=3.12
-conda activate anime-handbook
-python -m pip install -r requirements.txt
-python app.py
-```
-
-桌面入口为 `http://127.0.0.1:43127`。首次启动创建空白本地数据；Kazumi 收藏导入需要自行配置本机 Kazumi。可选的 Dart 收藏读取器只提供源码：在 `tools/kazumi_reader` 中运行 `dart pub get`，再用 `dart compile exe bin/kazumi_reader.dart -o ../kazumi_reader.exe` 构建。
-
-Android 需要 Java 17、Android SDK 和 Gradle（加入 PATH），设置 JAVA_HOME，并参考 android/local.properties.example 自行配置 `android/local.properties`。本仓库不提供私有签名密钥或预构建 APK，`releases/` 仅在本地打包后生成。
-
-线上入口与部署说明见 [deploy/online/README.md](deploy/online/README.md)。本仓库公开不代表已部署可访问的网站。
-
-## 验证
-
-公开源码整理时已通过 138 项 Python 单元测试、14 组前端检查，以及 60 项桌面／移动端排序对比与自定义可见性、封面路由检查。Android 构建脚本已做语法检查，本次未执行完整 Android 编译。
-
-## 许可证
-
-原创软件采用 [MIT](LICENSE)，第三方素材、数据与依赖参见 [来源和许可说明](THIRD_PARTY.md)。
-
-
 一个读取 Kazumi 本地收藏的轻量 Windows 动漫进度与观后感手账。
 
 ## 统一项目目录
@@ -47,7 +17,7 @@ Android 需要 Java 17、Android SDK 和 Gradle（加入 PATH），设置 JAVA_H
 线上版使用独立数据目录和端口，不会启动本机 Kazumi／坚果云同步。现有电脑版启动脚本和安卓版保持原用法；APK 的线上账号接入将在网站部署后进行。
 
 双击 `打包安卓版.cmd`，先运行安卓单元测试，再生成 APK 到 `releases/android/`。
-打包工具会将 `android/` 中的源码复制到临时英文路径，绕过中文路径下的安卓测试问题；结束后自动清理临时目录。首次缺少依赖时运行 `powershell -ExecutionPolicy Bypass -File tools/build_android.ps1 -Online`。本机使用 Java 17、Gradle 8.9 和 `C:\Android\Sdk`，路径可在脚本参数与 `android/local.properties` 中配置。
+打包工具会将 `android/` 中的源码复制到临时英文路径，绕过中文路径下的安卓测试问题；结束后自动清理临时目录。首次缺少依赖时运行 `powershell -ExecutionPolicy Bypass -File tools/build_android.ps1 -Online`。本机使用 Java 17、Gradle 8.9 和 `D:\Program Files (x86)\AndroidSdk`，路径可在脚本参数与 `android/local.properties` 中配置。
 
 跨端排序检查：`node tools/verify_mobile.cjs`。不传参数时使用测试样例，也可以传入包含 `anime` 数组的 JSON 文件。
 
@@ -63,7 +33,7 @@ python app.py
 
 ## 数据安全
 
-- Kazumi 的 `collectibles.hive` 只会被只读解析，手账不会写入 Kazumi 目录。
+- 收藏支持独立搜索添加和状态编辑；启用自动写回时，待同步任务会在 Kazumi 关闭后写入 `collectibles.hive`，写前备份、写后读回验证。详见 [Kazumi 写回说明](docs/kazumi-writeback.md)。
 - 手账自己的收藏快照、集数、进度、时间线与设置都保存在 `data/handbook.db`。
 - 封面缓存保存在 `data/covers/`。
 - Kazumi 运行时会独占数据库；关闭 Kazumi 后点击“同步收藏”即可导入，之后打开手账也会自动同步。

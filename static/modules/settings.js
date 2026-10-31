@@ -1,4 +1,6 @@
 function renderSettingsPanels() {
+  $("#kazumiWritebackInput").checked=state.settings.kazumi_writeback!==false;
+  $("#kazumiConflictInput").value=state.settings.kazumi_conflict||"handbook";
   renderKeyboardSettings();
   $("#showZeroStatisticsInput").checked = enabledSetting("statistics_show_zero_periods");
   renderBgmSourceControls();

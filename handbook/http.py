@@ -1,5 +1,6 @@
 from __future__ import annotations
 from .video_links import VideoLinks
+from .collection import save_collection
 from .shortcuts import normalize_shortcuts
 
 from typing import Any
@@ -186,6 +187,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                 store = VideoLinks(self.database)
                 anime_id = int(query.get("anime_id", ["0"])[0])
                 self.send_json({"features": {"optional_video_default": 1}, "scope": store.scope, "items": store.list(anime_id), "animes": [{"id": a["id"], "name": a["display_name"]} for a in self.database.list_anime()]})
+            elif path == "/api/collection-search":
+                keyword = query.get("q", [""])[0].strip()[:100]
+                if not keyword:
+                    raise ValueError("请输入番剧名称")
+                from schedule import ScheduleService
+                result = json.loads(ScheduleService.fetch("https://api.bgm.tv/v0/search/subjects?limit=20", body={"keyword": keyword, "filter": {"type": [2]}}))
+                self.send_json({"items": result.get("data", [])})
+            elif path == "/api/collection-outbox":
+                with self.database.connect() as db:
+                    rows = [dict(row) for row in db.execute("SELECT anime_id,status,error FROM kazumi_outbox")]
+                self.send_json({"items": rows})
             elif path == "/api/animes":
                 category = int(query["category"][0]) if query.get("category") else None
                 custom_collection_id = (
@@ -391,6 +403,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                     str(body.get("kazumi_path") or ""),
                 )
                 self.send_json({"ok": True, "profile": profile, "profiles": self.profiles.list_profiles()}, 201)
+            elif path == "/api/collection-status":
+                anime_id = int(body.get("anime_id", 0))
+                if anime_id <= 0:
+                    raise ValueError("番剧条目 ID 无效")
+                subject = self.sync.fetch_bgm(anime_id)
+                anime = save_collection(self.database, subject, body.get("status"))
+                if anime.get("episode_count") is None:
+                    rating=subject.get("rating") or {}
+                    self.database.update_bgm_metadata(anime_id, episode_count=int(subject.get("total_episodes") or subject.get("eps") or 0), rating_score=rating.get("score"), rating_rank=rating.get("rank"), rating_total=rating.get("total"), rating_synced=True)
+                self.send_json({"ok": True, "anime": self.database.get_anime(anime_id), "animes": self.database.list_anime(), "stats": self.database.stats()})
             elif path == "/api/profiles/activate":
                 profile = _desktop().activate_profile(str(body.get("profile_id") or ""))
                 self.send_json({
@@ -713,6 +735,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "sidebar_visibility",
                     "sidebar_order",
                     "sidebar_labels",
+                    "kazumi_writeback",
+                    "kazumi_conflict",
                     "schedule_source",
                     "show_schedule_source_switch",
                     "schedule_sort",
@@ -740,6 +764,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                             continue
                         if key == "schedule_grouping":
                             value = normalize_schedule_grouping(value)
+                        elif key == "kazumi_writeback":
+                            if type(value) is not bool:
+                                raise ValueError("写回开关无效")
+                        elif key == "kazumi_conflict":
+                            if value not in {"handbook", "kazumi"}:
+                                raise ValueError("冲突优先级无效")
                         elif key == "schedule_source":
                             if value not in {"yuc", "kazumi"}:
                                 raise ValueError("周表来源无效")

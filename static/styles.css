@@ -3145,3 +3145,7 @@ dialog::backdrop {
 .keyboard-binding.hidden { display:none; }
 
 #scheduleSourceSwitch[hidden] { display: none; }
+
+.collection-edit-actions { display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0; }
+.collection-search-result { padding:16px 0;border-bottom:1px solid var(--border); }
+#collectionOutboxStatus { overflow-wrap:anywhere; }

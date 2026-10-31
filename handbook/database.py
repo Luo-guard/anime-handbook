@@ -109,6 +109,10 @@ class HandbookDB:
                     is_default INTEGER NOT NULL DEFAULT 0,
                     UNIQUE(anime_id, url)
                 );
+                CREATE TABLE IF NOT EXISTS kazumi_outbox (
+                    anime_id INTEGER PRIMARY KEY, status INTEGER NOT NULL, baseline INTEGER,
+                    subject TEXT NOT NULL, revision TEXT NOT NULL, error TEXT NOT NULL DEFAULT ''
+                );
                 CREATE TABLE IF NOT EXISTS anime (
                     id INTEGER PRIMARY KEY,
                     name TEXT NOT NULL DEFAULT '',
@@ -843,12 +847,13 @@ class HandbookDB:
                 int(row["id"]): int(row["collection_type"])
                 for row in db.execute("SELECT id, collection_type FROM anime")
             }
+            pending_local_ids = {row[0] for row in db.execute("SELECT anime_id FROM kazumi_outbox")}
             existing_ids = set(existing)
             db.execute("UPDATE anime SET active = 0")
             for position, item in enumerate(items):
                 anime_id = int(item["id"])
                 collection_type = int(item.get("type") or 0)
-                if existing.get(anime_id) == 1 and collection_type == 4:
+                if anime_id not in pending_local_ids and existing.get(anime_id) == 1 and collection_type == 4:
                     completed_from_watching.add(anime_id)
                 values = (
                     anime_id,
@@ -917,6 +922,8 @@ class HandbookDB:
                     json_dumps(sorted(pending)),
                 ),
             )
+            # Pending local edits survive incoming Kazumi snapshots until acknowledged.
+            db.execute("UPDATE anime SET active=1,collection_type=(SELECT status FROM kazumi_outbox WHERE anime_id=anime.id) WHERE id IN (SELECT anime_id FROM kazumi_outbox)")
             deactivated = len(existing_ids - incoming_ids)
         return {
             "total": len(items),
