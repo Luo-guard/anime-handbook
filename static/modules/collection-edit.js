@@ -5,6 +5,7 @@ const COLLECT_CARET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 const COLLECT_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>';
 const COLLECT_SEARCH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>';
 const COLLECT_STATUS_GLYPHS = {
+  0: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.4 4.93 13.3a4.85 4.85 0 0 1 6.86-6.86L12 6.6l.21-.16a4.85 4.85 0 0 1 6.86 6.86Z"/></svg>',
   1: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 20.4 4.93 13.3a4.85 4.85 0 0 1 6.86-6.86L12 6.6l.21-.16a4.85 4.85 0 0 1 6.86 6.86Z"/></svg>',
   2: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3.3 2.72 5.5 6.07.89-4.4 4.28 1.04 6.05L12 17.16l-5.43 2.86 1.04-6.05-4.4-4.28 6.07-.89Z"/></svg>',
   3: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.5V12l3.1 1.9"/></svg>',
@@ -30,11 +31,11 @@ function collectionStatusName(status) {
   return found ? found.name : "未收藏";
 }
 function collectionStatusGlyph(status) {
-  return COLLECT_STATUS_GLYPHS[Number(status)] || COLLECT_STATUS_GLYPHS[2];
+  return COLLECT_STATUS_GLYPHS[Number(status)] || COLLECT_STATUS_GLYPHS[0];
 }
-function collectionControlMarkup(id, status = 2) {
+function collectionControlMarkup(id, status = 0) {
   const current = Number(status) || 0;
-  return `<div class="collect-control" data-collect-id="${Number(id)}" data-status="${current}"><button type="button" class="collect-trigger" data-collect-trigger aria-haspopup="menu" aria-expanded="false" aria-label="收藏状态：${collectionStatusName(current)}"><span class="collect-glyph" data-glyph="${current}">${collectionStatusGlyph(current)}</span><span class="collect-name">${collectionStatusName(current)}</span><span class="collect-caret" aria-hidden="true">${COLLECT_CARET}</span></button></div>`;
+  return `<div class="collect-control" data-collect-id="${Number(id)}" data-status="${current}"><button type="button" class="collect-trigger${current ? "" : " is-empty"}" data-collect-trigger aria-haspopup="menu" aria-expanded="false" aria-label="收藏状态：${collectionStatusName(current)}"><span class="collect-glyph" data-glyph="${current}">${collectionStatusGlyph(current)}</span><span class="collect-name">${collectionStatusName(current)}</span><span class="collect-caret" aria-hidden="true">${COLLECT_CARET}</span></button></div>`;
 }
 function collectionMenuMarkup(current) {
   return CATEGORIES.map((category) => {
@@ -42,7 +43,7 @@ function collectionMenuMarkup(current) {
     return `<button type="button" role="menuitemradio" aria-checked="${active}" data-collect-value="${category.id}" class="collect-option${active ? " is-current" : ""}"><span class="collect-glyph" data-glyph="${category.id}">${collectionStatusGlyph(category.id)}</span><span class="collect-option-name">${escapeHtml(category.name)}</span><span class="collect-check">${COLLECT_CHECK}</span></button>`;
   }).join("");
 }
-function collectionAction(id, status = 2) {
+function collectionAction(id, status = 0) {
   const slot = document.createElement("div");
   slot.className = "collect-slot";
   if (collectionEditingSupported()) slot.innerHTML = collectionControlMarkup(id, status);
@@ -108,6 +109,7 @@ function syncCollectControls(id, status) {
     control.dataset.status = value;
     const trigger = control.querySelector("[data-collect-trigger]");
     trigger.setAttribute("aria-label", `收藏状态：${collectionStatusName(value)}`);
+    trigger.classList.toggle("is-empty", !value);
     const glyph = trigger.querySelector(".collect-glyph");
     glyph.dataset.glyph = value;
     glyph.innerHTML = collectionStatusGlyph(value);
@@ -213,7 +215,7 @@ function collectionSearchRow(row) {
   return `<article class="collect-result" data-result-id="${Number(row.id)}" role="listitem">
   <div class="collect-result-cover${cover ? "" : " is-empty"}">${cover ? `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('is-empty');this.remove()" />` : ""}${score > 0 ? `<span class="collect-result-score">${score.toFixed(1)}</span>` : ""}</div>
   <div class="collect-result-body"><h3 class="collect-result-title">${escapeHtml(title)}</h3>${original || row.date ? `<p class="collect-result-sub">${escapeHtml([original, row.date].filter(Boolean).join(" · "))}</p>` : ""}<div class="collect-result-facts">${facts}</div></div>
-  <div class="collect-result-action">${collectionControlMarkup(row.id, anime?.collection_type || 2)}</div>
+  <div class="collect-result-action">${collectionControlMarkup(row.id, anime?.collection_type || 0)}</div>
 </article>`;
 }
 // Bangumi tokenises an unquoted keyword, so "少女前线" also returns 少女革命 and the

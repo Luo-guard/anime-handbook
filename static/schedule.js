@@ -312,7 +312,7 @@ function showScheduleDetail(key) {
     if(collectionEditingSupported()){
       const row=document.createElement("div");row.className="schedule-detail-collect";
       const label=document.createElement("span");label.className="schedule-detail-collect-label";label.textContent="收藏状态";
-      row.append(label,collectionAction(item.id,anime?.collection_type||2));
+      row.append(label,collectionAction(item.id,anime?.collection_type||0));
       const recordButton=$("#scheduleRecordProgress");
       if(recordButton)recordButton.before(row);else $("#scheduleDetail").append(row);
     }

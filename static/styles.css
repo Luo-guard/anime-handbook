@@ -3166,9 +3166,14 @@ dialog::backdrop {
 .collect-trigger:hover { background: var(--green-100); border-color: var(--active-inset); }
 .collect-trigger[aria-expanded="true"] { background: var(--green-100); border-color: var(--active-inset); box-shadow: 0 0 0 4px rgb(var(--theme-rgb) / .09); }
 .collect-trigger:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
+/* 未收藏：描边按钮，提示这是“还没加入”，而不是某个已有状态。 */
+.collect-trigger.is-empty { background: transparent; border-color: var(--line); border-style: dashed; color: var(--muted); font-weight: 600; }
+.collect-trigger.is-empty:hover,
+.collect-trigger.is-empty[aria-expanded="true"] { background: var(--green-50); border-style: solid; border-color: var(--active-inset); color: var(--green-800); }
 .collect-control[aria-busy="true"] .collect-trigger { opacity: .62; pointer-events: none; }
 .collect-glyph { display: inline-flex; width: 17px; height: 17px; }
 .collect-glyph svg { width: 17px; height: 17px; }
+.collect-glyph[data-glyph="0"] { color: var(--muted); }
 .collect-glyph[data-glyph="1"] { color: var(--green-600); }
 .collect-glyph[data-glyph="2"] { color: var(--warm); }
 .collect-glyph[data-glyph="3"] { color: var(--blue); }
