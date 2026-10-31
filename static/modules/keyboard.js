@@ -70,7 +70,19 @@ function renderKeyboardSettings(value=keyboardPreferences()) {
 function isKeyboardEditingTarget(target) {
   return target instanceof Element && (target.isContentEditable || Boolean(target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="searchbox"], [role="slider"], video, audio')));
 }
+function settingsDialogOpen() {
+  const dialog = document.querySelector("#settingsModal");
+  return Boolean(dialog?.open);
+}
+function currentShortcutView() {
+  return settingsDialogOpen() ? "settings" : state.activeView;
+}
 function navigateByShortcut(view) {
+  if (view === "settings" && settingsDialogOpen()) return true;
+  if (view !== "settings") {
+    const dialog = document.querySelector("#settingsModal");
+    if (dialog?.open) dialog.close();
+  }
   const button=document.querySelector(`.nav-item[data-nav-id="${view}"]`);
   if(!button||button.disabled||button.hidden||button.classList.contains("hidden"))return false;
   button.click();return true;
@@ -79,8 +91,11 @@ function runShortcut(action) {
   if(action.page)return navigateByShortcut(action.page);
   if(action.id==="previous"||action.id==="next"){
     const order=sidebarOrder().filter(id=>sidebarVisibility()[id]!==false);
-    const index=order.indexOf(state.activeView);if(!order.length)return false;
-    return navigateByShortcut(order[(Math.max(0,index)+(action.id==="next"?1:-1)+order.length)%order.length]);
+    const index=order.indexOf(currentShortcutView());if(!order.length||index<0)return false;
+    // Stop at the first/last page instead of wrapping around.
+    const target=index+(action.id==="next"?1:-1);
+    if(target<0||target>=order.length)return false;
+    return navigateByShortcut(order[target]);
   }
   if(action.id==="sidebar"){setSidebarCollapsed(!$(".app-shell").classList.contains("sidebar-collapsed"));return true;}
   if(action.id==="shutdown"){if(window.handbookOnline)return false;shutdownHandbookBackend();return true;}
@@ -96,17 +111,24 @@ function runShortcut(action) {
   return false;
 }
 document.addEventListener("keydown",event=>{
-  if(event.defaultPrevented||event.repeat||event.isComposing||event.keyCode===229||document.querySelector("dialog[open]"))return;
+  if(event.defaultPrevented||event.repeat||event.isComposing||event.keyCode===229)return;
   if(isKeyboardEditingTarget(document.activeElement)||event.composedPath().some(isKeyboardEditingTarget))return;
   const preferences=keyboardPreferences();if(!preferences.enabled)return;
   const key=shortcutKey(event);if(!key)return;
   const matches=SHORTCUT_ACTIONS.filter(action=>preferences.bindings[action.id].enabled&&preferences.bindings[action.id].key===key);
   if(matches.length!==1)return;
-  if(runShortcut(matches[0]))event.preventDefault();
+  // The settings page is a dialog, but it is also a sidebar entry, so navigation
+  // shortcuts stay available there. Every other open dialog still wins.
+  const navigates=Boolean(matches[0].page)||matches[0].id==="previous"||matches[0].id==="next";
+  if(document.querySelector("dialog[open]")&&!(navigates&&settingsDialogOpen()))return;
+  // A bound key belongs to the app even when its action cannot run (first/last page).
+  event.preventDefault();
+  runShortcut(matches[0]);
 });
 
-// Claim only enabled bindings (or explicit recording), and suppress the matching
-// release/auxclick so the browser does not also navigate its history.
+// A bound side button belongs to the app: it is claimed even when the action
+// cannot run (first/last page, open dialog, focused editor), so the browser
+// never falls back to its own back/forward history navigation.
 const claimedShortcutMouseButtons=new Set();
 function handleShortcutMouse(event) {
   if(event.button!==3&&event.button!==4)return;
@@ -125,12 +147,16 @@ function handleShortcutMouse(event) {
     try{readKeyboardSettings();$("#keyboardStatus").textContent="";}catch(error){$("#keyboardStatus").textContent=error.message;}
     return;
   }
-  if(event.defaultPrevented||document.querySelector('dialog[open]')||isKeyboardEditingTarget(input)||event.composedPath().some(isKeyboardEditingTarget))return;
   const prefs=keyboardPreferences();if(!prefs.enabled)return;
   const key=shortcutKey(event);
   const matches=SHORTCUT_ACTIONS.filter(action=>prefs.bindings[action.id].enabled&&prefs.bindings[action.id].key===key);
   if(matches.length!==1)return;
-  if(runShortcut(matches[0])){claimedShortcutMouseButtons.add(event.button);event.preventDefault();event.stopPropagation();}
+  claimedShortcutMouseButtons.add(event.button);
+  if(!event.defaultPrevented){event.preventDefault();event.stopPropagation();}
+  if(isKeyboardEditingTarget(input)||event.composedPath().some(isKeyboardEditingTarget))return;
+  const navigates=Boolean(matches[0].page)||matches[0].id==="previous"||matches[0].id==="next";
+  if(document.querySelector('dialog[open]')&&!(navigates&&settingsDialogOpen()))return;
+  runShortcut(matches[0]);
 }
 ['mousedown','mouseup','auxclick'].forEach(type=>document.addEventListener(type,handleShortcutMouse,{capture:true,passive:false}));
 window.addEventListener('blur',()=>claimedShortcutMouseButtons.clear());
