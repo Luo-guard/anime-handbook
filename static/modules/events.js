@@ -762,6 +762,7 @@ $("#saveSettings").addEventListener("click", async () => {
         show_create_collection_control: $("#showCreateCollectionControlInput").checked,
         show_age_related_button: $("#showAgeRelatedButtonInput").checked,
         show_bilibili_search_button: $("#showBilibiliSearchButtonInput").checked,
+        show_search_bgm_link: $("#showSearchBgmLinkInput").checked,
         merge_bilibili_links: $("#mergeBilibiliLinksInput").checked,
         show_saved_video_list: $("#showSavedVideoListInput").checked,
         show_episode_titles_on_hover:
@@ -776,6 +777,7 @@ $("#saveSettings").addEventListener("click", async () => {
     });
     verifyScheduleSortingSaved(payload.settings, scheduleSorting);
     if ($("#kazumiReadOnlyInput").checked && payload.settings.kazumi_read_only !== true) throw new Error("当前后台还不支持只读开关，请重启手账后台并刷新后再试。");
+    if (!$("#showSearchBgmLinkInput").checked && payload.settings.show_search_bgm_link !== false) throw new Error("当前后台还不支持搜索页 Bangumi 入口开关，请重启手账后台并刷新后再试。");
     if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
     if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
     state.settings = payload.settings;

@@ -3245,6 +3245,16 @@ dialog::backdrop {
 .collect-result-cover.is-empty::before { content: "番"; display: grid; place-items: center; width: 100%; height: 100%; background: var(--green-50); color: var(--green-500); font-size: 22px; font-weight: 700; }
 .collect-result-score { position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 6px; background: rgb(11 34 23 / .78); color: #fff; font-size: 11px; font-weight: 700; }
 .collect-result-state { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px; background: rgb(255 255 255 / .92); color: var(--green-800); font-size: 10.5px; font-weight: 700; }
+.collect-result-link {
+  position: absolute; top: 6px; right: 6px; display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgb(255 255 255 / .92); color: var(--green-800); text-decoration: none;
+  box-shadow: 0 2px 8px rgb(11 34 23 / .22);
+  transition: background .15s ease, transform .15s ease;
+}
+.collect-result-link svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.collect-result-link:hover { background: #fff; transform: translateY(-1px); }
+.collect-result-link:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 .collect-result-title {
   margin: 11px 0 0; font-size: 13.5px; font-weight: 650; line-height: 1.45; color: var(--ink);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261031-poster-grid-20261031-collect-ui-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261031-bgm-link-20261031-collect-ui-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -613,6 +613,16 @@
             </span>
           </label>
           <label class="setting-row">
+            <span>
+              <strong>搜索结果显示 Bangumi 入口</strong>
+              <small>在“搜索添加番剧”的结果卡片右上角显示跳转到该番 Bangumi 页面的按钮。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showSearchBgmLinkInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
             <span><strong>合并 B站入口</strong><small>开启后只显示一个入口：未存视频时为“B站搜索”，已存视频时为“已存视频”，点击打开默认视频；关闭后分开显示。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="mergeBilibiliLinksInput" /><span class="switch"></span></span>
           </label>
@@ -904,11 +914,11 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
     <script src="/modules/lifecycle.js?v=20261031-readonly-20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261031-readonly-20261029-sidebar-state" defer></script>
-    <script src="/modules/events.js?v=20261031-readonly-20261030-source-20261030-20261029-sidebar-state" defer></script>
+    <script src="/modules/settings.js?v=20261031-bgmlink-20261029-sidebar-state" defer></script>
+    <script src="/modules/events.js?v=20261031-bgmlink-20261030-source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261031-nav-bounds-20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
-    <script src="/modules/collection-edit.js?v=20261031-time-asc-poster-grid" defer></script>
+    <script src="/modules/collection-edit.js?v=20261031-bgm-link" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

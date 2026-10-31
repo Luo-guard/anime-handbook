@@ -41,6 +41,7 @@ function renderSettingsPanels() {
   $("#showCreateCollectionControlInput").checked = state.settings.show_create_collection_control !== false;
   $("#showAgeRelatedButtonInput").checked = showAgeRelatedButton();
   $("#showBilibiliSearchButtonInput").checked = showBilibiliSearchButton();
+  $("#showSearchBgmLinkInput").checked = enabledSetting("show_search_bgm_link");
   $("#mergeBilibiliLinksInput").checked = state.settings.merge_bilibili_links === true;
   $("#showSavedVideoListInput").checked = enabledSetting("show_saved_video_list");
   $("#showEpisodeTitlesOnHoverInput").checked = showEpisodeTitlesOnHover();

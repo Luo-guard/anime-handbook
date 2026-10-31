@@ -200,6 +200,14 @@ document.addEventListener("close", () => closeCollectMenus(), true);
 function collectionSearchSkeleton() {
   return `<div class="collect-card-grid">${Array.from({ length: 3 }, () => '<div class="collect-result collect-result-skeleton" aria-hidden="true"><div class="collect-result-cover"></div><span class="collect-skeleton-line"></span><span class="collect-skeleton-line short"></span><span class="collect-skeleton-line"></span></div>').join("")}</div>`;
 }
+function searchBgmLinkEnabled() {
+  return state.settings?.show_search_bgm_link !== false;
+}
+function searchBgmLink(row) {
+  if (!searchBgmLinkEnabled()) return "";
+  const base = String(state.settings?.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
+  return `<a class="collect-result-link" href="${escapeHtml(`${base}/subject/${Number(row.id)}`)}" target="_blank" rel="noopener noreferrer" title="在 Bangumi 打开" aria-label="在 Bangumi 打开"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5"/><path d="m19 5-8 8"/><path d="M18.5 14.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V7A1.5 1.5 0 0 1 6 5.5h3.5"/></svg></a>`;
+}
 function collectionSearchCard(row) {
   const anime = state.animes.find((item) => item.id === Number(row.id));
   const title = row.name_cn || row.name || "未命名条目";
@@ -213,7 +221,7 @@ function collectionSearchCard(row) {
     votes > 0 ? `${votes >= 10000 ? `${(votes / 10000).toFixed(1)} 万` : votes} 人评分` : "",
   ].filter(Boolean).join(" · ");
   return `<article class="collect-result" data-result-id="${Number(row.id)}" role="listitem">
-  <div class="collect-result-cover${cover ? "" : " is-empty"}">${cover ? `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('is-empty');this.remove()" />` : ""}${score > 0 ? `<span class="collect-result-score">${score.toFixed(1)}</span>` : ""}${anime ? '<span class="collect-result-state">已收藏</span>' : ""}</div>
+  <div class="collect-result-cover${cover ? "" : " is-empty"}">${cover ? `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('is-empty');this.remove()" />` : ""}${score > 0 ? `<span class="collect-result-score">${score.toFixed(1)}</span>` : ""}${anime ? '<span class="collect-result-state">已收藏</span>' : ""}${searchBgmLink(row)}</div>
   <h3 class="collect-result-title">${escapeHtml(title)}</h3>
   ${original ? `<p class="collect-result-sub">${escapeHtml(original)}</p>` : ""}
   <p class="collect-result-facts">${escapeHtml(facts)}</p>

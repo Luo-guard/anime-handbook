@@ -92,6 +92,8 @@ class CollectionTests(unittest.TestCase):
                     self.assertEqual(json.load(urllib.request.urlopen(base+"/api/collection-search?q=test&sort=time"))["sort"],"time")
                     self.assertEqual(sent["sort"],"match")
                     self.assertEqual(json.load(urllib.request.urlopen(base+"/api/collection-search?q=test&sort=bogus"))["sort"],"match")
+                request=urllib.request.Request(base+"/api/settings",data=json.dumps({"show_search_bgm_link":False}).encode(),method="PATCH",headers={"Content-Type":"application/json"})
+                self.assertFalse(json.load(urllib.request.urlopen(request))["settings"]["show_search_bgm_link"])
             finally:
                 server.shutdown();server.server_close();thread.join()
 

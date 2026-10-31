@@ -60,6 +60,10 @@ assert.equal(await more.getAttribute('aria-expanded'),'true');
 assert.match(await more.textContent(),/收起其他 1 条相关结果/);
 await more.click();
 assert.equal(await page.locator('.collect-result[data-result-id]:visible').count(),2);
+const bgmLink=result.locator('.collect-result-link');
+assert.equal(await bgmLink.getAttribute('href'),'https://bgm.tv/subject/123');
+assert.equal(await bgmLink.getAttribute('target'),'_blank');
+assert.equal(await bgmLink.getAttribute('rel'),'noopener noreferrer');
 const trigger=result.locator('[data-collect-trigger]');
 assert.equal(await trigger.locator('.collect-name').textContent(),'未收藏');
 assert.equal(await trigger.evaluate(node=>node.classList.contains('is-empty')),true);
@@ -91,5 +95,12 @@ assert.equal(await page.evaluate(()=>collectionAction(1,2).children.length),0,'r
 assert.equal(await page.evaluate(()=>collectionEditingSupported()),false);
 await page.evaluate(()=>{state.settings={kazumi_read_only:false};applyCollectionEditingAvailability();});
 assert.equal(await page.locator('#collectionSearchButton').evaluate(node=>node.classList.contains('hidden')),false,'turning read-only off restores the entry');
-console.log('Collection search dialog: poster cards, exact-title grouping, Kazumi-style status popover, escape guard, status save, uncollected state, sorting and read-only gating passed.');
+// The Bangumi entry honours its setting.
+await page.evaluate(()=>{state.settings={show_search_bgm_link:false};$('#collectionSearchForm').requestSubmit();});
+await page.waitForTimeout(250);
+assert.equal(await page.locator('.collect-result-link').count(),0,'setting hides the Bangumi entry');
+await page.evaluate(()=>{state.settings={};$('#collectionSearchForm').requestSubmit();});
+await page.waitForTimeout(250);
+assert.equal(await page.locator('.collect-result-link').count(),3,'setting restores the Bangumi entry');
+console.log('Collection search dialog: poster cards, exact-title grouping, Kazumi-style status popover, escape guard, status save, uncollected state, Bangumi entry, sorting and read-only gating passed.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
