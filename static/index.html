@@ -630,6 +630,10 @@
             <span><strong>显示已存视频列表</strong><small>在番剧详情中显示视频卡片和管理操作；关闭后仍保留上方“已存视频”入口。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="showSavedVideoListInput" /><span class="switch"></span></span>
           </label>
+          <label class="setting-row">
+            <span><strong>默认视频置顶</strong><small>开启时标记为“默认”的视频排在列表最前；关闭后它留在原来加入的位置，其余视频顺序不变。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="videoDefaultPinnedInput" /><span class="switch"></span></span>
+          </label>
           <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
           <div class="setting-row"><span><strong>周表来源</strong><small>两套周表独立展示；Kazumi 使用 Bangumi 放送列表，不提供具体时刻。</small></span><select id="scheduleSourceInput"><option value="yuc">長門番堂（有C）</option><option value="kazumi">Kazumi / Bangumi</option></select></div>
           <div class="setting-row"><span><strong>显示来源切换按钮</strong><small>隐藏后仍可在此处选择来源。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleSourceSwitchInput"><span class="switch"></span></span></div>
@@ -959,8 +963,8 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
     <script src="/modules/lifecycle.js?v=20261031-readonly-20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261031-kazumi-cloud-20261029-sidebar-state" defer></script>
-    <script src="/modules/events.js?v=20261031-kazumi-cloud-20261030-source-20261030-20261029-sidebar-state" defer></script>
+    <script src="/modules/settings.js?v=20261031-video-pin-20261029-sidebar-state" defer></script>
+    <script src="/modules/events.js?v=20261031-video-pin-20261030-source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261031-nav-bounds-20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/collection-edit.js?v=20261031-batch-import" defer></script>

@@ -24,8 +24,11 @@ class VideoLinks:
         self.scope = hashlib.sha256(str(database.path.resolve()).encode()).hexdigest()
 
     def list(self, anime_id):
+        # 默认视频是否置顶；关闭后按加入顺序（最新在前）排列，默认视频留在原位。
+        pinned = self.database.get_settings().get("video_default_pinned") is not False
+        order = "is_default DESC, id DESC" if pinned else "id DESC"
         with self.database.connect() as db:
-            return [dict(row) for row in db.execute("SELECT * FROM video_links WHERE anime_id=? ORDER BY is_default DESC, id DESC", (anime_id,))]
+            return [dict(row) for row in db.execute(f"SELECT * FROM video_links WHERE anime_id=? ORDER BY {order}", (anime_id,))]
 
     def update(self, body):
         if body.get("scope") != self.scope:

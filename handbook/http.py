@@ -707,6 +707,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "show_bilibili_search_button",
                     "show_search_bgm_link",
                     "show_saved_video_list",
+                    "video_default_pinned",
                     "merge_bilibili_links",
                     "show_episode_titles_on_hover",
                     "show_episode_review_record",
@@ -852,7 +853,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             value = bool(value)
                         elif key == "show_age_related_button":
                             value = bool(value)
-                        elif key in {"show_bilibili_search_button", "show_search_bgm_link", "show_saved_video_list", "merge_bilibili_links"}:
+                        elif key in {"show_bilibili_search_button", "show_search_bgm_link", "show_saved_video_list", "merge_bilibili_links", "video_default_pinned"}:
                             value = bool(value)
                         elif key == "show_episode_titles_on_hover":
                             value = bool(value)

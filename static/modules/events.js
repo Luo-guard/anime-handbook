@@ -766,6 +766,7 @@ $("#saveSettings").addEventListener("click", async () => {
         show_search_bgm_link: $("#showSearchBgmLinkInput").checked,
         merge_bilibili_links: $("#mergeBilibiliLinksInput").checked,
         show_saved_video_list: $("#showSavedVideoListInput").checked,
+        video_default_pinned: $("#videoDefaultPinnedInput").checked,
         show_episode_titles_on_hover:
           $("#showEpisodeTitlesOnHoverInput").checked,
         show_ranking_hover_titles: $("#showRankingHoverTitlesInput").checked,

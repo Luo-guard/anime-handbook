@@ -36,6 +36,20 @@ class VideoLinksTest(unittest.TestCase):
             self.assertEqual(len(VideoLinks(HandbookDB(db.path)).list(1)),1)
             self.assertEqual(VideoLinks(HandbookDB(Path(temp)/"two.db")).list(1),[])
 
+    def test_default_video_pin_setting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            db=HandbookDB(Path(temp)/"one.db")
+            with db.connect() as conn:
+                conn.execute("INSERT INTO anime(id,name,collection_type,created_at,updated_at) VALUES(1,'first',1,'2026-10-29','2026-10-29')")
+            store=VideoLinks(db)
+            for name,tail in (("A","z"),("B","a"),("C","b")):
+                store.update({"scope":store.scope,"anime_id":1,"url":f"https://www.bilibili.com/video/BV1NJHG6eE9{tail}/","title":name})
+            first=next(row for row in store.list(1) if row["title"]=="A")
+            pinned=store.update({"scope":store.scope,"anime_id":1,"id":first["id"],"action":"default"})
+            self.assertEqual([row["title"] for row in pinned],["A","C","B"])
+            db.set_setting("video_default_pinned",False)
+            self.assertEqual([row["title"] for row in store.list(1)],["C","B","A"])
+
     def test_http_routes_round_trip_and_scope_check(self):
         import json
         import threading
