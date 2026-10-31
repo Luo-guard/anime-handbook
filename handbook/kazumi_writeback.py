@@ -9,6 +9,8 @@ def flush(database, source):
     writer = APP_ROOT / "tools" / "kazumi_writer.exe"
     if not writer.is_file():
         raise RuntimeError("Kazumi 写回工具未构建")
+    if database.get_settings().get("kazumi_read_only"):
+        return
     options = {"creationflags": subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, "CREATE_NO_WINDOW") else {}
     processes = subprocess.run(["tasklist", "/FI", "IMAGENAME eq kazumi.exe", "/FO", "CSV", "/NH"], capture_output=True, timeout=10, **options)
     if processes.returncode or b'kazumi.exe' in processes.stdout.lower():
@@ -33,7 +35,8 @@ def start_worker(stop):
         from . import desktop
         while not stop.wait(5):
             database = desktop.DATABASE
-            if not database.get_settings().get("kazumi_writeback", True) or desktop.active_profile_write_issue(bind_unbound=False):
+            settings = database.get_settings()
+            if settings.get("kazumi_read_only") or not settings.get("kazumi_writeback", True) or desktop.active_profile_write_issue(bind_unbound=False):
                 continue
             if desktop.SYNC.status.get("running"):
                 continue

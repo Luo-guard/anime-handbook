@@ -696,6 +696,8 @@ $("#rankingHoverDelayInput").addEventListener("input", (event) => {
   if (state.activeView === "ranking") renderRanking();
 });
 
+$("#kazumiReadOnlyInput").addEventListener("change", applyKazumiReadOnlyControls);
+
 $("#saveSettings").addEventListener("click", async () => {
   try {
     const builtinVisibilityPayload = {};
@@ -730,6 +732,7 @@ $("#saveSettings").addEventListener("click", async () => {
         default_view: $("#defaultViewInput").value,
         ...scheduleSorting,
         kazumi_writeback: $("#kazumiWritebackInput").checked,
+        kazumi_read_only: $("#kazumiReadOnlyInput").checked,
         kazumi_conflict: $("#kazumiConflictInput").value,
         schedule_source: $("#scheduleSourceInput").value,
         show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
@@ -772,6 +775,7 @@ $("#saveSettings").addEventListener("click", async () => {
       }),
     });
     verifyScheduleSortingSaved(payload.settings, scheduleSorting);
+    if ($("#kazumiReadOnlyInput").checked && payload.settings.kazumi_read_only !== true) throw new Error("当前后台还不支持只读开关，请重启手账后台并刷新后再试。");
     if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
     if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
     state.settings = payload.settings;
@@ -785,6 +789,7 @@ $("#saveSettings").addEventListener("click", async () => {
     state.timelineThemes = new Set([...state.timelineThemes].filter((id) => visibleThemeIds.has(id)));
     applyTheme();
     applyCharacterTabVisibility();
+    applyCollectionEditingAvailability();
     $("#dayStartLabel").textContent = state.settings.day_start_hour;
     $("#settingsModal").close();
     ensureVisibleCollection();

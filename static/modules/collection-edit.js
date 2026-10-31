@@ -13,8 +13,17 @@ const COLLECT_STATUS_GLYPHS = {
 };
 let collectionSearchVersion = 0;
 
+function collectionReadOnly() {
+  return state.settings?.kazumi_read_only === true;
+}
 function collectionEditingSupported() {
-  return !window.handbookOnline;
+  return !window.handbookOnline && !collectionReadOnly();
+}
+function applyCollectionEditingAvailability() {
+  $("#collectionSearchButton")?.classList.toggle("hidden", !collectionEditingSupported());
+  if (collectionEditingSupported()) return;
+  closeCollectMenus();
+  $$(".collect-slot").forEach((slot) => slot.replaceChildren());
 }
 function collectionStatusName(status) {
   const found = CATEGORIES.find((category) => category.id === Number(status));
@@ -217,7 +226,7 @@ function renderCollectionSearchResults(result) {
   results.innerHTML = items.map(collectionSearchRow).join("");
 }
 if ($("#collectionSearchButton")) {
-  $("#collectionSearchButton").classList.toggle("hidden", !collectionEditingSupported());
+  applyCollectionEditingAvailability();
   $("#collectionSearchButton").onclick = () => {
     $("#collectionSearchModal").showModal();
     $("#collectionSearchQuery").focus();

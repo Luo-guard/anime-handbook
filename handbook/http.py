@@ -404,6 +404,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
                 self.send_json({"ok": True, "profile": profile, "profiles": self.profiles.list_profiles()}, 201)
             elif path == "/api/collection-status":
+                if self.database.get_settings().get("kazumi_read_only"):
+                    raise PermissionError("已开启只读 Kazumi 数据，先到设置中关闭后再修改收藏")
                 anime_id = int(body.get("anime_id", 0))
                 if anime_id <= 0:
                     raise ValueError("番剧条目 ID 无效")
@@ -735,6 +737,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "sidebar_visibility",
                     "sidebar_order",
                     "sidebar_labels",
+                    "kazumi_read_only",
                     "kazumi_writeback",
                     "kazumi_conflict",
                     "schedule_source",
@@ -764,6 +767,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                             continue
                         if key == "schedule_grouping":
                             value = normalize_schedule_grouping(value)
+                        elif key == "kazumi_read_only":
+                            if type(value) is not bool:
+                                raise ValueError("只读开关无效")
                         elif key == "kazumi_writeback":
                             if type(value) is not bool:
                                 raise ValueError("写回开关无效")

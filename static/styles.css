@@ -1015,6 +1015,11 @@ h1 {
   opacity: 0;
 }
 
+.setting-row.is-disabled { opacity: .7; }
+.setting-row.is-disabled .switch-row,
+.setting-row.is-disabled select,
+.setting-row.is-disabled button { cursor: not-allowed; }
+
 .switch {
   position: relative;
   width: 38px;

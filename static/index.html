@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261031-collect-ui-20261031-collection-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261031-readonly-20261031-collect-ui-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -762,6 +762,7 @@
             <span class="read-only-badge green">本地</span>
           </div>
           <div class="settings-section-title" data-settings-section="sharing">账号与同步</div>
+          <label class="setting-row desktop-only"><span><strong>只读 Kazumi 数据</strong><small>开启后手账不再修改 Kazumi：搜索添加收藏、周表加入收藏、详情修改状态一并关闭，自动写回也会暂停，已有待写回任务保留。</small></span><span class="switch-row compact"><input type="checkbox" id="kazumiReadOnlyInput"><span class="switch"></span></span></label>
           <label class="setting-row desktop-only"><span><strong>自动写回 Kazumi 收藏</strong><small>Kazumi 关闭后执行；开启期间等待。手账后台须保持运行，仅同步收藏新增和状态，不写观看进度。</small></span><span class="switch-row compact"><input type="checkbox" id="kazumiWritebackInput"><span class="switch"></span></span></label>
           <div class="setting-row desktop-only"><span><strong>Kazumi 冲突优先级</strong><small>两边都修改同一番剧状态时，采用选定来源。</small></span><select id="kazumiConflictInput"><option value="handbook">手账优先</option><option value="kazumi">Kazumi 优先</option></select><button type="button" class="secondary-button" id="collectionOutboxButton">查看待同步任务</button><p id="collectionOutboxStatus" role="status"></p></div>
           <h3 class="settings-subsection-title">本机账号</h3>
@@ -895,12 +896,12 @@
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
-    <script src="/modules/lifecycle.js?v=20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261031-collection-20261029-sidebar-state" defer></script>
-    <script src="/modules/events.js?v=20261031-collection-sidebar-restore-20261030-source-20261030-20261029-sidebar-state" defer></script>
+    <script src="/modules/lifecycle.js?v=20261031-readonly-20261029-video-confirm" defer></script>
+    <script src="/modules/settings.js?v=20261031-readonly-20261029-sidebar-state" defer></script>
+    <script src="/modules/events.js?v=20261031-readonly-20261030-source-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/keyboard.js?v=20261031-nav-bounds-20261029-configurable" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
-    <script src="/modules/collection-edit.js?v=20261031-collect-ui" defer></script>
+    <script src="/modules/collection-edit.js?v=20261031-readonly-collect-ui" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

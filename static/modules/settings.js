@@ -1,6 +1,15 @@
+function applyKazumiReadOnlyControls() {
+  const readOnly = $("#kazumiReadOnlyInput").checked;
+  $("#kazumiWritebackInput").disabled = readOnly;
+  $("#kazumiConflictInput").disabled = readOnly;
+  $("#kazumiWritebackInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
+  $("#kazumiConflictInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
+}
 function renderSettingsPanels() {
+  $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
   $("#kazumiWritebackInput").checked=state.settings.kazumi_writeback!==false;
   $("#kazumiConflictInput").value=state.settings.kazumi_conflict||"handbook";
+  applyKazumiReadOnlyControls();
   renderKeyboardSettings();
   $("#showZeroStatisticsInput").checked = enabledSetting("statistics_show_zero_periods");
   renderBgmSourceControls();

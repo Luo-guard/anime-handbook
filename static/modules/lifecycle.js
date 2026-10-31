@@ -90,6 +90,7 @@ async function bootstrap() {
     renderSync();
     renderTabs();
     renderCollection();
+    applyCollectionEditingAvailability();
     renderSeasonFilter();
     populateAnimeSelect();
     openVideoCaptureFromLocation();
