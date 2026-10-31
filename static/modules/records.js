@@ -1,3 +1,16 @@
+// Measure after the editor is mounted so wrapped lines count toward its height.
+function fitRecordEditor(textarea) {
+  const limit = Math.max(1, window.innerHeight * 0.8);
+  const border = textarea.offsetHeight - textarea.clientHeight;
+  textarea.style.height = 'auto';
+  const height = Math.min(textarea.scrollHeight + border, limit);
+  textarea.style.height = `${height}px`;
+  textarea.style.overflowY = textarea.scrollHeight + border > limit ? 'auto' : 'hidden';
+}
+window.addEventListener('resize', () => {
+  $$('.inline-event-editor textarea').forEach(fitRecordEditor);
+});
+
 const RECORD_THEME_ORDER = ["watch", "anime_comment", "anime_rating", "character_record", "episode_review", "episode_rating", "oped"];
 function allRecordThemes() {
   const themes = Array.isArray(state.settings?.record_themes) ? state.settings.record_themes : [];
@@ -265,10 +278,14 @@ async function renderTimeline(append = false) {
         editor.innerHTML = `<textarea rows="3" required></textarea><div><label class="secondary-button compact-button note-image-button">批量插入图片<input type="file" accept="image/png,image/jpeg,image/webp" multiple data-edit-image-input /></label><button type="button" class="text-button" data-cancel-edit>取消</button><button type="submit" class="primary-button compact-button">保存修改</button></div>`;
         $("textarea", editor).value = content;
         $(".event-content", card).append(editor);
+        const textarea = $("textarea", editor);
+        fitRecordEditor(textarea);
+        textarea.addEventListener("input", () => fitRecordEditor(textarea));
         button.classList.add("hidden");
         $("[data-cancel-edit]", editor).addEventListener("click", () => { editor.remove(); button.classList.remove("hidden"); });
-        $("[data-edit-image-input]", editor).addEventListener("change", (event) => {
-          insertRecordImages(event.target, $("textarea", editor));
+        $("[data-edit-image-input]", editor).addEventListener("change", async (event) => {
+          await insertRecordImages(event.target, textarea);
+          if (textarea.isConnected) fitRecordEditor(textarea);
         });
         editor.addEventListener("submit", async (event) => {
           event.preventDefault();

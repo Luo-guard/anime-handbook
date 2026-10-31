@@ -1544,7 +1544,7 @@ input[type="number"] {
 .edit-event { padding:0; border:0; color:var(--muted); background:transparent; cursor:pointer; font-size:11px; }
 .timeline-event:hover .edit-event { color:var(--green-800); }
 .inline-event-editor { display:grid; gap:8px; margin-top:10px; }
-.inline-event-editor textarea { width:100%; min-height:72px; resize:vertical; }
+.inline-event-editor textarea { width:100%; min-height:min(72px, 80vh); max-height:80vh; resize:vertical; }
 .inline-event-editor > div { display:flex; justify-content:flex-end; align-items:center; gap:8px; }
 
 .timeline-event.note {
