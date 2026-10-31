@@ -3152,7 +3152,7 @@ dialog::backdrop {
 #scheduleSourceSwitch[hidden] { display: none; }
 
 /* —— 收藏状态控件：沿用 Kazumi 的“一个状态按钮 + 五种状态菜单” —— */
-.collect-slot, .collect-detail-row, .schedule-detail-collect .collect-slot { display: inline-flex; }
+.collect-slot, .collect-detail-row { display: inline-flex; }
 .collect-detail-row { margin-top: 12px; }
 .collect-control { position: relative; display: inline-flex; }
 .collect-trigger {
@@ -3272,8 +3272,8 @@ dialog::backdrop {
 .collect-more-toggle small { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.5; }
 .collect-more-list { display: grid; gap: 8px; }
 .collect-more-list[hidden] { display: none; }
-.schedule-detail-collect { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; }
-.schedule-detail-collect-label { font-size: 12px; color: var(--muted); letter-spacing: .4px; }
+.schedule-detail-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.schedule-detail-footer .collect-slot { display: inline-flex; margin-left: auto; }
 #collectionOutboxStatus { overflow-wrap:anywhere; }
 @media (prefers-reduced-motion: reduce) {
   .collect-menu { animation: none; }

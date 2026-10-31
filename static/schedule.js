@@ -310,11 +310,12 @@ function showScheduleDetail(key) {
   $("#scheduleRecordProgress")?.addEventListener("click", () => {$("#scheduleDetailModal").close(); openProgress(item.local_id);});
   if(item.id) {
     if(collectionEditingSupported()){
-      const row=document.createElement("div");row.className="schedule-detail-collect";
-      const label=document.createElement("span");label.className="schedule-detail-collect-label";label.textContent="收藏状态";
-      row.append(label,collectionAction(item.id,anime?.collection_type||0));
+      // 收藏状态和「记录观看进度」同一行：按钮在左，状态控件靠右下角。
+      const footer=document.createElement("div");footer.className="schedule-detail-footer";
       const recordButton=$("#scheduleRecordProgress");
-      if(recordButton)recordButton.before(row);else $("#scheduleDetail").append(row);
+      if(recordButton)footer.append(recordButton);
+      footer.append(collectionAction(item.id,anime?.collection_type||0));
+      $("#scheduleDetail").append(footer);
     }
   }
   else {const note=document.createElement('p');note.textContent='该条目尚未关联 Bangumi ID，可在收藏夹的搜索添加中确认对应番剧。';$("#scheduleDetail").append(note);}
