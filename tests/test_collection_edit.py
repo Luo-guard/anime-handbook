@@ -24,6 +24,17 @@ class CollectionTests(unittest.TestCase):
             with self.assertRaises(ValueError):save_collection(db,subject,9)
             with self.assertRaises(ValueError):save_collection(db,{"id":2,"type":1},2)
 
+    def test_unannounced_subject_with_null_fields(self):
+        # 未定档的条目只有日期、简介为空（Bangumi 返回 null），不能写进 NOT NULL 列。
+        with tempfile.TemporaryDirectory() as folder:
+            db=HandbookDB(Path(folder)/"test.db")
+            anime=save_collection(db,{"id":599893,"type":2,"name":"薬屋のひとりごと 第3期 第2クール","name_cn":None,"summary":None,"date":None,"images":None},3)
+            self.assertEqual(anime["air_date"],"")
+            self.assertEqual(anime["summary"],"")
+            self.assertEqual(anime["image_url"],"")
+            self.assertEqual(anime["collection_type"],3)
+            self.assertEqual(anime["display_name"],"薬屋のひとりごと 第3期 第2クール")
+
     def test_worker_waits_and_preserves_failed_jobs(self):
         from handbook.kazumi_writeback import flush
         from unittest.mock import patch
@@ -52,7 +63,7 @@ class CollectionTests(unittest.TestCase):
         import threading, urllib.request
         with tempfile.TemporaryDirectory() as folder:
             database=HandbookDB(Path(folder)/"test.db")
-            subject={"id":123,"type":2,"name":"Test","eps":12,"rating":{"score":7,"total":10}}
+            subject={"id":123,"type":2,"name":"Test","eps":12,"date":None,"summary":None,"rating":{"score":7,"total":10}}
             class Handler(RequestHandler):
                 services=SimpleNamespace(database=database,sync=SyncService(database))
                 def require_write_access(self):pass
@@ -66,6 +77,7 @@ class CollectionTests(unittest.TestCase):
                     response=json.load(urllib.request.urlopen(request))
                     self.assertEqual(response["anime"]["collection_type"],2)
                     self.assertEqual(response["anime"]["episode_count"],12)
+                    self.assertEqual(response["anime"]["air_date"],"")
                 self.assertEqual(len(json.load(urllib.request.urlopen(base+"/api/collection-outbox"))["items"]),1)
                 sent={}
                 def fake_fetch(url,*,body=None):
