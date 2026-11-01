@@ -1,6 +1,6 @@
 import unittest
 
-from handbook.common import normalize_custom_search_links, normalize_detail_links
+from handbook.common import normalize_custom_search_links, normalize_detail_links, normalize_link_sync
 
 
 class CustomSearchLinkTest(unittest.TestCase):
@@ -30,15 +30,23 @@ class CustomSearchLinkTest(unittest.TestCase):
 class DetailLinksTest(unittest.TestCase):
     def test_presets_and_custom_order_is_kept(self):
         value = [
-            {"kind": "bgm", "name": "Bangumi #{id}", "url": "{site}/subject/{id}", "enabled": True},
-            {"kind": "bilibili", "name": "B站搜索", "url": "https://search.bilibili.com/all?keyword={title}", "enabled": False},
-            {"kind": "custom", "name": "次元城", "url": "https://www.cycani.org/category?q={title}", "enabled": True},
+            {"id": "a1", "kind": "bgm", "name": "Bangumi #{id}", "url": "{site}/subject/{id}", "enabled": True},
+            {"id": "b2", "kind": "bilibili", "name": "B站搜索", "url": "https://search.bilibili.com/all?keyword={title}", "enabled": False},
+            {"id": "c3", "kind": "custom", "name": "次元城", "url": "https://www.cycani.org/category?q={title}", "enabled": True},
         ]
         self.assertEqual(normalize_detail_links(value), value)
         self.assertEqual([item["name"] for item in normalize_detail_links(list(reversed(value)))], ["次元城", "B站搜索", "Bangumi #{id}"])
 
     def test_kind_defaults_to_custom(self):
-        self.assertEqual(normalize_detail_links([{"name": "x", "url": "https://a.b/?q="}])[0]["kind"], "custom")
+        link = normalize_detail_links([{"name": "x", "url": "https://a.b/?q="}])[0]
+        self.assertEqual(link["kind"], "custom")
+        self.assertEqual(link["id"], "")
+
+    def test_sync_records(self):
+        self.assertEqual(normalize_link_sync(["a1", " b2 ", ""]), ["a1", "b2"])
+        for value in ["a1", ["a1", 3], None]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalize_link_sync(value)
 
     def test_invalid_links(self):
         for value in [

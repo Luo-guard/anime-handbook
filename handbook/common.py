@@ -454,8 +454,15 @@ def normalize_detail_links(value: Any) -> list[dict[str, Any]]:
             raise ValueError("详情页链接的名称或网址过长")
         if not (url.startswith(("http://", "https://")) or url.startswith("{site}")):
             raise ValueError("详情页链接的网址必须以 http://、https:// 或 {site} 开头")
-        links.append({"kind": kind, "name": name, "url": url, "enabled": enabled})
+        links.append({"id": str(item.get("id") or "").strip()[:64], "kind": kind, "name": name, "url": url, "enabled": enabled})
     return links
+
+
+def normalize_link_sync(value: Any) -> list[str]:
+    """Ids already mirrored between the detail and schedule link lists."""
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError("链接同步记录格式错误")
+    return [item.strip()[:64] for item in value if item.strip()][:60]
 
 
 MAX_CUSTOM_SEARCH_LINKS = 12

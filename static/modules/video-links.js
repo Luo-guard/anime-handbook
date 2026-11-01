@@ -3,12 +3,24 @@ const DETAIL_LINK_PRESETS = [
   { kind: "bilibili", name: "B站搜索", url: "https://search.bilibili.com/all?keyword={title}", enabled: true },
 ];
 
+function detailLinkId() {
+  const cryptoObject = window.crypto;
+  if (cryptoObject?.randomUUID) return cryptoObject.randomUUID();
+  return `lnk${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function normalizeDetailLink(item) {
   if (!item || typeof item !== "object") return null;
   const name = String(item.name || "").trim();
   const url = String(item.url || "").trim();
   if (!name || !url) return null;
-  return { kind: ["bgm", "bilibili"].includes(item.kind) ? item.kind : "custom", name, url, enabled: item.enabled !== false };
+  return {
+    id: String(item.id || "") || detailLinkId(),
+    kind: ["bgm", "bilibili"].includes(item.kind) ? item.kind : "custom",
+    name,
+    url,
+    enabled: item.enabled !== false,
+  };
 }
 
 // 详情页那一行链接：预设的 BGM / B站 也是列表里的普通条目，可以改名、改网址、排序或删除。
@@ -21,6 +33,29 @@ function detailLinks() {
     { ...DETAIL_LINK_PRESETS[1], enabled: enabledSetting("show_bilibili_search_button") },
     ...legacy.map((item) => normalizeDetailLink({ ...item, kind: "custom" })).filter(Boolean),
   ];
+}
+
+// 周表卡片详情用同一套条目结构，只是独立保存、独立开关。
+function scheduleDetailLinks() {
+  const saved = state.settings.schedule_detail_links;
+  if (Array.isArray(saved)) return saved.map(normalizeDetailLink).filter(Boolean);
+  return DETAIL_LINK_PRESETS.map((preset) => ({ ...preset }));
+}
+
+// 统一把条目变成可点的链接；占位符取不到值时（例如没有 Bangumi 编号）跳过这一条。
+function buildDetailLinkItems(links, values) {
+  const items = [];
+  (links || []).forEach((link) => {
+    if (!link.enabled) return;
+    if (link.url.includes("{id}") && !values.id) return;
+    if ((link.url.includes("{title}") || link.name.includes("{title}")) && !values.title) return;
+    items.push({
+      kind: link.kind,
+      label: `${detailLinkLabel(link.name, values)} ↗`,
+      href: detailLinkHref(link.url, values),
+    });
+  });
+  return items;
 }
 
 function detailLinkHref(template, values) {
@@ -44,18 +79,18 @@ function renderDetailLinks(anime, preferred = null) {
   const title = String(anime.name_cn || anime.name || anime.display_name || "").trim();
   const site = String(state.settings.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
   const merged = state.settings.merge_bilibili_links === true;
-  detailLinks().forEach((link) => {
-    if (!link.enabled) return;
-    if (merged && preferred && link.kind === "bilibili") return;
-    const anchor = document.createElement("a");
-    anchor.className = "detail-link";
-    anchor.dataset.detailLinkKind = link.kind;
-    anchor.target = "_blank";
-    anchor.rel = "noreferrer";
-    anchor.textContent = `${detailLinkLabel(link.name, { id: anime.id, title, site })} ↗`;
-    anchor.href = detailLinkHref(link.url, { id: anime.id, title, site });
-    box.append(anchor);
-  });
+  buildDetailLinkItems(detailLinks(), { id: anime.id, title, site })
+    .filter((item) => !(merged && preferred && item.kind === "bilibili"))
+    .forEach((item) => {
+      const anchor = document.createElement("a");
+      anchor.className = "detail-link";
+      anchor.dataset.detailLinkKind = item.kind;
+      anchor.target = "_blank";
+      anchor.rel = "noreferrer";
+      anchor.textContent = item.label;
+      anchor.href = item.href;
+      box.append(anchor);
+    });
 }
 
 function renderBilibiliEntrypoints(anime, preferred = null) {

@@ -74,5 +74,37 @@ await page.evaluate(()=>{
 });
 const migrated=await page.locator('#detailLinks .detail-link').allTextContents();
 assert.deepEqual(migrated,['Bangumi #1 ↗','旧链接 ↗']);
-console.log('Detail links: presets as rows, add/edit/reorder/delete/reset, detail order, {site}/{title}/{id}, merged B站 entry and legacy migration passed.');
+// 周表卡片详情有自己的一份列表，默认同样是两个预设。
+assert.deepEqual(await page.evaluate(()=>scheduleDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索']);
+await page.evaluate(()=>{const modal=document.querySelector('#settingsModal');if(!modal.open)modal.showModal();});
+await page.evaluate(()=>{
+  state.settings.schedule_detail_links=undefined;
+  let node=document.querySelector('#scheduleDetailLinkList');
+  while(node){node.classList.remove('hidden');node=node.parentElement;}
+  renderScheduleDetailLinkSettings();
+});
+assert.equal(await page.locator('#scheduleDetailLinkList .detail-link-row').count(),2);
+await page.locator('#addScheduleDetailLink').click();
+assert.equal(await page.locator('#scheduleDetailLinkList .detail-link-row').count(),3);
+assert.deepEqual(await page.evaluate(()=>readScheduleDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索']);
+await page.locator('#resetScheduleDetailLinks').click();
+assert.equal(await page.locator('#scheduleDetailLinkList .detail-link-row').count(),2);
+// 新增链接会同步到另一边（默认关闭），开关和删除不同步。
+const sync=await page.evaluate(()=>{
+  const detail=[{id:'d1',kind:'custom',name:'次元城',url:'https://a.b/?q={title}',enabled:true}];
+  const schedule=[{id:'s1',kind:'custom',name:'樱花',url:'https://c.d/?q={title}',enabled:false}];
+  return syncLinkAdditions(detail,schedule,[]);
+});
+assert.deepEqual(sync.schedule.map(link=>[link.name,link.enabled]),[['樱花',false],['次元城',false]]);
+assert.deepEqual(sync.detail.map(link=>[link.name,link.enabled]),[['次元城',true],['樱花',false]]);
+assert.deepEqual(sync.synced.sort(),['d1','s1']);
+// 已经同步过的 id 不会因为对侧删除而反复补回。
+const again=await page.evaluate(()=>{
+  const detail=[{id:'d1',kind:'custom',name:'次元城',url:'https://a.b/?q={title}',enabled:true}];
+  const schedule=[{id:'s1',kind:'custom',name:'樱花',url:'https://c.d/?q={title}',enabled:true}];
+  return syncLinkAdditions(detail,schedule,['d1','s1']);
+});
+assert.equal(again.schedule.length,1);
+assert.equal(again.detail.length,1);
+console.log('Detail links: presets as rows, add/edit/reorder/delete/reset, detail order, {site}/{title}/{id}, merged B站 entry and legacy migration, schedule list and add-only sync passed.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

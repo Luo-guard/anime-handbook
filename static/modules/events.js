@@ -712,7 +712,12 @@ $("#saveSettings").addEventListener("click", async () => {
       return;
     }
     const detailLinkPayload = readDetailLinks();
+    const scheduleLinkPayload = readScheduleDetailLinks();
     const detailLinksChanged = JSON.stringify(detailLinkPayload) !== JSON.stringify(detailLinks());
+    // 两边各自新增的自定义链接会互相同步一条（另一边默认关闭）；开关和删除互不影响。
+    const linkSync = syncLinkAdditions(detailLinkPayload, scheduleLinkPayload, state.settings.detail_link_sync);
+    const detailLinkPayloadFinal = linkSync.detail;
+    const scheduleLinkPayloadFinal = linkSync.schedule;
     const keyboardSettings = readKeyboardSettings();
     const keyboardChanged = JSON.stringify(keyboardSettings) !== JSON.stringify(keyboardPreferences());
     if(keyboardChanged && !(await api("/api/health")).features?.keyboard_shortcuts) throw new Error("当前后台尚不支持保存快捷键，请重启手账后台并刷新页面。");
@@ -764,7 +769,9 @@ $("#saveSettings").addEventListener("click", async () => {
         show_collection_progress_control: $("#showCollectionProgressControlInput").checked,
         show_create_collection_control: $("#showCreateCollectionControlInput").checked,
         show_age_related_button: $("#showAgeRelatedButtonInput").checked,
-        detail_links: readDetailLinks(),
+        detail_links: detailLinkPayloadFinal,
+        schedule_detail_links: scheduleLinkPayloadFinal,
+        detail_link_sync: linkSync.synced,
         show_search_bgm_link: $("#showSearchBgmLinkInput").checked,
         merge_bilibili_links: $("#mergeBilibiliLinksInput").checked,
         show_saved_video_list: $("#showSavedVideoListInput").checked,

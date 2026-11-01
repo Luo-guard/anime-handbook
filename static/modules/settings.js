@@ -19,35 +19,54 @@ function readDetailLinks() {
 function commitDetailLinks(links) {
   state.settings.detail_links = links;
   renderDetailLinkSettings();
+  renderScheduleDetailLinkSettings();
 }
-$("#addDetailLink")?.addEventListener("click", () => {
-  commitDetailLinks([...detailLinksFromDom(), { kind: "custom", name: "", url: "", enabled: true }]);
-  $("#detailLinkList .detail-link-row:last-child [data-detail-link-name]")?.focus();
-});
-$("#resetDetailLinks")?.addEventListener("click", () => {
-  commitDetailLinks(DETAIL_LINK_PRESETS.map((preset) => ({ ...preset })));
-});
+const LINK_EDITORS = {
+  detail: { list: "#detailLinkList", setting: "detail_links", source: () => detailLinks() },
+  schedule: { list: "#scheduleDetailLinkList", setting: "schedule_detail_links", source: () => scheduleDetailLinks() },
+};
 
-// 编辑中的列表要保留还没填完的空行，所以不走 detailLinks() 的过滤。
-function editableDetailLinks() {
-  const saved = state.settings.detail_links;
-  if (!Array.isArray(saved)) return detailLinks();
+function linkRowsFromDom(kind) {
+  const config = LINK_EDITORS[kind];
+  return [...document.querySelectorAll(`${config.list} .detail-link-row`)].map((row) => ({
+    id: row.dataset.detailLinkId || "",
+    kind: row.dataset.detailLinkKind || "custom",
+    name: String(row.querySelector("[data-detail-link-name]").value || "").trim(),
+    url: String(row.querySelector("[data-detail-link-url]").value || "").trim(),
+    enabled: Boolean(row.querySelector("[data-detail-link-enabled]").checked),
+  }));
+}
+function readLinkList(kind) {
+  return linkRowsFromDom(kind).filter((link) => link.name && link.url);
+}
+function commitLinkList(kind, links) {
+  state.settings[LINK_EDITORS[kind].setting] = links;
+  renderLinkList(kind);
+}
+// 编辑中的列表要保留还没填完的空行，所以不走 source() 的过滤。
+function editableLinks(kind) {
+  const config = LINK_EDITORS[kind];
+  const saved = state.settings[config.setting];
+  if (!Array.isArray(saved)) return config.source();
   return saved.map((item) => ({
+    id: String(item?.id || "") || detailLinkId(),
     kind: ["bgm", "bilibili"].includes(item?.kind) ? item.kind : "custom",
     name: String(item?.name ?? ""),
     url: String(item?.url ?? ""),
     enabled: item?.enabled !== false,
   }));
 }
-function renderDetailLinkSettings() {
-  const list = $("#detailLinkList");
+function renderLinkList(kind) {
+  const config = LINK_EDITORS[kind];
+  const list = $(config.list);
   if (!list) return;
   list.replaceChildren();
-  const links = editableDetailLinks();
+  const links = editableLinks(kind);
   links.forEach((link, index) => {
     const row = document.createElement("div");
     row.className = "detail-link-row";
     row.dataset.detailLinkKind = link.kind || "custom";
+    row.dataset.detailLinkId = link.id;
     const name = document.createElement("input");
     name.type = "text";
     name.value = String(link.name || "");
@@ -68,10 +87,10 @@ function renderDetailLinkSettings() {
       button.setAttribute("aria-label", `${label}${String(link.name || "链接").trim()}`);
       button.disabled = index + delta < 0 || index + delta >= links.length;
       button.addEventListener("click", () => {
-        const next = detailLinksFromDom();
+        const next = linkRowsFromDom(kind);
         const target = index + delta;
         [next[index], next[target]] = [next[target], next[index]];
-        commitDetailLinks(next);
+        commitLinkList(kind, next);
       });
       order.append(button);
     });
@@ -90,11 +109,51 @@ function renderDetailLinkSettings() {
     remove.className = "secondary-button compact-button";
     remove.textContent = "删除";
     remove.setAttribute("aria-label", `删除链接 ${String(link.name || "").trim()}`);
-    remove.addEventListener("click", () => commitDetailLinks(detailLinksFromDom().filter((_, item) => item !== index)));
+    remove.addEventListener("click", () => commitLinkList(kind, linkRowsFromDom(kind).filter((_, item) => item !== index)));
     row.append(name, url, order, toggle, remove);
     list.append(row);
   });
 }
+
+// 新增的自定义链接在另一边补一条（默认关闭）；已同步过的 id 不再重复补，删除和开关也不会回灌。
+function syncLinkAdditions(detailList, scheduleList, syncedIds) {
+  const detail = [...detailList];
+  const schedule = [...scheduleList];
+  const synced = new Set(Array.isArray(syncedIds) ? syncedIds : []);
+  const propagate = (source, target) => {
+    const targetIds = new Set(target.map((link) => link.id).filter(Boolean));
+    source.forEach((link) => {
+      if (link.kind !== "custom" || !link.id || synced.has(link.id) || !link.name || !link.url) return;
+      synced.add(link.id);
+      if (!targetIds.has(link.id)) target.push({ ...link, enabled: false });
+    });
+  };
+  propagate(detail, schedule);
+  propagate(schedule, detail);
+  return { detail, schedule, synced: [...synced] };
+}
+
+function addLinkRow(kind) {
+  commitLinkList(kind, [...linkRowsFromDom(kind), { id: detailLinkId(), kind: "custom", name: "", url: "", enabled: true }]);
+  $(`${LINK_EDITORS[kind].list} .detail-link-row:last-child [data-detail-link-name]`)?.focus();
+}
+function resetLinkList(kind) {
+  commitLinkList(kind, DETAIL_LINK_PRESETS.map((preset) => ({ ...preset, id: detailLinkId() })));
+}
+
+$("#addDetailLink")?.addEventListener("click", () => addLinkRow("detail"));
+$("#resetDetailLinks")?.addEventListener("click", () => resetLinkList("detail"));
+$("#addScheduleDetailLink")?.addEventListener("click", () => addLinkRow("schedule"));
+$("#resetScheduleDetailLinks")?.addEventListener("click", () => resetLinkList("schedule"));
+
+// 兼容旧调用名。
+function detailLinksFromDom() { return linkRowsFromDom("detail"); }
+function readDetailLinks() { return readLinkList("detail"); }
+function readScheduleDetailLinks() { return readLinkList("schedule"); }
+function commitDetailLinks(links) { commitLinkList("detail", links); }
+function renderDetailLinkSettings() { renderLinkList("detail"); }
+function renderScheduleDetailLinkSettings() { renderLinkList("schedule"); }
+
 function renderSettingsPanels() {
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
   $("#kazumiWritebackInput").checked=state.settings.kazumi_writeback!==false;
@@ -103,6 +162,7 @@ function renderSettingsPanels() {
   applyKazumiReadOnlyControls();
   renderKeyboardSettings();
   renderDetailLinkSettings();
+  renderScheduleDetailLinkSettings();
   $("#showZeroStatisticsInput").checked = enabledSetting("statistics_show_zero_periods");
   renderBgmSourceControls();
   $("#hideCustomizedInput").checked = hideCustomizedFromBuiltin();
