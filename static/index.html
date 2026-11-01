@@ -15,7 +15,7 @@
         <div class="brand" aria-label="动漫手账">
           <span class="brand-mark">手</span>
           <span class="brand-name">动漫手账</span>
-          <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="收起侧边栏" title="收起侧边栏">
+          <button class="sidebar-toggle hidden" id="sidebarToggle" type="button" aria-label="收起侧边栏" title="收起侧边栏">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
           </button>
         </div>
@@ -53,7 +53,7 @@
             <span>设置</span>
           </button>
         </nav>
-        <div class="sidebar-power-area desktop-only">
+        <div class="sidebar-power-area desktop-only hidden" id="sidebarPowerArea">
           <button type="button" id="shutdownBackendButton" data-desktop-shutdown class="sidebar-power-button" title="关闭手账后台" aria-label="关闭手账后台"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 5.8a8.5 8.5 0 1 0 11.4 0"/></svg></button>
         </div>
       </aside>
@@ -62,7 +62,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg>
       </button>
 
-      <button type="button" id="shutdownBackendCompact" data-desktop-shutdown class="sidebar-power-button sidebar-power-compact desktop-only" title="关闭手账后台" aria-label="关闭手账后台"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 5.8a8.5 8.5 0 1 0 11.4 0"/></svg></button>
+      <button type="button" id="shutdownBackendCompact" data-desktop-shutdown class="sidebar-power-button sidebar-power-compact desktop-only hidden" title="关闭手账后台" aria-label="关闭手账后台"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 5.8a8.5 8.5 0 1 0 11.4 0"/></svg></button>
 
       <main class="main-content">
         <section class="view active" id="collectionView">
@@ -111,17 +111,17 @@
               <input id="searchInput" type="search" placeholder="搜索收藏" />
             </label>
             <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>搜索添加番剧</button>
-            <label class="switch-row compact" id="collectionRatingControl">
+            <label class="switch-row compact hidden" id="collectionRatingControl">
               <input type="checkbox" id="collectionRatingToggle" />
               <span class="switch"></span>
               <span>显示评分</span>
             </label>
-            <label class="switch-row compact" id="collectionProgressControl">
+            <label class="switch-row compact hidden" id="collectionProgressControl">
               <input type="checkbox" id="progressBarToggle" />
               <span class="switch"></span>
               <span>显示进度</span>
             </label>
-            <button class="secondary-button compact-button" id="createCollectionButton" type="button">新建收藏夹</button>
+            <button class="secondary-button compact-button hidden" id="createCollectionButton" type="button">新建收藏夹</button>
           </div>
 
           <div class="anime-grid" id="animeGrid"></div>

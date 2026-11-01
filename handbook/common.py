@@ -410,6 +410,40 @@ def normalize_watched_keys(
     return sorted(result, key=lambda key: order.get(key, 10**9))
 
 
+# 首屏可见性：这些元素在 index.html 里默认带 hidden，由服务端按设置直接决定渲染结果，
+# 避免“先画出来再被 JS 隐藏”的闪烁。键名必须与前端 enabledSetting() 使用的设置一致。
+INITIAL_VISIBILITY = {
+    "collectionRatingControl": "show_collection_rating_control",
+    "collectionProgressControl": "show_collection_progress_control",
+    "createCollectionButton": "show_create_collection_control",
+    "sidebarToggle": "show_sidebar_toggle",
+    "sidebarPowerArea": "show_shutdown_button",
+    "shutdownBackendCompact": "show_shutdown_button",
+}
+
+
+def _strip_hidden_class(tag: str) -> str:
+    def clean(match: re.Match[str]) -> str:
+        classes = re.sub(r"(^|\s+)hidden(?=\s|$)", " ", match.group(1)).strip()
+        return f'class="{classes}"'
+
+    return re.sub(r'class="([^"]*)"', clean, tag, count=1)
+
+
+def with_initial_visibility(html: str, settings: dict[str, Any]) -> str:
+    """Reveal setting-driven elements in the served HTML itself.
+
+    Anything still ``False`` in the account settings stays hidden; missing keys
+    are treated as enabled, matching the frontend's ``enabledSetting()``.
+    """
+    for element_id, key in INITIAL_VISIBILITY.items():
+        if settings.get(key) is False:
+            continue
+        pattern = re.compile(r'<[a-zA-Z][^>]*\bid="' + re.escape(element_id) + r'"[^>]*>')
+        html = pattern.sub(lambda match: _strip_hidden_class(match.group(0)), html, count=1)
+    return html
+
+
 def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str) -> str:
     """Embed only the active account's appearance, before the blocking theme script."""
     keys = ("theme_color", "custom_theme_color", "custom_background_enabled",
@@ -417,7 +451,8 @@ def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str
     payload = json.dumps({"settings": {key: settings[key] for key in keys if key in settings},
                           "account_id": account_id}, ensure_ascii=True).replace("<", "\\u003c")
     marker = '<script id="initialAppearance" type="application/json">{}</script>'
-    return html.replace(marker, f'<script id="initialAppearance" type="application/json">{payload}</script>', 1)
+    html = html.replace(marker, f'<script id="initialAppearance" type="application/json">{payload}</script>', 1)
+    return with_initial_visibility(html, settings)
 
 
 
