@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261101-saved-compact-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261101-toolbar-group-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -110,19 +110,21 @@
               </svg>
               <input id="searchInput" type="search" placeholder="搜索收藏" />
             </label>
-            <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>搜索添加番剧</button>
-            <label class="switch-row compact hidden" id="collectionRatingControl">
-              <input type="checkbox" id="collectionRatingToggle" />
-              <span class="switch"></span>
-              <span>显示评分</span>
-            </label>
-            <label class="switch-row compact hidden" id="collectionProgressControl">
-              <input type="checkbox" id="progressBarToggle" />
-              <span class="switch"></span>
-              <span>显示进度</span>
-            </label>
-            <button class="secondary-button compact-button" id="jumpHistoryButton" type="button">跳转记录</button>
-            <button class="secondary-button compact-button hidden" id="createCollectionButton" type="button">新建收藏夹</button>
+            <div class="collection-toolbar-actions">
+              <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>搜索添加番剧</button>
+              <button type="button" class="secondary-button collection-add-button" id="jumpHistoryButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.2h-4.2"/><path d="M12 8.4v4.2l2.8 1.7"/></svg>跳转记录</button>
+              <label class="switch-row compact hidden" id="collectionRatingControl">
+                <input type="checkbox" id="collectionRatingToggle" />
+                <span class="switch"></span>
+                <span>显示评分</span>
+              </label>
+              <label class="switch-row compact hidden" id="collectionProgressControl">
+                <input type="checkbox" id="progressBarToggle" />
+                <span class="switch"></span>
+                <span>显示进度</span>
+              </label>
+              <button class="secondary-button compact-button hidden" id="createCollectionButton" type="button">新建收藏夹</button>
+            </div>
           </div>
 
           <div class="anime-grid" id="animeGrid"></div>

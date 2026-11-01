@@ -598,6 +598,10 @@ h1 {
   gap: 18px;
   margin: 22px 0;
 }
+.collection-toolbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: none; }
+@media (max-width: 900px) {
+  .collection-toolbar-actions { justify-content: flex-start; }
+}
 
 .sort-direction-button {
   display: inline-flex;
