@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261101-custom-links-20261031-collect-ui-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261101-detail-links-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -281,7 +281,7 @@
           <img id="progressCover" alt="" />
           <div>
             <h2 id="progressTitle"></h2>
-            <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><a id="bgmMirrorLink" target="_blank" rel="noreferrer"></a><a id="savedVideoDefaultLink" class="hidden" target="_blank" rel="noreferrer">已存视频 ↗</a><a id="bilibiliSearchLink" target="_blank" rel="noreferrer">B站搜索 ↗</a><span id="customSearchLinks" class="custom-search-links"></span><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
+            <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><span id="detailLinks" class="detail-links"></span><a id="savedVideoDefaultLink" class="hidden" target="_blank" rel="noreferrer">已存视频 ↗</a><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
             <div class="anime-rating hidden" id="animeRating"></div>
             <div class="personal-rating hidden" id="personalRating"></div>
             <div class="collect-detail-row" id="collectionDetailStatus"></div>
@@ -604,23 +604,16 @@
               <span class="switch"></span>
             </span>
           </label>
-          <label class="setting-row">
+          <div class="setting-row stacked detail-link-settings">
             <span>
-              <strong>显示 B站搜索链接</strong>
-              <small>在单个番剧界面显示按番剧标题跳转到 B站搜索结果的链接。</small>
+              <strong>详情页搜索入口</strong>
+              <small>番剧详情里这一行链接的顺序和内容都在这里调整。可用占位符：<code>{title}</code> 番剧名称、<code>{id}</code> Bangumi 编号、<code>{site}</code> 当前 Bangumi 站点。上下箭头调整顺序，BGM 和 B站两条是预设，也可以改或删。</small>
             </span>
-            <span class="switch-row compact">
-              <input type="checkbox" id="showBilibiliSearchButtonInput" />
-              <span class="switch"></span>
-            </span>
-          </label>
-          <div class="setting-row stacked custom-search-settings">
-            <span>
-              <strong>自定义搜索链接</strong>
-              <small>在番剧详情里显示额外的搜索入口，位置在“B站搜索”后面。网址末尾会自动接上番剧名称；也可以用 <code>{title}</code> 指定名称的位置。每个链接都能单独开关。</small>
-            </span>
-            <div id="customSearchLinkList" class="custom-search-link-list"></div>
-            <button type="button" class="secondary-button compact-button" id="addCustomSearchLink">添加搜索链接</button>
+            <div id="detailLinkList" class="detail-link-list"></div>
+            <div class="detail-link-actions">
+              <button type="button" class="secondary-button compact-button" id="addDetailLink">新增链接</button>
+              <button type="button" class="secondary-button compact-button" id="resetDetailLinks">恢复预设</button>
+            </div>
           </div>
           <label class="setting-row">
             <span>
@@ -967,14 +960,14 @@
     <script src="/modules/presentation.js?v=sidebar-restore-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
     <script src="/modules/composer.js?v=20261023-modules" defer></script>
-    <script src="/modules/video-links.js?v=20261101-custom-links" defer></script>
-    <script src="/modules/details.js?v=20261031-collect-ui-20261029-video-disclosure" defer></script>
+    <script src="/modules/video-links.js?v=20261101-detail-links" defer></script>
+    <script src="/modules/details.js?v=20261101-detail-links" defer></script>
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
     <script src="/modules/lifecycle.js?v=20261031-readonly-20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261101-custom-links" defer></script>
-    <script src="/modules/events.js?v=20261101-custom-links" defer></script>
+    <script src="/modules/settings.js?v=20261101-detail-links" defer></script>
+    <script src="/modules/events.js?v=20261101-detail-links" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/collection-edit.js?v=20261031-batch-import" defer></script>

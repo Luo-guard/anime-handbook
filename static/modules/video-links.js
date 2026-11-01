@@ -1,39 +1,69 @@
+const DETAIL_LINK_PRESETS = [
+  { kind: "bgm", name: "Bangumi #{id}", url: "{site}/subject/{id}", enabled: true },
+  { kind: "bilibili", name: "B站搜索", url: "https://search.bilibili.com/all?keyword={title}", enabled: true },
+];
+
+function normalizeDetailLink(item) {
+  if (!item || typeof item !== "object") return null;
+  const name = String(item.name || "").trim();
+  const url = String(item.url || "").trim();
+  if (!name || !url) return null;
+  return { kind: ["bgm", "bilibili"].includes(item.kind) ? item.kind : "custom", name, url, enabled: item.enabled !== false };
+}
+
+// 详情页那一行链接：预设的 BGM / B站 也是列表里的普通条目，可以改名、改网址、排序或删除。
+function detailLinks() {
+  const saved = state.settings.detail_links;
+  if (Array.isArray(saved)) return saved.map(normalizeDetailLink).filter(Boolean);
+  const legacy = Array.isArray(state.settings.custom_search_links) ? state.settings.custom_search_links : [];
+  return [
+    { ...DETAIL_LINK_PRESETS[0] },
+    { ...DETAIL_LINK_PRESETS[1], enabled: enabledSetting("show_bilibili_search_button") },
+    ...legacy.map((item) => normalizeDetailLink({ ...item, kind: "custom" })).filter(Boolean),
+  ];
+}
+
+function detailLinkHref(template, values) {
+  return String(template)
+    .split("{site}").join(values.site)
+    .split("{id}").join(String(values.id ?? ""))
+    .split("{title}").join(encodeURIComponent(values.title));
+}
+
+function detailLinkLabel(name, values) {
+  return String(name)
+    .split("{id}").join(String(values.id ?? ""))
+    .split("{title}").join(values.title)
+    .split("{site}").join(values.site);
+}
+
+function renderDetailLinks(anime, preferred = null) {
+  const box = $("#detailLinks");
+  if (!box || !anime) return;
+  box.replaceChildren();
+  const title = String(anime.name_cn || anime.name || anime.display_name || "").trim();
+  const site = String(state.settings.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
+  const merged = state.settings.merge_bilibili_links === true;
+  detailLinks().forEach((link) => {
+    if (!link.enabled) return;
+    if (merged && preferred && link.kind === "bilibili") return;
+    const anchor = document.createElement("a");
+    anchor.className = "detail-link";
+    anchor.dataset.detailLinkKind = link.kind;
+    anchor.target = "_blank";
+    anchor.rel = "noreferrer";
+    anchor.textContent = `${detailLinkLabel(link.name, { id: anime.id, title, site })} ↗`;
+    anchor.href = detailLinkHref(link.url, { id: anime.id, title, site });
+    box.append(anchor);
+  });
+}
+
 function renderBilibiliEntrypoints(anime, preferred = null) {
-  const search=$("#bilibiliSearchLink"),saved=$("#savedVideoDefaultLink");
-  const keyword=String(anime.name_cn || anime.name || anime.display_name || "").trim();
-  const merged=state.settings.merge_bilibili_links === true;
-  search.dataset.animeId=anime.id;search.dataset.animeName=anime.display_name || keyword;
-  search.href=`https://search.bilibili.com/all?keyword=${encodeURIComponent(keyword)}`;
-  search.textContent="B站搜索 ↗";
-  search.classList.toggle("hidden",!enabledSetting("show_bilibili_search_button")||!keyword||(merged&&Boolean(preferred)));
+  const saved=$("#savedVideoDefaultLink");
   saved.textContent="已存视频 ↗";
   saved.classList.toggle("hidden",!preferred);
   if(preferred)saved.href=preferred.url;else saved.removeAttribute("href");
-  renderCustomSearchLinks(keyword);
-}
-
-function customSearchLinkUrl(template, keyword) {
-  const encoded=encodeURIComponent(keyword);
-  return template.includes("{title}")?template.split("{title}").join(encoded):`${template}${encoded}`;
-}
-
-function renderCustomSearchLinks(keyword) {
-  const box=$("#customSearchLinks");
-  if(!box)return;
-  box.replaceChildren();
-  const links=Array.isArray(state.settings.custom_search_links)?state.settings.custom_search_links:[];
-  links
-    .filter(link=>link&&link.enabled!==false&&String(link.name||"").trim()&&String(link.url||"").trim())
-    .forEach(link=>{
-      const anchor=document.createElement("a");
-      anchor.className="custom-search-link";
-      anchor.target="_blank";
-      anchor.rel="noreferrer";
-      anchor.textContent=`${String(link.name).trim()} ↗`;
-      anchor.href=customSearchLinkUrl(String(link.url).trim(),keyword);
-      anchor.title=`在${String(link.name).trim()}搜索《${keyword}》`;
-      box.append(anchor);
-    });
+  renderDetailLinks(anime,preferred);
 }
 
 let videoLinksLoadVersion = 0;

@@ -20,10 +20,6 @@ function openProgress(animeId) {
   $("#collectionDetailStatus").classList.toggle("hidden", !collectionEditingSupported());
   $("#progressAirDate").textContent = anime.air_date || "";
   $("#progressMetaSeparator").classList.toggle("hidden", !anime.air_date);
-  const mirrorLink = $("#bgmMirrorLink");
-  const siteBase = String(state.settings.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
-  mirrorLink.href = `${siteBase}/subject/${anime.id}`;
-  mirrorLink.textContent = `Bangumi #${anime.id} ↗`;
   $("#savedVideoSection").open = false;
   renderVideoLinks(anime.id);
   $("#openAgeRelated").classList.toggle("hidden", !showAgeRelatedButton());

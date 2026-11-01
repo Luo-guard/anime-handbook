@@ -5,42 +5,95 @@ function applyKazumiReadOnlyControls() {
   $("#kazumiWritebackInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
   $("#kazumiConflictInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
 }
-function customSearchLinks() {
-  return Array.isArray(state.settings.custom_search_links) ? state.settings.custom_search_links : [];
+function detailLinksFromDom() {
+  return [...document.querySelectorAll("#detailLinkList .detail-link-row")].map((row) => ({
+    kind: row.dataset.detailLinkKind || "custom",
+    name: String(row.querySelector("[data-detail-link-name]").value || "").trim(),
+    url: String(row.querySelector("[data-detail-link-url]").value || "").trim(),
+    enabled: Boolean(row.querySelector("[data-detail-link-enabled]").checked),
+  }));
 }
-function renderCustomSearchLinkSettings() {
-  const list=$("#customSearchLinkList");
-  if(!list)return;
+function readDetailLinks() {
+  return detailLinksFromDom().filter((link) => link.name && link.url);
+}
+function commitDetailLinks(links) {
+  state.settings.detail_links = links;
+  renderDetailLinkSettings();
+}
+$("#addDetailLink")?.addEventListener("click", () => {
+  commitDetailLinks([...detailLinksFromDom(), { kind: "custom", name: "", url: "", enabled: true }]);
+  $("#detailLinkList .detail-link-row:last-child [data-detail-link-name]")?.focus();
+});
+$("#resetDetailLinks")?.addEventListener("click", () => {
+  commitDetailLinks(DETAIL_LINK_PRESETS.map((preset) => ({ ...preset })));
+});
+
+// 编辑中的列表要保留还没填完的空行，所以不走 detailLinks() 的过滤。
+function editableDetailLinks() {
+  const saved = state.settings.detail_links;
+  if (!Array.isArray(saved)) return detailLinks();
+  return saved.map((item) => ({
+    kind: ["bgm", "bilibili"].includes(item?.kind) ? item.kind : "custom",
+    name: String(item?.name ?? ""),
+    url: String(item?.url ?? ""),
+    enabled: item?.enabled !== false,
+  }));
+}
+function renderDetailLinkSettings() {
+  const list = $("#detailLinkList");
+  if (!list) return;
   list.replaceChildren();
-  customSearchLinks().forEach((link,index)=>{
-    const row=document.createElement("div");
-    row.className="custom-search-link-row";
-    const name=document.createElement("input");
-    name.type="text";name.value=String(link.name||"");name.placeholder="名称，例如 次元城";name.dataset.customLinkName=String(index);
-    const url=document.createElement("input");
-    url.type="url";url.value=String(link.url||"");url.placeholder="https://example.com/search?q=";url.dataset.customLinkUrl=String(index);
-    const toggle=document.createElement("label");toggle.className="switch-row compact";
-    const check=document.createElement("input");
-    check.type="checkbox";check.checked=link.enabled!==false;check.dataset.customLinkEnabled=String(index);
-    check.setAttribute("aria-label",`显示${String(link.name||"这个").trim()||"自定义"}搜索链接`);
-    const visual=document.createElement("span");visual.className="switch";toggle.append(check,visual);
-    const remove=document.createElement("button");
-    remove.type="button";remove.className="secondary-button compact-button";remove.textContent="删除";
-    remove.setAttribute("aria-label",`删除搜索链接 ${String(link.name||"").trim()}`);
-    remove.addEventListener("click",()=>{
-      state.settings.custom_search_links=customSearchLinks().filter((_,item)=>item!==index);
-      renderCustomSearchLinkSettings();
+  const links = editableDetailLinks();
+  links.forEach((link, index) => {
+    const row = document.createElement("div");
+    row.className = "detail-link-row";
+    row.dataset.detailLinkKind = link.kind || "custom";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = String(link.name || "");
+    name.placeholder = "名称，例如 次元城";
+    name.dataset.detailLinkName = "";
+    const url = document.createElement("input");
+    url.type = "text";
+    url.value = String(link.url || "");
+    url.placeholder = "https://example.com/search?q={title}";
+    url.dataset.detailLinkUrl = "";
+    const order = document.createElement("div");
+    order.className = "detail-link-order";
+    [["↑", -1, "上移"], ["↓", 1, "下移"]].forEach(([glyph, delta, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "detail-link-order-button";
+      button.textContent = glyph;
+      button.setAttribute("aria-label", `${label}${String(link.name || "链接").trim()}`);
+      button.disabled = index + delta < 0 || index + delta >= links.length;
+      button.addEventListener("click", () => {
+        const next = detailLinksFromDom();
+        const target = index + delta;
+        [next[index], next[target]] = [next[target], next[index]];
+        commitDetailLinks(next);
+      });
+      order.append(button);
     });
-    row.append(name,url,toggle,remove);
+    const toggle = document.createElement("label");
+    toggle.className = "switch-row compact";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = link.enabled !== false;
+    check.dataset.detailLinkEnabled = "";
+    check.setAttribute("aria-label", `显示${String(link.name || "这个").trim() || "链接"}`);
+    const visual = document.createElement("span");
+    visual.className = "switch";
+    toggle.append(check, visual);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "secondary-button compact-button";
+    remove.textContent = "删除";
+    remove.setAttribute("aria-label", `删除链接 ${String(link.name || "").trim()}`);
+    remove.addEventListener("click", () => commitDetailLinks(detailLinksFromDom().filter((_, item) => item !== index)));
+    row.append(name, url, order, toggle, remove);
     list.append(row);
   });
-}
-function readCustomSearchLinks() {
-  return [...document.querySelectorAll("#customSearchLinkList .custom-search-link-row")].map(row=>({
-    name:String(row.querySelector("[data-custom-link-name]").value||"").trim(),
-    url:String(row.querySelector("[data-custom-link-url]").value||"").trim(),
-    enabled:Boolean(row.querySelector("[data-custom-link-enabled]").checked),
-  })).filter(link=>link.name&&link.url);
 }
 function renderSettingsPanels() {
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
@@ -49,7 +102,7 @@ function renderSettingsPanels() {
   $("#kazumiConflictInput").value=state.settings.kazumi_conflict||"handbook";
   applyKazumiReadOnlyControls();
   renderKeyboardSettings();
-  renderCustomSearchLinkSettings();
+  renderDetailLinkSettings();
   $("#showZeroStatisticsInput").checked = enabledSetting("statistics_show_zero_periods");
   renderBgmSourceControls();
   $("#hideCustomizedInput").checked = hideCustomizedFromBuiltin();
@@ -79,7 +132,6 @@ function renderSettingsPanels() {
   $("#showCollectionProgressControlInput").checked = state.settings.show_collection_progress_control !== false;
   $("#showCreateCollectionControlInput").checked = state.settings.show_create_collection_control !== false;
   $("#showAgeRelatedButtonInput").checked = showAgeRelatedButton();
-  $("#showBilibiliSearchButtonInput").checked = showBilibiliSearchButton();
   $("#showSearchBgmLinkInput").checked = enabledSetting("show_search_bgm_link");
   $("#videoDefaultPinnedInput").checked = state.settings.video_default_pinned !== false;
   $("#mergeBilibiliLinksInput").checked = state.settings.merge_bilibili_links === true;

@@ -21,7 +21,7 @@ import time
 from urllib.parse import unquote
 from urllib.parse import urlparse
 from .common import (BACKGROUND_ROOT, CATEGORY_NAMES, DATA_ROOT, MAX_JSON_BODY_BYTES, RECORD_IMAGE_ROOT, STATIC_ROOT, background_stem, configure_windows_autostart, find_background_asset, json_dumps, normalize_background_bytes, normalize_bgm_sources, safe_asset_id, with_initial_appearance)
-from .common import normalize_custom_search_links, normalize_schedule_grouping
+from .common import normalize_custom_search_links, normalize_detail_links, normalize_schedule_grouping
 from .metadata import SyncService
 
 SCHEDULE = ScheduleService(DATA_ROOT / "schedule")
@@ -704,6 +704,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "show_collection_progress_control",
                     "show_create_collection_control",
                     "show_age_related_button",
+                    "detail_links",
                     "custom_search_links",
                     "show_bilibili_search_button",
                     "show_search_bgm_link",
@@ -856,6 +857,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                             value = bool(value)
                         elif key == "custom_search_links":
                             value = normalize_custom_search_links(value)
+                        elif key == "detail_links":
+                            value = normalize_detail_links(value)
                         elif key in {"show_bilibili_search_button", "show_search_bgm_link", "show_saved_video_list", "merge_bilibili_links", "video_default_pinned"}:
                             value = bool(value)
                         elif key == "show_episode_titles_on_hover":

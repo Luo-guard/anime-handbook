@@ -422,6 +422,42 @@ def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str
 
 
 
+MAX_DETAIL_LINKS = 12
+DETAIL_LINK_KINDS = {"bgm", "bilibili", "custom"}
+
+
+def normalize_detail_links(value: Any) -> list[dict[str, Any]]:
+    """Validate the ordered shortcut list shown in an anime detail row.
+
+    ``kind`` only marks the two presets so the B站 entry can still be merged
+    with a saved video; users may rename, retarget or delete either preset.
+    """
+    if not isinstance(value, list):
+        raise ValueError("详情页链接格式错误")
+    if len(value) > MAX_DETAIL_LINKS:
+        raise ValueError(f"详情页链接最多 {MAX_DETAIL_LINKS} 个")
+    links = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("详情页链接格式错误")
+        kind = str(item.get("kind") or "custom")
+        if kind not in DETAIL_LINK_KINDS:
+            raise ValueError("详情页链接类型无效")
+        name = str(item.get("name") or "").strip()
+        url = str(item.get("url") or "").strip()
+        enabled = item.get("enabled", True)
+        if type(enabled) is not bool:
+            raise ValueError("详情页链接开关无效")
+        if not name or not url:
+            raise ValueError("详情页链接需要名称和网址")
+        if len(name) > 30 or len(url) > 500:
+            raise ValueError("详情页链接的名称或网址过长")
+        if not (url.startswith(("http://", "https://")) or url.startswith("{site}")):
+            raise ValueError("详情页链接的网址必须以 http://、https:// 或 {site} 开头")
+        links.append({"kind": kind, "name": name, "url": url, "enabled": enabled})
+    return links
+
+
 MAX_CUSTOM_SEARCH_LINKS = 12
 
 
