@@ -3141,13 +3141,27 @@ dialog::backdrop {
 .video-anime-empty { padding: 12px; color: var(--muted); }
 
 #keyboardBindings { width: 100%; display: grid; gap: 0; }
-.keyboard-binding { display: grid; grid-template-columns: minmax(0,1fr) minmax(120px,180px) 48px; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
-.keyboard-binding > input { width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--line); border-radius:10px; padding:10px; color:var(--green-800); background:var(--green-50); text-align:center; cursor:pointer; font:inherit; }
-.keyboard-binding > input:focus { outline:2px solid var(--active-inset); outline-offset:2px; }
+.keyboard-group-title { margin: 16px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--muted); }
+.keyboard-group:first-child .keyboard-group-title { margin-top: 4px; }
+.keyboard-binding { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.05fr) 44px; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.keyboard-binding-name { font-size: 13.5px; color: var(--ink); }
+.keyboard-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.shortcut-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 9px; border-radius: 8px; background: var(--green-50); color: var(--green-800); font-size: 12px; line-height: 1.5; }
+.shortcut-chip-label { white-space: nowrap; }
+.shortcut-chip-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px; line-height: 1; padding: 1px 5px; border-radius: 6px; cursor: pointer; }
+.shortcut-chip-remove:hover { background: rgb(0 0 0 / .07); color: var(--danger); }
+.shortcut-add { border: 1px dashed var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.shortcut-add:hover { border-color: var(--active-inset); color: var(--green-800); background: var(--green-50); }
+.shortcut-add:focus-visible, .shortcut-chip-remove:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
+.shortcut-capture { width: 132px; box-sizing: border-box; border: 1px solid var(--active-inset); border-radius: 8px; padding: 4px 8px; background: var(--surface); color: var(--green-800); font: inherit; font-size: 12px; }
+.shortcut-capture::placeholder { color: var(--muted); }
+.shortcut-capture:focus { outline: 2px solid rgb(var(--theme-rgb) / .25); outline-offset: 1px; }
 #keyboardStatus { color:var(--danger); font-size:13px; }
-@media(max-width:600px){.keyboard-binding { grid-template-columns:minmax(0,1fr) 110px 40px;gap:8px;font-size:13px; }}
-
 .keyboard-binding.hidden { display:none; }
+@media(max-width:600px){
+  .keyboard-binding { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 40px; gap: 8px; font-size: 13px; }
+  .shortcut-capture { width: 100%; }
+}
 
 #scheduleSourceSwitch[hidden] { display: none; }
 

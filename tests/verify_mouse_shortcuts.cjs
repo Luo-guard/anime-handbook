@@ -41,9 +41,9 @@ assert(p.url().endsWith('/two'));
 // Editing targets and the recording row keep working.
 await p.evaluate(()=>{state.settings.keyboard_shortcuts.bindings.previous.key='Alt+MouseBack';document.querySelector('#searchInput').focus();});
 await side('forward');assert.equal((await p.evaluate(()=>hits)).length,3);
-await p.evaluate(()=>{renderKeyboardSettings();const modal=document.querySelector('#settingsModal');modal.showModal();const node=document.querySelector('[data-shortcut-action="previous"] input');node.focus();});
+await p.evaluate(()=>{renderKeyboardSettings();const modal=document.querySelector('#settingsModal');modal.showModal();document.querySelector('[data-shortcut-action="previous"] [data-shortcut-add]').click();});
 await side('back',1);
-assert.equal(await p.locator('[data-shortcut-action="previous"] [data-collect-key], [data-shortcut-action="previous"] [data-shortcut-key]').first().getAttribute('data-key'),'Alt+MouseBack');
+assert.equal(await p.locator('[data-shortcut-action="previous"] [data-key-chip]').last().getAttribute('data-key'),'Alt+MouseBack');
 assert(p.url().endsWith('/two'));
 console.log('Mouse side buttons: boundary pages hold still, bound buttons never trigger browser history, settings dialog navigation and recording passed.');
 }finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1)});
