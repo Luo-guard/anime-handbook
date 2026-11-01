@@ -314,7 +314,7 @@ function syncSettingsNavigation(preview = false) {
   const tabs = new Map($$("[data-settings-tab]").map(button => [button.dataset.settingsTab, button]));
   const pageTabs = sidebarOrder().map(id => Object.keys(SETTINGS_PAGE_IDS).find(tab => SETTINGS_PAGE_IDS[tab] === id)).filter(Boolean);
   const nav = $("#settingsSideNav"), list = $(".settings-list");
-  ["theme", ...pageTabs, "keyboard", "data", "sharing"].forEach(tab => {
+  ["theme", ...pageTabs.flatMap((tab) => (tab === "collection" ? ["collection", "detail"] : [tab])), "keyboard", "data", "sharing"].forEach(tab => {
     const button = tabs.get(tab);
     if (!button) return;
     button.classList.toggle("hidden", Boolean(SETTINGS_PAGE_IDS[tab] && visibility[SETTINGS_PAGE_IDS[tab]] === false));

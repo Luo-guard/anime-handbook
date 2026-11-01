@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261101-multi-key-20261031-collect-ui-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261101-detail-tab-20261031-collect-ui-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -340,6 +340,7 @@
           <aside class="settings-side-nav" id="settingsSideNav" aria-label="设置分类">
 <button type="button" class="active" data-settings-tab="theme">主界面设置</button>
 <button type="button" data-settings-tab="collection" data-page-label="collection">收藏夹</button>
+<button type="button" data-settings-tab="detail">番剧详情</button>
 <button type="button" data-settings-tab="schedule" data-page-label="schedule">周表</button>
 <button type="button" data-settings-tab="record" data-page-label="timeline">看番记录</button>
 <button type="button" data-settings-tab="statistics" data-page-label="statistics">记录统计</button>
@@ -535,7 +536,8 @@
             <div class="settings-custom-list" id="settingsCustomCollections"></div>
           </div>
           
-          <h3 class="settings-subsection-title">番剧详情 · 评分与资料</h3>
+<div class="settings-section-title" data-settings-section="detail">番剧详情</div>
+<h3 class="settings-subsection-title">评分与资料</h3>
           <label class="setting-row">
             <span>
               <strong>显示 Bangumi 评分与排名</strong>
@@ -560,7 +562,7 @@
               <span class="switch"></span>
             </span>
           </label>
-          <h3 class="settings-subsection-title">番剧详情 · 单集快捷操作</h3>
+          <h3 class="settings-subsection-title">单集快捷操作</h3>
           <label class="setting-row">
             <span>
               <strong>显示单集评价入口</strong>
@@ -591,7 +593,7 @@
               <span class="switch"></span>
             </span>
           </label>
-          <h3 class="settings-subsection-title">番剧详情 · 外部查询链接</h3>
+          <h3 class="settings-subsection-title">外部查询链接</h3>
           <label class="setting-row">
             <span>
               <strong>显示相关番剧按钮</strong>
@@ -634,7 +636,7 @@
             <span><strong>默认视频置顶</strong><small>开启时标记为“默认”的视频排在列表最前；关闭后它留在原来加入的位置，其余视频顺序不变。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="videoDefaultPinnedInput" /><span class="switch"></span></span>
           </label>
-          <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
+                    <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
           <div class="setting-row"><span><strong>周表来源</strong><small>两套周表独立展示；Kazumi 使用 Bangumi 放送列表，不提供具体时刻。</small></span><select id="scheduleSourceInput"><option value="yuc">長門番堂（有C）</option><option value="kazumi">Kazumi / Bangumi</option></select></div>
           <div class="setting-row"><span><strong>显示来源切换按钮</strong><small>隐藏后仍可在此处选择来源。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleSourceSwitchInput"><span class="switch"></span></span></div>
           <h3 class="settings-subsection-title">排序与显示范围</h3>
