@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261101-jump-history-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261101-saved-compact-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -289,8 +289,10 @@
             <input id="episodeCountInput" type="hidden" />
           </div>
         </div>
-        <details class="saved-video-links hidden" id="savedVideoSection"><summary class="saved-video-heading"><span>已存视频</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedVideoLinks"></div></details>
-        <details class="saved-video-links hidden" id="savedLinkSection"><summary class="saved-video-heading"><span>已存链接</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedLinks"></div></details>
+        <div class="saved-sections">
+          <details class="saved-video-links hidden" id="savedVideoSection"><summary class="saved-video-heading"><span>已存视频</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedVideoLinks"></div></details>
+          <details class="saved-video-links hidden" id="savedLinkSection"><summary class="saved-video-heading"><span>已存链接</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedLinks"></div></details>
+        </div>
         <div class="detail-tabs" role="tablist">
           <button type="button" class="detail-tab active" data-detail-tab="overview" role="tab" aria-selected="true">概览</button>
           <button type="button" class="detail-tab" data-detail-tab="characters" id="charactersDetailTab" role="tab" aria-selected="false">人物</button>

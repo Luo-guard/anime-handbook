@@ -3098,8 +3098,11 @@ dialog::backdrop {
 /* Keep the shutdown preference effective in expanded, collapsed and mobile layouts. */
 .sidebar-power-area.hidden, .sidebar-power-compact.hidden { display: none; }
 
+.saved-sections { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2px 22px; margin: 0 0 12px; }
+.saved-sections .saved-video-links { flex: 0 0 auto; }
+.saved-sections .saved-video-links[open] { flex: 1 1 100%; }
 .saved-video-links { margin: 0 0 18px; padding: 0; border: 0; background: transparent; }
-.saved-video-heading { display: flex; align-items: center; justify-content: flex-start; gap: 7px; width: fit-content; padding: 4px 0; list-style: none; cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
+.saved-video-heading { display: flex; align-items: center; justify-content: flex-start; gap: 6px; width: fit-content; padding: 2px 0; list-style: none; cursor: pointer; color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .saved-video-heading::-webkit-details-marker { display: none; }
 .saved-video-heading svg { width: 15px; height: 15px; transition: transform 160ms ease; }
 .saved-video-links[open] > .saved-video-heading svg { transform: rotate(180deg); }
