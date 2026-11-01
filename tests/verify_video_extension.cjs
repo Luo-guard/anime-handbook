@@ -35,10 +35,10 @@ try{
  assert.equal(writes.length,0,'cancel and reuse must not write automatically');
  assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'456','open detail must take priority over source association');
  assert.equal(await capture.locator('#videoCaptureSearch').inputValue(),'另一部番剧');
- await capture.locator('#videoCaptureSearch').click();assert.equal(await capture.getByRole('listbox').isVisible(),true);
+ await capture.locator('#videoCaptureSearch').click();assert.equal(await capture.locator('#videoAnimeOptions').isVisible(),true);
  await capture.locator('#videoCaptureSearch').fill('没有这个名字');assert.equal(await capture.getByRole('option').count(),0);assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'');
  await capture.locator('#videoCaptureSearch').fill('');await capture.locator('#videoCaptureSearch').press('ArrowUp');await capture.locator('#videoCaptureSearch').press('Enter');assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'456');
- await capture.locator('#videoCaptureSearch').click();await capture.locator('#videoCaptureTitle').click();assert.equal(await capture.getByRole('listbox').isVisible(),false);
+ await capture.locator('#videoCaptureSearch').click();await capture.locator('#videoCaptureTitle').click();assert.equal(await capture.locator('#videoAnimeOptions').isVisible(),false);
  await capture.locator('#videoCaptureSearch').fill('另一');await capture.getByRole('option',{name:'另一部番剧',exact:true}).click();await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);assert.equal(await capture.locator('#videoCaptureDefault').isChecked(),false);await capture.locator('#videoCaptureTitle').fill('自定义视频名');await capture.locator('#videoCaptureNote').fill('繁体');await capture.locator('#videoCaptureSave').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
  assert.equal(writes.length,1);assert.equal(writes[0].anime_id,456);assert.equal(writes[0].note,'繁体');assert.equal(writes[0].title,'自定义视频名');assert(writes[0].url.includes('p=2'));assert.equal(writes[0].scope,'test-scope');assert.equal(writes[0].make_default,false,'save confirmation defaults to collection only');
  console.log('Extension capture -> same-origin handbook confirmation: first launch and existing-tab reuse without reload, catalog, association, reset, filter, explicit save and Part 2 passed.');

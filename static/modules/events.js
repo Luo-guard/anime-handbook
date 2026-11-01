@@ -711,6 +711,8 @@ $("#saveSettings").addEventListener("click", async () => {
       toast("至少保留一个收藏夹显示", "error");
       return;
     }
+    const detailLinkPayload = readDetailLinks();
+    const detailLinksChanged = JSON.stringify(detailLinkPayload) !== JSON.stringify(detailLinks());
     const keyboardSettings = readKeyboardSettings();
     const keyboardChanged = JSON.stringify(keyboardSettings) !== JSON.stringify(keyboardPreferences());
     if(keyboardChanged && !(await api("/api/health")).features?.keyboard_shortcuts) throw new Error("当前后台尚不支持保存快捷键，请重启手账后台并刷新页面。");
@@ -780,6 +782,7 @@ $("#saveSettings").addEventListener("click", async () => {
     verifyScheduleSortingSaved(payload.settings, scheduleSorting);
     if ($("#kazumiReadOnlyInput").checked && payload.settings.kazumi_read_only !== true) throw new Error("当前后台还不支持只读开关，请重启手账后台并刷新后再试。");
     if (!$("#showSearchBgmLinkInput").checked && payload.settings.show_search_bgm_link !== false) throw new Error("当前后台还不支持搜索页 Bangumi 入口开关，请重启手账后台并刷新后再试。");
+    if (detailLinksChanged && !Array.isArray(payload.settings.detail_links)) throw new Error("当前后台还不支持详情页链接，请重启手账后台并刷新后再试。");
     if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
     if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
     state.settings = payload.settings;
