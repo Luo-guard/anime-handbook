@@ -22,6 +22,7 @@ from urllib.parse import unquote
 from urllib.parse import urlparse
 from .common import (BACKGROUND_ROOT, CATEGORY_NAMES, DATA_ROOT, MAX_JSON_BODY_BYTES, RECORD_IMAGE_ROOT, STATIC_ROOT, background_stem, configure_windows_autostart, find_background_asset, json_dumps, normalize_background_bytes, normalize_bgm_sources, safe_asset_id, with_initial_appearance)
 from .common import normalize_custom_search_links, normalize_detail_links, normalize_link_sync, normalize_schedule_grouping
+from .jumps import normalize_jump
 from .metadata import SyncService
 
 SCHEDULE = ScheduleService(DATA_ROOT / "schedule")
@@ -183,6 +184,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 })
             elif path == "/api/webdav":
                 self.send_json({"webdav": self.webdav.status()})
+            elif path == "/api/jump-history":
+                limit = int(query.get("limit", ["80"])[0] or 80)
+                self.send_json({"items": self.database.list_jumps(limit)})
             elif path == "/api/video-links":
                 store = VideoLinks(self.database)
                 anime_id = int(query.get("anime_id", ["0"])[0])
@@ -401,7 +405,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             }
             if path not in write_exempt_paths:
                 self.require_write_access()
-            if path == "/api/video-links":
+            if path == "/api/jump-history":
+                if str(body.get("action") or "") == "clear":
+                    self.database.clear_jumps()
+                    self.send_json({"ok": True, "items": []})
+                else:
+                    self.send_json({"ok": True, "items": self.database.record_jump(normalize_jump(body))})
+            elif path == "/api/video-links":
                 self.send_json({"ok": True, "items": VideoLinks(self.database).update(body)})
             elif path == "/api/profiles":
                 profile = self.profiles.create(

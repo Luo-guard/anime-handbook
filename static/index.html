@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261101-saved-links-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261101-jump-history-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -121,6 +121,7 @@
               <span class="switch"></span>
               <span>显示进度</span>
             </label>
+            <button class="secondary-button compact-button" id="jumpHistoryButton" type="button">跳转记录</button>
             <button class="secondary-button compact-button hidden" id="createCollectionButton" type="button">新建收藏夹</button>
           </div>
 
@@ -911,6 +912,18 @@
         <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
       </div>
     </dialog>
+    <dialog class="modal jump-history-modal" id="jumpHistoryModal">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="jumpHistoryClose" aria-label="关闭">×</button>
+        <header class="collect-search-head">
+          <p class="eyebrow">RECENT JUMPS</p>
+          <h2>跳转记录</h2>
+          <p class="collect-search-hint">最近点开过的已存视频和链接，点一下直接打开，不用再进番剧详情。同一地址只保留最新一次。</p>
+        </header>
+        <div id="jumpHistoryList" class="jump-list"></div>
+        <div class="jump-actions"><button type="button" class="secondary-button compact-button" id="clearJumpHistory">清空记录</button><p id="jumpHistoryStatus" role="status"></p></div>
+      </div>
+    </dialog>
     <dialog class="modal import-modal" id="collectionImportModal">
       <div class="modal-frame">
         <button type="button" class="modal-close" id="collectionImportClose" aria-label="关闭">×</button>
@@ -974,7 +987,7 @@
     <script src="/modules/presentation.js?v=sidebar-restore-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
     <script src="/modules/composer.js?v=20261023-modules" defer></script>
-    <script src="/modules/video-links.js?v=20261101-saved-links" defer></script>
+    <script src="/modules/video-links.js?v=20261101-jump-history" defer></script>
     <script src="/modules/details.js?v=20261101-detail-links" defer></script>
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
@@ -986,6 +999,7 @@
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/collection-edit.js?v=20261031-batch-import" defer></script>
     <script src="/modules/collection-import.js?v=20261031-import-in-search" defer></script>
+    <script src="/modules/jump-history.js?v=20261101-jump-history" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

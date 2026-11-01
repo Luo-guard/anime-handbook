@@ -3153,6 +3153,24 @@ dialog::backdrop {
 .video-capture-kinds label:has(input:checked) { border-color: var(--active-inset); background: var(--green-50); color: var(--green-800); font-weight: 600; }
 .saved-link-icon { display: grid; place-items: center; flex: 0 0 36px; height: 36px; border-radius: 10px; background: var(--paper); color: var(--muted); }
 .saved-link-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* —— 跳转记录 —— */
+.jump-history-modal { width: min(620px, calc(100vw - 28px)); }
+.jump-list { display: grid; gap: 2px; max-height: min(52vh, 460px); overflow: auto; margin-top: 4px; }
+.jump-day { margin: 12px 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--muted); }
+.jump-day:first-child { margin-top: 2px; }
+.jump-row { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 11px; color: var(--ink); text-decoration: none; }
+.jump-row:hover, .jump-row:focus-visible { background: var(--green-50); outline: none; }
+.jump-icon { display: grid; place-items: center; flex: 0 0 30px; height: 30px; border-radius: 9px; background: var(--paper); color: var(--green-700); }
+.jump-icon svg { width: 16px; height: 16px; }
+.jump-row[data-jump-kind="video"] .jump-icon svg { fill: currentColor; stroke: none; }
+.jump-row[data-jump-kind="link"] .jump-icon svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.jump-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.jump-title { font-size: 13.5px; font-weight: 600; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jump-meta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jump-time { flex: 0 0 auto; font-size: 11.5px; color: var(--muted); }
+.jump-empty { padding: 26px 10px; text-align: center; color: var(--muted); font-size: 13px; }
+.jump-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.jump-actions p { margin: 0; font-size: 12px; color: var(--muted); }
 
 .video-anime-picker { position: relative; }
 .video-anime-input { display: flex; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }

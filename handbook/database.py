@@ -110,6 +110,17 @@ class HandbookDB:
                     kind TEXT NOT NULL DEFAULT 'video',
                     UNIQUE(anime_id, url)
                 );
+                CREATE TABLE IF NOT EXISTS jump_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    anime_id INTEGER,
+                    anime_name TEXT NOT NULL DEFAULT '',
+                    title TEXT NOT NULL DEFAULT '',
+                    url TEXT NOT NULL,
+                    kind TEXT NOT NULL DEFAULT 'video',
+                    host TEXT NOT NULL DEFAULT '',
+                    visited_at TEXT NOT NULL,
+                    UNIQUE(url)
+                );
                 CREATE TABLE IF NOT EXISTS kazumi_outbox (
                     anime_id INTEGER PRIMARY KEY, status INTEGER NOT NULL, baseline INTEGER,
                     subject TEXT NOT NULL, revision TEXT NOT NULL, error TEXT NOT NULL DEFAULT ''
@@ -560,6 +571,50 @@ class HandbookDB:
                 """,
                 (key, json_dumps(value)),
             )
+
+    JUMP_HISTORY_LIMIT = 200
+
+    def record_jump(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """最近跳过的视频/链接；同一地址只保留一条并刷新时间。"""
+        url = str(payload.get("url") or "")
+        with self._write_lock, self.connect() as db:
+            # 先删后插：让重复地址始终拿到最新 id，排序在时间相近时也稳定。
+            db.execute("DELETE FROM jump_history WHERE url=?", (url,))
+            db.execute(
+                """
+                INSERT INTO jump_history(anime_id, anime_name, title, url, kind, host, visited_at)
+                VALUES(?,?,?,?,?,?,?)
+                """,
+                (
+                    payload.get("anime_id"),
+                    str(payload.get("anime_name") or ""),
+                    str(payload.get("title") or ""),
+                    url,
+                    str(payload.get("kind") or "video"),
+                    str(payload.get("host") or ""),
+                    now_iso(),
+                ),
+            )
+            db.execute(
+                "DELETE FROM jump_history WHERE id NOT IN "
+                "(SELECT id FROM jump_history ORDER BY visited_at DESC, id DESC LIMIT ?)",
+                (self.JUMP_HISTORY_LIMIT,),
+            )
+        return self.list_jumps()
+
+    def list_jumps(self, limit: int = 80) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            return [
+                dict(row)
+                for row in db.execute(
+                    "SELECT * FROM jump_history ORDER BY visited_at DESC, id DESC LIMIT ?",
+                    (max(1, min(int(limit), self.JUMP_HISTORY_LIMIT)),),
+                )
+            ]
+
+    def clear_jumps(self) -> None:
+        with self._write_lock, self.connect() as db:
+            db.execute("DELETE FROM jump_history")
 
     def list_custom_collections(self) -> list[dict[str, Any]]:
         with self.connect() as db:

@@ -98,6 +98,13 @@ function renderBilibiliEntrypoints(anime, preferred = null) {
   saved.textContent="已存视频 ↗";
   saved.classList.toggle("hidden",!preferred);
   if(preferred)saved.href=preferred.url;else saved.removeAttribute("href");
+  saved.onclick = preferred ? () => typeof recordJump === "function" && recordJump({
+    anime_id: anime?.id || null,
+    anime_name: anime?.display_name || anime?.name_cn || "",
+    title: preferred.title,
+    url: preferred.url,
+    kind: preferred.kind || "video",
+  }) : null;
   renderDetailLinks(anime,preferred);
 }
 
@@ -170,6 +177,21 @@ async function renderVideoLinks(animeId) {
     }
     bindSavedActions(panel, animeId, result);
     if (linkPanel) bindSavedActions(linkPanel, animeId, result);
+    // 点开已存视频/链接时记一笔跳转记录，方便下次直接从这里打开。
+    const anime = state.progressAnime || {};
+    const remember = (item) => typeof recordJump === "function" && recordJump({
+      anime_id: animeId,
+      anime_name: anime.display_name || anime.name_cn || "",
+      title: item.title,
+      url: item.url,
+      kind: item.kind || "video",
+    });
+    panel.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
+      if (videos[index]) anchor.addEventListener("click", () => remember(videos[index]));
+    });
+    linkPanel?.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
+      if (links[index]) anchor.addEventListener("click", () => remember(links[index]));
+    });
   } catch(error) {
     if (version === videoLinksLoadVersion) {
       panel.textContent = `已存视频暂不可用：${error.message}`;
