@@ -50,6 +50,31 @@ class VideoLinksTest(unittest.TestCase):
             db.set_setting("video_default_pinned",False)
             self.assertEqual([row["title"] for row in store.list(1)],["C","B","A"])
 
+    def test_plain_links_are_stored_separately_from_videos(self):
+        with tempfile.TemporaryDirectory() as temp:
+            db=HandbookDB(Path(temp)/"one.db")
+            with db.connect() as conn:
+                conn.execute("INSERT INTO anime(id,name,collection_type,created_at,updated_at) VALUES(1,'first',1,'2026-10-29','2026-10-29')")
+            store=VideoLinks(db)
+            base={"scope":store.scope,"anime_id":1}
+            video=store.update({**base,"url":"https://www.bilibili.com/video/BV1NJHG6eE9z/","title":"视频","make_default":True})[0]
+            self.assertEqual(video["kind"],"video")
+            rows=store.update({**base,"kind":"link","url":"https://example.com/wiki?q=1","title":"资料页","note":"设定集"})
+            self.assertEqual(len(rows),2)
+            link=next(row for row in rows if row["kind"]=="link")
+            self.assertEqual(link["url"],"https://example.com/wiki?q=1")
+            self.assertEqual(link["is_default"],0)
+            self.assertEqual(next(row for row in rows if row["kind"]=="video")["is_default"],1)
+            # 普通链接不能设为默认，保存时也不会抢走“默认视频”
+            with self.assertRaises(ValueError):
+                store.update({**base,"id":link["id"],"action":"default"})
+            store.update({**base,"kind":"link","url":"https://example.com/wiki?q=1","title":"资料页","make_default":True})
+            self.assertEqual(len([row for row in store.list(1) if row["is_default"]]),1)
+            # 非法链接被拒绝
+            for bad in ["javascript:alert(1)", "ftp://a.b/c", "https://user:pw@example.com/", ""]:
+                with self.subTest(url=bad), self.assertRaises(ValueError):
+                    store.update({**base,"kind":"link","url":bad,"title":"x"})
+
     def test_http_routes_round_trip_and_scope_check(self):
         import json
         import threading

@@ -3145,6 +3145,14 @@ dialog::backdrop {
 
 .video-capture-field input { border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; color: var(--ink); background: var(--surface); font: inherit; }
 .video-capture-field input:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
+.video-capture-label { font-size: 12.5px; color: var(--muted); }
+.video-capture-kinds { display: inline-flex; gap: 6px; }
+.video-capture-kinds label { position: relative; display: inline-flex; align-items: center; padding: 7px 14px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; cursor: pointer; transition: background .16s ease, border-color .16s ease; }
+.video-capture-kinds label:hover { background: var(--green-50); }
+.video-capture-kinds input { position: absolute; opacity: 0; pointer-events: none; }
+.video-capture-kinds label:has(input:checked) { border-color: var(--active-inset); background: var(--green-50); color: var(--green-800); font-weight: 600; }
+.saved-link-icon { display: grid; place-items: center; flex: 0 0 36px; height: 36px; border-radius: 10px; background: var(--paper); color: var(--muted); }
+.saved-link-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 .video-anime-picker { position: relative; }
 .video-anime-input { display: flex; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }

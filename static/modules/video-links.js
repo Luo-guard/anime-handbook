@@ -102,38 +102,80 @@ function renderBilibiliEntrypoints(anime, preferred = null) {
 }
 
 let videoLinksLoadVersion = 0;
-async function renderVideoLinks(animeId) {
-  const version = ++videoLinksLoadVersion;
-  const panel = $("#savedVideoLinks");
-  const section = $("#savedVideoSection");
-  section.classList.add("hidden");
-  renderBilibiliEntrypoints(state.progressAnime);
-  panel.textContent = "正在读取已存视频…";
-  try {
-    const result = await api(`/api/video-links?anime_id=${animeId}`);
-    if (version !== videoLinksLoadVersion || state.progressAnime?.id !== animeId) return;
-    const preferred = result.items.find(item => item.is_default);
-    renderBilibiliEntrypoints(state.progressAnime,preferred);
-    section.classList.toggle("hidden", !enabledSetting("show_saved_video_list") || !result.items.length);
-    panel.innerHTML = result.items.map(item => `<article class="saved-video-row">
+
+function savedLinkHost(url) {
+  try { return new URL(String(url || "")).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+
+function savedVideoRow(item) {
+  return `<article class="saved-video-row">
       <a class="saved-video-open" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
         <span class="saved-video-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"/></svg></span>
         <span class="saved-video-copy"><span class="saved-video-title">${escapeHtml(item.title)}</span>${item.uploader || item.note ? `<span class="saved-video-meta">${escapeHtml([item.uploader,item.note].filter(Boolean).join(" · "))}</span>` : ""}</span>
       </a>
       <div class="saved-video-actions">${item.is_default ? `<span class="saved-video-badge">默认</span><button type="button" class="saved-video-action" data-video-action="unset_default" data-video-id="${item.id}">取消默认</button>` : `<button type="button" class="saved-video-action" data-video-action="default" data-video-id="${item.id}">设为默认</button>`}<button type="button" class="saved-video-action" data-video-action="delete" data-video-id="${item.id}" aria-label="移除视频：${escapeHtml(item.title)}">移除</button></div>
-    </article>`).join("");
-    panel.querySelectorAll("[data-video-action]").forEach(button => button.addEventListener("click", async () => {
-      if (button.dataset.videoAction === "delete" && !confirm("移除这个已存视频链接？")) return;
-      if(button.dataset.videoAction === "unset_default" && !result.features?.optional_video_default) {
-        toast("当前运行的是旧后台，尚不支持取消默认。请关闭手账后台，再通过启动快捷方式打开并刷新页面。", "error");return;
-      }
-      button.disabled = true;
-      try {
-        await api("/api/video-links", {method:"POST",body:JSON.stringify({anime_id:animeId,scope:result.scope,action:button.dataset.videoAction,id:Number(button.dataset.videoId)})});
-        if (state.progressAnime?.id === animeId) renderVideoLinks(animeId);
-      } catch (error) { toast(error.message,"error"); button.disabled=false; }
-    }));
-  } catch(error) { if (version === videoLinksLoadVersion) panel.textContent = `已存视频暂不可用：${error.message}`; }
+    </article>`;
+}
+
+function savedLinkRow(item) {
+  const meta = [savedLinkHost(item.url), item.note].filter(Boolean).join(" · ");
+  return `<article class="saved-video-row">
+      <a class="saved-video-open" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
+        <span class="saved-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10.6 13.4a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 1 0-5.7-5.7l-1.2 1.2"/><path d="M13.4 10.6a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 1 0 5.7 5.7l1.2-1.2"/></svg></span>
+        <span class="saved-video-copy"><span class="saved-video-title">${escapeHtml(item.title)}</span>${meta ? `<span class="saved-video-meta">${escapeHtml(meta)}</span>` : ""}</span>
+      </a>
+      <div class="saved-video-actions"><button type="button" class="saved-video-action" data-video-action="delete" data-video-id="${item.id}" aria-label="移除链接：${escapeHtml(item.title)}">移除</button></div>
+    </article>`;
+}
+
+function bindSavedActions(panel, animeId, result) {
+  panel.querySelectorAll("[data-video-action]").forEach(button => button.addEventListener("click", async () => {
+    const removing = button.dataset.videoAction === "delete";
+    if (removing && !confirm("移除这个已存条目？")) return;
+    if(button.dataset.videoAction === "unset_default" && !result.features?.optional_video_default) {
+      toast("当前运行的是旧后台，尚不支持取消默认。请关闭手账后台，再通过启动快捷方式打开并刷新页面。", "error");return;
+    }
+    button.disabled = true;
+    try {
+      await api("/api/video-links", {method:"POST",body:JSON.stringify({anime_id:animeId,scope:result.scope,action:button.dataset.videoAction,id:Number(button.dataset.videoId)})});
+      if (state.progressAnime?.id === animeId) renderVideoLinks(animeId);
+    } catch (error) { toast(error.message,"error"); button.disabled=false; }
+  }));
+}
+
+async function renderVideoLinks(animeId) {
+  const version = ++videoLinksLoadVersion;
+  const panel = $("#savedVideoLinks");
+  const section = $("#savedVideoSection");
+  const linkPanel = $("#savedLinks");
+  const linkSection = $("#savedLinkSection");
+  section.classList.add("hidden");
+  linkSection?.classList.add("hidden");
+  renderBilibiliEntrypoints(state.progressAnime);
+  panel.textContent = "正在读取已存视频…";
+  if (linkPanel) linkPanel.textContent = "正在读取已存链接…";
+  try {
+    const result = await api(`/api/video-links?anime_id=${animeId}`);
+    if (version !== videoLinksLoadVersion || state.progressAnime?.id !== animeId) return;
+    const videos = result.items.filter(item => (item.kind || "video") === "video");
+    const links = result.items.filter(item => item.kind === "link");
+    const preferred = videos.find(item => item.is_default);
+    renderBilibiliEntrypoints(state.progressAnime,preferred);
+    // 普通链接不算“已存视频”，单独一块显示，顶部快捷入口也只指向默认视频。
+    section.classList.toggle("hidden", !enabledSetting("show_saved_video_list") || !videos.length);
+    panel.innerHTML = videos.map(savedVideoRow).join("");
+    if (linkSection) {
+      linkSection.classList.toggle("hidden", !enabledSetting("show_saved_video_list") || !links.length);
+      linkPanel.innerHTML = links.map(savedLinkRow).join("");
+    }
+    bindSavedActions(panel, animeId, result);
+    if (linkPanel) bindSavedActions(linkPanel, animeId, result);
+  } catch(error) {
+    if (version === videoLinksLoadVersion) {
+      panel.textContent = `已存视频暂不可用：${error.message}`;
+      if (linkPanel) linkPanel.textContent = "";
+    }
+  }
 }
 window.addEventListener("focus", () => {
   if (state.progressAnime && $("#progressModal")?.open) renderVideoLinks(state.progressAnime.id);
@@ -143,8 +185,14 @@ function parseVideoCapture(fragment) {
   if (!fragment.startsWith("#save-video=")) return null;
   const payload=JSON.parse(decodeURIComponent(fragment.slice("#save-video=".length)));
   const url=new URL(payload.url);
-  if(url.protocol!=="https:" || !["www.bilibili.com","bilibili.com"].includes(url.hostname) || url.username || url.password || url.port || !/^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)) throw Error("无效的 B 站视频地址");
-  return {url:url.href,title:String(payload.title||"B站视频").slice(0,200),uploader:String(payload.uploader||"").slice(0,100),anime_id:Number(payload.anime_id)||null};
+  const isVideo=url.protocol==="https:" && ["www.bilibili.com","bilibili.com"].includes(url.hostname) && !url.username && !url.password && !url.port && /^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname);
+  if (!isVideo) {
+    // 非 B 站视频：可以当作普通链接保存，但地址必须是 http(s)。
+    if (!["https:","http:"].includes(url.protocol)) throw Error("只能保存 http 或 https 链接");
+    if (payload.kind !== "link") throw Error("无效的 B 站视频地址");
+    return {kind:"link",url:url.href,title:String(payload.title||"外部链接").slice(0,200),uploader:"",anime_id:Number(payload.anime_id)||null};
+  }
+  return {kind:"video",url:url.href,title:String(payload.title||"B站视频").slice(0,200),uploader:String(payload.uploader||"").slice(0,100),anime_id:Number(payload.anime_id)||null};
 }
 let videoAnimePickerController=null;
 function createVideoAnimePicker(animes, preferredId, dialog, onSelect = () => {}) {
@@ -200,6 +248,20 @@ async function openVideoCaptureFromLocation() {
   const dialog=$("#videoCaptureModal"),form=$("#videoCaptureForm"),save=$("#videoCaptureSave"),status=$("#videoCaptureStatus"),select=$("#videoCaptureAnime");
   $("#videoCaptureTitle").value=capture.title;
   $("#videoCaptureUploader").textContent=capture.uploader;
+  const kindInputs=$$('input[name="videoCaptureKind"]');
+  const urlField=$("#videoCaptureUrlField"),urlInput=$("#videoCaptureUrl");
+  const captureKind=()=>kindInputs.find(input=>input.checked)?.value||"video";
+  const applyKind=()=>{
+    const isVideo=captureKind()==="video";
+    $("#videoCaptureHeading").textContent=isVideo?"保存 B 站视频":"保存链接";
+    save.textContent=isVideo?"保存视频":"保存链接";
+    urlField.classList.toggle("hidden",isVideo);
+    $("#videoCaptureUploader").classList.toggle("hidden",!isVideo);
+    $("#videoCaptureDefaultRow").classList.toggle("hidden",!isVideo);
+    if(!isVideo&&!urlInput.value)urlInput.value=capture.url;
+  };
+  kindInputs.forEach(input=>{input.checked=input.value===(capture.kind||"video");input.addEventListener("change",applyKind);});
+  applyKind();
   const detailAnimeId=$("#progressModal")?.open ? Number(state.progressAnime?.id) : null;
   dialog.showModal();
   const version=++videoCaptureVersion;
@@ -225,14 +287,17 @@ async function openVideoCaptureFromLocation() {
   $("#videoCaptureClose").onclick=close;$("#videoCaptureCancel").onclick=close;
   form.onsubmit=async event=>{
     event.preventDefault();if(!catalog||saving||!select.value||!selectionReady)return;
-    if(!$("#videoCaptureDefault").checked && !catalog.features?.optional_video_default) {
+    if(captureKind()==="video" && !$("#videoCaptureDefault").checked && !catalog.features?.optional_video_default) {
       status.textContent="当前运行的是旧后台，尚不支持只收藏而不设默认。请重启手账后台并刷新页面后再保存。";return;
     }
+    const kind=captureKind();
+    const url=kind==="video"?capture.url:$("#videoCaptureUrl").value.trim();
+    if(kind==="link"&&!/^https?:\/\//i.test(url)){status.textContent="请填写以 http:// 或 https:// 开头的链接";return;}
     saving=true;videoCaptureSaving=true;save.disabled=true;
     try {
       const animeId=Number(select.value);
-      await api("/api/video-links",{method:"POST",body:JSON.stringify({...capture,title:$("#videoCaptureTitle").value.trim() || capture.title,anime_id:animeId,scope:catalog.scope,note:$("#videoCaptureNote").value,make_default:$("#videoCaptureDefault").checked})});
-      dialog.close();toast("视频已保存");openProgress(animeId);
+      await api("/api/video-links",{method:"POST",body:JSON.stringify({...capture,kind,url,title:$("#videoCaptureTitle").value.trim() || capture.title,anime_id:animeId,scope:catalog.scope,note:$("#videoCaptureNote").value,make_default:kind==="video"&&$("#videoCaptureDefault").checked})});
+      dialog.close();toast(kind==="video"?"视频已保存":"链接已保存");openProgress(animeId);
     }catch(error){status.textContent=error.message;}
     finally{saving=false;videoCaptureSaving=false;save.disabled=false;}
   };

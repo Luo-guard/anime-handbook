@@ -107,6 +107,7 @@ class HandbookDB:
                     uploader TEXT NOT NULL DEFAULT '',
                     note TEXT NOT NULL DEFAULT '',
                     is_default INTEGER NOT NULL DEFAULT 0,
+                    kind TEXT NOT NULL DEFAULT 'video',
                     UNIQUE(anime_id, url)
                 );
                 CREATE TABLE IF NOT EXISTS kazumi_outbox (
@@ -270,6 +271,11 @@ class HandbookDB:
             }.items():
                 if column not in columns:
                     db.execute(f"ALTER TABLE anime ADD COLUMN {column} {definition}")
+            video_link_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(video_links)").fetchall()
+            }
+            if "kind" not in video_link_columns:
+                db.execute("ALTER TABLE video_links ADD COLUMN kind TEXT NOT NULL DEFAULT 'video'")
             event_schema = db.execute(
                 "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'events'"
             ).fetchone()["sql"]

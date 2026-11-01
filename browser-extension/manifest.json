@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "动漫手账 · 存视频",
-  "version": "1.1.1",
-  "description": "将当前 B 站视频一键保存到本机动漫手账的指定番剧。",
+  "version": "1.2.0",
+  "description": "将当前页面（B 站视频或任意网页）一键保存到本机动漫手账的指定番剧。",
   "permissions": [
     "activeTab",
     "scripting",
@@ -17,7 +17,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "保存当前视频到动漫手账"
+    "default_title": "保存当前页面到动漫手账"
   },
   "content_scripts": [
     {

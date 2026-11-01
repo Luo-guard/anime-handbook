@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261101-detail-links-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261101-saved-links-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -289,6 +289,7 @@
           </div>
         </div>
         <details class="saved-video-links hidden" id="savedVideoSection"><summary class="saved-video-heading"><span>已存视频</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedVideoLinks"></div></details>
+        <details class="saved-video-links hidden" id="savedLinkSection"><summary class="saved-video-heading"><span>已存链接</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedLinks"></div></details>
         <div class="detail-tabs" role="tablist">
           <button type="button" class="detail-tab active" data-detail-tab="overview" role="tab" aria-selected="true">概览</button>
           <button type="button" class="detail-tab" data-detail-tab="characters" id="charactersDetailTab" role="tab" aria-selected="false">人物</button>
@@ -954,13 +955,15 @@
     <dialog class="modal" id="videoCaptureModal">
       <form class="modal-frame" id="videoCaptureForm">
         <button type="button" class="modal-close" id="videoCaptureClose" aria-label="关闭">×</button>
-        <p class="eyebrow">SAVE VIDEO</p><h2>保存 B 站视频</h2>
-        <div class="video-capture-field"><label for="videoCaptureTitle">视频名称</label><input id="videoCaptureTitle" type="text" maxlength="200" required /></div><p class="page-subtitle" id="videoCaptureUploader"></p>
+        <p class="eyebrow">SAVE TO HANDBOOK</p><h2 id="videoCaptureHeading">保存 B 站视频</h2>
+        <div class="video-capture-field"><span class="video-capture-label">类型</span><div class="video-capture-kinds" role="radiogroup" aria-label="保存类型"><label><input type="radio" name="videoCaptureKind" value="video" checked /><span>视频</span></label><label><input type="radio" name="videoCaptureKind" value="link" /><span>其他链接</span></label></div></div>
+        <div class="video-capture-field hidden" id="videoCaptureUrlField"><label for="videoCaptureUrl">链接地址</label><input id="videoCaptureUrl" type="url" maxlength="500" placeholder="https://..." /></div>
+        <div class="video-capture-field"><label for="videoCaptureTitle">名称</label><input id="videoCaptureTitle" type="text" maxlength="200" required /></div><p class="page-subtitle" id="videoCaptureUploader"></p>
         <div class="video-capture-field"><label for="videoCaptureSearch">保存到哪部番</label><div class="video-anime-picker" id="videoAnimePicker"><div class="video-anime-input"><input id="videoCaptureSearch" type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="videoAnimeOptions" autocomplete="off" placeholder="选择或输入番剧名称" required /><button type="button" id="videoAnimeToggle" aria-label="展开番剧选项">⌄</button></div><input type="hidden" id="videoCaptureAnime" /><div id="videoAnimeOptions" role="listbox" aria-label="番剧选项" hidden></div></div></div>
         <label class="video-capture-field">字幕 / 备注<input id="videoCaptureNote" maxlength="200" placeholder="例如：简体 · 喜欢的字幕组" /></label>
-        <label class="switch-row"><input type="checkbox" id="videoCaptureDefault" /><span class="switch"></span><span>设为默认视频</span></label>
+        <label class="switch-row" id="videoCaptureDefaultRow"><input type="checkbox" id="videoCaptureDefault" /><span class="switch"></span><span>设为默认视频</span></label>
         <p id="videoCaptureStatus" role="status">正在读取当前账号的番剧…</p>
-        <div class="modal-actions"><button type="button" class="secondary-button" id="videoCaptureCancel">取消</button><button type="submit" class="primary-button" id="videoCaptureSave" disabled>保存视频</button></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" id="videoCaptureCancel">取消</button><button type="submit" class="primary-button" id="videoCaptureSave" disabled>保存</button></div>
       </form>
     </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
@@ -971,7 +974,7 @@
     <script src="/modules/presentation.js?v=sidebar-restore-20261030-20261029-sidebar-state" defer></script>
     <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
     <script src="/modules/composer.js?v=20261023-modules" defer></script>
-    <script src="/modules/video-links.js?v=20261101-link-sync" defer></script>
+    <script src="/modules/video-links.js?v=20261101-saved-links" defer></script>
     <script src="/modules/details.js?v=20261101-detail-links" defer></script>
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>

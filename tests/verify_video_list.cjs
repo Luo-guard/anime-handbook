@@ -14,4 +14,20 @@ await p.evaluate(()=>{state.settings.show_saved_video_list=false;return renderVi
 await p.evaluate(()=>{state.settings.merge_bilibili_links=true;return renderVideoLinks(1)});assert.equal(await p.locator('#detailLinks [data-detail-link-kind="bilibili"]').isVisible(),false);assert.equal(await p.locator('#savedVideoDefaultLink').textContent(),'已存视频 ↗');assert.equal(await p.locator('#savedVideoDefaultLink').getAttribute('href'),'https://www.bilibili.com/video/BV1AgHK6jE64/');assert.equal(await p.locator('#savedVideoSection').isVisible(),false);
 await p.evaluate(()=>{rows=[];return renderVideoLinks(1)});assert.equal(await p.locator('#detailLinks [data-detail-link-kind="bilibili"]').isVisible(),true);assert((await p.locator('#detailLinks [data-detail-link-kind="bilibili"]').getAttribute('href')).startsWith('https://search.bilibili.com/'));assert.equal(await p.locator('#savedVideoDefaultLink').isVisible(),false);
 await p.evaluate(()=>{state.settings.merge_bilibili_links=false;rows=[{id:1,is_default:1,title:'video',url:'https://www.bilibili.com/video/BV1AgHK6jE64/'}];return renderVideoLinks(1)});assert.equal(await p.locator('#detailLinks [data-detail-link-kind="bilibili"]').isVisible(),true);assert.equal(await p.locator('#savedVideoDefaultLink').textContent(),'已存视频 ↗');
-await p.evaluate(()=>{state.settings.show_saved_video_list=true;rows=[];return renderVideoLinks(1)});assert.equal(await p.locator('#savedVideoSection').isVisible(),false);assert.equal(await p.locator('#savedVideoDefaultLink').isVisible(),false);console.log('Saved video cards: theme styling, no underline, default badge, hidden list retains shortcut, merged/separate modes, no-video fallback and empty state passed.');}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});
+await p.evaluate(()=>{state.settings.show_saved_video_list=true;rows=[];return renderVideoLinks(1)});assert.equal(await p.locator('#savedVideoSection').isVisible(),false);assert.equal(await p.locator('#savedVideoDefaultLink').isVisible(),false);// 普通链接单独一块显示，不算“已存视频”，也没有默认概念。
+await p.evaluate(()=>{state.settings.show_saved_video_list=true;state.settings.merge_bilibili_links=false;rows=[{id:9,kind:'link',title:'资料页',url:'https://example.com/wiki?q=1',note:'设定集',is_default:0}];return renderVideoLinks(1)});
+assert.equal(await p.locator('#savedVideoSection').isVisible(),false);
+assert.equal(await p.locator('#savedLinkSection').isVisible(),true);
+assert.equal(await p.locator('#savedLinks .saved-video-title').textContent(),'资料页');
+assert.equal(await p.locator('#savedLinks .saved-link-icon').count(),1);
+assert.equal(await p.locator('#savedLinks .saved-video-play').count(),0);
+assert.equal(await p.locator('#savedLinks [data-video-action="default"]').count(),0);
+assert.equal(await p.locator('#savedVideoDefaultLink').isVisible(),false);
+// 两类都有时各归各的区块。
+await p.evaluate(()=>{rows=[{id:1,kind:'video',is_default:1,title:'视频A',url:'https://www.bilibili.com/video/BV1AgHK6jE64/'},{id:9,kind:'link',title:'资料页',url:'https://example.com/wiki?q=1'}];return renderVideoLinks(1)});
+assert.equal(await p.locator('#savedVideoSection').isVisible(),true);
+assert.equal(await p.locator('#savedLinkSection').isVisible(),true);
+assert.equal(await p.locator('#savedVideoLinks .saved-video-title').textContent(),'视频A');
+assert.equal(await p.locator('#savedLinks .saved-video-title').textContent(),'资料页');
+assert.equal(await p.locator('#savedVideoDefaultLink').isVisible(),true);
+console.log('Saved video cards: theme styling, no underline, default badge, hidden list retains shortcut, merged/separate modes, no-video fallback, empty state and the separate saved-links block passed.');}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});
