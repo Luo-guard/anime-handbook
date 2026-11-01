@@ -9,6 +9,31 @@ function renderBilibiliEntrypoints(anime, preferred = null) {
   saved.textContent="已存视频 ↗";
   saved.classList.toggle("hidden",!preferred);
   if(preferred)saved.href=preferred.url;else saved.removeAttribute("href");
+  renderCustomSearchLinks(keyword);
+}
+
+function customSearchLinkUrl(template, keyword) {
+  const encoded=encodeURIComponent(keyword);
+  return template.includes("{title}")?template.split("{title}").join(encoded):`${template}${encoded}`;
+}
+
+function renderCustomSearchLinks(keyword) {
+  const box=$("#customSearchLinks");
+  if(!box)return;
+  box.replaceChildren();
+  const links=Array.isArray(state.settings.custom_search_links)?state.settings.custom_search_links:[];
+  links
+    .filter(link=>link&&link.enabled!==false&&String(link.name||"").trim()&&String(link.url||"").trim())
+    .forEach(link=>{
+      const anchor=document.createElement("a");
+      anchor.className="custom-search-link";
+      anchor.target="_blank";
+      anchor.rel="noreferrer";
+      anchor.textContent=`${String(link.name).trim()} ↗`;
+      anchor.href=customSearchLinkUrl(String(link.url).trim(),keyword);
+      anchor.title=`在${String(link.name).trim()}搜索《${keyword}》`;
+      box.append(anchor);
+    });
 }
 
 let videoLinksLoadVersion = 0;

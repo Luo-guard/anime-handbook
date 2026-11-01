@@ -5,6 +5,43 @@ function applyKazumiReadOnlyControls() {
   $("#kazumiWritebackInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
   $("#kazumiConflictInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
 }
+function customSearchLinks() {
+  return Array.isArray(state.settings.custom_search_links) ? state.settings.custom_search_links : [];
+}
+function renderCustomSearchLinkSettings() {
+  const list=$("#customSearchLinkList");
+  if(!list)return;
+  list.replaceChildren();
+  customSearchLinks().forEach((link,index)=>{
+    const row=document.createElement("div");
+    row.className="custom-search-link-row";
+    const name=document.createElement("input");
+    name.type="text";name.value=String(link.name||"");name.placeholder="名称，例如 次元城";name.dataset.customLinkName=String(index);
+    const url=document.createElement("input");
+    url.type="url";url.value=String(link.url||"");url.placeholder="https://example.com/search?q=";url.dataset.customLinkUrl=String(index);
+    const toggle=document.createElement("label");toggle.className="switch-row compact";
+    const check=document.createElement("input");
+    check.type="checkbox";check.checked=link.enabled!==false;check.dataset.customLinkEnabled=String(index);
+    check.setAttribute("aria-label",`显示${String(link.name||"这个").trim()||"自定义"}搜索链接`);
+    const visual=document.createElement("span");visual.className="switch";toggle.append(check,visual);
+    const remove=document.createElement("button");
+    remove.type="button";remove.className="secondary-button compact-button";remove.textContent="删除";
+    remove.setAttribute("aria-label",`删除搜索链接 ${String(link.name||"").trim()}`);
+    remove.addEventListener("click",()=>{
+      state.settings.custom_search_links=customSearchLinks().filter((_,item)=>item!==index);
+      renderCustomSearchLinkSettings();
+    });
+    row.append(name,url,toggle,remove);
+    list.append(row);
+  });
+}
+function readCustomSearchLinks() {
+  return [...document.querySelectorAll("#customSearchLinkList .custom-search-link-row")].map(row=>({
+    name:String(row.querySelector("[data-custom-link-name]").value||"").trim(),
+    url:String(row.querySelector("[data-custom-link-url]").value||"").trim(),
+    enabled:Boolean(row.querySelector("[data-custom-link-enabled]").checked),
+  })).filter(link=>link.name&&link.url);
+}
 function renderSettingsPanels() {
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
   $("#kazumiWritebackInput").checked=state.settings.kazumi_writeback!==false;
@@ -12,6 +49,7 @@ function renderSettingsPanels() {
   $("#kazumiConflictInput").value=state.settings.kazumi_conflict||"handbook";
   applyKazumiReadOnlyControls();
   renderKeyboardSettings();
+  renderCustomSearchLinkSettings();
   $("#showZeroStatisticsInput").checked = enabledSetting("statistics_show_zero_periods");
   renderBgmSourceControls();
   $("#hideCustomizedInput").checked = hideCustomizedFromBuiltin();

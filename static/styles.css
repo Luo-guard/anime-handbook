@@ -3117,6 +3117,15 @@ dialog::backdrop {
 .saved-video-title { font-size: 14px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .saved-video-meta { color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .saved-video-actions { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
+.custom-search-links { display: inline-flex; flex-wrap: wrap; gap: 10px; }
+.custom-search-link { color: var(--green-800); }
+.custom-search-link-row { display: grid; grid-template-columns: minmax(88px,150px) minmax(0,1fr) 44px auto; gap: 10px; align-items: center; margin-top: 8px; }
+.custom-search-link-row input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; }
+.custom-search-link-row input:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
+.custom-search-link-row button { white-space: nowrap; }
+@media (max-width: 640px) {
+  .custom-search-link-row { grid-template-columns: minmax(0,1fr) minmax(0,1.2fr) 40px auto; gap: 8px; }
+}
 .saved-video-badge { background: var(--green-50); color: var(--green-700); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
 .saved-video-action { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
 .saved-video-action:hover { background: var(--green-50); color: var(--green-800); }

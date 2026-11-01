@@ -422,6 +422,34 @@ def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str
 
 
 
+MAX_CUSTOM_SEARCH_LINKS = 12
+
+
+def normalize_custom_search_links(value: Any) -> list[dict[str, Any]]:
+    """Validate the user's own search shortcuts shown inside an anime detail."""
+    if not isinstance(value, list):
+        raise ValueError("自定义搜索链接格式错误")
+    if len(value) > MAX_CUSTOM_SEARCH_LINKS:
+        raise ValueError(f"自定义搜索链接最多 {MAX_CUSTOM_SEARCH_LINKS} 个")
+    links = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("自定义搜索链接格式错误")
+        name = str(item.get("name") or "").strip()
+        url = str(item.get("url") or "").strip()
+        enabled = item.get("enabled", True)
+        if type(enabled) is not bool:
+            raise ValueError("自定义搜索链接开关无效")
+        if not name or not url:
+            raise ValueError("自定义搜索链接需要名称和网址")
+        if len(name) > 20 or len(url) > 500:
+            raise ValueError("自定义搜索链接的名称或网址过长")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("自定义搜索链接的网址必须以 http:// 或 https:// 开头")
+        links.append({"name": name, "url": url, "enabled": enabled})
+    return links
+
+
 def normalize_schedule_grouping(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) - {"mode", "collection_order", "status_order", "sorts", "direction", "directions"}:
         raise ValueError("周表分组排序无效")

@@ -343,6 +343,12 @@ async function saveWebdavSettings() {
   return payload;
 }
 
+$("#addCustomSearchLink")?.addEventListener("click", () => {
+  state.settings.custom_search_links=[...customSearchLinks(), { name: "", url: "", enabled: true }];
+  renderCustomSearchLinkSettings();
+  $("#customSearchLinkList .custom-search-link-row:last-child [data-custom-link-name]")?.focus();
+});
+
 $("#saveWebdavButton").addEventListener("click", async () => {
   try { await saveWebdavSettings(); toast("坚果云配置已保存"); } catch (error) { toast(error.message, "error"); }
 });
@@ -763,6 +769,7 @@ $("#saveSettings").addEventListener("click", async () => {
         show_create_collection_control: $("#showCreateCollectionControlInput").checked,
         show_age_related_button: $("#showAgeRelatedButtonInput").checked,
         show_bilibili_search_button: $("#showBilibiliSearchButtonInput").checked,
+        custom_search_links: readCustomSearchLinks(),
         show_search_bgm_link: $("#showSearchBgmLinkInput").checked,
         merge_bilibili_links: $("#mergeBilibiliLinksInput").checked,
         show_saved_video_list: $("#showSavedVideoListInput").checked,
