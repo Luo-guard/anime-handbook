@@ -263,6 +263,23 @@ class HandbookDBTest(unittest.TestCase):
                 connection.execute("PRAGMA journal_mode").fetchone()[0], "wal"
             )
 
+    def test_empty_import_keeps_collection_and_reports(self) -> None:
+        """Kazumi 读取到 0 条时保留本机收藏，而不是让收藏“消失”。"""
+        self.db.import_kazumi([sample_item(95, 1, "watching")])
+        result = self.db.import_kazumi([])
+        self.assertEqual(result["kept"], 1)
+        self.assertEqual([item["id"] for item in self.db.list_anime()], [95])
+        self.assertEqual(self.db.get_anime(95)["collection_type"], 1)
+        # 再导入正常数据时一切照旧。
+        self.db.import_kazumi([sample_item(95, 2, "planned"), sample_item(96, 1, "watching")])
+        self.assertEqual([item["id"] for item in self.db.list_anime()], [96, 95])
+
+    def test_empty_import_without_collection_is_noop(self) -> None:
+        result = self.db.import_kazumi([])
+        self.assertEqual(result["total"], 0)
+        self.assertNotIn("kept", result)
+        self.assertEqual(self.db.list_anime(), [])
+
     def test_kazumi_watching_to_finished_adds_only_remaining_watch_record(self) -> None:
         self.db.import_kazumi([sample_item(70, 1, "moving")])
         self.db.update_bgm_metadata(70, episode_count=4)

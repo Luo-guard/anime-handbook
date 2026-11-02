@@ -928,6 +928,24 @@ class HandbookDB:
             }
             pending_local_ids = {row[0] for row in db.execute("SELECT anime_id FROM kazumi_outbox")}
             existing_ids = set(existing)
+            # 空导入保护：Kazumi 读取到 0 条，可能是真清空了，也可能是版本
+            # 变更导致解析失败。直接置 inactive 会让整个收藏“消失”，所以
+            # 本机还有收藏时跳过本次导入，由调用方给出保留提示。
+            active_without_outbox = int(
+                db.execute(
+                    "SELECT COUNT(*) FROM anime WHERE active = 1 "
+                    "AND id NOT IN (SELECT anime_id FROM kazumi_outbox)"
+                ).fetchone()[0]
+            )
+            if not items and active_without_outbox:
+                return {
+                    "total": 0,
+                    "created": 0,
+                    "updated": 0,
+                    "deactivated": 0,
+                    "completed_from_watching": 0,
+                    "kept": active_without_outbox,
+                }
             db.execute("UPDATE anime SET active = 0")
             for position, item in enumerate(items):
                 anime_id = int(item["id"])

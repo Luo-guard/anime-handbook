@@ -131,13 +131,19 @@ class SyncService:
             )
             enriched = self.enrich_missing(refresh_all=enrich_all)
             completed = self.database.complete_kazumi_watching_transitions()
+            kept = int(imported.get("kept") or 0)
+            summary = (
+                # 空导入保护触发时明确告诉用户“收藏被保留了”，避免误以为丢了数据。
+                f"Kazumi 收藏读取到 0 条，已保留本机 {kept} 部收藏未删除"
+                f"（更新 {enriched} 部信息）"
+                if kept else
+                f"同步完成：{len(items)} 部收藏，更新 {enriched} 部 Bangumi 信息"
+                + (f"，补记 {completed['recorded_episodes']} 集" if completed["recorded_episodes"] else "")
+            )
             self.status.update(
                 running=False,
                 phase="idle",
-                message=(
-                    f"同步完成：{len(items)} 部收藏，更新 {enriched} 部 Bangumi 信息"
-                    + (f"，补记 {completed['recorded_episodes']} 集" if completed["recorded_episodes"] else "")
-                ),
+                message=summary,
                 last_success_at=now_iso(),
                 last_error=None,
                 enriched=enriched,
