@@ -794,6 +794,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     if "episode_balance_daily_target" in body
                     else None
                 )
+                pending_settings: dict[str, Any] = {}
                 for key, value in body.items():
                     if key in allowed:
                         if key in {
@@ -1015,7 +1016,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                                 item for item in ["collection", "schedule", "timeline", "statistics", "ranking", "settings"]
                                 if item not in ordered
                             ]
-                        self.database.set_setting(key, value)
+                        pending_settings[key] = value
+                # 收集完一次写入：逐键提交时 61 个键要开 61 次连接、61 个事务。
+                self.database.set_settings(pending_settings)
                 self.database.update_episode_balance_settings(
                     initial=balance_initial,
                     daily_target=balance_daily_target,

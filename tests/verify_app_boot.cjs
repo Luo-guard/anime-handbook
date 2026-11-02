@@ -102,7 +102,33 @@ function scriptUrls() {
     const collectionFetches = await page.evaluate(() => performance.getEntriesByType('resource').filter(entry => entry.name.endsWith('/api/collection-state')).length);
     assert.equal(collectionFetches, 0, 'no collection refetch without data changes');
 
-    console.log('App boot smoke: real script order loads clean, boot completes, toolbar/help/empty state wired, no collection refetch without writes.');
+    // 详情页：点击弹窗以外的空白区域关闭；点击内部不关；拖拽不算点外面。
+    await page.evaluate(() => {
+      state.progressAnime = { id: 1, display_name: '冒烟番剧', name_cn: '冒烟番剧' };
+      document.querySelector('#progressModal').showModal();
+    });
+    await page.waitForTimeout(200);
+    // 内部点击（弹窗中心，落在 .modal-frame 上）不应关闭。
+    const dialog = await page.locator('#progressModal').boundingBox();
+    await page.mouse.click(dialog.x + dialog.width / 2, dialog.y + 20);
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#progressModal').evaluate(node => node.open), true, 'clicks inside the modal must not close it');
+    // 背板单击关闭。
+    await page.mouse.click(Math.max(2, dialog.x - 30), Math.max(2, dialog.y + 40));
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#progressModal').evaluate(node => node.open), false, 'clicking outside closes the detail modal');
+    // 在背板按下、拖进弹窗内松开：不算点外面。
+    await page.evaluate(() => document.querySelector('#progressModal').showModal());
+    await page.waitForTimeout(150);
+    const box2 = await page.locator('#progressModal').boundingBox();
+    await page.mouse.move(Math.max(2, box2.x - 30), Math.max(2, box2.y + 40));
+    await page.mouse.down();
+    await page.mouse.move(box2.x + box2.width / 2, box2.y + 20, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#progressModal').evaluate(node => node.open), true, 'press outside + release inside must not close');
+
+    console.log('App boot smoke: real script order loads clean, boot completes, toolbar/help/empty state wired, no collection refetch without writes, detail modal closes on outside click.');
   } finally {
     await browser.close();
     server.close();

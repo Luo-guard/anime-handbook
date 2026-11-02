@@ -251,6 +251,48 @@ class HandbookDBTest(unittest.TestCase):
             thread.join(timeout=3)
             desktop.DATABASE = previous_database
 
+    def test_stats_and_timeline_stay_fast_at_scale(self) -> None:
+        """A6/A7 的 SQL 下推：几千条事件下 stats 与 timeline_page 仍应秒级。"""
+        import time
+
+        self.db.import_kazumi([sample_item(71, 1, "watching")])
+        self.db.update_bgm_metadata(71, episode_count=12)
+        for i in range(2400):
+            self.db.add_note(f"note {i}", 71, theme="episode_review" if i % 3 else "other")
+        with self.db.connect() as db:
+            # 分散到 81 个不同日期，让“一页止于天边界”的分页逻辑真正生效。
+            db.execute(
+                "UPDATE events SET created_at = printf('2026-0%d-%02dT12:00:00+08:00', 1 + id % 9, 1 + id % 28) WHERE anime_id = 71"
+            )
+        started = time.perf_counter()
+        stats = self.db.stats()
+        elapsed_stats = time.perf_counter() - started
+        started = time.perf_counter()
+        page = self.db.timeline_page(limit=30)
+        elapsed_page = time.perf_counter() - started
+        # 语义回归：跨天数据两页不重叠、有后续页、主题候选不受翻页影响。
+        self.assertTrue(page["has_more"])
+        second = self.db.timeline_page(limit=30, offset=page["next_offset"])
+        first_ids = [event["id"] for d in page["days"] for event in d["events"]]
+        second_ids = [event["id"] for d in second["days"] for event in d["events"]]
+        self.assertTrue(first_ids and second_ids)
+        self.assertFalse(set(first_ids) & set(second_ids), "pages must not overlap")
+        self.assertGreater(len(first_ids) + len(second_ids), 30, "page must extend past the limit to finish a day")
+        self.assertEqual(page["available_themes"], ["episode_review", "other"])
+        self.assertGreater(stats["watched_episode_total"] + stats["anime_total"], 0)
+        self.assertLess(elapsed_stats, 3.0, f"stats too slow: {elapsed_stats:.2f}s")
+        self.assertLess(elapsed_page, 3.0, f"timeline_page too slow: {elapsed_page:.2f}s")
+
+    def test_settings_batch_write_advances_revision_once(self) -> None:
+        """保存设置合并成单事务：一次写入只推进一次数据版本。"""
+        before = self.db.revision
+        self.db.set_settings({f"key_{i}": i for i in range(61)})
+        self.assertEqual(self.db.revision, before + 1)
+        self.assertEqual(self.db.get_settings()["key_60"], 60)
+        # 空写入为 no-op。
+        self.db.set_settings({})
+        self.assertEqual(self.db.revision, before + 1)
+
     def test_revision_tracks_writes_and_wal_is_persistent(self) -> None:
         before = self.db.revision
         self.db.list_anime()

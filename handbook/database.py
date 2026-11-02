@@ -581,13 +581,20 @@ class HandbookDB:
             }
 
     def set_setting(self, key: str, value: Any) -> None:
+        self.set_settings({key: value})
+
+    def set_settings(self, values: dict[str, Any]) -> None:
+        """一个事务写多个设置项；保存设置不再逐键开连接、逐键提交。"""
+        if not values:
+            return
+        payload = [(key, json_dumps(value)) for key, value in values.items()]
         with self._write_lock, self.connect() as db:
-            db.execute(
+            db.executemany(
                 """
                 INSERT INTO settings(key, value) VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value = excluded.value
                 """,
-                (key, json_dumps(value)),
+                payload,
             )
 
     JUMP_HISTORY_LIMIT = 200
@@ -1949,43 +1956,128 @@ class HandbookDB:
         """Page lightweight event headers first; expand only this page's episodes.
 
         Finish the last day so daily summaries and day sections remain complete.
+        主题筛选、分页与候选主题都下推到 SQL；排序沿用 julianday，兼容云端
+        `Z` 结尾与其他时区偏移的记录（纯文本排序会把 15:47Z 排在 16:10+08:00
+        之前，尽管它其实是北京时间 23:47）。
         """
         offset = max(0, offset)
         limit = max(1, min(100, limit))
-        selected = set(themes or [])
-        day_start = int(self.get_settings().get("day_start_hour", 4))
-        sql = """SELECT e.id, e.created_at, e.theme, e.themes FROM events e
-                 LEFT JOIN anime a ON a.id=e.anime_id
-                 WHERE e.event_type IN ('watch','note','anime_comment')"""
+        selected = list(dict.fromkeys(str(item) for item in (themes or [])))
+        settings = self.get_settings()
+        day_start = int(settings.get("day_start_hour", 4))
+        selected_json = json_dumps(selected)
+
+        # themes 列统一在 CTE 里把非法 JSON 归一成 NULL，后面可以放心用
+        # json_array_length / json_each 而不会遇到畸形历史数据。
+        cte = """
+            WITH page_events AS (
+                SELECT e.id, e.created_at, e.theme, e.content,
+                    CASE WHEN COALESCE(json_valid(e.themes), 0) = 1
+                        THEN e.themes END AS themes_json,
+                    a.name, a.name_cn
+                FROM events e
+                LEFT JOIN anime a ON a.id = e.anime_id
+                WHERE e.event_type IN ('watch', 'note', 'anime_comment')
+            )
+        """
+        conditions = " WHERE 1 = 1"
         params: list[Any] = []
         if search.strip():
-            sql += " AND (a.name LIKE ? OR a.name_cn LIKE ? OR e.content LIKE ?)"
-            params = [f"%{search.strip()}%"] * 3
-        sql += " ORDER BY julianday(e.created_at) DESC, e.id DESC"
-        ids: list[int] = []
-        skipped = 0
-        last_day = None
-        has_more = False
+            conditions += " AND (name LIKE ? OR name_cn LIKE ? OR content LIKE ?)"
+            keyword = f"%{search.strip()}%"
+            params += [keyword, keyword, keyword]
+        if selected:
+            # 主题命中规则与旧 Python 实现一致：
+            # 1) themes 是非空 JSON 数组 → 任一非空成员命中即可；
+            # 2) 否则（空数组/空串/畸形）→ 回退到 theme 单值（空串按 other）。
+            conditions += """
+              AND (
+                (themes_json IS NOT NULL AND json_array_length(themes_json) > 0
+                   AND EXISTS (SELECT 1 FROM json_each(COALESCE(themes_json, json_array())) j
+                               WHERE TRIM(CAST(j.value AS TEXT)) IN (SELECT value FROM json_each(?))))
+                OR (NOT (themes_json IS NOT NULL AND json_array_length(themes_json) > 0
+                         AND EXISTS (SELECT 1 FROM json_each(COALESCE(themes_json, json_array())) j
+                                     WHERE TRIM(CAST(j.value AS TEXT)) <> ''))
+                     AND COALESCE(NULLIF(theme, ''), 'other') IN (SELECT value FROM json_each(?)))
+              )
+            """
+            params += [selected_json, selected_json]
+
+        def fetch_rows(extra: str, extra_params: list[Any], page_limit: int):
+            query = f"""
+                {cte}
+                SELECT id, created_at FROM page_events
+                {conditions} {extra}
+                ORDER BY julianday(created_at) DESC, id DESC
+                LIMIT ?
+            """
+            return db.execute(query, [*params, *extra_params, page_limit]).fetchall()
+
         with self.connect() as db:
-            for row in db.execute(sql, params):
-                if selected and not selected.intersection(normalize_theme_ids(json_list(row["themes"]), row["theme"] or "other")):
-                    continue
-                if skipped < offset:
-                    skipped += 1
-                    continue
-                day = (datetime.fromisoformat(row["created_at"]) - timedelta(hours=day_start)).date()
-                if len(ids) >= limit and day != last_day:
-                    has_more = True
-                    break
-                ids.append(row["id"])
-                last_day = day
-        with self.connect() as db:
-            # Account-wide metadata, independent of search, selection and paging.
-            theme_rows = db.execute("SELECT DISTINCT theme,themes FROM events WHERE event_type IN ('watch','note','anime_comment')")
-            available_themes = sorted({theme for row in theme_rows
-                for theme in normalize_theme_ids(json_list(row["themes"]), row["theme"] or "other")})
+            page_rows = db.execute(
+                f"""
+                {cte}
+                SELECT id, created_at FROM page_events
+                {conditions}
+                ORDER BY julianday(created_at) DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            ).fetchall()
+            ids = [row["id"] for row in page_rows]
+            has_more = False
+            if len(page_rows) == limit:
+                rows = list(page_rows)
+                last_day = self._event_day(rows[-1]["created_at"], day_start)
+                cursor_created, cursor_id = rows[-1]["created_at"], rows[-1]["id"]
+                # 一页只到事件为止：把最后一“天”的剩余记录补齐。
+                while True:
+                    batch = fetch_rows(
+                        " AND (julianday(created_at) < julianday(?)"
+                        " OR (julianday(created_at) = julianday(?) AND id < ?))",
+                        [cursor_created, cursor_created, cursor_id],
+                        400,
+                    )
+                    if not batch:
+                        break
+                    exhausted = True
+                    for row in batch:
+                        if self._event_day(row["created_at"], day_start) != last_day:
+                            has_more = True
+                            exhausted = False
+                            break
+                        ids.append(row["id"])
+                        cursor_created, cursor_id = row["created_at"], row["id"]
+                    if not exhausted:
+                        break
+                    if len(batch) < 400:
+                        break
+                    # 这一整批都还是同一天，继续往后取。
+            # 账号级的候选主题与搜索、筛选、翻页无关。
+            theme_rows = db.execute(
+                f"""
+                {cte}
+                SELECT DISTINCT theme FROM (
+                    SELECT TRIM(CAST(j.value AS TEXT)) AS theme
+                    FROM page_events p, json_each(COALESCE(p.themes_json, json_array())) j
+                    WHERE p.themes_json IS NOT NULL AND json_array_length(p.themes_json) > 0
+                      AND TRIM(CAST(j.value AS TEXT)) <> ''
+                    UNION ALL
+                    SELECT COALESCE(NULLIF(p.theme, ''), 'other') AS theme
+                    FROM page_events p
+                    WHERE NOT (p.themes_json IS NOT NULL AND json_array_length(p.themes_json) > 0
+                               AND EXISTS (SELECT 1 FROM json_each(COALESCE(p.themes_json, json_array())) j
+                                           WHERE TRIM(CAST(j.value AS TEXT)) <> ''))
+                ) ORDER BY theme
+                """
+            ).fetchall()
+        available_themes = sorted({row["theme"] for row in theme_rows})
         return {"days": self.timeline_days(event_ids=ids), "has_more": has_more,
                 "next_offset": offset + len(ids), "available_themes": available_themes}
+
+    @staticmethod
+    def _event_day(created_at: str, day_start: int) -> date:
+        return (datetime.fromisoformat(created_at) - timedelta(hours=day_start)).date()
 
     def episode_record_annotations(self, anime_id: int) -> dict[str, list[dict[str, Any]]]:
         """Return lightweight, per-episode notes created through quick episode actions."""
@@ -2210,45 +2302,67 @@ class HandbookDB:
                 )
             }
             total_watched = 0
+            # 只把“确有观看记录”的番剧取回来；观看为空的番剧旧逻辑也计 0，
+            # 但旧实现要为它们展开整份剧集 JSON，是这里最大的开销。
             for row in db.execute(
                 """
                 SELECT watched_episodes, episodes, episode_count
-                FROM anime WHERE active = 1
+                FROM anime
+                WHERE active = 1
+                  AND COALESCE(json_valid(watched_episodes), 0) = 1
+                  AND json_array_length(watched_episodes) > 0
                 """
             ):
+                watched = json_list(row["watched_episodes"])
+                if not watched:
+                    continue
                 episodes = normalize_episodes(json_list(row["episodes"]))
                 if not episodes and row["episode_count"]:
                     episodes = generated_episodes(int(row["episode_count"] or 0))
                 total_watched += len(
                     normalize_watched_keys(
-                        json_list(row["watched_episodes"]),
+                        watched,
                         episodes,
                         int(row["episode_count"] or 0),
                     )
                 )
-            today_key = (
-                datetime.now().astimezone()
-                - timedelta(hours=int(self.get_settings()["day_start_hour"]))
-            ).date().isoformat()
             today_episodes = 0
-            # Dashboard totals need only today's expanded episode records.
-            # Avoid expanding the entire history on every status poll.
-            day_start_hour = int(self.get_settings()["day_start_hour"])
-            today_event_ids = [row["id"] for row in db.execute(
-                "SELECT id, created_at FROM events WHERE event_type='watch'"
-            ) if (datetime.fromisoformat(row["created_at"]) - timedelta(
-                hours=day_start_hour
-            )).date().isoformat() == today_key]
+            # “今天”的判定下推到 SQL：先给一个能走 created_at 索引的宽区间，
+            # 再用 julianday 精确比较，兼容云端 Z 结尾与其他时区偏移的记录。
+            now = datetime.now().astimezone()
+            day_start_hour = day_start = int(settings["day_start_hour"])
+            today_key = (now - timedelta(hours=day_start)).date()
+            window_start = datetime.combine(
+                today_key, datetime.min.time(), tzinfo=now.tzinfo
+            ) + timedelta(hours=day_start)
+            window_end = window_start + timedelta(days=1)
+            scan_lo = f"{(today_key - timedelta(days=1)).isoformat()}T00:00:00"
+            scan_hi = f"{(today_key + timedelta(days=2)).isoformat()}T00:00:00"
+            today_rows = db.execute(
+                """
+                SELECT e.id FROM events e
+                LEFT JOIN anime a ON a.id = e.anime_id
+                WHERE e.event_type = 'watch'
+                  AND e.created_at >= ? AND e.created_at < ?
+                  AND julianday(e.created_at) >= julianday(?)
+                  AND julianday(e.created_at) < julianday(?)
+                """,
+                (
+                    scan_lo,
+                    scan_hi,
+                    window_start.isoformat(),
+                    window_end.isoformat(),
+                ),
+            ).fetchall()
+            today_event_ids = [row["id"] for row in today_rows]
             for event in self.timeline(show_watch=True, show_notes=False, show_comments=False,
                                        event_ids=today_event_ids):
                 moment = datetime.fromisoformat(event["created_at"])
                 key = (
                     moment
-                    - timedelta(
-                        hours=int(self.get_settings()["day_start_hour"])
-                    )
+                    - timedelta(hours=day_start_hour)
                 ).date().isoformat()
-                if key == today_key:
+                if key == today_key.isoformat():
                     today_episodes += len(event["episodes"])
             active_total = db.execute(
                 "SELECT COUNT(*) FROM anime WHERE active = 1"

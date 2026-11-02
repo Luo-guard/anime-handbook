@@ -117,6 +117,28 @@ $("#progressModal .modal-close").addEventListener("click", (event) => {
   event.preventDefault();
   $("#progressModal").close();
 });
+
+// 点击详情页以外的空白区域（含背板）等同点右上角 ×；弹窗内部点击不关闭。
+// pointerdown/up 双确认：在弹窗里按下、拖到外面松开不算点外面。
+let progressOutsidePress = null;
+$("#progressModal").addEventListener("pointerdown", (event) => {
+  progressOutsidePress = event.target === event.currentTarget
+    ? { x: event.clientX, y: event.clientY }
+    : null;
+});
+$("#progressModal").addEventListener("pointerup", (event) => {
+  if (!progressOutsidePress) return;
+  const pressed = progressOutsidePress;
+  progressOutsidePress = null;
+  const moved = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > 8;
+  if (!moved && event.target === event.currentTarget) {
+    event.preventDefault();
+    $("#progressModal").close();
+  }
+});
+$("#progressModal").addEventListener("close", () => {
+  progressOutsidePress = null;
+});
 $$("[data-detail-tab]").forEach((button) => button.addEventListener("click", () => {
   const tab = button.dataset.detailTab;
   switchDetailTab(tab);
