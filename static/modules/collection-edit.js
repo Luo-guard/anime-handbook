@@ -22,7 +22,7 @@ function collectionEditingSupported() {
 }
 function applyCollectionEditingAvailability() {
   const supported = collectionEditingSupported();
-  $("#collectionSearchButton")?.classList.toggle("hidden", !supported);
+  applyCollectionToolbarButtons();
   $("#collectionImportButton")?.classList.toggle("hidden", !supported);
   if (supported) return;
   closeCollectMenus();

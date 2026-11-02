@@ -10,6 +10,8 @@ const harness=[
   "function renderTabs(){}",
   "function renderStats(){}",
   "function toast(){}",
+  "function booleanSetting(key,fallback=false){const v=state.settings?.[key];return typeof v==='boolean'?v:fallback;}",
+  "function enabledSetting(key){return booleanSetting(key,true);}",
   "window.requests=[];",
   "window.queries=[];",
   "async function api(path,options){",
@@ -22,7 +24,7 @@ const harness=[
 (async()=>{const browser=await chromium.launch({headless:true});try{
 const page=await browser.newPage({viewport:{width:1100,height:820}});
 await page.setContent(fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));
-await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/collection-edit.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-import.js','utf8')});
+await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/toolbar-buttons.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-edit.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-import.js','utf8')});
 // Parsers: plain lines, CSV with header, Excel-style tab paste, JSON objects.
 assert.deepEqual(await page.evaluate(()=>parseImportText('葬送的芙莉莲\n药屋少女的呢喃\n\n葬送的芙莉莲')),['葬送的芙莉莲','药屋少女的呢喃']);
 assert.deepEqual(await page.evaluate(()=>parseImportText('番剧,状态\n葬送的芙莉莲,看过\n药屋少女的呢喃,在看')),['葬送的芙莉莲','药屋少女的呢喃']);

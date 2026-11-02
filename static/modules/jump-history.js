@@ -96,7 +96,8 @@ function setupJumpHistory() {
   const button = $("#jumpHistoryButton");
   const modal = $("#jumpHistoryModal");
   if (!button || !modal) return;
-  button.classList.toggle("hidden", !collectionEditingSupported());
+  // 显隐与图标模式统一交给 applyCollectionToolbarButtons()（生命周期里调用），
+  // 这里不再单独切换，避免设置还没读到时先闪出来。
   button.addEventListener("click", () => {
     jumpHistoryState.items = [];
     renderJumpHistoryRows([]);

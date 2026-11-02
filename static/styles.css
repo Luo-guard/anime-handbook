@@ -599,12 +599,10 @@ h1 {
   margin: 22px 0;
 }
 .collection-toolbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: none; }
-.search-field { position: relative; display: flex; align-items: center; width: min(360px, 100%); flex: none; }
-.search-field .search-box { width: 100%; padding-right: 48px; }
-.search-box-action { position: absolute; right: 6px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--green-800); opacity: .66; cursor: pointer; transition: background .16s ease, color .16s ease, opacity .16s ease; }
-.search-box-action:hover { background: rgba(30, 60, 45, .09); color: var(--green-700); opacity: 1; }
-.search-box-action:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
-.search-box-action svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* 工具栏按钮：图标＋文字，或只留图标（设置里可切换）。 */
+.collection-add-button.icon-only { width: 42px; min-width: 42px; padding: 0; gap: 0; }
+.collection-add-button.icon-only .button-label { display: none; }
+.collection-add-button.icon-only svg { width: 17px; height: 17px; }
 @media (max-width: 900px) {
   .collection-toolbar-actions { justify-content: flex-start; }
 }

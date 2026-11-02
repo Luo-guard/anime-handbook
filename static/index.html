@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261102-search-action-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261102-toolbar-buttons-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -104,17 +104,15 @@
           <div class="category-tabs" id="categoryTabs" role="tablist"></div>
 
           <div class="collection-toolbar">
-            <div class="search-field">
-              <label class="search-box">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>
-                </svg>
-                <input id="searchInput" type="search" placeholder="搜索收藏" />
-              </label>
-              <button type="button" class="search-box-action" id="jumpHistoryButton" aria-label="跳转记录" title="跳转记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.2h-4.2"/><path d="M12 8.4v4.2l2.8 1.7"/></svg></button>
-            </div>
+            <label class="search-box">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/>
+              </svg>
+              <input id="searchInput" type="search" placeholder="搜索收藏" />
+            </label>
             <div class="collection-toolbar-actions">
-              <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>搜索添加番剧</button>
+              <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="button-label">搜索添加番剧</span></button>
+              <button type="button" class="secondary-button collection-add-button collection-icon-button hidden" id="jumpHistoryButton" title="跳转记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.2h-4.2"/><path d="M12 8.4v4.2l2.8 1.7"/></svg><span class="button-label">跳转记录</span></button>
               <label class="switch-row compact hidden" id="collectionRatingControl">
                 <input type="checkbox" id="collectionRatingToggle" />
                 <span class="switch"></span>
@@ -514,6 +512,22 @@
           <label class="setting-row">
             <span><strong>显示“新建收藏夹”按钮</strong><small data-page-text="控制{collection}页面工具栏中是否出现“新建收藏夹”按钮。">控制收藏夹工具栏中是否出现“新建收藏夹”按钮。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="showCreateCollectionControlInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示“搜索添加番剧”按钮</strong><small data-page-text="控制{collection}工具栏是否出现“搜索添加番剧”按钮。">控制收藏夹工具栏是否出现“搜索添加番剧”按钮，关闭后仍可从其他入口添加收藏。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showCollectionAddButtonInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>“搜索添加番剧”只显示图标</strong><small>开启后按钮只留一个“＋”，鼠标悬停显示名称；与右侧的跳转记录按钮并排更整齐。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="collectionAddIconOnlyInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>显示“跳转记录”按钮</strong><small data-page-text="控制{collection}工具栏是否出现“跳转记录”按钮。">控制收藏夹工具栏是否出现“跳转记录”按钮；关掉只是藏起来，记录本身仍会继续累计。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="showJumpHistoryButtonInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
+            <span><strong>“跳转记录”只显示图标</strong><small>开启后按钮只留时钟图标（默认），关闭则显示“跳转记录”文字。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="jumpHistoryIconOnlyInput" /><span class="switch"></span></span>
           </label>
           <label class="setting-row">
             <span>
@@ -997,15 +1011,16 @@
     <script src="/modules/details.js?v=20261101-detail-links" defer></script>
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
-    <script src="/modules/statistics.js?v=20261027-statistics-zero" defer></script>
+    <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261031-readonly-20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261101-link-sync" defer></script>
-    <script src="/modules/events.js?v=20261101-link-sync" defer></script>
+    <script src="/modules/settings.js?v=20261102-toolbar-buttons" defer></script>
+    <script src="/modules/events.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
-    <script src="/modules/collection-edit.js?v=20261031-batch-import" defer></script>
+    <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>
+    <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-import.js?v=20261031-import-in-search" defer></script>
-    <script src="/modules/jump-history.js?v=20261101-jump-history" defer></script>
+    <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

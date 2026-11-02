@@ -5,6 +5,8 @@ const harness=[
   "const $$=s=>[...document.querySelectorAll(s)];",
   "const state={settings:{}};",
   "const collectionEditingSupported=()=>window.editingSupported!==false;",
+  "const booleanSetting=(key,fallback=false)=>{const v=state.settings?.[key];return typeof v==='boolean'?v:fallback;};",
+  "const enabledSetting=key=>booleanSetting(key,true);",
   "window.editingSupported=true;",
   "window.posts=[];",
   "window.rows=[];",
@@ -18,7 +20,8 @@ const harness=[
 const page=await browser.newPage({viewport:{width:1100,height:820}});
 const html=fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'');
 await page.setContent(`<style>${fs.readFileSync('static/styles.css','utf8')}</style>${html}`);
-await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/jump-history.js','utf8')});
+await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/toolbar-buttons.js','utf8')+"\n"+fs.readFileSync('static/modules/jump-history.js','utf8')});
+await page.evaluate(()=>applyCollectionToolbarButtons());
 // 记录一条跳转：直接 POST，带番剧名与类型。
 await page.evaluate(()=>recordJump({anime_id:1,anime_name:'测试番剧',title:'某视频',url:'https://www.bilibili.com/video/BV1NJHG6eE9z/',kind:'video'}));
 assert.deepEqual(await page.evaluate(()=>posts),[{anime_id:1,anime_name:'测试番剧',title:'某视频',url:'https://www.bilibili.com/video/BV1NJHG6eE9z/',kind:'video'}]);
@@ -56,9 +59,10 @@ assert.match(await page.locator('#jumpHistoryStatus').textContent(),/已清空/)
 assert.match(await page.locator('#jumpHistoryList').textContent(),/还没有跳转记录/);
 await page.evaluate(()=>document.querySelector('#jumpHistoryModal').close());
 // 只读/线上模式不显示入口
-await page.evaluate(()=>{window.editingSupported=false;
+await page.evaluate(()=>{
+  window.editingSupported=false;
   document.querySelector('#jumpHistoryButton').classList.remove('hidden');
-  setupJumpHistory();
+  applyCollectionToolbarButtons();
 });
 assert.equal(await page.locator('#jumpHistoryButton').evaluate(node=>node.classList.contains('hidden')),true);
 console.log('Jump history: record POST, day grouping, kinds, clear and read-only entry hidden passed.');

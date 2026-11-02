@@ -713,6 +713,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "collection_rating_source",
                     "show_collection_progress_control",
                     "show_create_collection_control",
+                    "show_collection_add_button",
+                    "collection_add_button_icon_only",
+                    "show_jump_history_button",
+                    "jump_history_button_icon_only",
                     "show_age_related_button",
                     "detail_links",
                     "schedule_detail_links",
@@ -875,6 +879,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                             value = normalize_detail_links(value)
                         elif key == "detail_link_sync":
                             value = normalize_link_sync(value)
+                        elif key in {"show_collection_add_button", "collection_add_button_icon_only", "show_jump_history_button", "jump_history_button_icon_only"}:
+                            value = bool(value)
                         elif key in {"show_bilibili_search_button", "show_search_bgm_link", "show_saved_video_list", "merge_bilibili_links", "video_default_pinned"}:
                             value = bool(value)
                         elif key == "show_episode_titles_on_hover":

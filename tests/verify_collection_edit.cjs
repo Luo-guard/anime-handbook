@@ -10,6 +10,8 @@ const harness=[
   "function renderTabs(){}",
   "function renderStats(){}",
   "function toast(){}",
+  "function booleanSetting(key,fallback=false){const v=state.settings?.[key];return typeof v==='boolean'?v:fallback;}",
+  "function enabledSetting(key){return booleanSetting(key,true);}",
   "window.requests=[];",
   "async function api(path,options){",
   "  if(options){const body=JSON.parse(options.body);requests.push(body);return {animes:[{id:123,collection_type:body.status}],anime:{id:123,collection_type:body.status}};}",
@@ -25,7 +27,7 @@ const harness=[
 (async()=>{const browser=await chromium.launch({headless:true});try{
 const page=await browser.newPage({viewport:{width:1100,height:820}});
 await page.setContent(fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));
-await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/collection-edit.js','utf8')});
+await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/toolbar-buttons.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-edit.js','utf8')});
 await page.locator('#collectionSearchButton').click({force:true});
 await page.locator('#collectionSearchQuery').fill('测试');
 await page.locator('#collectionSearchSubmit').click();

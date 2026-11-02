@@ -419,6 +419,7 @@ INITIAL_VISIBILITY = {
     "sidebarToggle": "show_sidebar_toggle",
     "sidebarPowerArea": "show_shutdown_button",
     "shutdownBackendCompact": "show_shutdown_button",
+    "jumpHistoryButton": "show_jump_history_button",
 }
 
 

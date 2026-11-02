@@ -191,6 +191,11 @@ function renderSettingsPanels() {
   $("#showCollectionRatingControlInput").checked = state.settings.show_collection_rating_control !== false;
   $("#showCollectionProgressControlInput").checked = state.settings.show_collection_progress_control !== false;
   $("#showCreateCollectionControlInput").checked = state.settings.show_create_collection_control !== false;
+  $("#showCollectionAddButtonInput").checked = enabledSetting("show_collection_add_button");
+  $("#collectionAddIconOnlyInput").checked = state.settings.collection_add_button_icon_only === true;
+  $("#showJumpHistoryButtonInput").checked = enabledSetting("show_jump_history_button");
+  // 跳转记录默认就是图标样式，和截图里的一致。
+  $("#jumpHistoryIconOnlyInput").checked = booleanSetting("jump_history_button_icon_only", true);
   $("#showAgeRelatedButtonInput").checked = showAgeRelatedButton();
   $("#showSearchBgmLinkInput").checked = enabledSetting("show_search_bgm_link");
   $("#videoDefaultPinnedInput").checked = state.settings.video_default_pinned !== false;

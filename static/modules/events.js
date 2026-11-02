@@ -768,6 +768,10 @@ $("#saveSettings").addEventListener("click", async () => {
         show_collection_rating_control: $("#showCollectionRatingControlInput").checked,
         show_collection_progress_control: $("#showCollectionProgressControlInput").checked,
         show_create_collection_control: $("#showCreateCollectionControlInput").checked,
+        show_collection_add_button: $("#showCollectionAddButtonInput").checked,
+        collection_add_button_icon_only: $("#collectionAddIconOnlyInput").checked,
+        show_jump_history_button: $("#showJumpHistoryButtonInput").checked,
+        jump_history_button_icon_only: $("#jumpHistoryIconOnlyInput").checked,
         show_age_related_button: $("#showAgeRelatedButtonInput").checked,
         detail_links: detailLinkPayloadFinal,
         schedule_detail_links: scheduleLinkPayloadFinal,
@@ -790,6 +794,7 @@ $("#saveSettings").addEventListener("click", async () => {
     if ($("#kazumiReadOnlyInput").checked && payload.settings.kazumi_read_only !== true) throw new Error("当前后台还不支持只读开关，请重启手账后台并刷新后再试。");
     if (!$("#showSearchBgmLinkInput").checked && payload.settings.show_search_bgm_link !== false) throw new Error("当前后台还不支持搜索页 Bangumi 入口开关，请重启手账后台并刷新后再试。");
     if (detailLinksChanged && !Array.isArray(payload.settings.detail_links)) throw new Error("当前后台还不支持详情页链接，请重启手账后台并刷新后再试。");
+    if (!$("#showJumpHistoryButtonInput").checked && payload.settings.show_jump_history_button !== false) throw new Error("当前后台还不支持工具栏按钮设置，请重启手账后台并刷新后再试。");
     if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
     if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
     state.settings = payload.settings;
