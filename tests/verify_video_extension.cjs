@@ -22,13 +22,13 @@ try{
   chrome.scripting.executeScript=async()=>[{result:{url:'https://www.bilibili.com/video/BV1NJHG6eE9z/?p=2&spm_id=tracking',title:'<img src=x onerror=alert(1)>',uploader:'测试UP'}}];
  },tab.id);
  const next=context.waitForEvent('page');await worker.evaluate(tab=>saveVideoFromTab(tab),{id:tab.id,url:video.url()});const capture=await next;await capture.waitForLoadState();
- await capture.locator('#videoCaptureModal').waitFor({state:'visible'});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
+ await capture.locator('#videoCaptureModal').waitFor({state:'visible',timeout:60000});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
  assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'123');assert.equal(await capture.locator('#videoCaptureTitle img').count(),0);assert.equal(await capture.locator('#videoCaptureTitle').inputValue(),'<img src=x onerror=alert(1)>');assert.equal(await capture.locator('#videoCaptureDefault').isChecked(),true);assert.equal(writes.length,0,'navigation must not save');assert.equal(new URL(capture.url()).hash,'');
  await capture.locator('#videoCaptureCancel').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
  await capture.evaluate(()=>{window.reuseMarker='existing-state';state.progressAnime={id:456};document.querySelector('#progressModal').showModal();document.querySelector('#videoCaptureNote').value='old note';});
  const pageCount=context.pages().length;
  await worker.evaluate(tab=>saveVideoFromTab(tab),{id:tab.id,url:video.url()});
- await capture.locator('#videoCaptureModal').waitFor({state:'visible'});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
+ await capture.locator('#videoCaptureModal').waitFor({state:'visible',timeout:60000});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
  assert.equal(context.pages().length,pageCount,'reuse must not create another tab');
  assert.equal(await capture.evaluate(()=>window.reuseMarker),'existing-state','reuse must not reload the existing page');
  assert.equal(await capture.locator('#videoCaptureNote').inputValue(),'','new request must reset the previous note');

@@ -2535,10 +2535,30 @@ dialog::backdrop {
   border-color: var(--green-700);
   color: var(--green-800);
   background: var(--green-50);
+  box-shadow: inset 0 0 0 1px var(--green-700);
+  font-weight: 600;
   box-shadow: 0 0 0 2px rgb(var(--theme-rgb) / 0.12);
 }
 .theme-profile-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-.theme-profile-controls select { min-width:180px; }
+.theme-profile-controls select { min-width:180px; flex:1 1 200px; max-width:280px; }
+/* 删除是危险动作，和“另存为/重命名”之间拉开距离，避免误点。 */
+.theme-profile-delete { margin-left:auto; padding-left:14px; border-left:1px solid var(--line); }
+.theme-profile-delete:disabled { color:var(--muted); opacity:.55; cursor:not-allowed; text-decoration:none; }
+.theme-profile-delete:disabled:hover { text-decoration:none; }
+.background-file-input { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; pointer-events:none; }
+.custom-theme-inuse { padding:2px 8px; border-radius:999px; background:var(--green-50); color:var(--green-800); font-size:11px; font-weight:700; }
+.custom-theme-row.is-active .custom-theme-input input[type="text"] { border-color:var(--green-700); box-shadow:inset 0 0 0 1px var(--green-700); }
+.text-button:disabled { color:var(--muted); opacity:.5; cursor:not-allowed; }
+.text-button:disabled:hover { text-decoration:none; }
+.custom-background-name { min-width:52px; color:var(--muted); font-size:12px; }
+.custom-background-name.is-set { color:var(--green-800); font-weight:600; }
+.custom-background-input label.secondary-button { cursor:pointer; }
+#customBackgroundOpacityValue.saved-flash { animation:opacity-saved .9s ease; }
+@keyframes opacity-saved {
+  0% { transform:scale(1); color:var(--green-800); }
+  35% { transform:scale(1.18); color:#2e6d4e; }
+  100% { transform:scale(1); color:var(--green-800); }
+}
 .compact-check { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; white-space:nowrap; }
 .compact-check input { accent-color:var(--accent); }
 

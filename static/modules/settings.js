@@ -205,17 +205,7 @@ function renderSettingsPanels() {
   $("#showRankingHoverTitlesInput").checked = showRankingHoverTitles();
   $("#rankingHoverDelayInput").value = rankingHoverDelay();
   $("#rankingHoverDelayValue").textContent = `${rankingHoverDelay()} 秒`;
-  const activeTheme = state.settings.theme_color || "forest";
-  $$(".theme-option").forEach((button) => {
-    const active = button.dataset.themeValue === activeTheme;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-checked", String(active));
-  });
-  $("#customThemeColorInput").value = state.settings.custom_theme_color || "#2e6d4e";
-  $("#customThemeColorPreview").value = state.settings.custom_theme_color || "#2e6d4e";
-  $("#customBackgroundOpacityInput").value = state.settings.custom_background_overlay_opacity ?? 82;
-  $("#customBackgroundOpacityValue").textContent = `${$("#customBackgroundOpacityInput").value}%`;
-  renderThemeProfiles();
+  renderThemeControls();
   renderScheduleSettings();
   renderSharingSettings();
   renderWebdavSettings();
@@ -427,28 +417,111 @@ function themeProfiles() {
     : [{ id: "default", name: "默认主题", theme_color: "forest", custom_theme_color: "#2e6d4e", custom_background_enabled: false, custom_background_version: 0, custom_background_overlay_opacity: 82 }];
 }
 
+function activeThemeId() {
+  return state.settings.active_theme_profile || themeProfiles()[0].id;
+}
+
+// 快照只读 state，不读 DOM：面板没渲染、或正在拖动滑块时都能拿到正确值。
 function currentThemeSnapshot(id, name) {
-  return { id, name, theme_color: state.settings.theme_color || "forest", custom_theme_color: $("#customThemeColorInput").value.trim() || "#2E6D4E", custom_background_enabled: state.settings.custom_background_enabled === true, custom_background_version: state.settings.custom_background_version || 0, custom_background_overlay_opacity: Number($("#customBackgroundOpacityInput").value) };
+  return {
+    id,
+    name,
+    theme_color: state.settings.theme_color || "forest",
+    custom_theme_color: String(state.settings.custom_theme_color || "#2E6D4E").toUpperCase(),
+    custom_background_enabled: state.settings.custom_background_enabled === true,
+    custom_background_version: state.settings.custom_background_version || 0,
+    custom_background_overlay_opacity: Number(state.settings.custom_background_overlay_opacity ?? 82),
+  };
+}
+
+// 只刷新主题区控件；切换方案时用它，避免重渲染整个面板把其他页签未保存的改动清掉。
+function renderThemeControls() {
+  const activeTheme = state.settings.theme_color || "forest";
+  $$(".theme-option").forEach((button) => {
+    const active = button.dataset.themeValue === activeTheme;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-checked", String(active));
+  });
+  $("#customThemeColorInput").value = String(state.settings.custom_theme_color || "#2e6d4e").toUpperCase();
+  $("#customThemeColorPreview").value = String(state.settings.custom_theme_color || "#2e6d4e");
+  // 选了自定义色时，8 个预设都不高亮，容易让人以为“没选中任何颜色”。
+  const usingCustom = activeTheme === "custom";
+  $("#customThemeInUse").classList.toggle("hidden", !usingCustom);
+  $("#customThemeColorInput").closest(".custom-theme-row")?.classList.toggle("is-active", usingCustom);
+  const opacity = state.settings.custom_background_overlay_opacity ?? 82;
+  $("#customBackgroundOpacityInput").value = opacity;
+  $("#customBackgroundOpacityValue").textContent = `${opacity}%`;
+  renderBackgroundStatus();
+  renderThemeProfiles();
 }
 
 function renderThemeProfiles() {
   const select = $("#themeProfileInput");
-  select.innerHTML = themeProfiles().map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}</option>`).join("");
-  select.value = state.settings.active_theme_profile || themeProfiles()[0].id;
-  $("#deleteThemeProfileButton").disabled = themeProfiles().length <= 1;
+  const profiles = themeProfiles();
+  select.innerHTML = profiles.map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}</option>`).join("");
+  const id = activeThemeId();
+  select.value = id;
+  const current = profiles.find((profile) => profile.id === id);
+  const deleteButton = $("#deleteThemeProfileButton");
+  const lastOne = profiles.length <= 1;
+  deleteButton.disabled = lastOne;
+  // 只剩一个方案时说明为什么不能删，而不是只把按钮变灰。
+  deleteButton.title = lastOne
+    ? "至少要保留一套主题方案"
+    : `删除「${current?.name || "当前方案"}」，删除后会切到「${profiles.find((profile) => profile.id !== id)?.name || "另一套"}」`;
+}
+
+// 背景的选择状态直接显示在行内，避免用户对着“未选择文件”猜有没有设过。
+function renderBackgroundStatus() {
+  const name = $("#customBackgroundName");
+  if (!name) return;
+  const enabled = state.settings.custom_background_enabled === true;
+  name.textContent = enabled ? "已设置" : "未设置";
+  name.classList.toggle("is-set", enabled);
+  const clear = $("#clearCustomBackgroundButton");
+  if (clear) clear.disabled = !enabled;
 }
 
 async function persistThemeProfiles(profiles, activeId) {
-  const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify({ theme_profiles: profiles, active_theme_profile: activeId }) });
+  // 顶层外观字段必须一起写：只写方案快照的话，响应里旧的 theme_color 会把
+  // 刚调好的配色覆盖回去，刷新页面后又变回来。
+  const payload = await api("/api/settings", {
+    method: "PATCH",
+    body: JSON.stringify({
+      theme_profiles: profiles,
+      active_theme_profile: activeId,
+      theme_color: state.settings.theme_color || "forest",
+      custom_theme_color: String(state.settings.custom_theme_color || "#2E6D4E").toUpperCase(),
+      custom_background_enabled: state.settings.custom_background_enabled === true,
+      custom_background_version: state.settings.custom_background_version || 0,
+      custom_background_overlay_opacity: Number(state.settings.custom_background_overlay_opacity ?? 82),
+    }),
+  });
   state.settings = payload.settings;
   renderThemeProfiles();
 }
 
-async function saveActiveThemeProfileSilently() {
-  const id = state.settings.active_theme_profile || themeProfiles()[0].id;
-  const old = themeProfiles().find((item) => item.id === id);
-  const profiles = themeProfiles().map((item) => item.id === id ? currentThemeSnapshot(id, old?.name || "主题") : item);
+// 主题区统一“改了就存”：把当前外观写进当前方案，不需要用户再找保存按钮。
+async function persistThemeAppearance() {
+  clearTimeout(themePersistTimer);
+  themePersistTimer = null;
+  const id = activeThemeId();
+  const current = themeProfiles().find((item) => item.id === id);
+  const profiles = themeProfiles().map((item) => item.id === id ? currentThemeSnapshot(id, current?.name || "主题") : item);
   await persistThemeProfiles(profiles, id);
+}
+
+// 连点颜色、拖动滑块时合并成一次请求，最后一次为准。
+let themePersistTimer = null;
+function scheduleThemePersist(delay = 260) {
+  clearTimeout(themePersistTimer);
+  themePersistTimer = setTimeout(() => {
+    persistThemeAppearance().catch((error) => toast(error.message, "error"));
+  }, delay);
+}
+
+async function saveActiveThemeProfileSilently() {
+  await persistThemeAppearance();
 }
 
 async function activateThemeProfile(id) {
@@ -458,7 +531,7 @@ async function activateThemeProfile(id) {
   const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify({ active_theme_profile: id, theme_color: state.settings.theme_color, custom_theme_color: state.settings.custom_theme_color, custom_background_enabled: state.settings.custom_background_enabled, custom_background_version: state.settings.custom_background_version, custom_background_overlay_opacity: state.settings.custom_background_overlay_opacity }) });
   state.settings = payload.settings;
   applyTheme();
-  renderSettingsPanels();
+  renderThemeControls();
 }
 
 let settingsGroupsInitialized = false;

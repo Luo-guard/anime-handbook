@@ -606,11 +606,10 @@ $("#deleteBgmSourceButton").addEventListener("click", async () => {
 function selectTheme(theme) {
   state.settings.theme_color = theme;
   applyTheme();
-  $$(".theme-option").forEach((button) => {
-    const active = button.dataset.themeValue === theme;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-checked", String(active));
-  });
+  // 统一走主题区刷新：预设选中态、自定义色的“使用中”标记要一起更新。
+  renderThemeControls();
+  // 主题区统一“改了就存”，不再依赖另一个保存按钮。
+  scheduleThemePersist();
 }
 
 $$(".theme-option").forEach((button) => {
@@ -618,13 +617,16 @@ $$(".theme-option").forEach((button) => {
 });
 
 $("#themeProfileInput").addEventListener("change", (event) => activateThemeProfile(event.target.value));
-$("#newThemeProfileButton").addEventListener("click", async () => {
-  const name = prompt("新主题名称");
+// 「另存为新方案」= 以当前外观为起点复制一套并切过去（原「新建」与「保存当前方案」的合并）。
+$("#saveThemeProfileButton").addEventListener("click", async () => {
+  const name = prompt("新方案名称", `主题 ${themeProfiles().length + 1}`);
   if (!name?.trim()) return;
   const id = `theme_${Date.now()}`;
   const profiles = [...themeProfiles(), currentThemeSnapshot(id, name.trim())];
   await persistThemeProfiles(profiles, id);
   state.settings.active_theme_profile = id;
+  renderThemeControls();
+  toast(`已另存为「${name.trim()}」并切换过去`);
 });
 $("#renameThemeProfileButton").addEventListener("click", async () => {
   const id = $("#themeProfileInput").value;
@@ -636,34 +638,43 @@ $("#renameThemeProfileButton").addEventListener("click", async () => {
   await persistThemeProfiles(profiles, id);
   toast("主题名称已修改");
 });
-$("#saveThemeProfileButton").addEventListener("click", async () => {
-  const id = $("#themeProfileInput").value;
-  const old = themeProfiles().find((item) => item.id === id);
-  const profiles = themeProfiles().map((item) => item.id === id ? currentThemeSnapshot(id, old?.name || "主题") : item);
-  await persistThemeProfiles(profiles, id);
-  toast("当前主题方案已保存");
-});
 $("#deleteThemeProfileButton").addEventListener("click", async () => {
   const id = $("#themeProfileInput").value;
-  if (themeProfiles().length <= 1 || !confirm("删除这个主题方案？")) return;
-  const profiles = themeProfiles().filter((item) => item.id !== id);
-  await persistThemeProfiles(profiles, profiles[0].id);
-  await activateThemeProfile(profiles[0].id);
+  const profiles = themeProfiles();
+  if (profiles.length <= 1) {
+    toast("至少要保留一套主题方案", "error");
+    return;
+  }
+  const target = profiles.find((item) => item.id === id);
+  const fallback = profiles.find((item) => item.id !== id);
+  if (!confirm(`删除主题方案「${target?.name || "当前方案"}」？\n删除后会切换到「${fallback?.name || "另一套"}」，这一步无法撤销。`)) return;
+  const remaining = profiles.filter((item) => item.id !== id);
+  await persistThemeProfiles(remaining, remaining[0].id);
+  await activateThemeProfile(remaining[0].id);
+  toast(`已删除「${target?.name || "方案"}」，当前使用「${remaining[0].name}」`);
 });
 
 $("#customThemeColorPreview").addEventListener("input", (event) => {
   $("#customThemeColorInput").value = event.target.value.toUpperCase();
 });
 
-$("#useCustomThemeButton").addEventListener("click", () => {
+function applyCustomThemeColor() {
   const value = $("#customThemeColorInput").value.trim();
   if (!/^#[0-9a-f]{6}$/i.test(value)) {
     toast("请输入 6 位 HEX 色值，例如 #2E6D4E", "error");
     return;
   }
   state.settings.custom_theme_color = value.toUpperCase();
+  $("#customThemeColorInput").value = value.toUpperCase();
   $("#customThemeColorPreview").value = value;
   selectTheme("custom");
+  toast(`已应用自定义主题色 ${value.toUpperCase()}`);
+}
+$("#useCustomThemeButton").addEventListener("click", applyCustomThemeColor);
+$("#customThemeColorInput").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  applyCustomThemeColor();
 });
 
 $("#customBackgroundInput").addEventListener("change", async (event) => {
@@ -677,7 +688,8 @@ $("#customBackgroundInput").addEventListener("change", async (event) => {
       state.settings = payload.settings;
       applyTheme();
       await saveActiveThemeProfileSilently();
-      toast("原图背景已保存到线上账号");
+      renderThemeControls();
+      toast("背景已保存到线上账号，已应用到当前方案");
     } catch (error) { toast(error.message, "error"); }
     finally { event.target.value = ""; }
     return;
@@ -689,7 +701,8 @@ $("#customBackgroundInput").addEventListener("change", async (event) => {
       state.settings = payload.settings;
       applyTheme();
       await saveActiveThemeProfileSilently();
-      toast("自定义背景已保存到本地");
+      renderThemeControls();
+      toast("背景已保存到本地，已应用到当前方案");
     } catch (error) { toast(error.message, "error"); }
   };
   reader.readAsDataURL(file);
@@ -702,7 +715,8 @@ $("#clearCustomBackgroundButton").addEventListener("click", async () => {
     applyTheme();
     $("#customBackgroundInput").value = "";
     await saveActiveThemeProfileSilently();
-    toast("当前主题已关闭自定义背景");
+    renderThemeControls();
+    toast("已移除背景，当前方案恢复纯色底");
   } catch (error) { toast(error.message, "error"); }
 });
 
@@ -710,6 +724,15 @@ $("#customBackgroundOpacityInput").addEventListener("input", (event) => {
   state.settings.custom_background_overlay_opacity = Number(event.target.value);
   $("#customBackgroundOpacityValue").textContent = `${event.target.value}%`;
   applyTheme();
+});
+// 松手才写库：拖动过程只预览，避免一步一步发请求。短暂高亮数字作为“已保存”反馈。
+$("#customBackgroundOpacityInput").addEventListener("change", () => {
+  scheduleThemePersist(0);
+  const output = $("#customBackgroundOpacityValue");
+  output.classList.remove("saved-flash");
+  void output.offsetWidth;
+  output.classList.add("saved-flash");
+  setTimeout(() => output.classList.remove("saved-flash"), 900);
 });
 
 $("#rankingHoverDelayInput").addEventListener("input", (event) => {

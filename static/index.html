@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261102-settings-help-2-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261102-theme-ux-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -359,8 +359,16 @@
           <div class="settings-section-title" data-settings-section="theme">主界面设置</div>
           <h3 class="settings-subsection-title">配色与主题方案</h3>
           <div class="setting-row stacked">
-            <span><strong>主题方案</strong><small>保存多套颜色、背景和遮罩设置，随后可快速切换。</small></span>
-            <div class="theme-profile-controls"><select id="themeProfileInput"></select><button type="button" class="secondary-button compact-button" id="newThemeProfileButton">新建</button><button type="button" class="secondary-button compact-button" id="renameThemeProfileButton">重命名</button><button type="button" class="primary-button compact-button" id="saveThemeProfileButton">保存当前方案</button><button type="button" class="text-button danger" id="deleteThemeProfileButton">删除</button></div>
+            <span>
+              <strong>主题方案</strong>
+              <small>把配色、背景和遮罩存成一套，上班和下班可以各用一套。切换方案会立刻生效；在这里改的配色会直接存进当前方案，不需要另外保存。</small>
+            </span>
+            <div class="theme-profile-controls">
+              <select id="themeProfileInput" aria-label="当前主题方案"></select>
+              <button type="button" class="secondary-button compact-button" id="saveThemeProfileButton">另存为新方案</button>
+              <button type="button" class="secondary-button compact-button" id="renameThemeProfileButton">重命名</button>
+              <button type="button" class="text-button danger theme-profile-delete" id="deleteThemeProfileButton" aria-label="删除当前主题方案">删除当前方案</button>
+            </div>
           </div>
           <label class="setting-row">
             <span>
@@ -381,22 +389,28 @@
           <label class="setting-row custom-theme-row">
             <span>
               <strong>自定义主题色</strong>
-              <small>输入 6 位 HEX 色值；保存后会自动生成配套浅色、高光与阴影。</small>
+              <small>输入 6 位 HEX（如 <code>#2E6D4E</code>）后按回车或点「应用」，会自动配出浅色、高光与阴影。</small>
             </span>
             <span class="custom-theme-input">
-              <input id="customThemeColorInput" type="text" inputmode="text" maxlength="7" placeholder="#2E6D4E" aria-label="自定义主题色 HEX" />
-              <input id="customThemeColorPreview" type="color" aria-label="自定义主题色预览" />
-              <button type="button" class="text-button" id="useCustomThemeButton">使用</button>
+              <input id="customThemeColorInput" type="text" inputmode="text" maxlength="7" placeholder="#2E6D4E" aria-label="自定义主题色 HEX" title="输入 6 位 HEX 后按回车或点“应用”" />
+              <input id="customThemeColorPreview" type="color" aria-label="点击选择自定义主题色" title="点击取色" />
+              <button type="button" class="secondary-button compact-button" id="useCustomThemeButton">应用</button>
+              <span class="custom-theme-inuse hidden" id="customThemeInUse">使用中</span>
             </span>
           </label>
           <h3 class="settings-subsection-title">背景图片</h3>
-          <label class="setting-row custom-background-row">
-            <span><strong>自定义背景</strong><small>选择本机照片作为手账背景；会保存在手账本地。</small></span>
-            <span class="custom-background-input"><input id="customBackgroundInput" type="file" accept="image/png,image/jpeg,image/webp" /><button type="button" class="text-button" id="clearCustomBackgroundButton">移除</button></span>
-          </label>
+          <div class="setting-row custom-background-row">
+            <span><strong>自定义背景</strong><small>选一张本机照片当手账背景，会保存在手账本地；选完立刻生效，不需要再保存。</small></span>
+            <span class="custom-background-input">
+              <input id="customBackgroundInput" type="file" accept="image/png,image/jpeg,image/webp" class="background-file-input" />
+              <label class="secondary-button compact-button" for="customBackgroundInput" id="chooseBackgroundButton">选择图片</label>
+              <span class="custom-background-name" id="customBackgroundName">未设置</span>
+              <button type="button" class="text-button danger" id="clearCustomBackgroundButton">移除</button>
+            </span>
+          </div>
           <label class="setting-row">
-            <span><strong>背景遮罩透明度</strong><small>数值越高，背景图前面的浅色遮罩越明显。</small></span>
-            <span class="background-opacity-input"><input id="customBackgroundOpacityInput" type="range" min="0" max="100" step="1" /><output id="customBackgroundOpacityValue">82%</output></span>
+            <span><strong>背景遮罩强度</strong><small>数值越高，盖在背景上的浅色遮罩越重、照片越淡（0% 时照片最清晰，适合深色背景；100% 几乎只看得到底色）。</small></span>
+            <span class="background-opacity-input"><input id="customBackgroundOpacityInput" type="range" min="0" max="100" step="1" aria-label="背景遮罩强度" /><output id="customBackgroundOpacityValue">82%</output></span>
           </label>
           
           <h3 class="settings-subsection-title">打开与启动</h3>
@@ -1016,9 +1030,9 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261102-light-status" defer></script>
-    <script src="/modules/settings.js?v=20261102-settings-help-2" defer></script>
+    <script src="/modules/settings.js?v=20261102-theme-ux" defer></script>
     <script src="/modules/settings-help.js?v=20261102-settings-help-2" defer></script>
-    <script src="/modules/events.js?v=20261102-outside-close" defer></script>
+    <script src="/modules/events.js?v=20261102-theme-ux" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>
