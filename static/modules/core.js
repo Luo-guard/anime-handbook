@@ -34,6 +34,7 @@ const state = {
   timelineThemes: new Set(),
   noteThemes: new Set(["other"]),
   statusTimer: null,
+  dataRevision: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);

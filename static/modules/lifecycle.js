@@ -29,20 +29,26 @@ async function refreshStatus(options = {}) {
   const silent = Boolean(options.silent);
   const payload = await api("/api/status");
   const wasRunning = state.sync.running;
-  const collectionChanged = JSON.stringify(state.animes) !== JSON.stringify(payload.animes)
-    || JSON.stringify(state.custom_collections) !== JSON.stringify(payload.custom_collections || state.custom_collections);
-  state.animes = payload.animes;
-  state.custom_collections = payload.custom_collections || state.custom_collections;
-  state.stats = payload.stats;
   state.sync = payload.sync;
-  renderStats();
-  renderSync();
+  state.stats = payload.stats;
+  // /api/status 不再携带全部收藏：数据版本变了才调一次全量接口。
+  const revision = Number(payload.revision || 0);
+  const collectionChanged = revision !== state.dataRevision;
   if (collectionChanged) {
+    const fresh = await api("/api/collection-state");
+    state.animes = fresh.animes;
+    state.custom_collections = fresh.custom_collections || state.custom_collections;
+    // 拉取成功才记账，失败时下一次轮询会再试一次。
+    state.dataRevision = revision;
     renderTabs();
     renderCollection();
     renderSeasonFilter();
     populateAnimeSelect();
+  } else {
+    state.dataRevision = revision;
   }
+  renderStats();
+  renderSync();
   if (wasRunning && !state.sync.running && !silent) {
     toast(state.sync.message, state.sync.last_error ? "error" : "normal");
   }
@@ -74,6 +80,7 @@ async function bootstrap() {
   try {
     const payload = await api("/api/bootstrap");
     Object.assign(state, payload);
+    state.dataRevision = Number(payload.revision || 0);
     initializeSchedule();
     applyTheme();
     applySidebarLayout();

@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from handbook import common as app
+from handbook.common import episode_groups
 
 
 def sample_item(anime_id: int, collection_type: int, name: str) -> dict:
@@ -175,7 +176,7 @@ class HandbookDBTest(unittest.TestCase):
         finished = self.db.get_anime(1)
         watching = self.db.get_anime(2)
         self.assertEqual(
-            finished["watched_episode_keys"],
+            finished["watched_episodes"],
             ["bgm:101", "bgm:102", "bgm:201", "bgm:301"],
         )
         self.assertEqual(finished["episode_summary"], "本篇 2 · OP 1 · ED 1")
@@ -207,6 +208,60 @@ class HandbookDBTest(unittest.TestCase):
             server.server_close()
             thread.join(timeout=3)
             desktop.DATABASE = previous_database
+
+    def test_status_poll_is_light_and_revision_gates_collections(self) -> None:
+        """轮询接口不再整包返回收藏；前端靠 revision 决定何时拉全量。"""
+        self.db.import_kazumi([sample_item(91, 1, "watching")])
+        previous_database = desktop.DATABASE
+        server = app.ThreadingHTTPServer(("127.0.0.1", 0), http.RequestHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        desktop.DATABASE = self.db
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            with urlopen(f"{base}/api/status", timeout=3) as response:
+                status = app.json.loads(response.read().decode("utf-8"))
+            self.assertNotIn("animes", status)
+            self.assertNotIn("custom_collections", status)
+            self.assertIn("revision", status)
+            self.assertIn("stats", status)
+
+            # 写入推进版本；只读调用不动它。
+            before = self.db.revision
+            with urlopen(f"{base}/api/animes", timeout=3) as response:
+                app.json.loads(response.read().decode("utf-8"))
+            self.assertEqual(self.db.revision, before)
+            self.db.update_bgm_metadata(91, episode_count=12)
+            with urlopen(f"{base}/api/status", timeout=3) as response:
+                after = app.json.loads(response.read().decode("utf-8"))
+            self.assertGreater(after["revision"], before)
+
+            with urlopen(f"{base}/api/collection-state", timeout=3) as response:
+                state = app.json.loads(response.read().decode("utf-8"))
+            self.assertEqual([item["id"] for item in state["animes"]], [91])
+            self.assertIn("custom_collections", state)
+            anime = state["animes"][0]
+            # 收藏条目不再携带重复字段，概览文案保留。
+            self.assertNotIn("episode_groups", anime)
+            self.assertNotIn("watched_episode_keys", anime)
+            self.assertTrue(anime["episode_summary"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+            desktop.DATABASE = previous_database
+
+    def test_revision_tracks_writes_and_wal_is_persistent(self) -> None:
+        before = self.db.revision
+        self.db.list_anime()
+        self.db.get_settings()
+        self.assertEqual(self.db.revision, before, "只读调用不应推进数据版本")
+        self.db.import_kazumi([sample_item(61, 1, "watching")])
+        self.assertGreater(self.db.revision, before)
+        with self.db.connect() as connection:
+            self.assertEqual(
+                connection.execute("PRAGMA journal_mode").fetchone()[0], "wal"
+            )
 
     def test_kazumi_watching_to_finished_adds_only_remaining_watch_record(self) -> None:
         self.db.import_kazumi([sample_item(70, 1, "moving")])
@@ -426,7 +481,7 @@ class HandbookDBTest(unittest.TestCase):
 
         anime = self.db.get_anime(32)
         self.assertEqual(anime["episode_summary"], "本篇 2 · OP 1 · ED 1")
-        self.assertEqual([group["type_label"] for group in anime["episode_groups"]], ["本篇", "OP", "ED"])
+        self.assertEqual([group["type_label"] for group in episode_groups(anime["episodes"])], ["本篇", "OP", "ED"])
 
     def test_legacy_generated_episode_keys_resolve_after_group_restore(self) -> None:
         self.db.import_kazumi([sample_item(33, 1, "legacy")])
@@ -443,7 +498,7 @@ class HandbookDBTest(unittest.TestCase):
         self.assertEqual(self.db.recover_progress_from_watch_events([33]), 1)
         anime = self.db.get_anime(33)
         event = self.db.timeline(show_watch=True, show_notes=False)[0]
-        self.assertEqual(anime["watched_episode_keys"], ["bgm:101", "bgm:102"])
+        self.assertEqual(anime["watched_episodes"], ["bgm:101", "bgm:102"])
         self.assertEqual(
             [episode["display_label"] for episode in event["episodes"]],
             ["本篇 01", "本篇 02"],
@@ -497,7 +552,7 @@ class HandbookDBTest(unittest.TestCase):
             ["本篇 01"],
         )
         self.assertEqual(
-            self.db.get_anime(3)["watched_episode_keys"],
+            self.db.get_anime(3)["watched_episodes"],
             ["bgm:101", "bgm:201"],
         )
 
@@ -511,7 +566,7 @@ class HandbookDBTest(unittest.TestCase):
 
         anime = self.db.get_anime(35)
         events = self.db.timeline(show_watch=True, show_notes=False)
-        self.assertEqual(anime["watched_episode_keys"], ["bgm:101"])
+        self.assertEqual(anime["watched_episodes"], ["bgm:101"])
         self.assertEqual(len(events), 1)
         self.assertEqual(
             [episode["display_label"] for episode in events[0]["episodes"]],
@@ -531,7 +586,7 @@ class HandbookDBTest(unittest.TestCase):
         events = self.db.timeline(show_watch=True, show_notes=False)
 
         self.assertEqual(result["recorded_episodes"], [])
-        self.assertEqual(anime["watched_episode_keys"], ["bgm:101", "bgm:102", "bgm:201"])
+        self.assertEqual(anime["watched_episodes"], ["bgm:101", "bgm:102", "bgm:201"])
         self.assertEqual(len(events), 1)
 
     def test_timeline_uses_4am_day_boundary(self) -> None:
@@ -969,7 +1024,7 @@ class HandbookDBTest(unittest.TestCase):
 
         anime = self.db.get_anime(5)
 
-        self.assertEqual(anime["watched_episode_keys"], ["0:1", "0:2", "0:3"])
+        self.assertEqual(anime["watched_episodes"], ["0:1", "0:2", "0:3"])
         self.assertEqual(anime["watched_count"], 3)
 
 

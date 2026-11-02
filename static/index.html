@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261102-toolbar-buttons-20261029-sidebar-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261102-settings-help-2-20261029-sidebar-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -416,7 +416,8 @@
           <label class="setting-row">
             <span>
               <strong>开机自启手账</strong>
-              <small id="launchAtLoginHint">仅当前账号绑定的 Kazumi 路径与本机一致时生效；其他账号的设置不会影响本机自启。</small>
+              <small>登录 Windows 时静默启动手账后台，省去每次手动双击。只对绑定本机 Kazumi 路径的账号生效，其他账号不会改动这台电脑的启动项。</small>
+              <small id="launchAtLoginHint">正在检查本机绑定…</small>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="launchAtLoginInput" />
@@ -588,7 +589,7 @@
           <label class="setting-row">
             <span>
               <strong>显示单集评价入口</strong>
-              <small>控制详情页剧集快捷操作中的“评价”入口；不影响已有记录、记录主题选择和主题筛选。</small>
+              <small>在番剧详情的单集快捷菜单里增加「评价」：长按（或右键）某一集就能写一条单集评价，并写入看番记录。<br>关掉只会隐藏这个入口，已经写下的评价、记录主题与筛选都不会受影响。</small>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="showEpisodeReviewRecordInput" />
@@ -598,7 +599,7 @@
           <label class="setting-row">
             <span>
               <strong>显示单集评分入口</strong>
-              <small>控制详情页剧集快捷操作中的“评分”入口；不影响已有记录、记录主题选择和主题筛选。</small>
+              <small>给单集单独打分用的快捷入口，和整部番的 Bangumi 评分互不影响。<br>关闭后入口消失，已经记下的单集评分仍保留在看番记录里。</small>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="showEpisodeRatingRecordInput" />
@@ -608,7 +609,7 @@
           <label class="setting-row">
             <span>
               <strong>显示 OP/ED 记录入口</strong>
-              <small>控制详情页剧集快捷操作中的 OP 和 ED 入口；不影响已有记录、记录主题选择和主题筛选。</small>
+              <small>在单集快捷菜单里增加 OP、ED 两个按钮，点一下就能记一条片头／片尾记录（内容默认填 OP 或 ED，可以自己改）。<br>关闭只收起入口，不会删除已经记录的内容。</small>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="showOpedRecordInput" />
@@ -619,7 +620,7 @@
           <label class="setting-row">
             <span>
               <strong>显示相关番剧按钮</strong>
-              <small>在单个番剧界面显示 AGE 相关番剧查询按钮。</small>
+              <small>在番剧详情顶部显示「相关番剧」按钮，点开后按番名去 AGE 动漫搜索同一部作品，用来补充放送信息或找资源。<br>结果会缓存在本地，同一部番不会反复联网；没网时只提示失败，不影响其他功能。</small>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="showAgeRelatedButtonInput" />
@@ -629,7 +630,7 @@
           <div class="setting-row stacked detail-link-settings">
             <span>
               <strong>详情页搜索入口</strong>
-              <small>番剧详情里这一行链接的顺序和内容都在这里调整。可用占位符：<code>{title}</code> 番剧名称、<code>{id}</code> Bangumi 编号、<code>{site}</code> 当前 Bangumi 站点。上下箭头调整顺序，BGM 和 B站两条是预设，也可以改或删。</small>
+              <small>决定番剧详情那一行链接显示什么、按什么顺序：预设的 Bangumi 与 B 站也可以改名、换网址或删除，改坏了点「恢复预设」即可恢复。<br>占位符：<code>{title}</code> 番剧名称（自动 URL 编码）、<code>{id}</code> Bangumi 编号、<code>{site}</code> 当前 Bangumi 站点。<br>↑ ↓ 调整顺序，行尾开关控制单条是否显示；改完记得点右下角「保存设置」。</small>
             </span>
             <div id="detailLinkList" class="detail-link-list"></div>
             <div class="detail-link-actions">
@@ -838,7 +839,8 @@
           <div class="setting-row stacked sharing-settings">
             <span>
               <strong>坚果云多端同步</strong>
-              <small id="webdavStatus">将当前账号同步到坚果云；同一账号在另一台设备填入同一“云端账号标识”即可互通。默认只传手账账号数据，不含封面和角色缓存；打开上方“一并推送 Kazumi 收藏”后才会额外上传 Kazumi 收藏库。</small>
+              <small>把当前账号同步到坚果云，换台电脑填入同一个“云端账号标识”就能接着用。默认只传手账数据，不含封面和角色缓存；打开上方“一并推送 Kazumi 收藏”后才会额外上传 Kazumi 收藏库。</small>
+              <small id="webdavStatus">正在读取坚果云状态…</small>
             </span>
             <div class="sharing-workflow">
               <section class="sharing-step">
@@ -871,7 +873,8 @@
           <div class="setting-row stacked sharing-settings">
             <span>
               <strong>好友共享（Syncthing）</strong>
-              <small id="sharingStatus">先运行“设置共享同步.cmd”，再将脚本创建的 shared 文件夹填在下方。手账只同步已发布的账号快照，不直接同步 Kazumi。</small>
+              <small>借用 Syncthing 的共享文件夹，把当前账号的快照发布给另一台设备或好友。只同步已发布的快照，Kazumi 数据库本身不会被传出去。先运行“设置共享同步.cmd”，再把脚本创建的 shared 文件夹填在下方。</small>
+              <small id="sharingStatus">正在读取共享状态…</small>
             </span>
             <div class="sharing-workflow">
               
@@ -1000,8 +1003,8 @@
       </form>
     </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261101-link-sync" defer></script>
-    <script src="/modules/core.js?v=20261029-toast-layer" defer></script>
+    <script src="/schedule.js?v=20261102-settings-help-2" defer></script>
+    <script src="/modules/core.js?v=20261102-light-status" defer></script>
     <script src="/modules/network.js?v=20261025-shutdown" defer></script>
     <script src="/modules/collection.js?v=20261023-modules" defer></script>
     <script src="/modules/presentation.js?v=sidebar-restore-20261030-20261029-sidebar-state" defer></script>
@@ -1012,8 +1015,9 @@
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
-    <script src="/modules/lifecycle.js?v=20261031-readonly-20261029-video-confirm" defer></script>
-    <script src="/modules/settings.js?v=20261102-toolbar-buttons" defer></script>
+    <script src="/modules/lifecycle.js?v=20261102-light-status" defer></script>
+    <script src="/modules/settings.js?v=20261102-settings-help-2" defer></script>
+    <script src="/modules/settings-help.js?v=20261102-settings-help-2" defer></script>
     <script src="/modules/events.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

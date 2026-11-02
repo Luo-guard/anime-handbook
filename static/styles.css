@@ -2692,11 +2692,11 @@ dialog::backdrop {
 
 .setting-row {
   display: flex;
-  min-height: 74px;
+  min-height: 54px;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 15px 17px;
+  padding: 11px 17px;
   border-bottom: 1px solid #ecece8;
 }
 
@@ -2718,7 +2718,7 @@ dialog::backdrop {
 }
 
 .setting-row strong {
-  margin-bottom: 5px;
+  margin-bottom: 0;
   font-size: 14px;
 }
 
@@ -2729,6 +2729,53 @@ dialog::backdrop {
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
+
+/* 说明文字默认收起，只保留标题右侧的问号；内容仍在 DOM 里，供弹层读取。 */
+.setting-row small.setting-help-source { display: none; }
+.setting-row.stacked > span:first-child { margin-bottom: 2px; }
+.setting-help {
+  display: inline-grid;
+  width: 15px;
+  height: 15px;
+  margin-left: 7px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #d6ded6;
+  border-radius: 50%;
+  background: transparent;
+  color: #94a09a;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 1px;
+  cursor: help;
+  user-select: none;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.setting-help:hover,
+.setting-help[aria-expanded="true"] { border-color: var(--active-inset); background: var(--green-50); color: var(--green-800); }
+.setting-help:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
+
+.setting-help-popover {
+  position: fixed;
+  z-index: 90;
+  width: min(330px, calc(100vw - 24px));
+  box-sizing: border-box;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgb(24 40 30 / .16);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.setting-help-popover.is-pinned { border-color: var(--active-inset); box-shadow: 0 16px 36px rgb(24 40 30 / .2); }
+.setting-help-popover.hidden { display: none; }
+.setting-help-title { margin: 0 0 5px; color: var(--green-900); font-size: 12.5px; font-weight: 700; }
+.setting-help-body { overflow-wrap: anywhere; }
+.setting-help-body code { padding: 1px 4px; border-radius: 5px; background: var(--green-50); color: var(--green-800); font-size: 11px; }
 
 @media (max-width: 640px) {
   .settings-modal .setting-row { flex-wrap: wrap; gap: 12px; }

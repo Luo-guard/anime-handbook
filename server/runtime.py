@@ -155,7 +155,7 @@ class AccountServices:
         moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
         if moment.tzinfo is None or moment > datetime.now(timezone.utc) + timedelta(minutes=5):
             raise ValueError("观看时间无效，请检查设备时钟")
-        current = set(normalize(anime.get("watched_episode_keys") or []))
+        current = set(normalize(anime.get("watched_episodes") or []))
         keys = (current - removed) | added
         result = self.database.set_progress(subject_id, list(keys))
         with self.database.connect() as db:

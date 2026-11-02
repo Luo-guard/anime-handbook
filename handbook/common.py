@@ -364,13 +364,17 @@ def episode_groups(episodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def episode_summary(episodes: list[dict[str, Any]]) -> str:
-    groups = episode_groups(episodes)
+def episode_groups_summary(groups: list[dict[str, Any]]) -> str:
+    """紧凑的一行章节概览，例如 “本篇 2 · OP 1 · ED 1”。"""
     if not groups:
         return "章节待同步"
     return " · ".join(
         f"{group['type_label']} {group['count']}" for group in groups
     )
+
+
+def episode_summary(episodes: list[dict[str, Any]]) -> str:
+    return episode_groups_summary(episode_groups(episodes))
 
 
 def normalize_watched_keys(

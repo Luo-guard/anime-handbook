@@ -289,6 +289,8 @@ function renderScheduleSettings() {
   const visibility = scheduleCardVisibility();
   $("#scheduleCardFieldInputs").innerHTML = scheduleCardFieldOptions.map(([key, label, description]) =>
     `<label class="setting-row"><span><strong>${label}</strong><small>${description}</small></span><span class="switch-row compact"><input type="checkbox" data-schedule-field="${key}" ${visibility[key] ? "checked" : ""} /><span class="switch"></span></span></label>`).join("");
+  // 这些行是动态生成的，重新挂一次说明问号。
+  if (typeof setupSettingHelp === "function") setupSettingHelp();
 }
 
 function openScheduleFilters() {

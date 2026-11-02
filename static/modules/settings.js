@@ -318,6 +318,7 @@ function renderSettingsPanels() {
       renderSettingsPanels();
     });
   });
+  if (typeof setupSettingHelp === "function") setupSettingHelp();
 }
 
 function renderSharingSettings() {

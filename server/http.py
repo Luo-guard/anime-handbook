@@ -21,7 +21,7 @@ from .uploads import CHUNK_SIZE, receive_original
 
 ASSETS = Path(__file__).parent / "static"
 LOG = logging.getLogger("animehandbook.online")
-READ_ROUTES = re.compile(r"/api/(?:video-links|animes(?:/[1-9]\d*(?:/(?:characters|episode-records|comments))?)?|timeline|statistics|status|schedule(?:/cover)?|covers/[1-9]\d*|character-covers/[1-9]\d*/[1-9]\d*|record-images/[\w-]+\.(?:jpg|png|webp)|background|rankings(?:/[1-9]\d*)?|ranking-templates)\Z")
+READ_ROUTES = re.compile(r"/api/(?:video-links|animes(?:/[1-9]\d*(?:/(?:characters|episode-records|comments))?)?|collection-state|timeline|statistics|status|schedule(?:/cover)?|covers/[1-9]\d*|character-covers/[1-9]\d*/[1-9]\d*|record-images/[\w-]+\.(?:jpg|png|webp)|background|rankings(?:/[1-9]\d*)?|ranking-templates)\Z")
 WRITE_ROUTES = {
     "POST": re.compile(r"/api/(?:video-links|notes|custom-collections(?:/[1-9]\d*/items)?|rankings(?:/[1-9]\d*/(?:tiers|import|move))?|ranking-templates|animes/custom-sort|animes/[1-9]\d*/(?:rating|comments|characters|episode-titles|progress|episode-count))\Z"),
     "PATCH": re.compile(r"/api/(?:settings|events/[1-9]\d*|custom-collections/[1-9]\d*|categories/[1-5]|rankings/[1-9]\d*(?:/tiers/[1-9]\d*)?)\Z"),

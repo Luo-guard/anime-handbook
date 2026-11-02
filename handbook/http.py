@@ -153,6 +153,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "settings": self.database.get_settings(),
                         "stats": self.database.stats(),
                         "sync": self.sync.status,
+                        "revision": self.database.revision,
                     }
                 )
             elif path == "/api/schedule":
@@ -316,10 +317,18 @@ class RequestHandler(BaseHTTPRequestHandler):
                     {"series": self.database.statistics(period, record_type), "balance": self.database.episode_balance()}
                 )
             elif path == "/api/status":
+                # 轮询接口只带轻量数据：收藏内容变化由 revision 标记，
+                # 前端发现版本变了再调 /api/collection-state 拉一次全量。
                 self.send_json(
                     {
                         "sync": self.sync.status,
                         "stats": self.database.stats(),
+                        "revision": self.database.revision,
+                    }
+                )
+            elif path == "/api/collection-state":
+                self.send_json(
+                    {
                         "animes": self.database.list_anime(),
                         "custom_collections": self.database.list_custom_collections(),
                     }

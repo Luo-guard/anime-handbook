@@ -398,7 +398,7 @@ class OnlineTest(unittest.TestCase):
         status, result, _ = self.call("POST", "/api/animes/1/progress", {"base_episode_keys": [], "episode_keys": [keys[0], keys[2]], "watched_at": "2026-10-01T02:00:00Z"}, second)
         self.assertEqual(status, 200)
         self.assertTrue(result["refresh_required"])
-        self.assertEqual(set(result["anime"]["watched_episode_keys"]), set(keys))
+        self.assertEqual(set(result["anime"]["watched_episodes"]), set(keys))
         events = svc.database.export_cloud_state()["tables"]["events"]
         moments = {k: webdav.WebDAVSyncService._row_moment(e, "created_at").isoformat() for e in events for k in json.loads(e["episodes"])}
         self.assertEqual(moments[keys[0]], "2026-10-01T02:00:00+00:00")
@@ -415,7 +415,7 @@ class OnlineTest(unittest.TestCase):
         second = self.login("alice")
         self.call("POST", "/api/animes/1/progress", {"base_episode_keys": [], "episode_keys": [key]}, self.alice)
         self.assertEqual(self.call("POST", "/api/animes/1/progress", {"base_episode_keys": [key], "episode_keys": []}, second)[0], 409)
-        self.assertEqual(svc.database.get_anime(1)["watched_episode_keys"], [key])
+        self.assertEqual(svc.database.get_anime(1)["watched_episodes"], [key])
 
     def test_only_referenced_images_are_imported(self):
         source_root = Path(self.temp.name) / "source"

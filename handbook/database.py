@@ -13,7 +13,7 @@ import sqlite3
 import tempfile
 import threading
 from datetime import timedelta
-from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso)
+from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso)
 
 class HandbookDB:
     def __init__(self, path: Path = DB_PATH, *, asset_root: Path | None = None) -> None:
@@ -23,6 +23,8 @@ class HandbookDB:
         (self.asset_root / "covers").mkdir(parents=True, exist_ok=True)
         (self.asset_root / "character-covers").mkdir(parents=True, exist_ok=True)
         self._write_lock = threading.RLock()
+        self._revision = 1
+        self._revision_lock = threading.Lock()
         self.initialize()
 
     @contextmanager
@@ -31,14 +33,28 @@ class HandbookDB:
         try:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA journal_mode = WAL")
+            # WAL 模式写在数据库文件里，initialize() 设置一次即可；
+            # 以前每个连接都执行一遍 pragma，实测占了单次连接近九成耗时。
+            before = connection.total_changes
             yield connection
             connection.commit()
+            if connection.total_changes > before:
+                # 任何写入都推进数据版本，前端据此决定是否重新拉取收藏。
+                self._touch_revision()
         except Exception:
             connection.rollback()
             raise
         finally:
             connection.close()
+
+    @property
+    def revision(self) -> int:
+        with self._revision_lock:
+            return self._revision
+
+    def _touch_revision(self) -> None:
+        with self._revision_lock:
+            self._revision += 1
 
     def export_snapshot(self, destination: Path) -> None:
         """Create a consistent SQLite copy without syncing WAL/SHM sidecars.
@@ -83,6 +99,7 @@ class HandbookDB:
                 target.close()
                 source.close()
             os.replace(temporary, self.path)
+            self._touch_revision()
 
     def referenced_record_images(self) -> set[str]:
         """Return local record-image filenames referenced by this handbook."""
@@ -97,6 +114,7 @@ class HandbookDB:
 
     def initialize(self) -> None:
         with self.connect() as db:
+            db.execute("PRAGMA journal_mode = WAL")
             db.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS video_links (
@@ -1064,12 +1082,14 @@ class HandbookDB:
         )
         groups = episode_groups(episodes)
         item["episodes"] = episodes
-        item["episode_groups"] = groups
-        item["episode_summary"] = episode_summary(episodes)
+        # episode_groups 与 episodes 内容重复（一份 3.9MB 的响应里占 1.4MB），
+        # 不再下发；需要分组的调用方用 common.episode_groups(episodes) 现算。
+        item["episode_summary"] = episode_groups_summary(groups)
         item["has_episode_list"] = bool(raw_episodes)
         item["episode_count"] = len(episodes) if episodes else item.get("episode_count")
         item["watched_episodes"] = watched
-        item["watched_episode_keys"] = watched
+        # watched_episode_keys 曾经是同一份数据的第二个名字，前端已改用
+        # watched_episodes，这里不再重复下发。
         item["watched_count"] = len(watched)
         item["display_name"] = item["name_cn"] or item["name"]
         item["category_name"] = CATEGORY_NAMES.get(
@@ -1334,9 +1354,7 @@ class HandbookDB:
             # during a Kazumi 1 -> 4 move those keys must not be recorded
             # again as newly watched episodes.
             stored = normalize_watched_keys(
-                anime.get("watched_episode_keys")
-                or anime.get("watched_episodes")
-                or [],
+                anime.get("watched_episodes") or [],
                 anime["episodes"],
                 int(anime["episode_count"] or 0),
             )
