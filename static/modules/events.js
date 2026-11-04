@@ -603,55 +603,76 @@ $("#deleteBgmSourceButton").addEventListener("click", async () => {
   } catch (error) { toast(error.message, "error"); }
 });
 
+// 主题卡片：点卡片切换；编辑/删除是卡片内的独立按钮，不会顺带切换。
+$("#themeProfileGrid").addEventListener("click", (event) => {
+  const pick = event.target.closest("[data-theme-pick]");
+  if (pick) {
+    activateThemeProfile(pick.dataset.themePick).catch((error) => toast(error.message, "error"));
+    return;
+  }
+  const edit = event.target.closest("[data-theme-edit]");
+  if (edit) {
+    openThemeEditor(edit.dataset.themeEdit);
+    return;
+  }
+  const remove = event.target.closest("[data-theme-delete]");
+  if (remove && !remove.disabled) {
+    deleteThemeProfile(remove.dataset.themeDelete).catch((error) => toast(error.message, "error"));
+    return;
+  }
+  if (event.target.closest("#newThemeCard")) openThemeEditor();
+});
+
 function selectTheme(theme) {
-  state.settings.theme_color = theme;
-  applyTheme();
-  // 统一走主题区刷新：预设选中态、自定义色的“使用中”标记要一起更新。
-  renderThemeControls();
-  // 主题区统一“改了就存”，不再依赖另一个保存按钮。
-  scheduleThemePersist();
+  if (!themeEditorState.open || !themeEditorState.draft) return;
+  themeEditorState.draft.theme_color = theme;
+  applyThemeDraft();
+  renderThemeEditorFields();
 }
 
 $$(".theme-option").forEach((button) => {
   button.addEventListener("click", () => selectTheme(button.dataset.themeValue));
 });
 
-$("#themeProfileInput").addEventListener("change", (event) => activateThemeProfile(event.target.value));
-// 「另存为新方案」= 以当前外观为起点复制一套并切过去（原「新建」与「保存当前方案」的合并）。
-$("#saveThemeProfileButton").addEventListener("click", async () => {
-  const name = prompt("新方案名称", `主题 ${themeProfiles().length + 1}`);
-  if (!name?.trim()) return;
-  const id = `theme_${Date.now()}`;
-  const profiles = [...themeProfiles(), currentThemeSnapshot(id, name.trim())];
-  await persistThemeProfiles(profiles, id);
-  state.settings.active_theme_profile = id;
-  renderThemeControls();
-  toast(`已另存为「${name.trim()}」并切换过去`);
+$("#themeEditorClose").addEventListener("click", () => closeThemeEditor(true));
+$("#themeEditorCancel").addEventListener("click", () => closeThemeEditor(true));
+// Esc 只取消编辑并回滚，不要顺带把下面的设置面板关掉。
+$("#themeEditorModal").addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeThemeEditor(true);
 });
-$("#renameThemeProfileButton").addEventListener("click", async () => {
-  const id = $("#themeProfileInput").value;
-  const current = themeProfiles().find((item) => item.id === id);
-  if (!current) return;
-  const name = prompt("修改主题名称", current.name);
-  if (!name?.trim() || name.trim() === current.name) return;
-  const profiles = themeProfiles().map((item) => item.id === id ? { ...item, name: name.trim() } : item);
-  await persistThemeProfiles(profiles, id);
-  toast("主题名称已修改");
+$("#themeEditorForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveThemeEditor();
 });
-$("#deleteThemeProfileButton").addEventListener("click", async () => {
-  const id = $("#themeProfileInput").value;
-  const profiles = themeProfiles();
-  if (profiles.length <= 1) {
-    toast("至少要保留一套主题方案", "error");
-    return;
+$("#themeEditorName").addEventListener("input", (event) => {
+  if (!themeEditorState.open || !themeEditorState.draft) return;
+  themeEditorState.draft.name = event.target.value;
+  if (themeEditorState.mode === "edit") {
+    $("#themeEditorTitle").textContent = `编辑主题「${event.target.value.trim() || "未命名"}」`;
   }
-  const target = profiles.find((item) => item.id === id);
-  const fallback = profiles.find((item) => item.id !== id);
-  if (!confirm(`删除主题方案「${target?.name || "当前方案"}」？\n删除后会切换到「${fallback?.name || "另一套"}」，这一步无法撤销。`)) return;
-  const remaining = profiles.filter((item) => item.id !== id);
-  await persistThemeProfiles(remaining, remaining[0].id);
-  await activateThemeProfile(remaining[0].id);
-  toast(`已删除「${target?.name || "方案"}」，当前使用「${remaining[0].name}」`);
+});
+
+// 主题区其它项都是“改了就存”，这个开关保持一致；本次页面已经加载完，
+// 所以提示里说明是“下次打开”生效。
+$("#themeRandomOnOpenInput").addEventListener("change", async (event) => {
+  const enabled = event.target.checked;
+  try {
+    const payload = await api("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ theme_random_on_open: enabled }),
+    });
+    if (payload.settings) state.settings = payload.settings;
+    toast(enabled ? "已开启：下次打开或刷新会随机使用一套主题" : "已关闭随机主题");
+  } catch (error) {
+    toast(error.message, "error");
+    event.target.checked = !enabled;
+  }
+});
+
+$("#themeWeeklyPlanEnabledInput").addEventListener("change", () => saveThemeWeeklyPlan(true));
+$("#themeWeeklyPlan").addEventListener("change", (event) => {
+  if (event.target.matches("[data-theme-plan-day]")) saveThemeWeeklyPlan(false);
 });
 
 $("#customThemeColorPreview").addEventListener("input", (event) => {
@@ -659,16 +680,16 @@ $("#customThemeColorPreview").addEventListener("input", (event) => {
 });
 
 function applyCustomThemeColor() {
+  if (!themeEditorState.open || !themeEditorState.draft) return;
   const value = $("#customThemeColorInput").value.trim();
   if (!/^#[0-9a-f]{6}$/i.test(value)) {
     toast("请输入 6 位 HEX 色值，例如 #2E6D4E", "error");
     return;
   }
-  state.settings.custom_theme_color = value.toUpperCase();
-  $("#customThemeColorInput").value = value.toUpperCase();
-  $("#customThemeColorPreview").value = value;
-  selectTheme("custom");
-  toast(`已应用自定义主题色 ${value.toUpperCase()}`);
+  themeEditorState.draft.custom_theme_color = value.toUpperCase();
+  themeEditorState.draft.theme_color = "custom";
+  applyThemeDraft();
+  renderThemeEditorFields();
 }
 $("#useCustomThemeButton").addEventListener("click", applyCustomThemeColor);
 $("#customThemeColorInput").addEventListener("keydown", (event) => {
@@ -677,62 +698,36 @@ $("#customThemeColorInput").addEventListener("keydown", (event) => {
   applyCustomThemeColor();
 });
 
+// 选图只做本地预览，真正上传在「保存并应用」里，取消不会留下孤儿文件。
 $("#customBackgroundInput").addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
-  if (!file) return;
+  if (!file || !themeEditorState.open || !themeEditorState.draft) return;
   if (file.size > 8 * 1024 * 1024) { toast("背景图片不能超过 8 MB", "error"); return; }
-  if (window.handbookOnline) {
-    try {
-      toast("正在上传原图，繁忙时会自动排队");
-      const payload = await window.handbookOnline.uploadImage("/api/background", file, state.settings.active_theme_profile || "default");
-      state.settings = payload.settings;
-      applyTheme();
-      await saveActiveThemeProfileSilently();
-      renderThemeControls();
-      toast("背景已保存到线上账号，已应用到当前方案");
-    } catch (error) { toast(error.message, "error"); }
-    finally { event.target.value = ""; }
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const payload = await api("/api/background", { method: "POST", body: JSON.stringify({ data: reader.result, profile_id: state.settings.active_theme_profile || "default", account_id: state.active_profile?.id || "local" }) });
-      state.settings = payload.settings;
-      applyTheme();
-      await saveActiveThemeProfileSilently();
-      renderThemeControls();
-      toast("背景已保存到本地，已应用到当前方案");
-    } catch (error) { toast(error.message, "error"); }
-  };
-  reader.readAsDataURL(file);
+  try {
+    const dataUrl = await themeFileToDataUrl(file);
+    themeEditorState.pendingFile = file;
+    themeEditorState.localBackgroundUrl = dataUrl;
+    themeEditorState.draft.custom_background_enabled = true;
+    applyThemeDraft();
+    renderThemeEditorFields();
+  } catch (error) { toast(error.message, "error"); }
+  finally { event.target.value = ""; }
 });
 
-$("#clearCustomBackgroundButton").addEventListener("click", async () => {
-  try {
-    const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify({ custom_background_enabled: false }) });
-    state.settings = payload.settings;
-    applyTheme();
-    $("#customBackgroundInput").value = "";
-    await saveActiveThemeProfileSilently();
-    renderThemeControls();
-    toast("已移除背景，当前方案恢复纯色底");
-  } catch (error) { toast(error.message, "error"); }
+$("#clearCustomBackgroundButton").addEventListener("click", () => {
+  if (!themeEditorState.open || !themeEditorState.draft) return;
+  themeEditorState.pendingFile = null;
+  themeEditorState.localBackgroundUrl = null;
+  themeEditorState.draft.custom_background_enabled = false;
+  applyThemeDraft();
+  renderThemeEditorFields();
 });
 
 $("#customBackgroundOpacityInput").addEventListener("input", (event) => {
-  state.settings.custom_background_overlay_opacity = Number(event.target.value);
+  if (!themeEditorState.open || !themeEditorState.draft) return;
+  themeEditorState.draft.custom_background_overlay_opacity = Number(event.target.value);
   $("#customBackgroundOpacityValue").textContent = `${event.target.value}%`;
-  applyTheme();
-});
-// 松手才写库：拖动过程只预览，避免一步一步发请求。短暂高亮数字作为“已保存”反馈。
-$("#customBackgroundOpacityInput").addEventListener("change", () => {
-  scheduleThemePersist(0);
-  const output = $("#customBackgroundOpacityValue");
-  output.classList.remove("saved-flash");
-  void output.offsetWidth;
-  output.classList.add("saved-flash");
-  setTimeout(() => output.classList.remove("saved-flash"), 900);
+  applyThemeDraft();
 });
 
 $("#rankingHoverDelayInput").addEventListener("input", (event) => {
@@ -778,9 +773,7 @@ $("#saveSettings").addEventListener("click", async () => {
         episode_balance_daily_target: Number($("#episodeBalanceDailyTargetInput").value),
         statistics_default_theme: $("#statisticsDefaultThemeInput").value,
         statistics_show_zero_periods: $("#showZeroStatisticsInput").checked,
-        theme_color: state.settings.theme_color || "forest",
-        custom_theme_color: $("#customThemeColorInput").value.trim() || "#2E6D4E",
-        custom_background_overlay_opacity: Number($("#customBackgroundOpacityInput").value),
+        // 主题外观由主题编辑器即时写入，这里不再重复提交，避免把弹窗里的草稿带进当前方案。
         default_view: $("#defaultViewInput").value,
         ...scheduleSorting,
         kazumi_writeback: $("#kazumiWritebackInput").checked,

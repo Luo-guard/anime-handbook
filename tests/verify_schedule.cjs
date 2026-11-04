@@ -18,6 +18,14 @@ state.settings={schedule_statuses:[1,2],schedule_uncollected:false};assert.equal
 for(const [sort,key] of [['time','a'],['score','b'],['popularity','a']]){state.settings={schedule_sort:sort};assert.equal(run('[...fixture.slice(0,2)].sort(scheduleComparator)[0].key'),key)}
 assert.equal(run('scheduleTimeLabel(fixture[1])'),'次日 01:00');
 assert.equal(run("scheduleTimeLabel({kind:'weekly'})"),'时间待公布');
+assert.equal(run("scheduleTimeLabel({kind:'weekly',weekday:1,calendar_weekday:2,time:'01:30',bj_time:'00:30',bj_weekday:2})"),'次日 00:30');
+assert.equal(run("scheduleTimeLabel({kind:'weekly',weekday:7,calendar_weekday:1,time:'00:30',bj_time:'23:30',bj_weekday:7})"),'23:30');
+run("scheduleState.season='202601'");
+assert.equal(run("schedulePremiereDate({release:'12/25~'}).getFullYear()"),2025);
+assert.equal(run("schedulePremiereDate({release:'1/5~'}).getFullYear()"),2026);
+run("scheduleState.season='202610'");
+assert.equal(run("scheduleEstimatedEpisode({kind:'weekly',air_date:'2026-11-04',source_time:'21:00~'}, new Date('2026-11-04T19:59:00+08:00'))"),0);
+assert.equal(run("scheduleEstimatedEpisode({kind:'weekly',air_date:'2026-11-04',source_time:'21:00~'}, new Date('2026-11-04T20:01:00+08:00'))"),1);
 run('renderSchedule()');assert(element('#scheduleGrid').innerHTML.includes('data-schedule-key="a"'));assert(!element('#scheduleGrid').innerHTML.includes('data-schedule-key="c"'));assert.equal(element('#scheduleWeek').innerHTML.split('data-schedule-day=').length-1,8);
 run('scheduleState.day=0;renderSchedule()');assert(element('#scheduleGrid').innerHTML.includes('data-schedule-key="c"'));assert(element('#scheduleNotice').textContent.includes('不推算集数'));
 run("scheduleState.search='不存在';renderSchedule()");assert(element('#scheduleGrid').innerHTML.includes('schedule-empty'));
@@ -28,8 +36,8 @@ vm.runInContext(part,ctx);state.settings={sidebar_order:['collection','timeline'
 assert.equal(run("sidebarOrder().join(',')"),'collection,schedule,timeline,statistics,ranking,settings');
 console.log('Schedule frontend: 04:00/quarter boundaries, filters, sorts, weekday/network views, escaping and sidebar migration passed');
 
-ctx.visibilityFixture={key:'visible',id:123,title:'测试卡片',kind:'weekly',collection_type:1,score:8.1,votes:100,time:'20:30',weekday:1,calendar_weekday:1,release:'10/1~',tags:['奇幻']};
-const markers={tags:'class="schedule-card-meta"',votes:'100 人评分',release:'class="schedule-card-release"',score:'class="poster-score"',collection:'class="schedule-collection-badge"',airtime:'class="schedule-airtime'};
+ctx.visibilityFixture={key:'visible',id:123,title:'测试卡片',kind:'weekly',collection_type:1,score:8.1,votes:100,time:'20:30',weekday:1,calendar_weekday:1,air_date:'2026-07-06',source_time:'20:30~',release:'10/1~',tags:['奇幻']};
+const markers={tags:'class="schedule-card-meta"',votes:'100 人评分',release:'class="schedule-card-release"',score:'class="poster-score"',collection:'class="schedule-collection-badge"',airtime:'class="schedule-airtime',progress:'class="schedule-progress'};
 state.settings={};
 for(const marker of Object.values(markers))assert(run('scheduleCard(visibilityFixture)').includes(marker));
 for(const [field,marker] of Object.entries(markers)){
@@ -39,6 +47,11 @@ for(const [field,marker] of Object.entries(markers)){
 }
 state.settings={schedule_card_fields:Object.fromEntries(Object.keys(markers).map(key=>[key,false]))};
 assert(!run('scheduleCard(visibilityFixture)').includes('class="schedule-card-footer"'));
+// 已收藏且有逐集日程时，用服务端的 airing 而不是首播日估算。
+state.settings={};ctx.state.animes=[{id:123,airing:{aired:4,total:12,next_label:'11/04 20:00'}}];ctx.visibilityFixture.local_id=123;
+assert(run('scheduleCard(visibilityFixture)').includes('已播 4 / 12'));
+assert(!run('scheduleCard(visibilityFixture)').includes('预计第'));
+ctx.state.animes=[];delete ctx.visibilityFixture.local_id;
 assert(run('scheduleCard(visibilityFixture)').includes('测试卡片'));
 console.log('Card information switches: default visibility, independent controls and empty-footer removal passed');
 // Group priority is independent from each group's sort and from visibility filters.

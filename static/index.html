@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#173f2d" />
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
-    <script src="/appearance.js?v=20261029-sidebar-state"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261102-theme-ux-20261029-sidebar-state" />
+    <script src="/appearance.js?v=20261104-theme-studio"></script>
+  <link rel="stylesheet" href="/styles.css?v=20261104-airing-progress" />
   </head>
   <body>
     <div class="app-shell">
@@ -344,7 +344,8 @@
         <h2>手账设置</h2>
         <div class="settings-layout">
           <aside class="settings-side-nav" id="settingsSideNav" aria-label="设置分类">
-<button type="button" class="active" data-settings-tab="theme">主界面设置</button>
+<button type="button" class="active" data-settings-tab="theme">主题</button>
+<button type="button" data-settings-tab="interface">界面与启动</button>
 <button type="button" data-settings-tab="collection" data-page-label="collection">收藏夹</button>
 <button type="button" data-settings-tab="detail">番剧详情</button>
 <button type="button" data-settings-tab="schedule" data-page-label="schedule">周表</button>
@@ -356,63 +357,32 @@
 <button type="button" data-settings-tab="sharing">账号与同步</button>
 </aside>
           <div class="settings-list">
-          <div class="settings-section-title" data-settings-section="theme">主界面设置</div>
-          <h3 class="settings-subsection-title">配色与主题方案</h3>
-          <div class="setting-row stacked">
-            <span>
-              <strong>主题方案</strong>
-              <small>把配色、背景和遮罩存成一套，上班和下班可以各用一套。切换方案会立刻生效；在这里改的配色会直接存进当前方案，不需要另外保存。</small>
-            </span>
-            <div class="theme-profile-controls">
-              <select id="themeProfileInput" aria-label="当前主题方案"></select>
-              <button type="button" class="secondary-button compact-button" id="saveThemeProfileButton">另存为新方案</button>
-              <button type="button" class="secondary-button compact-button" id="renameThemeProfileButton">重命名</button>
-              <button type="button" class="text-button danger theme-profile-delete" id="deleteThemeProfileButton" aria-label="删除当前主题方案">删除当前方案</button>
-            </div>
-          </div>
+          <div class="settings-section-title" data-settings-section="theme">主题</div>
+          <p class="settings-lead">点卡片立即切换。配色、背景和遮罩分别存进每套方案，改完即时生效，不需要另外保存。</p>
+          <div class="theme-profile-grid" id="themeProfileGrid" role="list" aria-label="主题方案"></div>
           <label class="setting-row">
             <span>
-              <strong>主题颜色</strong>
-              <small>切换手账的主色调，设置会保留。</small>
+              <strong>打开时随机主题</strong>
+              <small>每次打开手账或刷新页面，都从上面的方案里随机抽一套显示，各有各的配色和背景；方案本身的内容不会被改动。只有一套方案时就是它。开启周计划后，随机主题会暂停。</small>
             </span>
-            <div class="theme-picker" id="themeColorInput" role="radiogroup" aria-label="主题颜色">
-              <button type="button" class="theme-option" data-theme-value="forest" role="radio"><i style="--swatch:#2e6d4e"></i>森野绿</button>
-              <button type="button" class="theme-option" data-theme-value="ocean" role="radio"><i style="--swatch:#2784aa"></i>海蓝</button>
-              <button type="button" class="theme-option" data-theme-value="violet" role="radio"><i style="--swatch:#7c60ae"></i>暮紫</button>
-              <button type="button" class="theme-option" data-theme-value="amber" role="radio"><i style="--swatch:#aa7833"></i>暖琥珀</button>
-              <button type="button" class="theme-option" data-theme-value="rose" role="radio"><i style="--swatch:#b85670"></i>蔷薇粉</button>
-              <button type="button" class="theme-option" data-theme-value="indigo" role="radio"><i style="--swatch:#5269b6"></i>靛蓝</button>
-              <button type="button" class="theme-option" data-theme-value="teal" role="radio"><i style="--swatch:#23807a"></i>青碧</button>
-              <button type="button" class="theme-option" data-theme-value="slate" role="radio"><i style="--swatch:#58677a"></i>雾灰蓝</button>
-            </div>
-          </label>
-          <label class="setting-row custom-theme-row">
-            <span>
-              <strong>自定义主题色</strong>
-              <small>输入 6 位 HEX（如 <code>#2E6D4E</code>）后按回车或点「应用」，会自动配出浅色、高光与阴影。</small>
-            </span>
-            <span class="custom-theme-input">
-              <input id="customThemeColorInput" type="text" inputmode="text" maxlength="7" placeholder="#2E6D4E" aria-label="自定义主题色 HEX" title="输入 6 位 HEX 后按回车或点“应用”" />
-              <input id="customThemeColorPreview" type="color" aria-label="点击选择自定义主题色" title="点击取色" />
-              <button type="button" class="secondary-button compact-button" id="useCustomThemeButton">应用</button>
-              <span class="custom-theme-inuse hidden" id="customThemeInUse">使用中</span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="themeRandomOnOpenInput" />
+              <span class="switch"></span>
             </span>
           </label>
-          <h3 class="settings-subsection-title">背景图片</h3>
-          <div class="setting-row custom-background-row">
-            <span><strong>自定义背景</strong><small>选一张本机照片当手账背景，会保存在手账本地；选完立刻生效，不需要再保存。</small></span>
-            <span class="custom-background-input">
-              <input id="customBackgroundInput" type="file" accept="image/png,image/jpeg,image/webp" class="background-file-input" />
-              <label class="secondary-button compact-button" for="customBackgroundInput" id="chooseBackgroundButton">选择图片</label>
-              <span class="custom-background-name" id="customBackgroundName">未设置</span>
-              <button type="button" class="text-button danger" id="clearCustomBackgroundButton">移除</button>
-            </span>
-          </div>
+          <h3 class="settings-subsection-title">周计划</h3>
           <label class="setting-row">
-            <span><strong>背景遮罩强度</strong><small>数值越高，盖在背景上的浅色遮罩越重、照片越淡（0% 时照片最清晰，适合深色背景；100% 几乎只看得到底色）。</small></span>
-            <span class="background-opacity-input"><input id="customBackgroundOpacityInput" type="range" min="0" max="100" step="1" aria-label="背景遮罩强度" /><output id="customBackgroundOpacityValue">82%</output></span>
+            <span>
+              <strong>按周计划切换主题</strong>
+              <small>每天打开时使用指定的主题；跨过零点仍在运行时也会自动切换。开启后「打开时随机主题」暂停，没指定主题的日子保持当前方案。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="themeWeeklyPlanEnabledInput" />
+              <span class="switch"></span>
+            </span>
           </label>
-          
+          <div class="theme-weekly-plan" id="themeWeeklyPlan" role="group" aria-label="每周主题安排"></div>
+          <div class="settings-section-title" data-settings-section="interface">界面与启动</div>
           <h3 class="settings-subsection-title">打开与启动</h3>
           <label class="setting-row">
             <span>
@@ -430,8 +400,8 @@
           <label class="setting-row">
             <span>
               <strong>开机自启手账</strong>
-              <small>登录 Windows 时静默启动手账后台，省去每次手动双击。只对绑定本机 Kazumi 路径的账号生效，其他账号不会改动这台电脑的启动项。</small>
-              <small id="launchAtLoginHint">正在检查本机绑定…</small>
+              <small>登录 Windows 时静默启动手账后台，省去每次手动双击。只对绑定本机 Kazumi 路径的账号生效，其他账号不会改动这台电脑的启动项；首次开启时会绑定当前本机路径。</small>
+              <small id="launchAtLoginHint" class="setting-status">正在检查本机绑定…</small>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="launchAtLoginInput" />
@@ -815,7 +785,7 @@
           <div class="setting-row">
             <span>
               <strong>Kazumi 数据</strong>
-              <small id="kazumiPath">正在查找…</small>
+              <small id="kazumiPath" class="setting-status is-path">正在查找…</small>
             </span>
             <span class="read-only-badge">收藏同步</span>
           </div>
@@ -853,8 +823,8 @@
           <div class="setting-row stacked sharing-settings">
             <span>
               <strong>坚果云多端同步</strong>
-              <small>把当前账号同步到坚果云，换台电脑填入同一个“云端账号标识”就能接着用。默认只传手账数据，不含封面和角色缓存；打开上方“一并推送 Kazumi 收藏”后才会额外上传 Kazumi 收藏库。</small>
-              <small id="webdavStatus">正在读取坚果云状态…</small>
+              <small>把当前账号同步到坚果云，换台电脑填入同一个“云端账号标识”就能接着用。默认只传手账数据，不含封面、角色资料等缓存；打开上方“一并推送 Kazumi 收藏”后才会额外上传 Kazumi 收藏库。填写 WebDAV 地址、账号和应用密码后保存；密码只保存在当前设备。</small>
+              <small id="webdavStatus" class="setting-status">正在读取坚果云状态…</small>
             </span>
             <div class="sharing-workflow">
               <section class="sharing-step">
@@ -887,8 +857,8 @@
           <div class="setting-row stacked sharing-settings">
             <span>
               <strong>好友共享（Syncthing）</strong>
-              <small>借用 Syncthing 的共享文件夹，把当前账号的快照发布给另一台设备或好友。只同步已发布的快照，Kazumi 数据库本身不会被传出去。先运行“设置共享同步.cmd”，再把脚本创建的 shared 文件夹填在下方。</small>
-              <small id="sharingStatus">正在读取共享状态…</small>
+              <small>借用 Syncthing 的共享文件夹，把当前账号的快照发布给另一台设备或好友。只同步已发布的快照，Kazumi 数据库本身不会被传出去。先运行“设置共享同步.cmd”，再把脚本创建的 shared 文件夹填在下方；其他账号默认按需加载，常驻账号每 30 分钟刷新一次。</small>
+              <small id="sharingStatus" class="setting-status">正在读取共享状态…</small>
             </span>
             <div class="sharing-workflow">
               
@@ -914,6 +884,70 @@
         </div>
         <div class="modal-actions">
           <button class="primary-button" type="button" id="saveSettings">保存设置</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal theme-editor-modal" id="themeEditorModal">
+      <form class="modal-frame theme-editor-frame" id="themeEditorForm">
+        <button type="button" class="modal-close" id="themeEditorClose" aria-label="关闭">×</button>
+        <div class="theme-editor-scroll">
+        <p class="eyebrow">THEME STUDIO</p>
+        <h2 id="themeEditorTitle">新建主题</h2>
+        <p class="page-subtitle" id="themeEditorSubtitle">从当前外观开始，保存后立即应用。</p>
+
+        <label class="theme-editor-field">
+          <span>主题名称</span>
+          <input id="themeEditorName" type="text" maxlength="24" autocomplete="off" placeholder="例如：通勤、夜间阅读" />
+        </label>
+
+        <section class="theme-editor-section">
+          <h3>主题颜色</h3>
+          <div class="theme-picker theme-editor-picker" id="themeColorInput" role="radiogroup" aria-label="主题颜色">
+            <button type="button" class="theme-option" data-theme-value="forest" role="radio"><i style="--swatch:#2e6d4e"></i>森野绿</button>
+            <button type="button" class="theme-option" data-theme-value="ocean" role="radio"><i style="--swatch:#2784aa"></i>海蓝</button>
+            <button type="button" class="theme-option" data-theme-value="violet" role="radio"><i style="--swatch:#7c60ae"></i>暮紫</button>
+            <button type="button" class="theme-option" data-theme-value="amber" role="radio"><i style="--swatch:#aa7833"></i>暖琥珀</button>
+            <button type="button" class="theme-option" data-theme-value="rose" role="radio"><i style="--swatch:#b85670"></i>蔷薇粉</button>
+            <button type="button" class="theme-option" data-theme-value="indigo" role="radio"><i style="--swatch:#5269b6"></i>靛蓝</button>
+            <button type="button" class="theme-option" data-theme-value="teal" role="radio"><i style="--swatch:#23807a"></i>青碧</button>
+            <button type="button" class="theme-option" data-theme-value="slate" role="radio"><i style="--swatch:#58677a"></i>雾灰蓝</button>
+          </div>
+          <div class="theme-editor-custom">
+            <span class="theme-editor-custom-label">自定义颜色</span>
+            <span class="custom-theme-input">
+              <input id="customThemeColorInput" type="text" inputmode="text" maxlength="7" placeholder="#2E6D4E" aria-label="自定义主题色 HEX" title="输入 6 位 HEX 后按回车或点“应用”" />
+              <input id="customThemeColorPreview" type="color" aria-label="点击选择自定义主题色" title="点击取色" />
+              <button type="button" class="secondary-button compact-button" id="useCustomThemeButton">应用</button>
+              <span class="custom-theme-inuse hidden" id="customThemeInUse">使用中</span>
+            </span>
+          </div>
+        </section>
+
+        <section class="theme-editor-section">
+          <h3>背景图片</h3>
+          <div class="theme-editor-background">
+            <div class="theme-editor-bg-preview" id="themeEditorBackgroundPreview" aria-hidden="true"></div>
+            <span class="custom-background-input">
+              <input id="customBackgroundInput" type="file" accept="image/png,image/jpeg,image/webp" class="background-file-input" />
+              <label class="secondary-button compact-button" for="customBackgroundInput" id="chooseBackgroundButton">选择图片</label>
+              <span class="custom-background-name" id="customBackgroundName">未设置</span>
+              <button type="button" class="text-button danger" id="clearCustomBackgroundButton">移除</button>
+            </span>
+            <p class="theme-editor-note">选图后只在本机预览，点「保存并应用」才会上传；取消不会留下文件。</p>
+          </div>
+          <label class="theme-editor-slider">
+            <span>背景遮罩强度</span>
+            <input id="customBackgroundOpacityInput" type="range" min="0" max="100" step="1" aria-label="背景遮罩强度" />
+            <output id="customBackgroundOpacityValue">82%</output>
+          </label>
+        </section>
+
+        <p class="theme-editor-status" id="themeEditorStatus" role="status"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" id="themeEditorCancel">取消</button>
+          <button type="submit" class="primary-button" id="themeEditorSave">保存并应用</button>
         </div>
       </form>
     </dialog>
@@ -1017,22 +1051,22 @@
       </form>
     </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261102-settings-help-2" defer></script>
-    <script src="/modules/core.js?v=20261102-light-status" defer></script>
+    <script src="/schedule.js?v=20261104-airing-progress" defer></script>
+    <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261025-shutdown" defer></script>
     <script src="/modules/collection.js?v=20261023-modules" defer></script>
-    <script src="/modules/presentation.js?v=sidebar-restore-20261030-20261029-sidebar-state" defer></script>
+    <script src="/modules/presentation.js?v=20261104-airing-progress" defer></script>
     <script src="/modules/collection-cards.js?v=20261023-modules" defer></script>
     <script src="/modules/composer.js?v=20261023-modules" defer></script>
     <script src="/modules/video-links.js?v=20261101-jump-history" defer></script>
-    <script src="/modules/details.js?v=20261101-detail-links" defer></script>
+    <script src="/modules/details.js?v=20261103-collection-map" defer></script>
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
-    <script src="/modules/lifecycle.js?v=20261102-light-status" defer></script>
-    <script src="/modules/settings.js?v=20261102-theme-ux" defer></script>
-    <script src="/modules/settings-help.js?v=20261102-settings-help-2" defer></script>
-    <script src="/modules/events.js?v=20261102-theme-ux" defer></script>
+    <script src="/modules/lifecycle.js?v=20261104-weekly-plan" defer></script>
+    <script src="/modules/settings.js?v=20261104-weekly-plan" defer></script>
+    <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
+    <script src="/modules/events.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

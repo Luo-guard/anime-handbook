@@ -12,14 +12,15 @@
     },
   };
 
-  function apply(settings = {}, accountId = "local") {
+  function apply(settings = {}, accountId = "local", options = {}) {
     const root = document.documentElement;
     root.dataset.theme = settings.theme_color || "forest";
     ["--green-950", "--green-900", "--green-800", "--green-700", "--green-600", "--green-500", "--green-100", "--green-50", "--theme-rgb", "--active-inset"].forEach(property => root.style.removeProperty(property));
     if (root.dataset.theme === "custom") applyCustomThemeColor(settings.custom_theme_color || "#2e6d4e");
     const enabled = settings.custom_background_enabled === true;
     root.classList.toggle("has-custom-background", enabled);
-    if (enabled) root.style.setProperty("--custom-background", `url('/api/background?profile=${encodeURIComponent(settings.active_theme_profile || "default")}&account=${encodeURIComponent(accountId)}&v=${Number(settings.custom_background_version) || 0}')`);
+    const backgroundUrl = options.backgroundUrl || `/api/background?profile=${encodeURIComponent(settings.active_theme_profile || "default")}&account=${encodeURIComponent(accountId)}&v=${Number(settings.custom_background_version) || 0}`;
+    if (enabled) root.style.setProperty("--custom-background", `url('${backgroundUrl}')`);
     else root.style.removeProperty("--custom-background");
     root.style.setProperty("--background-overlay-opacity", `${Math.min(100, Math.max(0, Number(settings.custom_background_overlay_opacity ?? 82))) / 100}`);
   }
@@ -49,6 +50,8 @@
     try {
       const appearance = JSON.parse(initial.textContent);
       apply(appearance.settings, appearance.account_id);
+      // 服务端可能已经随机选过主题；启动流程要用同一个结果，否则会闪一下再跳。
+      window.handbookInitialAppearance = appearance;
     } catch (error) {
       console.warn("初始外观设置无法读取", error);
     }

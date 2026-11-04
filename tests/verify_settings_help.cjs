@@ -38,6 +38,39 @@ const harness = [
     const button = row.locator('.setting-help');
     const popover = page.locator('#settingHelpPopover');
 
+    // 分区导语也收进标题问号，正文默认不显示。
+    assert.equal(await page.locator('.settings-lead').isVisible(), false, 'section lead is collapsed');
+    const themeHelp = page.locator('.settings-section-title', { hasText: '主题' }).locator('.setting-help');
+    assert.equal(await themeHelp.count(), 1, 'section title gets a help button');
+    await themeHelp.click();
+    await page.waitForTimeout(200);
+    assert.match(await popover.innerText(), /点卡片立即切换/, 'section help carries the lead text');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+
+    // 共享/同步的编号步骤说明同样收起。
+    const step = page.locator('.sharing-step-heading').first();
+    assert.equal(await step.locator('.setting-help').count(), 1, 'sharing step gets a help button');
+    assert.equal(await step.locator('small').isVisible(), false, 'step description is collapsed');
+    await step.locator('.setting-help').click();
+    await page.waitForTimeout(200);
+    assert.match(await popover.innerText(), /应用密码/, 'step help carries its description');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+
+    // 站点编辑器的字段级说明也收起。
+    const siteLabel = page.locator('.bgm-source-editor label', { has: page.locator('#bgmSourceSiteInput') });
+    assert.equal(await siteLabel.locator('small').isVisible(), false, 'field hint is collapsed');
+    await siteLabel.locator('.setting-help').click();
+    await page.waitForTimeout(200);
+    assert.match(await popover.innerText(), /用于打开番剧详情页/, 'field help carries its hint');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+
+    // 运行时状态不是说明，必须继续可见。
+    assert.equal(await page.locator('#launchAtLoginHint').isVisible(), true, 'launch binding status stays visible');
+    assert.equal(await page.locator('#kazumiPath').isVisible(), true, 'local Kazumi path stays visible');
+
     // 悬停出现，移开消失。
     await button.hover();
     await page.waitForTimeout(250);

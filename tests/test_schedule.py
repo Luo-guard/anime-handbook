@@ -45,6 +45,24 @@ class ScheduleTest(unittest.TestCase):
                 service._refresh("202610")
                 self.assertEqual(len(queries), calls)
 
+    def test_airtime_index_uses_latest_local_cache_without_network(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "202607.json").write_text(json.dumps({"items": [
+                {"id": 1, "kind": "weekly", "source_time": "20:00~"},
+            ]}), encoding="utf-8")
+            (root / "202610.json").write_text(json.dumps({"items": [
+                {"id": 1, "kind": "weekly", "source_time": "21:00~"},
+                {"id": 2, "kind": "weekly", "source_time": ""},
+                {"id": 3, "kind": "network", "source_time": "20:00~"},
+            ]}), encoding="utf-8")
+            service = schedule.ScheduleService(root)
+            with patch.object(service, "fetch", side_effect=AssertionError("must not use the network")):
+                index = service.airtime_index()
+            self.assertEqual(index[1]["source_time"], "21:00~", "newest season wins")
+            self.assertNotIn(2, index, "items without a clock are skipped")
+            self.assertNotIn(3, index, "network releases are not weekly slots")
+
     def test_season_number_spellings_share_one_identity(self):
         names = ["佐佐木 第二季", "佐佐木第2期", "佐佐木 Season 2", "佐佐木 Season２", "佐佐木Ⅱ"]
         self.assertEqual(len({schedule.normalized_title(name) for name in names}), 1)

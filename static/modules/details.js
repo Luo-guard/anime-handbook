@@ -339,12 +339,32 @@ async function updateCustomMembership(collectionId, checked) {
     }
     renderTabs();
     renderCollection();
-    closeCustomMoveMenu();
-    toast(checked ? "已加入自定义收藏夹" : "已移出自定义收藏夹");
+    // 菜单保持打开：一部番经常要同时放进好几个收藏夹，关掉就得重新点开。
+    syncCustomMoveMenuState();
+    const mapped = Number(result.anime?.mapped_category) || 0;
+    if (checked && mapped) {
+      toast(
+        `已加入自定义收藏夹，并同步到 Kazumi「${typeof customCollectionCategoryName === "function" ? customCollectionCategoryName(mapped) : "收藏夹"}」`,
+      );
+    } else if (checked) {
+      toast("已加入自定义收藏夹");
+    } else {
+      toast("已移出自定义收藏夹");
+    }
   } catch (error) {
     toast(error.message, "error");
-    closeCustomMoveMenu();
   }
+}
+
+// 加入/移出后只更新菜单里的勾选状态，不销毁菜单。
+function syncCustomMoveMenuState() {
+  const menu = $("#customMoveMenu");
+  if (!menu) return;
+  const anime = state.moveAnime;
+  const membership = new Set((anime?.custom_collection_ids || []).map(Number));
+  $$(".move-menu-check", menu).forEach((input) => {
+    input.checked = membership.has(Number(input.dataset.collectionId));
+  });
 }
 
 function closeCustomMoveMenu() {
@@ -364,7 +384,12 @@ function openCustomMoveMenu(animeId, anchor) {
   menu.id = "customMoveMenu";
   const membership = new Set((anime.custom_collection_ids || []).map(Number));
   const list = state.custom_collections.length
-    ? state.custom_collections.map((collection) => `
+    ? state.custom_collections.map((collection) => {
+        const mapped = Number(collection.kazumi_category) || 0;
+        const mapLabel = mapped
+          ? `<em class="move-menu-map">→ ${escapeHtml(typeof customCollectionCategoryName === "function" ? customCollectionCategoryName(mapped) : "Kazumi")}</em>`
+          : "";
+        return `
         <label class="move-menu-item">
           <input
             type="checkbox"
@@ -372,9 +397,10 @@ function openCustomMoveMenu(animeId, anchor) {
             data-collection-id="${collection.id}"
             ${membership.has(Number(collection.id)) ? "checked" : ""}
           />
-          <span>${escapeHtml(collection.name)}</span>
+          <span class="move-menu-name">${escapeHtml(collection.name)}${mapLabel}</span>
         </label>
-      `).join("")
+      `;
+      }).join("")
     : `<div class="move-menu-empty">还没有自定义收藏夹</div>`;
   menu.innerHTML = `
     <div class="move-menu-title">移入自定义收藏夹</div>

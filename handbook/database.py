@@ -13,7 +13,13 @@ import sqlite3
 import tempfile
 import threading
 from datetime import timedelta
-from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso)
+from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso,
+    normalize_kazumi_category,
+)
+
+# 区分“不修改这个字段”和“把它改成 None（不映射）”。
+_UNSET = object()
+
 
 class HandbookDB:
     def __init__(self, path: Path = DB_PATH, *, asset_root: Path | None = None) -> None:
@@ -197,7 +203,8 @@ class HandbookDB:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    kazumi_category INTEGER
                 );
 
                 CREATE TABLE IF NOT EXISTS custom_collection_items (
@@ -305,6 +312,12 @@ class HandbookDB:
             }
             if "kind" not in video_link_columns:
                 db.execute("ALTER TABLE video_links ADD COLUMN kind TEXT NOT NULL DEFAULT 'video'")
+            # 自定义收藏夹 → Kazumi 收藏夹的映射（NULL 表示不映射）。
+            custom_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(custom_collections)").fetchall()
+            }
+            if "kazumi_category" not in custom_columns:
+                db.execute("ALTER TABLE custom_collections ADD COLUMN kazumi_category INTEGER")
             event_schema = db.execute(
                 "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'events'"
             ).fetchone()["sql"]
@@ -445,6 +458,11 @@ class HandbookDB:
                 "custom_background_version": 0,
                 "custom_background_overlay_opacity": 82,
                 "active_theme_profile": "default",
+                # 打开/刷新时从已保存的方案里随机挑一套（只影响显示）。
+                "theme_random_on_open": False,
+                # 按星期指定主题（1=周一…7=周日）；开启后优先于随机主题。
+                "theme_weekly_plan_enabled": False,
+                "theme_weekly_plan": {},
                 "theme_profiles": [
                     {"id": "default", "name": "默认主题", "theme_color": "forest", "custom_theme_color": "#2e6d4e", "custom_background_enabled": False, "custom_background_version": 0, "custom_background_overlay_opacity": 82}
                 ],
@@ -645,7 +663,7 @@ class HandbookDB:
         with self.connect() as db:
             rows = db.execute(
                 """
-                SELECT c.id, c.name, c.created_at, c.updated_at,
+                SELECT c.id, c.name, c.created_at, c.updated_at, c.kazumi_category,
                     COUNT(a.id) AS count
                 FROM custom_collections c
                 LEFT JOIN custom_collection_items i ON i.collection_id = c.id
@@ -656,18 +674,21 @@ class HandbookDB:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def create_custom_collection(self, name: str) -> dict[str, Any]:
+    def create_custom_collection(
+        self, name: str, kazumi_category: Any = None
+    ) -> dict[str, Any]:
         name = name.strip()
         if not name:
             raise ValueError("收藏夹名称不能为空")
+        target = normalize_kazumi_category(kazumi_category)
         stamp = now_iso()
         with self._write_lock, self.connect() as db:
             cursor = db.execute(
                 """
-                INSERT INTO custom_collections(name, created_at, updated_at)
-                VALUES (?, ?, ?)
+                INSERT INTO custom_collections(name, created_at, updated_at, kazumi_category)
+                VALUES (?, ?, ?, ?)
                 """,
-                (name, stamp, stamp),
+                (name, stamp, stamp, target),
             )
             collection_id = int(cursor.lastrowid)
         collection = self.get_custom_collection(collection_id)
@@ -681,20 +702,34 @@ class HandbookDB:
                 return collection
         return None
 
-    def rename_custom_collection(
-        self, collection_id: int, name: str
+    def update_custom_collection(
+        self,
+        collection_id: int,
+        *,
+        name: str | None = None,
+        kazumi_category: Any = _UNSET,
     ) -> dict[str, Any]:
-        name = name.strip()
-        if not name:
-            raise ValueError("收藏夹名称不能为空")
+        """改名与 Kazumi 映射可以分开改，也可以一起改。"""
+        assignments: list[str] = []
+        values: list[Any] = []
+        if name is not None:
+            cleaned = name.strip()
+            if not cleaned:
+                raise ValueError("收藏夹名称不能为空")
+            assignments.append("name = ?")
+            values.append(cleaned)
+        if kazumi_category is not _UNSET:
+            assignments.append("kazumi_category = ?")
+            values.append(normalize_kazumi_category(kazumi_category))
+        if not assignments:
+            raise ValueError("没有需要修改的内容")
+        assignments.append("updated_at = ?")
+        values.append(now_iso())
+        values.append(collection_id)
         with self._write_lock, self.connect() as db:
             cursor = db.execute(
-                """
-                UPDATE custom_collections
-                SET name = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (name, now_iso(), collection_id),
+                f"UPDATE custom_collections SET {', '.join(assignments)} WHERE id = ?",
+                values,
             )
             if cursor.rowcount <= 0:
                 raise KeyError("自定义收藏夹不存在")
@@ -702,6 +737,11 @@ class HandbookDB:
         if not collection:
             raise KeyError("自定义收藏夹不存在")
         return collection
+
+    def rename_custom_collection(
+        self, collection_id: int, name: str
+    ) -> dict[str, Any]:
+        return self.update_custom_collection(collection_id, name=name)
 
     def delete_custom_collection(self, collection_id: int) -> bool:
         with self._write_lock, self.connect() as db:
@@ -847,15 +887,83 @@ class HandbookDB:
             db.execute("UPDATE ranking_boards SET updated_at = ? WHERE id = ?", (now_iso(), board_id))
         return self.get_ranking_board(board_id) or {}
 
+    @staticmethod
+    def _setting_flag(db: sqlite3.Connection, key: str) -> bool:
+        row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        if not row:
+            return False
+        try:
+            return bool(json.loads(row["value"]))
+        except (TypeError, json.JSONDecodeError):
+            return False
+
+    @staticmethod
+    def _queue_kazumi_status(
+        db: sqlite3.Connection, anime_id: int, status: int, stamp: str
+    ) -> int | None:
+        """按 save_collection 的同一协议写入 outbox，返回实际改为的分类。
+
+        已经是目标分类时返回 None：不用多写一条无意义的写回任务。
+        """
+        row = db.execute("SELECT * FROM anime WHERE id = ?", (anime_id,)).fetchone()
+        if not row:
+            return None
+        current = int(row["collection_type"] or 0)
+        if current == status:
+            return None
+        image = str(row["image_url"] or "")
+        subject = {
+            "id": anime_id,
+            "type": 2,
+            "name": str(row["name"] or ""),
+            "name_cn": str(row["name_cn"] or ""),
+            "summary": str(row["summary"] or ""),
+            "date": str(row["air_date"] or ""),
+            "images": {"large": image} if image else {},
+            "rating": {
+                "score": row["bgm_score"] or 0,
+                "rank": row["bgm_rank"] or 0,
+                "total": row["bgm_rating_total"] or 0,
+            },
+        }
+        db.execute(
+            "UPDATE anime SET collection_type = ?, updated_at = ? WHERE id = ?",
+            (status, stamp, anime_id),
+        )
+        db.execute(
+            """
+            INSERT INTO kazumi_outbox(anime_id, status, baseline, subject, revision)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(anime_id) DO UPDATE SET
+                status = excluded.status,
+                subject = excluded.subject,
+                revision = excluded.revision,
+                error = ''
+            """,
+            (anime_id, status, current, json.dumps(subject, ensure_ascii=False), stamp),
+        )
+        return status
+
     def add_to_custom_collection(
         self, collection_id: int, anime_id: int
     ) -> dict[str, Any]:
-        if not self.get_custom_collection(collection_id):
-            raise KeyError("自定义收藏夹不存在")
-        if not self.get_anime(anime_id):
-            raise KeyError("动漫不存在")
+        """加入自定义收藏夹；若该收藏夹映射到 Kazumi 收藏夹，顺带改分类并排队写回。
+
+        多个自定义收藏夹可以映射到同一个 Kazumi 收藏夹：往任一个里加都会把
+        该番改成那个分类。移出时不会回滚分类——否则移出一个映射夹就会把另一个
+        映射夹刚写好的状态抹掉。
+        """
         stamp = now_iso()
+        mapped: int | None = None
         with self._write_lock, self.connect() as db:
+            collection = db.execute(
+                "SELECT id, kazumi_category FROM custom_collections WHERE id = ?",
+                (collection_id,),
+            ).fetchone()
+            if not collection:
+                raise KeyError("自定义收藏夹不存在")
+            if not db.execute("SELECT 1 FROM anime WHERE id = ?", (anime_id,)).fetchone():
+                raise KeyError("动漫不存在")
             db.execute(
                 """
                 INSERT OR IGNORE INTO custom_collection_items(
@@ -868,7 +976,14 @@ class HandbookDB:
                 "UPDATE custom_collections SET updated_at = ? WHERE id = ?",
                 (stamp, collection_id),
             )
-        return self.get_anime(anime_id) or {}
+            target = collection["kazumi_category"]
+            if target in CATEGORY_NAMES and not self._setting_flag(db, "kazumi_read_only"):
+                mapped = self._queue_kazumi_status(db, anime_id, int(target), stamp)
+        anime = self.get_anime(anime_id) or {}
+        if mapped is not None:
+            # 前端据此提示“已同步到 Kazumi 的某个收藏夹”。
+            anime["mapped_category"] = mapped
+        return anime
 
     def remove_from_custom_collection(
         self, collection_id: int, anime_id: int

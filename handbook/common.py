@@ -11,6 +11,7 @@ import secrets
 import sqlite3
 import subprocess
 import sys
+import random
 import threading
 import tempfile
 import time
@@ -197,6 +198,21 @@ CATEGORY_NAMES = {
     4: "看过",
     5: "抛弃",
 }
+
+
+def normalize_kazumi_category(value: Any) -> int | None:
+    """把“映射到哪个 Kazumi 收藏夹”归一到 1-5 或 None（不映射）。"""
+    if value is None or value == "" or value == "none":
+        return None
+    if type(value) is bool:
+        raise ValueError("Kazumi 收藏夹映射无效")
+    try:
+        category = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("Kazumi 收藏夹映射无效") from None
+    if category not in CATEGORY_NAMES:
+        raise ValueError("Kazumi 收藏夹映射无效")
+    return category
 
 EPISODE_TYPE_NAMES = {
     0: "本篇",
@@ -449,12 +465,87 @@ def with_initial_visibility(html: str, settings: dict[str, Any]) -> str:
     return html
 
 
-def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str) -> str:
-    """Embed only the active account's appearance, before the blocking theme script."""
+# “打开时随机主题”的进程内记忆：只用来避免连续两次抽到同一套。
+_RANDOM_THEME_LOCK = threading.Lock()
+_LAST_RANDOM_THEME: str | None = None
+
+
+def pick_random_theme_profile(settings: dict[str, Any]) -> dict[str, Any] | None:
+    """从已保存的主题方案里挑一套；有多套时避开上一次抽到的。"""
+    global _LAST_RANDOM_THEME
+    profiles = [
+        item
+        for item in (settings.get("theme_profiles") or [])
+        if isinstance(item, dict) and str(item.get("id") or "")
+    ]
+    if not profiles:
+        return None
+    with _RANDOM_THEME_LOCK:
+        candidates = [item for item in profiles if str(item["id"]) != _LAST_RANDOM_THEME] or profiles
+        chosen = random.choice(candidates)
+        _LAST_RANDOM_THEME = str(chosen["id"])
+    return chosen
+
+
+def pick_weekly_theme_profile(settings: dict[str, Any], now: datetime | date | None = None) -> dict[str, Any] | None:
+    """按周计划取今天该用的方案；未指定或方案已不存在时返回 None。
+
+    键用 ISO 星期（1=周一…7=周日），与前端 ``getDay() || 7`` 保持一致。
+    """
+    if settings.get("theme_weekly_plan_enabled") is not True:
+        return None
+    plan = settings.get("theme_weekly_plan")
+    if not isinstance(plan, dict):
+        return None
+    weekday = (now or datetime.now()).isoweekday()
+    chosen_id = str(plan.get(str(weekday)) or "").strip()
+    if not chosen_id:
+        return None
+    for item in settings.get("theme_profiles") or []:
+        if isinstance(item, dict) and str(item.get("id") or "") == chosen_id:
+            return item
+    return None
+
+
+def _appearance_from_profile(profile: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "theme_color": profile.get("theme_color") or current.get("theme_color", "forest"),
+        "custom_theme_color": profile.get("custom_theme_color") or current.get("custom_theme_color", "#2e6d4e"),
+        "custom_background_enabled": profile.get("custom_background_enabled") is True,
+        "active_theme_profile": str(profile["id"]),
+        "custom_background_version": profile.get("custom_background_version") or 0,
+        "custom_background_overlay_opacity": profile.get(
+            "custom_background_overlay_opacity", 82
+        ),
+    }
+
+
+def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str, now: datetime | date | None = None) -> str:
+    """Embed only the active account's appearance, before the blocking theme script.
+
+    周计划优先于随机主题：今天指定了方案就用它；没指定就保持数据库里的方案，
+    不会退回随机。两者都在这里定下来，首屏第一帧即最终配色，避免二次切换。
+    """
     keys = ("theme_color", "custom_theme_color", "custom_background_enabled",
             "active_theme_profile", "custom_background_version", "custom_background_overlay_opacity")
-    payload = json.dumps({"settings": {key: settings[key] for key in keys if key in settings},
-                          "account_id": account_id}, ensure_ascii=True).replace("<", "\\u003c")
+    appearance = {key: settings[key] for key in keys if key in settings}
+    weekly_profile = pick_weekly_theme_profile(settings, now=now)
+    random_profile = None
+    if weekly_profile:
+        appearance.update(_appearance_from_profile(weekly_profile, appearance))
+    elif settings.get("theme_weekly_plan_enabled") is not True and settings.get("theme_random_on_open") is True:
+        random_profile = pick_random_theme_profile(settings)
+        if random_profile:
+            appearance.update(_appearance_from_profile(random_profile, appearance))
+    payload = json.dumps(
+        {
+            "settings": appearance,
+            "account_id": account_id,
+            "weekly_theme_profile": str(weekly_profile["id"]) if weekly_profile else None,
+            "random_theme_profile": str(random_profile["id"]) if random_profile else None,
+        },
+        ensure_ascii=True,
+    ).replace("<", "\\u003c")
     marker = '<script id="initialAppearance" type="application/json">{}</script>'
     html = html.replace(marker, f'<script id="initialAppearance" type="application/json">{payload}</script>', 1)
     return with_initial_visibility(html, settings)

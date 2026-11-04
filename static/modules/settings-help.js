@@ -82,67 +82,93 @@ function settingHelpAvailable() {
     && typeof document.querySelectorAll === "function";
 }
 
+// 说明可能挂在设置行、共享步骤标题、站点编辑器的字段标签或分区标题上。
+// 统一收进标题右侧的问号；带 id 的是运行时状态，必须继续可见。
+function appendSettingHelp(anchor, title, sources) {
+  if (!anchor || !title || !sources?.length) return;
+  if (anchor.querySelector(".setting-help")) return;
+  const visibleSources = sources.filter((node) => node && !node.id);
+  if (!visibleSources.length) return;
+  const label = title.textContent.trim();
+  visibleSources.forEach((source) => source.classList.add("setting-help-source"));
+  // 用 span 而不是 <button>：整行/整个标签是 <label>，可聚焦的 <button>
+  // 会抢走 label 与控件的关联，导致点开关没反应。span 不参与 label 关联。
+  const button = document.createElement("span");
+  button.className = "setting-help";
+  button.textContent = "?";
+  button.dataset.helpTitle = label;
+  button.setAttribute("role", "button");
+  button.setAttribute("tabindex", "0");
+  button.setAttribute("aria-label", `查看“${label}”的说明`);
+  button.setAttribute("aria-expanded", "false");
+  settingHelpSources.set(button, visibleSources);
+  // 点问号不应该顺带切换同一行的开关。
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (settingHelpPinned && settingHelpButton === button) {
+      closeSettingHelp(true);
+      return;
+    }
+    settingHelpPinned = false;
+    openSettingHelp(button, true);
+  });
+  button.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (settingHelpPinned && settingHelpButton === button) closeSettingHelp(true);
+    else {
+      settingHelpPinned = false;
+      openSettingHelp(button, true);
+    }
+  });
+  button.addEventListener("pointerenter", () => {
+    if (!settingHelpPinned) openSettingHelp(button, false);
+  });
+  button.addEventListener("pointerleave", () => {
+    if (!settingHelpPinned) scheduleSettingHelpClose();
+  });
+  button.addEventListener("focus", () => {
+    if (!settingHelpPinned) openSettingHelp(button, false);
+  });
+  button.addEventListener("blur", () => {
+    if (!settingHelpPinned) closeSettingHelp();
+  });
+  anchor.append(button);
+}
+
 function setupSettingHelp() {
   if (!settingHelpAvailable()) return;
+  // 普通设置行：标题下直接跟一个或多个 <small>。
   $$("#settingsModal .setting-row").forEach((row) => {
-    if (row.querySelector(".setting-help")) return;
     const firstSmall = row.querySelector("small");
     const title = firstSmall?.parentElement?.querySelector("strong");
     if (!firstSmall || !title) return;
-    const label = title.textContent.trim();
-    // 同一行标题下可能有多段说明，全部收起并由问号统一展示；
-    // 带 id 的是运行时状态（如“已连接坚果云”），必须继续可见。
-    const sources = [...title.parentElement.querySelectorAll(":scope > small")].filter((node) => !node.id);
-    sources.forEach((source) => source.classList.add("setting-help-source"));
-    // 用 span 而不是 <button>：整行是 <label>，可聚焦的 <button> 会抢走
-    // label 与开关的关联，导致点开关没反应。span 不会参与 label 关联。
-    const button = document.createElement("span");
-    button.className = "setting-help";
-    button.textContent = "?";
-    button.dataset.helpTitle = label;
-    button.setAttribute("role", "button");
-    button.setAttribute("tabindex", "0");
-    button.setAttribute("aria-label", `查看“${label}”的说明`);
-    button.setAttribute("aria-expanded", "false");
-    settingHelpSources.set(button, sources);
-    // 点问号不应该顺带切换同一行的开关。
-    button.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (settingHelpPinned && settingHelpButton === button) {
-        closeSettingHelp(true);
-        return;
-      }
-      settingHelpPinned = false;
-      openSettingHelp(button, true);
-    });
-    button.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (settingHelpPinned && settingHelpButton === button) closeSettingHelp(true);
-      else {
-        settingHelpPinned = false;
-        openSettingHelp(button, true);
-      }
-    });
-    button.addEventListener("pointerenter", () => {
-      if (!settingHelpPinned) openSettingHelp(button, false);
-    });
-    button.addEventListener("pointerleave", () => {
-      if (!settingHelpPinned) scheduleSettingHelpClose();
-    });
-    button.addEventListener("focus", () => {
-      if (!settingHelpPinned) openSettingHelp(button, false);
-    });
-    button.addEventListener("blur", () => {
-      if (!settingHelpPinned) closeSettingHelp();
-    });
-    title.append(button);
+    // 只取标题同级的说明，避免把子编辑器里的说明也吞掉。
+    appendSettingHelp(title, title, [...title.parentElement.querySelectorAll(":scope > small")]);
+  });
+  // 共享/同步的编号步骤：说明在 <span> 里的 <small>。
+  $$("#settingsModal .sharing-step-heading").forEach((heading) => {
+    const title = heading.querySelector(":scope > span > strong") || heading.querySelector("strong");
+    if (!title) return;
+    appendSettingHelp(title, title, [...heading.querySelectorAll(":scope > span > small")]);
+  });
+  // Bangumi 站点编辑器：站点地址/API 地址各自的小字。
+  $$("#settingsModal .bgm-source-editor > label").forEach((label) => {
+    const title = label.querySelector(":scope > span");
+    if (!title) return;
+    appendSettingHelp(title, title, [...label.querySelectorAll(":scope > small")]);
+  });
+  // 分区标题下的整段导语（如“主题”页顶部那段），收进标题右侧的问号。
+  $$("#settingsModal .settings-section-title").forEach((title) => {
+    const lead = title.nextElementSibling;
+    if (!lead?.classList?.contains("settings-lead")) return;
+    appendSettingHelp(title, title, [lead]);
   });
 }
 

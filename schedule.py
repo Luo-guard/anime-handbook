@@ -29,18 +29,29 @@ def season_key(value: str) -> str:
 
 
 def broadcast_slot(weekday: int, text: str) -> dict:
-    """Source uses broadcast hours such as Monday 25:30 (Tuesday 01:30)."""
+    """Source uses Japanese broadcast hours such as Monday 25:30 (Tuesday 01:30).
+
+    Keep both clocks: ``time`` is the source's Japan time, ``bj_time`` is the
+    same instant converted to Beijing time. ``air_offset`` is minutes since the
+    broadcast day's 00:00 JST, which pairs with Bangumi's per-episode airdate.
+    """
+    empty = {"weekday": weekday, "time": "", "time_order": 9999, "calendar_weekday": weekday,
+             "bj_time": "", "bj_weekday": weekday, "air_offset": None, "source_weekday": weekday}
     match = re.search(r"(?<!\d)(\d{1,2}):(\d{2})", text)
     if not match or not 1 <= weekday <= 7:
-        return {"weekday": weekday, "time": "", "time_order": 9999, "calendar_weekday": weekday}
+        return empty
     hour, minute = map(int, match.groups())
     if hour > 47 or minute > 59:
-        return {"weekday": weekday, "time": "", "time_order": 9999, "calendar_weekday": weekday}
+        return empty
     minutes = hour * 60 + minute
     day = (weekday - 1 + (minutes - 240) // 1440) % 7 + 1
     actual = (weekday - 1 + minutes // 1440) % 7 + 1
+    beijing = minutes - 60
     return {"weekday": day, "calendar_weekday": actual,
-            "time": f"{hour % 24:02d}:{minute:02d}", "time_order": (minutes - 240) % 1440}
+            "time": f"{hour % 24:02d}:{minute:02d}", "time_order": (minutes - 240) % 1440,
+            "bj_time": f"{beijing % 1440 // 60:02d}:{beijing % 60:02d}",
+            "bj_weekday": (weekday - 1 + beijing // 1440) % 7 + 1,
+            "air_offset": minutes, "source_weekday": weekday}
 
 
 class Node:
@@ -255,6 +266,7 @@ def parse_bangumi(document) -> list[dict]:
             rows.append({"id": int(item["id"]), "title": title,
                          "aliases": [title, item.get("name", "")], "kind": "weekly",
                          "weekday": weekday, "calendar_weekday": weekday, "time": "", "source_time": "", "time_order": 9999,
+                         "bj_time": "", "bj_weekday": weekday, "air_offset": None, "source_weekday": weekday,
                          "score": rating.get("score", 0), "votes": rating.get("total", 0),
                          "votes_known": "total" in rating,
                          "image_url": (item.get("images") or {}).get("large", ""),
@@ -314,7 +326,7 @@ def merge_sources(yuc, bangumi, supplemental=()):
 
 class ScheduleService:
     TTL = 6 * 60 * 60
-    SCHEMA_VERSION = 6
+    SCHEMA_VERSION = 7
 
     def __init__(self, root: Path):
         self.root = root
@@ -379,6 +391,44 @@ class ScheduleService:
                 threading.Thread(target=self._refresh, args=(season,), daemon=True).start()
             return {**(data or {"season": season, "items": [], "fetched_at": 0}),
                     "loading": season in self.jobs, "error": self.errors.get(season, "")}
+
+    def airtime_index(self):
+        """bgm id -> the newest cached schedule row that has a broadcast clock.
+
+        Reads only local season caches; no network calls. The cache is keyed by
+        file mtimes so a refreshed season is picked up on the next request.
+        """
+        try:
+            files = sorted((p for p in self.root.glob("*.json") if p.is_file()),
+                           key=lambda p: p.name, reverse=True)
+        except OSError:
+            return {}
+        signature = []
+        for path in files:
+            try:
+                signature.append((str(path), path.stat().st_mtime_ns))
+            except OSError:
+                continue
+        signature = tuple(signature)
+        with self.lock:
+            cached = getattr(self, "_airtime_cache", None)
+            if cached and cached[0] == signature:
+                return cached[1]
+        index = {}
+        for path in files:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            for item in data.get("items", []):
+                if not isinstance(item, dict) or item.get("kind") != "weekly":
+                    continue
+                if not item.get("id") or not item.get("source_time"):
+                    continue
+                index.setdefault(int(item["id"]), item)
+        with self.lock:
+            self._airtime_cache = (signature, index)
+        return index
 
     def search_metadata(self, query):
         """Cache candidate data, not a hand-maintained title-to-ID override."""

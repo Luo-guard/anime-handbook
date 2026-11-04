@@ -15,6 +15,7 @@ import mimetypes
 import os
 from urllib.parse import parse_qs
 import re
+from datetime import date, datetime, timedelta
 from schedule import season_key
 import secrets
 import time
@@ -24,6 +25,7 @@ from .common import (BACKGROUND_ROOT, CATEGORY_NAMES, DATA_ROOT, MAX_JSON_BODY_B
 from .common import normalize_custom_search_links, normalize_detail_links, normalize_link_sync, normalize_schedule_grouping
 from .jumps import normalize_jump
 from .metadata import SyncService
+from .airing import BEIJING, compute_airing
 
 SCHEDULE = ScheduleService(DATA_ROOT / "schedule")
 
@@ -33,6 +35,36 @@ def _desktop():
 
 class RequestHandler(BaseHTTPRequestHandler):
     server_version = "AnimeHandbook/1.0"
+
+    @staticmethod
+    def _with_airing(animes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Attach schedule-based progress to collection items (meaning A).
+
+        Uses only the local season caches; no external requests. Items without a
+        cached clock fall back to date precision, and only for recent premieres
+        so a 500-item collection stays cheap.
+        """
+        index = SCHEDULE.airtime_index()
+        now = datetime.now(BEIJING)
+        cutoff = now.date() - timedelta(days=200)
+        for anime in animes:
+            try:
+                anime_id = int(anime.get("id") or 0)
+            except (TypeError, ValueError):
+                continue
+            slot = index.get(anime_id)
+            if slot is None:
+                try:
+                    premiere = date.fromisoformat(str(anime.get("air_date") or "")[:10])
+                except ValueError:
+                    continue
+                if premiere < cutoff:
+                    continue
+                slot = {}
+            result = compute_airing(anime, slot, now)
+            if result:
+                anime["airing"] = result
+        return animes
 
     @property
     def schedule(self):
@@ -146,7 +178,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "active_profile": self.profiles.profile(),
                         "sharing": self.sharing.status(),
                         "webdav": self.webdav.status(),
-                        "animes": self.database.list_anime(),
+                        "animes": self._with_airing(self.database.list_anime()),
                         "custom_collections": self.database.list_custom_collections(),
                         "ranking_boards": self.database.list_ranking_boards(),
                         "ranking_templates": self.database.list_ranking_templates(),
@@ -329,7 +361,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif path == "/api/collection-state":
                 self.send_json(
                     {
-                        "animes": self.database.list_anime(),
+                        "animes": self._with_airing(self.database.list_anime()),
                         "custom_collections": self.database.list_custom_collections(),
                     }
                 )
@@ -539,7 +571,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
             elif path == "/api/custom-collections":
                 collection = self.database.create_custom_collection(
-                    str(body.get("name") or "")
+                    str(body.get("name") or ""),
+                    body.get("kazumi_category"),
                 )
                 self.send_json(
                     {
@@ -758,6 +791,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "custom_background_enabled",
                     "custom_background_overlay_opacity",
                     "active_theme_profile",
+                    "theme_random_on_open",
+                    "theme_weekly_plan_enabled",
+                    "theme_weekly_plan",
                     "theme_profiles",
                     "category_episode_visibility",
                     "category_rating_visibility",
@@ -825,7 +861,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             if value not in {"time", "score", "popularity"}:
                                 raise ValueError("周表排序无效")
                         elif key == "schedule_card_fields":
-                            fields = {"tags", "votes", "release", "score", "collection", "airtime"}
+                            fields = {"tags", "votes", "release", "score", "collection", "airtime", "progress"}
                             if not isinstance(value, dict) or any(item not in fields or type(flag) is not bool for item, flag in value.items()):
                                 raise ValueError("周表卡片显示设置无效")
                             value = {**self.database.get_settings().get(key, {}), **value}
@@ -978,6 +1014,23 @@ class RequestHandler(BaseHTTPRequestHandler):
                             value = [item for item in value if isinstance(item, dict) and item.get("id") and item.get("name")]
                         elif key == "active_theme_profile":
                             value = str(value or "default")
+                        elif key == "theme_random_on_open":
+                            value = bool(value)
+                        elif key == "theme_weekly_plan_enabled":
+                            value = bool(value)
+                        elif key == "theme_weekly_plan":
+                            if not isinstance(value, dict):
+                                raise ValueError("周计划格式错误")
+                            plan = {}
+                            for day in range(1, 8):
+                                item = value.get(str(day), "")
+                                if item in (None, ""):
+                                    plan[str(day)] = ""
+                                elif isinstance(item, str):
+                                    plan[str(day)] = item.strip()[:64]
+                                else:
+                                    raise ValueError("周计划格式错误")
+                            value = plan
                         elif key == "collection_rating_source":
                             if value not in {"bgm", "personal"}:
                                 raise ValueError("评分来源无效")
@@ -1075,9 +1128,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "board": board, "boards": self.database.list_ranking_boards()})
             elif path.startswith("/api/custom-collections/"):
                 collection_id = int(path.rsplit("/", 1)[1])
-                collection = self.database.rename_custom_collection(
-                    collection_id,
-                    str(body.get("name") or ""),
+                # 只传了哪个字段就改哪个：改名和改映射互不影响。
+                changes: dict[str, Any] = {}
+                if "name" in body:
+                    changes["name"] = str(body.get("name") or "")
+                if "kazumi_category" in body:
+                    changes["kazumi_category"] = body.get("kazumi_category")
+                if not changes:
+                    raise ValueError("没有需要修改的内容")
+                collection = self.database.update_custom_collection(
+                    collection_id, **changes
                 )
                 self.send_json(
                     {

@@ -20,9 +20,16 @@ function episodeGroupSummary(group, watchedSet) {
 
 function episodeReleaseStatus(anime, group) {
   if (Number(group.type) !== 0) return "";
-  const aired = Math.max(0, Number(anime.aired_episode_count || 0));
-  if (!aired || aired >= group.count) return "";
-  return `<span class="episode-release-status"><i></i>更新至 ${aired} 集</span>`;
+  // 只认 Bangumi 逐集日期 + 周表放送时刻算出的进度，不再用“到日期就算已播”。
+  const airing = anime.airing;
+  if (!airing || !Number(airing.total)) return "";
+  const aired = Math.max(0, Number(airing.aired) || 0);
+  const total = Number(airing.total);
+  if (aired >= total) return "";
+  const next = airing.next_label
+    ? `<span class="episode-next-airing" title="北京时间">下集 ${escapeHtml(airing.next_label)}</span>`
+    : "";
+  return `<span class="episode-release-status" title="按 Bangumi 逐集播出日期与放送时刻（北京时间）计算"><i></i>已播 ${aired} / ${total}</span>${next}`;
 }
 
 function showCustomMoveButton() {
@@ -121,7 +128,10 @@ function hasEnabledQuickRecordActions() {
 }
 
 function applyTheme() {
-  window.handbookAppearance.apply(state.settings, state.active_profile?.id || "local");
+  // 主题编辑器里未保存的背景图只存在于内存，用 data URL 覆盖真实文件地址。
+  const preview = window.handbookThemePreview;
+  window.handbookAppearance.apply(state.settings, state.active_profile?.id || "local",
+    preview?.backgroundUrl ? { backgroundUrl: preview.backgroundUrl } : undefined);
 }
 
 function applyNoteComposerMode() {

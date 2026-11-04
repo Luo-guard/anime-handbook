@@ -35,6 +35,8 @@ const state = {
   noteThemes: new Set(["other"]),
   statusTimer: null,
   dataRevision: null,
+  weeklyPlanDay: null,
+  weeklyThemeProfile: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);

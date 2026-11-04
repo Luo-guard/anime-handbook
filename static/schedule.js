@@ -10,6 +10,7 @@ const scheduleCardFieldOptions = [
   ["score", "显示评分", "封面右上角的 Bangumi 评分。"],
   ["collection", "显示收藏状态", "封面左上角的在看、想看等收藏状态。"],
   ["airtime", "显示放送时间", "封面底部的具体放送时间；网络放送对应上线日期。"],
+  ["progress", "显示播出进度", "已收藏的番剧按逐集日程计算；未收藏的按首播日与每周放送时间推算，停播会偏差。"],
 ];
 
 function scheduleCardVisibility() {
@@ -220,8 +221,65 @@ async function loadSchedule(refresh = false) {
 
 function scheduleTimeLabel(item) {
   if (item.kind === "network") return item.release || "上线日期待公布";
-  if (!item.time) return scheduleSource() === "kazumi" ? "未提供具体时刻" : "时间待公布";
-  return `${item.calendar_weekday !== item.weekday ? "次日 " : ""}${item.time}`;
+  // 新缓存带北京时间；旧缓存只有日本时间，刷新季度后自动切换。
+  const clock = item.bj_time || item.time;
+  if (!clock) return scheduleSource() === "kazumi" ? "未提供具体时刻" : "时间待公布";
+  const day = item.bj_weekday ?? item.calendar_weekday;
+  return `${day !== item.weekday ? "次日 " : ""}${clock}`;
+}
+
+// 未收藏（或没有逐集日期）的番剧只能按首播日 + 每周放送时间推算。
+// 不请求接口，也不抓资源站；停播、总集篇会让它偏大。
+function schedulePremiereDate(item) {
+  const airDate = String(item.air_date || "").match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (airDate) return new Date(Number(airDate[1]), Number(airDate[2]) - 1, Number(airDate[3]));
+  const release = String(item.release || "").match(/(\d{1,2})\/(\d{1,2})/);
+  if (!release) return null;
+  const season = String(scheduleState.season || "");
+  let year = Number(season.slice(0, 4)) || new Date().getFullYear();
+  const seasonMonth = Number(season.slice(4, 6)) || new Date().getMonth() + 1;
+  const month = Number(release[1]);
+  // 冬季番（1 月季度）的 12 月首播属于上一年；其他季度跨年时属于下一年。
+  if (seasonMonth === 1 && month >= 10) year -= 1;
+  else if (month < seasonMonth - 6) year += 1;
+  return new Date(year, month - 1, Number(release[2]));
+}
+
+function scheduleEstimatedEpisode(item, now = new Date()) {
+  if (item.kind !== "weekly") return null;
+  const premiere = schedulePremiereDate(item);
+  if (!premiere || Number.isNaN(premiere.getTime())) return null;
+  const clock = String(item.source_time || "").match(/(\d{1,2}):(\d{2})/);
+  // 来源是日本时间，减 1 小时得到北京时间；没有时刻时按“那天过完”才算。
+  const firstAt = clock
+    ? new Date(premiere.getTime() + (Number(clock[1]) * 60 + Number(clock[2]) - 60) * 60000)
+    : new Date(premiere.getTime() + 86400000);
+  if (now < firstAt) return 0;
+  return Math.floor((now - firstAt) / (7 * 86400000)) + 1;
+}
+
+function scheduleProgress(item) {
+  if (item.kind !== "weekly") return null;
+  const anime = item.local_id ? state.animes.find((row) => row.id === item.local_id) : null;
+  const airing = anime?.airing;
+  if (airing && Number(airing.total) > 0) {
+    const aired = Math.max(0, Number(airing.aired) || 0);
+    const total = Number(airing.total);
+    return {
+      text: aired >= total ? `已播完 ${total} / ${total}` : `已播 ${aired} / ${total}`,
+      estimated: false,
+      detail: airing.next_label ? `下集 ${airing.next_label}（北京时间）` : "",
+      title: "按 Bangumi 逐集播出日期与放送时刻（北京时间）计算，不是资源站更新时间",
+    };
+  }
+  const episode = scheduleEstimatedEpisode(item);
+  if (episode === null) return null;
+  return {
+    text: episode > 0 ? `预计第 ${episode} 集` : "待开播",
+    estimated: true,
+    detail: "按首播日与每周放送时间推算，停播或总集篇会偏差",
+    title: "未收藏或缺少逐集日期，只能按首播日推算；停播会偏差",
+  };
 }
 
 function scheduleVotesLabel(item) {
@@ -237,13 +295,18 @@ function scheduleCard(item) {
   const release = item.kind === "weekly" ? (item.release ? `${item.release.replace(/~$/, "")} 起` : "") : item.platforms?.[0]?.name || "";
   const votesHtml = show.votes ? `<span>${scheduleVotesLabel(item)}</span>` : "";
   const releaseHtml = show.release && release ? `<span class="schedule-card-release">${escapeHtml(release)}</span>` : "";
+  const progress = show.progress ? scheduleProgress(item) : null;
+  const progressHtml = progress
+    ? `<div class="schedule-progress-row"><span class="schedule-progress${progress.estimated ? " is-estimated" : ""}" title="${escapeHtml(progress.title)}">${escapeHtml(progress.text)}</span></div>`
+    : "";
   return `<button type="button" class="anime-card schedule-card" data-schedule-key="${escapeHtml(item.key)}" aria-label="查看${escapeHtml(item.title)}的放送信息">
     <div class="poster-wrap">${item.image_url ? `<img src="${image}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'" />` : ""}
       ${show.score && Number(item.score) > 0 ? `<span class="poster-score">${Number(item.score).toFixed(1)}</span>` : ""}
       ${show.collection && category ? `<span class="schedule-collection-badge">${category.name}</span>` : ""}
-      ${show.airtime ? `<span class="schedule-airtime ${item.time || item.kind === "network" ? "" : "unknown"}">${escapeHtml(scheduleTimeLabel(item))}</span>` : ""}
+      ${show.airtime ? `<span class="schedule-airtime ${item.bj_time || item.time || item.kind === "network" ? "" : "unknown"}">${escapeHtml(scheduleTimeLabel(item))}</span>` : ""}
     </div><div class="card-body"><div class="card-title">${escapeHtml(item.title)}</div>
     ${show.tags ? `<p class="schedule-card-meta">${escapeHtml(item.kind === "network" ? item.release_note || "网络放送" : item.tags?.slice(0, 2).join(" · ") || "每周放送")}</p>` : ""}
+    ${progressHtml}
     ${votesHtml || releaseHtml ? `<div class="schedule-card-footer">${votesHtml}${releaseHtml}</div>` : ""}</div>
   </button>`;
 }
@@ -271,8 +334,8 @@ function renderSchedule() {
   if (selected.length > scheduleState.shown) $("#scheduleGrid").insertAdjacentHTML("beforeend", '<button type="button" class="secondary-button schedule-more" id="scheduleMore">继续展开本日番剧</button>');
   $("#scheduleMore")?.addEventListener("click", () => {scheduleState.shown += 30; renderSchedule();});
   $$("[data-schedule-key]", $("#scheduleGrid")).forEach((button) => button.onclick = () => showScheduleDetail(button.dataset.scheduleKey));
-  $("#scheduleSource").innerHTML = `<span>播出日按北京时间 04:00—次日 03:59 划分；时间采用来源页面标注，不代表字幕上线时间。</span><span>时间：<a href="https://yuc.wiki/${scheduleState.season}/" target="_blank" rel="noopener noreferrer">長門番堂</a> · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>　评分：Bangumi / Kazumi${data?.fetched_at ? `　缓存更新 ${new Date(data.fetched_at * 1000).toLocaleString("zh-CN")}` : ""}</span>`;
-  if (scheduleSource() === "kazumi") $("#scheduleSource").textContent = "来源：Kazumi / Bangumi 放送列表。仅提供星期，不提供具体放送时刻；不推算更新集数。";
+  $("#scheduleSource").innerHTML = `<span>播出日按北京时间 04:00—次日 03:59 划分；放送时间已换算为北京时间，不代表字幕上线时间。收藏进度按 Bangumi 逐集日程，未收藏的按首播日推算。</span><span>时间：<a href="https://yuc.wiki/${scheduleState.season}/" target="_blank" rel="noopener noreferrer">長門番堂</a> · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>　评分：Bangumi / Kazumi${data?.fetched_at ? `　缓存更新 ${new Date(data.fetched_at * 1000).toLocaleString("zh-CN")}` : ""}</span>`;
+  if (scheduleSource() === "kazumi") $("#scheduleSource").textContent = "来源：Kazumi / Bangumi 放送列表。仅提供星期，不提供具体放送时刻；未收藏作品的进度只能按日期估算。";
 }
 
 function scheduleStatusMarkup(statuses, name) {
@@ -309,7 +372,11 @@ function showScheduleDetail(key) {
   const scheduleLinks = buildDetailLinkItems(scheduleDetailLinks(), { id: item.id || null, title: keyword, site: siteBase })
     .map((entry) => `<a href="${escapeHtml(entry.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.label)}</a>`)
     .join("");
-  $("#scheduleDetail").innerHTML = `<p class="eyebrow">${item.kind === "network" ? "STREAMING RELEASE" : "WEEKLY AIRING"}</p><h2>${escapeHtml(item.title)}</h2><div class="schedule-detail-time">${item.kind === "weekly" ? `${scheduleDays[item.weekday - 1]} · ` : ""}${escapeHtml(scheduleTimeLabel(item))}</div><p>${escapeHtml(item.summary || "暂无匹配的 Bangumi 简介，可通过下方链接查看详细介绍。")}</p><div class="schedule-detail-facts"><span>评分 ${Number(item.score) > 0 ? Number(item.score).toFixed(1) : "暂无"}</span><span>${scheduleVotesLabel(item)}</span><span>${escapeHtml(item.release_note || "")}</span></div><div class="schedule-detail-links">${scheduleLinks}</div>${item.local_id && state.animes.some((a) => a.id === item.local_id) ? '<button type="button" class="primary-button" id="scheduleRecordProgress">记录观看进度</button>' : ""}`;
+  const progress = scheduleProgress(item);
+  const progressHtml = progress
+    ? `<div class="schedule-detail-progress${progress.estimated ? " is-estimated" : ""}" title="${escapeHtml(progress.title)}"><strong>${escapeHtml(progress.text)}</strong>${progress.detail ? `<span>${escapeHtml(progress.detail)}</span>` : ""}</div>`
+    : "";
+  $("#scheduleDetail").innerHTML = `<p class="eyebrow">${item.kind === "network" ? "STREAMING RELEASE" : "WEEKLY AIRING"}</p><h2>${escapeHtml(item.title)}</h2><div class="schedule-detail-time">${item.kind === "weekly" ? `${scheduleDays[item.weekday - 1]} · ` : ""}${escapeHtml(scheduleTimeLabel(item))}</div>${progressHtml}<p>${escapeHtml(item.summary || "暂无匹配的 Bangumi 简介，可通过下方链接查看详细介绍。")}</p><div class="schedule-detail-facts"><span>评分 ${Number(item.score) > 0 ? Number(item.score).toFixed(1) : "暂无"}</span><span>${scheduleVotesLabel(item)}</span><span>${escapeHtml(item.release_note || "")}</span></div><div class="schedule-detail-links">${scheduleLinks}</div>${item.local_id && state.animes.some((a) => a.id === item.local_id) ? '<button type="button" class="primary-button" id="scheduleRecordProgress">记录观看进度</button>' : ""}`;
   $("#scheduleRecordProgress")?.addEventListener("click", () => {$("#scheduleDetailModal").close(); openProgress(item.local_id);});
   if(item.id) {
     if(collectionEditingSupported()){
