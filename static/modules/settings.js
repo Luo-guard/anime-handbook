@@ -1031,7 +1031,7 @@ function syncSettingsNavigation(preview = false) {
   const tabs = new Map($$("[data-settings-tab]").map(button => [button.dataset.settingsTab, button]));
   const pageTabs = sidebarOrder().map(id => Object.keys(SETTINGS_PAGE_IDS).find(tab => SETTINGS_PAGE_IDS[tab] === id)).filter(Boolean);
   const nav = $("#settingsSideNav"), list = $(".settings-list");
-  ["theme", "interface", ...pageTabs.flatMap((tab) => (tab === "collection" ? ["collection", "detail"] : [tab])), "keyboard", "data", "sharing"].forEach(tab => {
+  ["main", ...pageTabs.flatMap((tab) => (tab === "collection" ? ["collection", "detail"] : [tab])), "keyboard", "data", "sharing"].forEach(tab => {
     const button = tabs.get(tab);
     if (!button) return;
     button.classList.toggle("hidden", Boolean(SETTINGS_PAGE_IDS[tab] && visibility[SETTINGS_PAGE_IDS[tab]] === false));
@@ -1039,13 +1039,11 @@ function syncSettingsNavigation(preview = false) {
     const group = $(`.settings-group[data-settings-group="${tab}"]`);
     if (group) list.append(group);
   });
-  if ([...tabs.values()].some(button => button.classList.contains("active") && button.classList.contains("hidden"))) switchSettingsTab("theme");
+  if ([...tabs.values()].some(button => button.classList.contains("active") && button.classList.contains("hidden"))) switchSettingsTab("main");
 }
 function switchSettingsTab(tab) {
   $$(".settings-group").forEach((group) => group.classList.toggle("hidden", group.dataset.settingsGroup !== tab));
   $$("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === tab));
-  // 主题页全部即时保存，底部「保存设置」在这里没有作用；其他页签照常显示。
-  $("#settingsModal").classList.toggle("settings-theme-tab", tab === "theme");
   $("#settingsModal").scrollTop = 0;
 }
 
@@ -1068,6 +1066,6 @@ function setupSettingsTabs() {
     settingsGroupsInitialized = true;
   }
   syncSettingsNavigation();
-  switchSettingsTab("theme");
+  switchSettingsTab("main");
 }
 

@@ -2572,7 +2572,6 @@ dialog::backdrop {
 
 /* 主题页只负责“选”，具体外观收进独立面板。 */
 .settings-lead { margin:0; padding:14px 17px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; line-height:1.7; }
-.settings-modal.settings-theme-tab > .modal-frame > .modal-actions { display:none; }
 .theme-profile-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(178px, 1fr)); gap:12px; padding:16px; border-bottom:1px solid var(--line); }
 .theme-card { display:flex; flex-direction:column; min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:13px; background:#fff; transition:border-color .15s, box-shadow .15s; }
 .theme-card.is-active { border-color:var(--green-700); box-shadow:0 0 0 2px rgb(var(--theme-rgb) / .14); }

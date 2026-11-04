@@ -102,15 +102,15 @@ const server = http.createServer((req, res) => {
     await page.waitForSelector('#settingsModal[open]');
     await page.waitForTimeout(300);
 
-    // 1) 主题页只留卡片；保存按钮在这一页隐藏。
-    assert.equal(await page.locator('#saveSettings').isVisible(), false, 'theme tab hides the footer save button');
+    // 1) 合并的主界面设置保留主题卡片与布局设置保存按钮。
+    assert.equal(await page.locator('#saveSettings').isVisible(), true, 'merged main tab keeps the layout save button');
     assert.equal(await page.locator('.theme-card-main').count(), 2, 'one card per saved profile');
     assert.equal(await page.locator('#newThemeCard').count(), 1, 'dashed new-theme card follows the list');
     assert.equal(await page.locator('.theme-card.is-active').getAttribute('data-theme-card'), 'default');
-    await page.click('[data-settings-tab="interface"]');
+    await page.click('[data-settings-tab="main"]');
     await page.waitForTimeout(150);
     assert.equal(await page.locator('#saveSettings').isVisible(), true, 'interface tab keeps the footer save button');
-    await page.click('[data-settings-tab="theme"]');
+    await page.click('[data-settings-tab="main"]');
     await page.waitForTimeout(150);
 
     // 2) 只剩一套时，所有删除按钮都禁用并说明原因。
@@ -257,7 +257,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'slate');
 
     assert.deepEqual(errors, [], 'no page errors');
-    console.log('Theme profiles: cards switch instantly, footer hidden, editor preview/cancel rollback, delayed background upload, duplicate guard, delete confirm, reload persistence passed.');
+    console.log('Theme profiles: cards switch instantly, merged settings footer visible, editor preview/cancel rollback, delayed background upload, duplicate guard, delete confirm, reload persistence passed.');
   } finally {
     await browser.close();
     server.close();

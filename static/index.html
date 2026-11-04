@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261104-schedule-card-unified" />
+  <link rel="stylesheet" href="/styles.css?v=20261104-main-settings" />
   </head>
   <body>
     <div class="app-shell">
@@ -344,8 +344,7 @@
         <h2>手账设置</h2>
         <div class="settings-layout">
           <aside class="settings-side-nav" id="settingsSideNav" aria-label="设置分类">
-<button type="button" class="active" data-settings-tab="theme">主题</button>
-<button type="button" data-settings-tab="interface">界面与启动</button>
+<button type="button" class="active" data-settings-tab="main">主界面设置</button>
 <button type="button" data-settings-tab="collection" data-page-label="collection">收藏夹</button>
 <button type="button" data-settings-tab="detail">番剧详情</button>
 <button type="button" data-settings-tab="schedule" data-page-label="schedule">周表</button>
@@ -357,7 +356,8 @@
 <button type="button" data-settings-tab="sharing">账号与同步</button>
 </aside>
           <div class="settings-list">
-          <div class="settings-section-title" data-settings-section="theme">主题</div>
+          <div class="settings-section-title" data-settings-section="main">主界面设置</div>
+          <h3 class="settings-subsection-title">外观与主题</h3>
           <p class="settings-lead">点卡片立即切换。配色、背景和遮罩分别存进每套方案，改完即时生效，不需要另外保存。</p>
           <div class="theme-profile-grid" id="themeProfileGrid" role="list" aria-label="主题方案"></div>
           <label class="setting-row">
@@ -382,7 +382,8 @@
             </span>
           </label>
           <div class="theme-weekly-plan" id="themeWeeklyPlan" role="group" aria-label="每周主题安排"></div>
-          <div class="settings-section-title" data-settings-section="interface">界面与启动</div>
+          <h3 class="settings-subsection-title">布局与导航</h3>
+          <p class="settings-lead">调整后点击底部“保存设置”生效。</p>
           <h3 class="settings-subsection-title">打开与启动</h3>
           <label class="setting-row">
             <span>
@@ -1064,7 +1065,7 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261104-airing-refresh" defer></script>
-    <script src="/modules/settings.js?v=20261104-assets" defer></script>
+    <script src="/modules/settings.js?v=20261104-main-settings" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261104-hardening" defer></script>
     <script src="/modules/events.js?v=20261104-hardening" defer></script>

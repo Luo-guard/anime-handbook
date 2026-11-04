@@ -118,7 +118,7 @@ function startServer() {
     // 2) 设置里下拉显示的是实际在用的那套。
     await page.click('#settingsButton');
     await page.waitForSelector('#settingsModal[open]');
-    await page.click('[data-settings-tab="theme"]');
+    await page.click('[data-settings-tab="main"]');
     await page.waitForTimeout(300);
     assert.equal(await page.locator('.theme-card.is-active').getAttribute('data-theme-card'), RANDOM_ID);
     assert.match(await page.locator('.theme-card.is-active .theme-card-meta small').innerText(), /海蓝/);

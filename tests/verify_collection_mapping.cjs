@@ -185,7 +185,7 @@ const server = http.createServer((req, res) => {
     );
 
     // 5) 点卡片切主题立即生效；随后改映射不会把主题状态带回去。
-    await page.click('[data-settings-tab="theme"]');
+    await page.click('[data-settings-tab="main"]');
     await page.waitForTimeout(200);
     await page.locator('[data-theme-pick="night"]').click();
     await page.waitForTimeout(500);
