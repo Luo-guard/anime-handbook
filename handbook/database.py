@@ -11,9 +11,9 @@ import os
 import re
 import sqlite3
 import tempfile
-import threading
 import uuid
 from datetime import timedelta
+from .concurrency import database_state
 from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso,
     normalize_kazumi_category,
 )
@@ -29,39 +29,41 @@ class HandbookDB:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         (self.asset_root / "covers").mkdir(parents=True, exist_ok=True)
         (self.asset_root / "character-covers").mkdir(parents=True, exist_ok=True)
-        self._write_lock = threading.RLock()
-        self._revision = 1
-        self._revision_lock = threading.Lock()
+        self._state = database_state(self.path)
+        self._write_lock = self._state.write_lock
+        self._connection_gate = self._state.gate
+        self._revision_lock = self._state.revision_lock
         self.initialize()
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.path, timeout=15)
-        try:
-            connection.row_factory = sqlite3.Row
-            connection.execute("PRAGMA foreign_keys = ON")
-            # WAL 模式写在数据库文件里，initialize() 设置一次即可；
-            # 以前每个连接都执行一遍 pragma，实测占了单次连接近九成耗时。
-            before = connection.total_changes
-            yield connection
-            connection.commit()
-            if connection.total_changes > before:
-                # 任何写入都推进数据版本，前端据此决定是否重新拉取收藏。
-                self._touch_revision()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
+        with self._connection_gate.read():
+            connection = sqlite3.connect(self.path, timeout=15)
+            try:
+                connection.row_factory = sqlite3.Row
+                connection.execute("PRAGMA foreign_keys = ON")
+                # WAL 模式写在数据库文件里，initialize() 设置一次即可；
+                # 以前每个连接都执行一遍 pragma，实测占了单次连接近九成耗时。
+                before = connection.total_changes
+                yield connection
+                connection.commit()
+                if connection.total_changes > before:
+                    # 任何写入都推进数据版本，前端据此决定是否重新拉取收藏。
+                    self._touch_revision()
+            except Exception:
+                connection.rollback()
+                raise
+            finally:
+                connection.close()
 
     @property
     def revision(self) -> int:
         with self._revision_lock:
-            return self._revision
+            return self._state.revision
 
     def _touch_revision(self) -> None:
         with self._revision_lock:
-            self._revision += 1
+            self._state.revision += 1
 
     def export_snapshot(self, destination: Path) -> None:
         """Create a consistent SQLite copy without syncing WAL/SHM sidecars.
@@ -95,18 +97,31 @@ class HandbookDB:
         source_path = Path(source_path)
         if not source_path.is_file():
             raise ValueError("找不到要加载的共享手账快照")
-        temporary = self.path.with_suffix(self.path.suffix + ".importing")
-        with self._write_lock:
-            source = sqlite3.connect(source_path, timeout=15)
-            target = sqlite3.connect(temporary, timeout=15)
+        # Validate an isolated snapshot, then restore into the existing SQLite
+        # file. Never replace a pathname underneath WAL readers/connections.
+        with tempfile.TemporaryDirectory(dir=self.path.parent, prefix="snapshot-import-") as folder:
+            staged = Path(folder) / "verified.db"
+            with closing(sqlite3.connect(source_path.resolve().as_uri() + "?mode=ro", uri=True, timeout=15)) as source:
+                with closing(sqlite3.connect(staged)) as target:
+                    source.backup(target)
+                    if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                        raise ValueError("共享快照完整性检查失败")
+                    tables = {row[0] for row in target.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                    if not {"anime", "events", "settings"}.issubset(tables):
+                        raise ValueError("共享快照缺少手账数据表")
             try:
-                source.backup(target)
-                target.execute("PRAGMA integrity_check")
-            finally:
-                target.close()
-                source.close()
-            os.replace(temporary, self.path)
-            self._touch_revision()
+                verified = HandbookDB(staged, asset_root=Path(folder) / "assets")
+                verified.get_settings()
+                verified.list_anime()
+                verified.stats()
+            except (sqlite3.Error, ValueError, KeyError, TypeError) as error:
+                raise ValueError("共享快照格式检查失败") from error
+            with self._write_lock, self._connection_gate.write():
+                self.export_snapshot(self.asset_root / "backups" / f"{self.path.stem}-before-snapshot-{uuid.uuid4().hex}.db")
+                with closing(sqlite3.connect(staged)) as source, closing(sqlite3.connect(self.path, timeout=15)) as target:
+                    source.backup(target)
+                self.initialize()
+                self._touch_revision()
 
     def referenced_record_images(self) -> set[str]:
         """Return local record-image filenames referenced by this handbook."""
@@ -1302,6 +1317,12 @@ class HandbookDB:
                 for row in db.execute(sql, params).fetchall()
             ]
         return self._attach_custom_memberships(items)
+
+    def cover_info(self, anime_id: int) -> dict[str, Any] | None:
+        """No episode JSON, membership joins or presentation work for a cover."""
+        with self.connect() as db:
+            row = db.execute("SELECT id, image_url FROM anime WHERE id = ?", (anime_id,)).fetchone()
+        return dict(row) if row else None
 
     def get_anime(self, anime_id: int) -> dict[str, Any] | None:
         with self.connect() as db:

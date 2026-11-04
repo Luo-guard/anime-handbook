@@ -78,7 +78,7 @@ class OnlineMetadata(metadata.SyncService):
         return data, mime
 
     def cover(self, anime_id):
-        anime = self.database.get_anime(anime_id)
+        anime = self.database.cover_info(anime_id)
         return self.cached_image(str(anime.get("image_url") or "")) if anime else None
 
     def character_cover(self, anime_id, character_id):

@@ -16,6 +16,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .auth import Accounts
+from handbook.http_support import send_asset
+from handbook.observability import record_failure
 from .runtime import Runtime, core
 from .uploads import CHUNK_SIZE, receive_original
 
@@ -91,7 +93,7 @@ class Handler(http.RequestHandler):
         return self.server.runtime.schedule
 
     def send_header(self, keyword, value):
-        if keyword.lower() == "cache-control" and urlparse(self.path).path.startswith("/api/"):
+        if keyword.lower() == "cache-control" and urlparse(self.path).path.startswith("/api/") and value != "private, no-cache":
             value = "private, no-store"
         super().send_header(keyword, value)
 
@@ -117,6 +119,8 @@ class Handler(http.RequestHandler):
         return value
 
     def file_response(self, data, mime):
+        if mime.startswith("image/"):
+            return send_asset(self, data, mime, cache="private, no-cache")
         self.send_response(200)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(len(data)))
@@ -141,7 +145,7 @@ class Handler(http.RequestHandler):
     def serve_static(self, request_path):
         if request_path in {"/online.js", "/online.css", "/login.js"}:
             p = ASSETS / request_path[1:]
-            return self.file_response(p.read_bytes(), "text/javascript; charset=utf-8" if p.suffix == ".js" else "text/css; charset=utf-8")
+            return send_asset(self, p.read_bytes(), "text/javascript; charset=utf-8" if p.suffix == ".js" else "text/css; charset=utf-8", cache="public, no-cache", compress=True)
         if request_path == "/login":
             return self.file_response((ASSETS / "login.html").read_bytes(), "text/html; charset=utf-8")
         if request_path in {"/", "/index.html"}:
@@ -149,7 +153,7 @@ class Handler(http.RequestHandler):
                                                 self.database.get_settings(), str(self.profiles.profile()["id"]))
             html = html.replace("<body>", '<body class="online-mode">')
             html = html.replace("</head>", '<link rel="stylesheet" href="/online.css" /></head>')
-            html = html.replace('    <script src="/schedule.js', '    <script src="/online.js" defer></script>\n    <script src="/schedule.js')
+            html = html.replace('    <script src="/modules/collection.js', '    <script src="/online.js" defer></script>\n    <script src="/modules/collection.js')
             return self.file_response(html.encode(), "text/html; charset=utf-8")
         module_paths = {"/modules/" + path.name for path in core.STATIC_ROOT.joinpath("modules").glob("*.js")}
         if request_path not in {"/app.js", "/schedule.js", "/styles.css", "/appearance.js"} | module_paths:
@@ -300,12 +304,12 @@ class Handler(http.RequestHandler):
             self.send_error_json(429, str(error))
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
             self.send_error_json(400, str(error)[:200])
-        except (BrokenPipeError, ConnectionResetError, socket.timeout):
+        except (ConnectionError, socket.timeout):
             pass
         except urllib.error.URLError:
             self.send_error_json(502, "资料来源暂不可用，请稍后重试")
-        except Exception:
-            LOG.exception("Online request failed: %s", method)
+        except Exception as error:
+            record_failure("online_" + method, error)
             self.send_error_json(500, "服务器暂时无法处理请求")
 
     def upload_image(self, path):

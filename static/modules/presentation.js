@@ -80,10 +80,6 @@ function showAgeRelatedButton() {
   return enabledSetting("show_age_related_button");
 }
 
-function showBilibiliSearchButton() {
-  return enabledSetting("show_bilibili_search_button");
-}
-
 function showEpisodeTitlesOnHover() {
   return booleanSetting("show_episode_titles_on_hover");
 }

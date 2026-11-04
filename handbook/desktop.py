@@ -5,9 +5,10 @@ from http.server import ThreadingHTTPServer
 import os
 import sys
 import threading
-import traceback
 import urllib.request
 import webbrowser
+from .concurrency import ReadWriteGate
+from .observability import configure_logging, close_logging, record_failure
 from .assets import run_housekeeping
 from .common import (DATA_ROOT, HOST, PORT, migrate_legacy_backgrounds, path_identity)
 from .database import HandbookDB
@@ -18,6 +19,7 @@ from .sharing import SharingService
 from .webdav import WebDAVSyncService
 from .control import DesktopHTTPServer
 
+PROFILE_GATE = ReadWriteGate()
 PROFILES = ProfileManager()
 DATABASE = HandbookDB(PROFILES.database_path())
 SYNC = SyncService(DATABASE)
@@ -28,11 +30,18 @@ WEBDAV = WebDAVSyncService(PROFILES)
 def activate_profile(profile_id: str) -> dict[str, Any]:
     """Switch the in-process data services to the selected local profile."""
     global DATABASE, SYNC, AGE
-    profile = PROFILES.activate(profile_id)
-    DATABASE = HandbookDB(PROFILES.database_path(profile_id))
-    SYNC = SyncService(DATABASE)
-    AGE = AgeRelatedService(DATABASE, SYNC)
-    return profile
+    with PROFILE_GATE.write():
+        # Build first; a failed initialization must not partially switch globals.
+        new_database = HandbookDB(PROFILES.database_path(profile_id))
+        new_sync = SyncService(new_database)
+        new_age = AgeRelatedService(new_database, new_sync)
+        profile = PROFILES.activate(profile_id)
+        DATABASE, SYNC, AGE = new_database, new_sync, new_age
+        return profile
+
+
+def service_snapshot():
+    return {"database": DATABASE, "sync": SYNC, "age": AGE}
 
 
 def active_profile_write_issue(*, bind_unbound: bool = True) -> str | None:
@@ -112,18 +121,18 @@ def _startup_repairs(database: HandbookDB, sync: SyncService) -> None:
     """
     try:
         migrate_legacy_backgrounds()
-    except Exception:
-        traceback.print_exc()
+    except Exception as error:
+        record_failure("startup_repair", error)
     try:
         database.recover_progress_from_watch_events(
             [int(item["id"]) for item in database.list_anime()]
         )
-    except Exception:
-        traceback.print_exc()
+    except Exception as error:
+        record_failure("startup_repair", error)
     try:
         sync.repair_legacy_watch_episode_keys()
-    except Exception:
-        traceback.print_exc()
+    except Exception as error:
+        record_failure("startup_repair", error)
     try:
         accounts = {str(profile.get("id") or "") for profile in PROFILES.list_profiles()}
         accounts.add("local")
@@ -135,19 +144,21 @@ def _startup_repairs(database: HandbookDB, sync: SyncService) -> None:
             profile_paths={account: PROFILES.database_path(account) for account in accounts},
             backup_root=DATA_ROOT / "backups",
         )
-    except Exception:
-        traceback.print_exc()
+    except Exception as error:
+        record_failure("startup_repair", error)
     try:
         database._touch_revision()
-    except Exception:
-        traceback.print_exc()
+    except Exception as error:
+        record_failure("startup_repair", error)
 
 
 def main(*, open_browser: bool = True) -> None:
+    configure_logging(DATA_ROOT)
     url = f"http://{HOST}:{PORT}"
     if server_is_running():
         if open_browser:
             webbrowser.open(url)
+        close_logging()
         return
     server = DesktopHTTPServer((HOST, PORT), busy=lambda: bool(SYNC.status.get("running")))
     from .kazumi_writeback import start_worker
@@ -155,7 +166,7 @@ def main(*, open_browser: bool = True) -> None:
     start_worker(writeback_stop)
     SYNC.start_background()
     SHARING.start_resident_refresh()
-    WEBDAV.start_background(lambda: DATABASE)
+    WEBDAV.start_background(lambda: DATABASE, profile_gate=PROFILE_GATE)
     # The window must come up first; repairs and asset sweeps run behind it.
     threading.Thread(
         target=_startup_repairs,
@@ -183,5 +194,6 @@ def main(*, open_browser: bool = True) -> None:
             SHARING._thread.join()
         with SYNC._lock:
             pass
+        close_logging()
 
 

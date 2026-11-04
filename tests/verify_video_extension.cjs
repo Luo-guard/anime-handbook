@@ -1,18 +1,28 @@
-const fs=require('fs'),path=require('path'),os=require('os'),assert=require('node:assert/strict');
+const fs=require('fs'),path=require('path'),os=require('os'),http=require('http'),assert=require('node:assert/strict');
 const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-(async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handbook-extension-'));let context;let writes=[];
+(async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handbook-extension-'));let context,server;let writes=[];const pageErrors=[];let html="";
 try{
- const extension=path.resolve('browser-extension');context=await chromium.launchPersistentContext(dir,{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
- const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
- let html=fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'');
- html+=`<script>const $=s=>document.querySelector(s);const state={progressAnime:null};window.messages=[];function toast(m){messages.push(m)};function openProgress(id){window.openedAnime=id};const api=async(path,options={})=>{const r=await fetch(path,{...options,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok)throw Error(d.message);return d};</script><script>${fs.readFileSync('static/modules/video-links.js','utf8')}</script><script>openVideoCaptureFromLocation();</script>`;
- await context.route('http://127.0.0.1:43127/**',route=>{
-  if(new URL(route.request().url()).pathname==='/api/video-links'){
-   if(route.request().method()==='POST'){const body=route.request().postDataJSON();writes.push(body);return route.fulfill({json:{ok:true,items:[]}});}
-   return route.fulfill({json:{features:{optional_video_default:1},scope:'test-scope',animes:[{id:123,name:'测试番剧'},{id:456,name:'另一部番剧'}],items:new URL(route.request().url()).searchParams.get('anime_id')==='456'?[{id:9,is_default:1}]:[]}});
+ server=http.createServer((request,response)=>{
+  if(new URL(request.url,'http://localhost').pathname==='/api/video-links'){
+   response.setHeader('Content-Type','application/json');
+   if(request.method==='POST'){
+    let raw='';request.on('data',chunk=>raw+=chunk);request.on('end',()=>{writes.push(JSON.parse(raw));response.end(JSON.stringify({ok:true,items:[]}));});return;
+   }
+   response.end(JSON.stringify({features:{optional_video_default:1},scope:'test-scope',animes:[{id:123,name:'测试番剧'},{id:456,name:'另一部番剧'}],items:new URL(request.url,'http://localhost').searchParams.get('anime_id')==='456'?[{id:9,is_default:1}]:[]}));return;
   }
-  return route.fulfill({contentType:'text/html',body:html});
+  response.setHeader('Content-Type','text/html; charset=utf-8');response.end(html);
  });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const fixturePort=server.address().port;
+ // Service-worker-created tabs can bypass Playwright route interception.
+ // Load a temporary extension whose fixed local port targets only this fixture.
+ const extension=path.join(dir,'fixture-extension');fs.mkdirSync(extension);
+ for(const name of fs.readdirSync('browser-extension'))if(/\.(js|json)$/.test(name)){const content=fs.readFileSync(path.join('browser-extension',name),'utf8');fs.writeFileSync(path.join(extension,name),content.replaceAll('43127',String(fixturePort)));}
+ context=await chromium.launchPersistentContext(path.join(dir,"profile"),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
+ context.on("page", page=>page.on("pageerror", error=>pageErrors.push(error.message)));
+ const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
+ html=fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'');
+ html+=`<script>const $=s=>document.querySelector(s);const $$=(s,root=document)=>[...root.querySelectorAll(s)];const state={progressAnime:null};window.messages=[];function toast(m){messages.push(m)};function openProgress(id){window.openedAnime=id};const api=async(path,options={})=>{const r=await fetch(path,{...options,headers:{'Content-Type':'application/json'}});const d=await r.json();if(!r.ok)throw Error(d.message);return d};</script><script>${fs.readFileSync('static/modules/video-links.js','utf8')}</script><script>openVideoCaptureFromLocation();</script>`;
  await context.route('https://www.bilibili.com/**',route=>route.fulfill({contentType:'text/html',body:'<h1>测试视频</h1>'}));
  const video=await context.newPage();await video.goto('https://www.bilibili.com/video/BV1NJHG6eE9z/?p=2');
  const [tab]=await worker.evaluate(()=>chrome.tabs.query({active:true,currentWindow:true}));
@@ -22,13 +32,14 @@ try{
   chrome.scripting.executeScript=async()=>[{result:{url:'https://www.bilibili.com/video/BV1NJHG6eE9z/?p=2&spm_id=tracking',title:'<img src=x onerror=alert(1)>',uploader:'测试UP'}}];
  },tab.id);
  const next=context.waitForEvent('page');await worker.evaluate(tab=>saveVideoFromTab(tab),{id:tab.id,url:video.url()});const capture=await next;await capture.waitForLoadState();
- await capture.locator('#videoCaptureModal').waitFor({state:'visible',timeout:60000});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
+ assert.deepEqual(pageErrors,[],"capture script errors at "+capture.url());
+ await capture.locator('#videoCaptureModal').waitFor({state:'visible',timeout:15000});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
  assert.equal(await capture.locator('#videoCaptureAnime').inputValue(),'123');assert.equal(await capture.locator('#videoCaptureTitle img').count(),0);assert.equal(await capture.locator('#videoCaptureTitle').inputValue(),'<img src=x onerror=alert(1)>');assert.equal(await capture.locator('#videoCaptureDefault').isChecked(),true);assert.equal(writes.length,0,'navigation must not save');assert.equal(new URL(capture.url()).hash,'');
  await capture.locator('#videoCaptureCancel').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
  await capture.evaluate(()=>{window.reuseMarker='existing-state';state.progressAnime={id:456};document.querySelector('#progressModal').showModal();document.querySelector('#videoCaptureNote').value='old note';});
  const pageCount=context.pages().length;
  await worker.evaluate(tab=>saveVideoFromTab(tab),{id:tab.id,url:video.url()});
- await capture.locator('#videoCaptureModal').waitFor({state:'visible',timeout:60000});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
+ await capture.locator('#videoCaptureModal').waitFor({state:'visible',timeout:15000});await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
  assert.equal(context.pages().length,pageCount,'reuse must not create another tab');
  assert.equal(await capture.evaluate(()=>window.reuseMarker),'existing-state','reuse must not reload the existing page');
  assert.equal(await capture.locator('#videoCaptureNote').inputValue(),'','new request must reset the previous note');
@@ -42,4 +53,4 @@ try{
  await capture.locator('#videoCaptureSearch').fill('另一');await capture.getByRole('option',{name:'另一部番剧',exact:true}).click();await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);assert.equal(await capture.locator('#videoCaptureDefault').isChecked(),false);await capture.locator('#videoCaptureTitle').fill('自定义视频名');await capture.locator('#videoCaptureNote').fill('繁体');await capture.locator('#videoCaptureSave').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
  assert.equal(writes.length,1);assert.equal(writes[0].anime_id,456);assert.equal(writes[0].note,'繁体');assert.equal(writes[0].title,'自定义视频名');assert(writes[0].url.includes('p=2'));assert.equal(writes[0].scope,'test-scope');assert.equal(writes[0].make_default,false,'save confirmation defaults to collection only');
  console.log('Extension capture -> same-origin handbook confirmation: first launch and existing-tab reuse without reload, catalog, association, reset, filter, explicit save and Part 2 passed.');
-}finally{if(context)await context.close();if(!path.resolve(dir).startsWith(path.join(os.tmpdir(),'handbook-extension-')))throw Error('Unexpected directory');fs.rmSync(dir,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exit(1)});
+}finally{if(context)await context.close();if(server)await new Promise(resolve=>server.close(resolve));if(!path.resolve(dir).startsWith(path.join(os.tmpdir(),'handbook-extension-')))throw Error('Unexpected directory');fs.rmSync(dir,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exit(1)});

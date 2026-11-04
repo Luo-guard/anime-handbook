@@ -24,9 +24,9 @@ function harness(guest = false) {
       return {ok: status < 400, status, headers: {get: () => String(revision)}, json: async () => data};
     },
     renderCollection: () => applied++, applyTheme() {}, applySidebarLayout() {}, renderStats() {}, renderSync() {}, renderTabs() {}, renderSeasonFilter() {}, populateAnimeSelect() {},
-    setInterval() {}, clearInterval() {}, console,
+    setInterval() {}, clearInterval() {}, setTimeout, clearTimeout, AbortController, console,
   };
-  vm.createContext(context); vm.runInContext(source, context);
+  vm.createContext(context); vm.runInContext(fs.readFileSync("static/modules/network.js", "utf8"), context); vm.runInContext(source, context);
   return {api: context.window.handbookOnline, calls, state, setRevision: n => revision=n, setDialog: v => dialogs=v, setActive: v => active=v, race: () => changed=true, applied: () => applied};
 }
 

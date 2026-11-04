@@ -9,6 +9,7 @@ import time
 if hasattr(time, "tzset"):
     time.tzset()
 
+from handbook.observability import configure_logging, close_logging
 from .http import OnlineServer
 
 
@@ -22,6 +23,7 @@ def main():
     args = parser.parse_args()
     origin = args.origin or (f"http://127.0.0.1:{args.port}" if args.development else "")
     logging.basicConfig(level=logging.INFO)
+    configure_logging(args.data_dir)
     server = OnlineServer((args.host, args.port), args.data_dir, origin, args.development)
     print(f"动漫手账线上服务：{origin}；数据目录：{server.runtime.root}")
     try:
@@ -30,6 +32,7 @@ def main():
         pass
     finally:
         server.server_close()
+        close_logging()
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """Local-only outbox worker. Never force locks or terminate Kazumi."""
+from .observability import record_failure
 import json
 import subprocess
 import threading
@@ -34,20 +35,22 @@ def start_worker(stop):
     def run():
         from . import desktop
         while not stop.wait(5):
-            database = desktop.DATABASE
-            settings = database.get_settings()
-            if settings.get("kazumi_read_only") or not settings.get("kazumi_writeback", True) or desktop.active_profile_write_issue(bind_unbound=False):
-                continue
-            if desktop.SYNC.status.get("running"):
-                continue
-            try:
-                with desktop.SYNC._lock:
-                    if database is not desktop.DATABASE:
-                        continue
-                    flush(database, desktop.SyncService.find_kazumi_database())
-            except Exception as error:
-                with database.connect() as db:
-                    db.execute("UPDATE kazumi_outbox SET error=?", (str(error),))
+            with desktop.PROFILE_GATE.read():
+                database = desktop.DATABASE
+                settings = database.get_settings()
+                if settings.get("kazumi_read_only") or not settings.get("kazumi_writeback", True) or desktop.active_profile_write_issue(bind_unbound=False):
+                    continue
+                if desktop.SYNC.status.get("running"):
+                    continue
+                try:
+                    with desktop.SYNC._lock:
+                        if database is not desktop.DATABASE:
+                            continue
+                        flush(database, desktop.SyncService.find_kazumi_database())
+                except Exception as error:
+                    record_failure("kazumi_writeback", error)
+                    with database.connect() as db:
+                        db.execute("UPDATE kazumi_outbox SET error=?", (str(error),))
     thread=threading.Thread(target=run, daemon=True)
     thread.start()
     return thread

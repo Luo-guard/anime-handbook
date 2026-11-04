@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .observability import record_failure
 
 from typing import Any
 from pathlib import Path
@@ -7,6 +8,7 @@ from concurrent.futures import as_completed
 from datetime import date
 from datetime import datetime
 import json
+import tempfile
 import os
 import re
 import subprocess
@@ -151,6 +153,7 @@ class SyncService:
             )
             return {"ok": True, "imported": imported, "enriched": enriched}
         except Exception as error:
+            record_failure("metadata_fallback", error)
             message = str(error)
             self.status.update(
                 running=False,
@@ -237,7 +240,8 @@ class SyncService:
                     enriched += 1
                     self.status["enriched"] = enriched
                     self.status["pending"] = len(candidates) - enriched
-                except Exception:
+                except Exception as error:
+                    record_failure("metadata_fallback", error)
                     # One unavailable subject must not abort the remaining sync.
                     continue
         return enriched
@@ -511,7 +515,8 @@ class SyncService:
                         synced_episodes
                     )
                     metadata["_episode_release_synced"] = True
-            except Exception:
+            except Exception as error:
+                record_failure("metadata_fallback", error)
                 metadata["_episodes"] = None
                 metadata["_episode_titles_synced"] = False
                 metadata["_episode_release_synced"] = False
@@ -567,7 +572,8 @@ class SyncService:
                 )
                 restored += 1
                 restored_ids.append(int(item["id"]))
-            except Exception:
+            except Exception as error:
+                record_failure("metadata_fallback", error)
                 # Keep repairing the remaining collection if one subject is unavailable.
                 continue
         self.database.recover_progress_from_watch_events(restored_ids)
@@ -591,12 +597,21 @@ class SyncService:
                 # Repair requests are rare; space them out if an old database
                 # contains more than one affected record.
                 time.sleep(0.2)
-            except Exception:
+            except Exception as error:
+                record_failure("metadata_fallback", error)
                 continue
         return self.database.recover_progress_from_watch_events(repaired_ids)
 
+    def cover_etag(self, anime_id: int) -> str | None:
+        if not self.database.cover_info(anime_id): return None
+        try:
+            stat = (self.cover_root / f"{anime_id}.img").stat()
+        except OSError:
+            return None
+        return f'W/"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+
     def cover(self, anime_id: int) -> tuple[bytes, str] | None:
-        anime = self.database.get_anime(anime_id)
+        anime = self.database.cover_info(anime_id)
         if not anime:
             return None
         cached = self.cover_root / f"{anime_id}.img"
@@ -622,7 +637,13 @@ class SyncService:
                 data = response.read()
                 mime = response.headers.get_content_type()
             if data:
-                cached.write_bytes(data)
+                with tempfile.NamedTemporaryFile(dir=self.cover_root, suffix=".tmp", delete=False) as staging:
+                    temporary = Path(staging.name)
+                    staging.write(data)
+                try:
+                    os.replace(temporary, cached)
+                finally:
+                    temporary.unlink(missing_ok=True)
                 meta.write_text(
                     json_dumps({"content_type": mime, "source": url}),
                     encoding="utf-8",

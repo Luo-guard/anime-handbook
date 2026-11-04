@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 from pathlib import Path
+from .observability import record_failure
+from contextlib import nullcontext
 import base64
 from datetime import datetime
 import hashlib
@@ -572,7 +574,7 @@ class WebDAVSyncService:
             self._write(config)
             return {"ok": True, "action": "unchanged", "message": "两边数据已经是最新"}
 
-    def start_background(self, database_getter: Any) -> None:
+    def start_background(self, database_getter: Any, *, profile_gate=None) -> None:
         if self._thread and self._thread.is_alive():
             return
         def worker() -> None:
@@ -584,14 +586,16 @@ class WebDAVSyncService:
                     self._wake.clear()
                     continue
                 self._wake.clear()
-                try:
-                    if self.status().get("configured") and self.status().get("auto_sync"):
-                        self.sync(database_getter())
-                except Exception as error:
-                    with self._lock:
-                        config = self._read()
-                        self._profile_config(config)["last_error"] = str(error)[:240]
-                        self._write(config)
+                with profile_gate.read() if profile_gate else nullcontext():
+                    try:
+                        if self.status().get("configured") and self.status().get("auto_sync"):
+                            self.sync(database_getter())
+                    except Exception as error:
+                        record_failure("webdav_background", error)
+                        with self._lock:
+                            config = self._read()
+                            self._profile_config(config)["last_error"] = str(error)[:240]
+                            self._write(config)
         self._thread = threading.Thread(target=worker, name="webdav-sync", daemon=True)
         self._thread.start()
 
