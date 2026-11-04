@@ -293,21 +293,24 @@ function scheduleCard(item) {
   const category = CATEGORIES.find((c) => c.id === item.collection_type);
   const image = `/api/schedule/cover?source=${scheduleSource()}&${new URLSearchParams({season: scheduleState.season, key: item.key})}`;
   const release = item.kind === "weekly" ? (item.release ? `${item.release.replace(/~$/, "")} 起` : "") : item.platforms?.[0]?.name || "";
-  const votesHtml = show.votes ? `<span>${scheduleVotesLabel(item)}</span>` : "";
+  const votesHtml = show.votes ? `<span class="schedule-card-votes">${scheduleVotesLabel(item)}</span>` : "";
   const releaseHtml = show.release && release ? `<span class="schedule-card-release">${escapeHtml(release)}</span>` : "";
   const progress = show.progress ? scheduleProgress(item) : null;
   const progressHtml = progress
-    ? `<div class="schedule-progress-row"><span class="schedule-progress${progress.estimated ? " is-estimated" : ""}" title="${escapeHtml(progress.title)}">${escapeHtml(progress.text)}</span></div>`
+    ? `<span class="schedule-progress${progress.estimated ? " is-estimated" : ""}" title="${escapeHtml(progress.title)}">${escapeHtml(progress.text)}</span>`
     : "";
+  const metaText = item.kind === "network" ? item.release_note || "网络放送" : item.tags?.slice(0, 2).join(" · ") || "每周放送";
+  const metaHtml = show.tags ? `<p class="schedule-card-meta">${escapeHtml(metaText)}</p>` : "";
+  // 固定三层：标题 / 出处与首播 / 进度与热度。每层各占一行，位置不随内容跳动。
+  const metaRow = metaHtml || releaseHtml ? `<div class="schedule-meta-row">${metaHtml}${releaseHtml}</div>` : "";
+  const statsRow = progressHtml || votesHtml ? `<div class="schedule-card-footer">${progressHtml}${votesHtml}</div>` : "";
   return `<button type="button" class="anime-card schedule-card" data-schedule-key="${escapeHtml(item.key)}" aria-label="查看${escapeHtml(item.title)}的放送信息">
     <div class="poster-wrap">${item.image_url ? `<img src="${image}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'" />` : ""}
       ${show.score && Number(item.score) > 0 ? `<span class="poster-score">${Number(item.score).toFixed(1)}</span>` : ""}
       ${show.collection && category ? `<span class="schedule-collection-badge">${category.name}</span>` : ""}
       ${show.airtime ? `<span class="schedule-airtime ${item.bj_time || item.time || item.kind === "network" ? "" : "unknown"}">${escapeHtml(scheduleTimeLabel(item))}</span>` : ""}
-    </div><div class="card-body"><div class="card-title">${escapeHtml(item.title)}</div>
-    ${show.tags ? `<p class="schedule-card-meta">${escapeHtml(item.kind === "network" ? item.release_note || "网络放送" : item.tags?.slice(0, 2).join(" · ") || "每周放送")}</p>` : ""}
-    ${progressHtml}
-    ${votesHtml || releaseHtml ? `<div class="schedule-card-footer">${votesHtml}${releaseHtml}</div>` : ""}</div>
+    </div><div class="card-body"><div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+    ${metaRow}${statsRow}</div>
   </button>`;
 }
 
