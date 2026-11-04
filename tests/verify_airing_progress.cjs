@@ -20,6 +20,7 @@ assert.ok(ongoing.includes('已播至第 4 集'), ongoing);
 assert.ok(ongoing.includes('已播 4 / 12'), 'full counts remain available in the tooltip');
 assert.ok(ongoing.includes('下集 11/04 20:00'), ongoing);
 assert.ok(ongoing.includes('北京时间'), 'title names the timezone');
+assert.ok(run("episodeReleaseStatus({airing:{aired:0,total:12}},{type:0})").includes("尚未开播"));
 assert.equal(run("episodeReleaseStatus({airing:{aired:12,total:12}},{type:0})"), '', 'finished shows hide the chip');
 assert.equal(run("episodeReleaseStatus({airing:{aired:1,total:12}},{type:2})"), '', 'OP/ED groups have no airing chip');
 assert.equal(run("episodeReleaseStatus({},{type:0})"), '', 'no airing data, no chip');
