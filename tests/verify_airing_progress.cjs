@@ -16,7 +16,8 @@ vm.runInContext(source, ctx);
 const run = (code) => vm.runInContext(code, ctx);
 
 const ongoing = run("episodeReleaseStatus({airing:{aired:4,total:12,next_label:'11/04 20:00'}},{type:0})");
-assert.ok(ongoing.includes('已播 4 / 12'), ongoing);
+assert.ok(ongoing.includes('已播至第 4 集'), ongoing);
+assert.ok(ongoing.includes('已播 4 / 12'), 'full counts remain available in the tooltip');
 assert.ok(ongoing.includes('下集 11/04 20:00'), ongoing);
 assert.ok(ongoing.includes('北京时间'), 'title names the timezone');
 assert.equal(run("episodeReleaseStatus({airing:{aired:12,total:12}},{type:0})"), '', 'finished shows hide the chip');

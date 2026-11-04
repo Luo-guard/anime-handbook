@@ -500,9 +500,9 @@ function renderEpisodeGrid() {
             <strong>${escapeHtml(group.type_label)}</strong>
             <div class="episode-group-meta">
               <span class="episode-group-summary" data-episode-group-summary>${episodeGroupSummary(group, state.pendingEpisodes)}</span>
-              <span data-episode-airing-type="${group.type}" style="display:contents">${episodeReleaseStatus(anime, group)}</span>
             </div>
           </div>
+          ${Number(group.type) === 0 ? `<div class="episode-airing-info" data-episode-airing-type="0">${episodeReleaseStatus(anime, group)}</div>` : ""}
           <div class="episode-group-grid">
             ${group.episodes.map((episode) => {
               const key = String(episode.key);

@@ -27,9 +27,10 @@ function episodeReleaseStatus(anime, group) {
   const total = Number(airing.total);
   if (aired >= total) return "";
   const next = airing.next_label
-    ? `<span class="episode-next-airing" title="北京时间">下集 ${escapeHtml(airing.next_label)}</span>`
+    ? `<span class="episode-next-airing">下集 ${escapeHtml(airing.next_label)}</span>`
     : "";
-  return `<span class="episode-release-status" title="按 Bangumi 逐集播出日期与放送时刻（北京时间）计算"><i></i>已播 ${aired} / ${total}</span>${next}`;
+  const detail = `已播 ${aired} / ${total}；按 Bangumi 逐集播出日期与放送时刻（北京时间）计算`;
+  return `<span class="episode-release-status" title="${escapeHtml(detail)}"><span>已播至第 ${aired} 集</span>${next}</span>`;
 }
 
 function showCustomMoveButton() {
