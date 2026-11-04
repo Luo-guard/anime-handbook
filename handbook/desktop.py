@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 from http.server import ThreadingHTTPServer
+import os
+import sys
 import threading
 import traceback
 import urllib.request
@@ -72,6 +74,31 @@ def server_is_running() -> bool:
             return response.status == 200
     except (OSError, urllib.error.URLError):
         return False
+
+
+def should_open_browser(
+    argv: list[str] | None = None,
+    environ: dict[str, str] | None = None,
+) -> bool:
+    """Decide whether launching should also open a browser window.
+
+    A scratch instance (tests, screenshots, diagnosing a copy of the data) must
+    never steal focus or cover whatever the person is looking at.  Such runs are
+    recognisable by ``ANIME_HANDBOOK_DATA_DIR``: the launcher never sets it, so
+    normal double-click startup still opens the handbook.  ``--browser`` forces
+    the window back for anyone using a custom data directory on purpose.
+    """
+    args = list(sys.argv[1:] if argv is None else argv)
+    env = os.environ if environ is None else environ
+    if "--browser" in args:
+        return True
+    if "--no-browser" in args:
+        return False
+    if str(env.get("ANIME_HANDBOOK_NO_BROWSER") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    if str(env.get("ANIME_HANDBOOK_DATA_DIR") or "").strip():
+        return False
+    return True
 
 
 def _startup_repairs(database: HandbookDB, sync: SyncService) -> None:

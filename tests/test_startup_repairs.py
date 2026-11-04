@@ -65,6 +65,7 @@ class StartupOrderTest(unittest.TestCase):
              patch.object(desktop.SYNC, "start_background"), \
              patch.object(desktop.SHARING, "start_resident_refresh"), \
              patch.object(desktop.WEBDAV, "start_background"), \
+             patch.object(desktop.webbrowser, "open") as open_browser, \
              patch("handbook.kazumi_writeback.start_worker", lambda *args, **kwargs: None):
             desktop.main(open_browser=False)
 
@@ -73,6 +74,7 @@ class StartupOrderTest(unittest.TestCase):
                 break
             time.sleep(0.01)
         self.assertEqual(order, ["serve", "repair"], "the port must be open before the repair starts")
+        open_browser.assert_not_called()
 
     def test_repair_failure_does_not_stop_the_remaining_steps(self):
         database, sync = StubDatabase(), StubSync()
