@@ -191,6 +191,7 @@ class HandbookDB:
                     rating REAL,
                     raw_directives TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT '',
                     FOREIGN KEY(anime_id) REFERENCES anime(id)
                 );
 
@@ -356,6 +357,11 @@ class HandbookDB:
                 db.execute("ALTER TABLE events ADD COLUMN raw_directives TEXT NOT NULL DEFAULT ''")
             if "themes" not in event_columns:
                 db.execute("ALTER TABLE events ADD COLUMN themes TEXT NOT NULL DEFAULT '[]'")
+            if "updated_at" not in event_columns:
+                db.execute("ALTER TABLE events ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
+            # Older rows carry no edit history; the creation time is the best
+            # available stand-in and keeps merges deterministic.
+            db.execute("UPDATE events SET updated_at = created_at WHERE updated_at = ''")
             db.execute("UPDATE events SET theme = CASE event_type WHEN 'watch' THEN 'watch' WHEN 'anime_comment' THEN 'anime_comment' ELSE 'other' END WHERE theme = ''")
             for row in db.execute("SELECT id, theme, themes FROM events").fetchall():
                 themes = json_list(row["themes"])
@@ -364,6 +370,10 @@ class HandbookDB:
                         "UPDATE events SET themes = ? WHERE id = ?",
                         (json_dumps(normalize_theme_ids(row["theme"])), row["id"]),
                     )
+            # Earlier sync merges turned every edit into an extra timeline row.
+            # Collapse the versions that are strict prefixes of the newest text;
+            # genuinely different notes written in the same second stay.
+            self._merge_note_versions(db)
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS anime_characters (
@@ -1535,13 +1545,14 @@ class HandbookDB:
                 (json_dumps(normalized), now_iso(), anime_id),
             )
             if added:
+                stamp = now_iso()
                 db.execute(
                     """
                     INSERT INTO events(
-                        event_type, anime_id, episodes, content, theme, themes, created_at
-                    ) VALUES ('watch', ?, ?, '', 'watch', '["watch"]', ?)
+                        event_type, anime_id, episodes, content, theme, themes, created_at, updated_at
+                    ) VALUES ('watch', ?, ?, '', 'watch', '["watch"]', ?, ?)
                     """,
-                    (anime_id, json_dumps(added), now_iso()),
+                    (anime_id, json_dumps(added), stamp, stamp),
                 )
         return {
             "anime": self.get_anime(anime_id),
@@ -1757,12 +1768,13 @@ class HandbookDB:
         theme_ids = normalize_theme_ids(themes if themes is not None else theme, theme)
         primary_theme = theme_ids[0] if theme_ids else "other"
         episode_json = json_dumps([str(item) for item in (episode_keys or [])])
+        stamp = now_iso()
         with self._write_lock, self.connect() as db:
             cursor = db.execute(
                 """
                 INSERT INTO events(
-                    event_type, anime_id, episodes, content, theme, themes, raw_directives, created_at
-                ) VALUES ('note', ?, ?, ?, ?, ?, ?, ?)
+                    event_type, anime_id, episodes, content, theme, themes, raw_directives, created_at, updated_at
+                ) VALUES ('note', ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     anime_id,
@@ -1771,7 +1783,8 @@ class HandbookDB:
                     primary_theme,
                     json_dumps(theme_ids),
                     raw_directives,
-                    now_iso(),
+                    stamp,
+                    stamp,
                 ),
             )
             return int(cursor.lastrowid)
@@ -1789,12 +1802,13 @@ class HandbookDB:
             f"#主题 番剧评论\n#动漫 {anime.get('name_cn') or anime.get('name') or ''}\n{content}"
         )
         with self._write_lock, self.connect() as db:
+            stamp = now_iso()
             cursor = db.execute(
                 """
-                INSERT INTO events(event_type, anime_id, episodes, content, theme, themes, raw_directives, created_at)
-                VALUES ('anime_comment', ?, '[]', ?, 'anime_comment', '["anime_comment"]', ?, ?)
+                INSERT INTO events(event_type, anime_id, episodes, content, theme, themes, raw_directives, created_at, updated_at)
+                VALUES ('anime_comment', ?, '[]', ?, 'anime_comment', '["anime_comment"]', ?, ?, ?)
                 """,
-                (anime_id, content, raw_directives, now_iso()),
+                (anime_id, content, raw_directives, stamp, stamp),
             )
             return int(cursor.lastrowid)
 
@@ -1809,17 +1823,19 @@ class HandbookDB:
             raise ValueError("评分不能超过 80 个字符")
         with self._write_lock, self.connect() as db:
             db.execute("UPDATE anime SET personal_rating_text = ?, updated_at = ? WHERE id = ?", (rating, now_iso(), anime_id))
+            stamp = now_iso()
             cursor = db.execute(
                 """
-                INSERT INTO events(event_type, anime_id, episodes, content, theme, themes, rating, raw_directives, created_at)
-                VALUES ('note', ?, '[]', ?, 'anime_rating', '["anime_rating"]', ?, ?, ?)
+                INSERT INTO events(event_type, anime_id, episodes, content, theme, themes, rating, raw_directives, created_at, updated_at)
+                VALUES ('note', ?, '[]', ?, 'anime_rating', '["anime_rating"]', ?, ?, ?, ?)
                 """,
                 (
                     anime_id,
                     f"评分：{rating}",
                     None,
                     f"#主题 番剧评分\n#动漫 {anime.get('name_cn') or anime.get('name') or ''}\n评分：{rating}",
-                    now_iso(),
+                    stamp,
+                    stamp,
                 ),
             )
             return int(cursor.lastrowid)
@@ -1851,6 +1867,43 @@ class HandbookDB:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def _merge_note_versions(self, db: sqlite3.Connection) -> int:
+        """Collapse older copies of an edited note left by previous sync merges.
+
+        The old merge key contained the whole body, so editing a note made the
+        previous text look like a second record.  Only groups in the same second
+        whose text is contained in the longest version are collapsed; two
+        genuinely different notes written in the same second stay untouched.
+        """
+        rows = db.execute(
+            """
+            SELECT id, event_type, anime_id, created_at, content
+            FROM events
+            WHERE event_type IN ('note', 'anime_comment')
+            ORDER BY created_at, id
+            """
+        ).fetchall()
+        groups: dict[tuple, list] = {}
+        for row in rows:
+            key = (row["event_type"], row["anime_id"], row["created_at"])
+            groups.setdefault(key, []).append(row)
+        removed = 0
+        for items in groups.values():
+            if len(items) < 2:
+                continue
+            keeper = max(items, key=lambda item: len(str(item["content"] or "")))
+            keeper_text = str(keeper["content"] or "").strip()
+            if not keeper_text:
+                continue
+            for item in items:
+                if item["id"] == keeper["id"]:
+                    continue
+                text = str(item["content"] or "").strip()
+                if text and text in keeper_text:
+                    db.execute("DELETE FROM events WHERE id = ?", (item["id"],))
+                    removed += 1
+        return removed
+
     def delete_event(self, event_id: int) -> bool:
         with self._write_lock, self.connect() as db:
             cursor = db.execute("DELETE FROM events WHERE id = ?", (event_id,))
@@ -1869,8 +1922,8 @@ class HandbookDB:
             # editable #集数 directive is free-form; existing keys are retained
             # only for quick-action annotations and progress bookkeeping.
             cursor = db.execute(
-                "UPDATE events SET anime_id = ?, content = ?, theme = ?, themes = ?, rating = ?, raw_directives = ? WHERE id = ?",
-                (anime_id, content, primary_theme, json_dumps(theme_ids), rating, raw_directives, event_id),
+                "UPDATE events SET anime_id = ?, content = ?, theme = ?, themes = ?, rating = ?, raw_directives = ?, updated_at = ? WHERE id = ?",
+                (anime_id, content, primary_theme, json_dumps(theme_ids), rating, raw_directives, now_iso(), event_id),
             )
             return cursor.rowcount > 0
 
@@ -1932,6 +1985,9 @@ class HandbookDB:
                     placeholders = ", ".join("?" for _ in columns)
                     sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
                     db.executemany(sql, [tuple(row.get(column) for column in columns) for row in rows])
+                # Snapshots written before edit tracking have no updated_at;
+                # fall back to the creation time so merges stay deterministic.
+                db.execute("UPDATE events SET updated_at = created_at WHERE updated_at = ''")
                 # Character and AGE caches point at old metadata. They are
                 # intentionally local and safe to rebuild on demand.
                 db.execute("DELETE FROM anime_characters")

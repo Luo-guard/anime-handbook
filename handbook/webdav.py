@@ -262,6 +262,48 @@ class WebDAVSyncService:
         return cls._select_row(left, right, timestamp, earlier=True)
 
     @classmethod
+    def _same_note_version(
+        cls, left: dict[str, Any], right: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Return the surviving row when two snapshots describe one note.
+
+        ``None`` means they are independent notes that merely share a second.
+        """
+        left_text = str(left.get("content") or "").strip()
+        right_text = str(right.get("content") or "").strip()
+        if left_text and left_text == right_text:
+            return cls._newer_row(left, right, "updated_at")
+        same_id = left.get("id") is not None and str(left.get("id")) == str(right.get("id"))
+        contained = bool(left_text and right_text) and (
+            left_text in right_text or right_text in left_text
+        )
+        left_time = cls._row_moment(left, "updated_at")
+        right_time = cls._row_moment(right, "updated_at")
+        edited = bool(left_time and right_time and left_time != right_time)
+        # Same id alone is not proof: two devices can hand out the same SQLite
+        # id for unrelated notes written in the same second.  Treat them as one
+        # record only when the bodies overlap, or when the edit clock shows one
+        # of them was changed after creation.
+        if not contained and not (same_id and edited):
+            return None
+        if edited:
+            return right if right_time > left_time else left
+        return right if len(right_text) > len(left_text) else left
+
+    @classmethod
+    def _collapse_note_versions(cls, group: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        kept: list[dict[str, Any]] = []
+        for event in group:
+            for index, existing in enumerate(kept):
+                chosen = cls._same_note_version(existing, event)
+                if chosen is not None:
+                    kept[index] = chosen
+                    break
+            else:
+                kept.append(event)
+        return kept
+
+    @classmethod
     def merge_record_states(cls, local: dict[str, Any], remote: dict[str, Any]) -> dict[str, Any]:
         """Merge concurrent watch records by anime id and episode key.
 
@@ -295,7 +337,8 @@ class WebDAVSyncService:
 
         # Split legacy multi-episode records before merging, so episode 1 on
         # one device can never erase episode 2 recorded on the other device.
-        event_by_key: dict[str, dict[str, Any]] = {}
+        watch_events: dict[str, dict[str, Any]] = {}
+        note_groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for source in (local_tables.get("events", []), remote_tables.get("events", [])):
             for raw in source:
                 if not isinstance(raw, dict):
@@ -308,15 +351,21 @@ class WebDAVSyncService:
                             item = dict(event)
                             item["episodes"] = json_dumps([str(episode)])
                             key = f"watch:{item['anime_id']}:{episode}"
-                            event_by_key[key] = cls._earlier_row(event_by_key[key], item, "created_at") if key in event_by_key else item
+                            watch_events[key] = cls._earlier_row(watch_events[key], item, "created_at") if key in watch_events else item
                         continue
-                key = "event:" + json.dumps({
-                    "type": event.get("event_type"), "anime": event.get("anime_id"),
-                    "episodes": event.get("episodes"), "content": event.get("content"),
-                    "created": event.get("created_at"),
-                }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-                event_by_key.setdefault(key, event)
-        events = [event_by_key[key] for key in sorted(event_by_key)]
+                # A note is identified by type, subject and creation second.
+                # The body stays out of the key: including it made an edited
+                # note look like a second record and duplicated the timeline.
+                key = (
+                    str(event.get("event_type") or ""),
+                    "" if event.get("anime_id") is None else str(event.get("anime_id")),
+                    str(event.get("created_at") or ""),
+                )
+                note_groups.setdefault(key, []).append(event)
+
+        events: list[dict[str, Any]] = list(watch_events.values())
+        for group in note_groups.values():
+            events.extend(cls._collapse_note_versions(group))
         # Device-local SQLite ids can collide. Retain one when unique and give
         # the other merged record a fresh id before importing it.
         used_ids: set[int] = set()
