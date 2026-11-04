@@ -450,7 +450,10 @@ function episodeAnnotationMarkup(annotations) {
 function refreshEpisodeAiringStatus() {
   if (!state.progressAnime) return;
   $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
+    const expanded = !!element.querySelector("details[open]");
     element.innerHTML = episodeReleaseStatus(state.progressAnime, {type: Number(element.dataset.episodeAiringType)});
+    const disclosure = element.querySelector("details");
+    if (disclosure && expanded) disclosure.open = true;
   });
 }
 
@@ -500,9 +503,9 @@ function renderEpisodeGrid() {
             <strong>${escapeHtml(group.type_label)}</strong>
             <div class="episode-group-meta">
               <span class="episode-group-summary" data-episode-group-summary>${episodeGroupSummary(group, state.pendingEpisodes)}</span>
+          ${Number(group.type) === 0 ? `<div class="episode-airing-info" data-episode-airing-type="0">${episodeReleaseStatus(anime, group)}</div>` : ""}
             </div>
           </div>
-          ${Number(group.type) === 0 ? `<div class="episode-airing-info" data-episode-airing-type="0">${episodeReleaseStatus(anime, group)}</div>` : ""}
           <div class="episode-group-grid">
             ${group.episodes.map((episode) => {
               const key = String(episode.key);

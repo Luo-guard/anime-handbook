@@ -2334,20 +2334,39 @@ dialog::backdrop {
 .episode-airing-info:empty { display: none; }
 
 .episode-release-status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 10px;
-  color: inherit;
-  font-size: inherit;
-  font-weight: 400;
-}
-
-.episode-next-airing::before {
-  content: "·";
-  margin-right: 10px;
+  position: relative;
+  margin: 0;
   color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
 }
+.episode-release-status summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  list-style: none;
+  cursor: pointer;
+}
+.episode-release-status summary::-webkit-details-marker { display: none; }
+.episode-release-status summary:hover { color: var(--green-700); }
+.episode-release-status summary:focus-visible { outline: 2px solid var(--green-700); outline-offset: 3px; border-radius: 3px; }
+.episode-airing-chevron { opacity: .6; }
+.episode-release-status[open] .episode-airing-chevron { transform: rotate(180deg); }
+.episode-release-status .episode-next-airing {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  top: calc(100% + 7px);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 4px 16px #0001;
+  color: var(--ink);
+}
+.episode-next-airing small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+
 
 .episode-group-grid {
   display: grid;

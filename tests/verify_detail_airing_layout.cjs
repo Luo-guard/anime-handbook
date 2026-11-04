@@ -12,19 +12,19 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
   await page.setViewportSize({width,height:800});
   const result=await page.locator('.episode-group').first().evaluate(section=>{
    const head=section.querySelector('.episode-group-head'),info=section.querySelector('.episode-airing-info'),grid=section.querySelector('.episode-group-grid');
-   return {head:head.textContent,info:info.textContent,separate:info.getBoundingClientRect().top>=head.getBoundingClientRect().bottom,clear:grid.getBoundingClientRect().top>=info.getBoundingClientRect().bottom,overflow:section.scrollWidth>section.clientWidth};
+   return {head:head.textContent,info:info.textContent,separate:head.contains(info),clear:grid.getBoundingClientRect().top>=info.getBoundingClientRect().bottom,overflow:section.scrollWidth>section.clientWidth};
   });
-  assert(!result.head.includes('已播')&&!result.head.includes('下集'));assert(result.head.includes('已看 1 / 12'));
-  assert(result.info.includes('已播至第 4 集')&&result.info.includes('下集 11/04 20:00'));
+  assert(result.head.includes('已看 1 / 12')); assert(result.head.includes('已播 4 / 14'));
+  assert(result.info.includes('已播 4 / 14')); assert.equal(await page.locator('.episode-next-airing').isVisible(),false); await page.locator('.episode-release-status summary').click(); assert.equal(await page.locator('.episode-next-airing').isVisible(),true); await page.locator('.episode-release-status summary').click();
   assert(result.separate&&result.clear&&!result.overflow,JSON.stringify(result));
  }
  assert.equal(await page.locator('[data-episode-airing-type]').count(),1);
  await page.locator('[data-episode-key="0:2"]').click();assert((await page.locator('[data-episode-group-summary]').first().textContent()).includes('已看 2 / 12'));
  await page.evaluate(()=>{window.savedCell=document.querySelector('.episode-cell');state.progressAnime.airing.aired=5;refreshEpisodeAiringStatus()});
  assert(await page.evaluate(()=>savedCell===document.querySelector('.episode-cell')));
- assert((await page.locator('.episode-airing-info').textContent()).includes('已播至第 5 集'));
+ assert((await page.locator('.episode-airing-info').textContent()).includes('已播 5 / 14'));
  await page.setViewportSize({width:920,height:620});await page.screenshot({path:path.join(os.tmpdir(),'handbook-detail-airing-layout.png')});
  await page.evaluate(()=>{state.progressAnime.airing=undefined;refreshEpisodeAiringStatus()});
  assert.equal(await page.locator('.episode-airing-info').isVisible(),false);
- console.log('Detail airing layout: separate muted row at 920/390/320px, no overflow, watch selection preserved, live text refresh and empty-row collapse passed.');
+ console.log('Detail airing layout: compact header at 920/390/320px with collapsed next-episode disclosure, no overflow, watch selection preserved, live text refresh and empty-row collapse passed.');
 }finally{await browser.close()}})().catch(error=>{console.error(error);process.exit(1)});
