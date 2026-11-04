@@ -97,7 +97,7 @@ class HandbookDBTest(unittest.TestCase):
         template = next(event for event in local["tables"]["events"] if event["event_type"] == "watch")
         # Each device has overlapping batch records with colliding SQLite IDs.
         local["tables"]["events"][0].update(episodes='["bgm:101","bgm:102"]', created_at="2026-09-15T10:00:00+08:00")
-        remote["tables"]["events"] = [dict(template, id=template["id"], episodes='["bgm:102"]', created_at="2026-09-15T01:00:00Z"), dict(template, id=2, anime_id=2, episodes='["bgm:101"]', created_at="2026-09-15T04:00:00Z"), dict(local["tables"]["events"][-1], content="mobile note")]
+        remote["tables"]["events"] = [dict(template, id=template["id"], episodes='["bgm:102"]', created_at="2026-09-15T01:00:00Z"), dict(template, id=2, anime_id=2, episodes='["bgm:101"]', created_at="2026-09-15T04:00:00Z"), dict(local["tables"]["events"][-1], content="mobile note", record_uid="independent-mobile-note")]
         before_local, before_remote = deepcopy(local), deepcopy(remote)
         merged = webdav.WebDAVSyncService.merge_record_states(local, remote)
         self.assertEqual(local, before_local)
@@ -245,6 +245,12 @@ class HandbookDBTest(unittest.TestCase):
             self.assertNotIn("episode_groups", anime)
             self.assertNotIn("watched_episode_keys", anime)
             self.assertTrue(anime["episode_summary"])
+            revision = self.db.revision
+            with urlopen(f"{base}/api/airing", timeout=3) as response:
+                progress = app.json.loads(response.read().decode("utf-8"))
+            self.assertEqual([row["id"] for row in progress["animes"]], [91])
+            self.assertEqual(set(progress["animes"][0]), {"id", "airing"})
+            self.assertEqual(self.db.revision, revision)
         finally:
             server.shutdown()
             server.server_close()

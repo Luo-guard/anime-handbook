@@ -102,7 +102,7 @@ class OnlineTest(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/bootstrap", client=self.alice)[1]["settings"]["sidebar_labels"], {})
 
     def test_login_required_for_data_and_images(self):
-        for path in ("/api/bootstrap", "/api/status", "/api/record-images/record-test.jpg", "/api/background", "/api/covers/1"):
+        for path in ("/api/bootstrap", "/api/status", "/api/airing", "/api/record-images/record-test.jpg", "/api/background", "/api/covers/1"):
             self.assertEqual(self.call("GET", path)[0], 401)
         self.assertEqual(self.call("GET", "/")[0], 303)
 

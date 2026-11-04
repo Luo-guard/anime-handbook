@@ -447,6 +447,13 @@ function episodeAnnotationMarkup(annotations) {
   }).join("");
 }
 
+function refreshEpisodeAiringStatus() {
+  if (!state.progressAnime) return;
+  $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
+    element.innerHTML = episodeReleaseStatus(state.progressAnime, {type: Number(element.dataset.episodeAiringType)});
+  });
+}
+
 function renderEpisodeGrid() {
   const anime = state.progressAnime;
   if (!anime) return;
@@ -493,7 +500,7 @@ function renderEpisodeGrid() {
             <strong>${escapeHtml(group.type_label)}</strong>
             <div class="episode-group-meta">
               <span class="episode-group-summary" data-episode-group-summary>${episodeGroupSummary(group, state.pendingEpisodes)}</span>
-              ${episodeReleaseStatus(anime, group)}
+              <span data-episode-airing-type="${group.type}" style="display:contents">${episodeReleaseStatus(anime, group)}</span>
             </div>
           </div>
           <div class="episode-group-grid">

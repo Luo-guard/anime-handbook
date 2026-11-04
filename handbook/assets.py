@@ -9,6 +9,10 @@ row is committed.
 from __future__ import annotations
 
 import time
+import json
+import re
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -37,10 +41,29 @@ def _is_fresh(path: Path, cutoff: float) -> bool:
         return True
 
 
+def profile_asset_references(paths: dict[str, Path]) -> tuple[set[str], dict[str, dict[str, Any]]]:
+    """Read every account without initializing/migrating any database.
+
+    Errors deliberately propagate: incomplete knowledge must never authorize
+    deletion from a directory shared by all accounts.
+    """
+    images: set[str] = set()
+    settings: dict[str, dict[str, Any]] = {}
+    pattern = re.compile(r"/api/record-images/([A-Za-z0-9_-]+\.(?:png|jpg|webp))")
+    for account, path in paths.items():
+        with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
+            for row in db.execute("SELECT content, raw_directives FROM events"):
+                for value in row:
+                    images.update(pattern.findall(str(value or "")))
+            settings[account] = {key: json.loads(value) for key, value in db.execute("SELECT key, value FROM settings")}
+    return images, settings
+
+
 def prune_record_images(
     database,
     *,
     root: Path | None = None,
+    referenced_images: set[str] | None = None,
     grace: int = RECORD_IMAGE_GRACE,
     now: float | None = None,
 ) -> list[str]:
@@ -48,7 +71,7 @@ def prune_record_images(
     directory = Path(root) if root is not None else RECORD_IMAGE_ROOT
     if not directory.is_dir():
         return []
-    referenced = database.referenced_record_images()
+    referenced = database.referenced_record_images() | (referenced_images or set())
     cutoff = (time.time() if now is None else now) - grace
     removed: list[str] = []
     for path in _stored_files(directory):
@@ -86,6 +109,7 @@ def prune_backgrounds(
     accounts: Iterable[str],
     *,
     root: Path | None = None,
+    account_settings: dict[str, dict[str, Any]] | None = None,
     grace: int = BACKGROUND_GRACE,
     now: float | None = None,
 ) -> list[str]:
@@ -98,7 +122,12 @@ def prune_backgrounds(
         # Never sweep without knowing which accounts exist: every namespaced
         # image would look like an orphan.
         return []
-    stems = background_stems(settings, accounts)
+    if account_settings is not None:
+        if not set(accounts).issubset(account_settings):
+            return []
+        stems = set().union(*(background_stems(value, [account]) for account, value in account_settings.items()))
+    else:
+        stems = background_stems(settings, accounts)
     cutoff = (time.time() if now is None else now) - grace
     removed: list[str] = []
     for path in _stored_files(directory):
@@ -174,14 +203,24 @@ def run_housekeeping(
     settings: dict[str, Any],
     accounts: Iterable[str],
     *,
+    profile_paths: dict[str, Path] | None = None,
     backup_root: Path | None = None,
     record_root: Path | None = None,
     background_root: Path | None = None,
 ) -> dict[str, Any]:
     """One sweep over every local asset directory; safe to call on a timer."""
     accounts = list(accounts)
+    images, all_settings = set(), None
+    if profile_paths is not None:
+        try:
+            images, all_settings = profile_asset_references(profile_paths)
+            if not set(accounts).issubset(all_settings):
+                raise ValueError("Incomplete account inventory")
+        except (OSError, sqlite3.Error, ValueError):
+            # Backups have their own retention policy; shared assets stay intact.
+            return {"record_images": [], "backgrounds": [], "backups": prune_backups(backup_root), "assets_skipped": True}
     return {
-        "record_images": prune_record_images(database, root=record_root),
-        "backgrounds": prune_backgrounds(settings, accounts, root=background_root),
+        "record_images": prune_record_images(database, root=record_root, referenced_images=images),
+        "backgrounds": prune_backgrounds(settings, accounts, root=background_root, account_settings=all_settings),
         "backups": prune_backups(backup_root),
     }

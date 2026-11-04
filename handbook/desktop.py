@@ -132,6 +132,7 @@ def _startup_repairs(database: HandbookDB, sync: SyncService) -> None:
             database,
             database.get_settings(),
             accounts,
+            profile_paths={account: PROFILES.database_path(account) for account in accounts},
             backup_root=DATA_ROOT / "backups",
         )
     except Exception:

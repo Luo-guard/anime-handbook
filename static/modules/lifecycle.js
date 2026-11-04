@@ -111,6 +111,53 @@ function startStatusPolling(options = {}) {
   }, 900);
 }
 
+let airingRefreshPending = false;
+let airingRefreshTimer = null;
+
+async function refreshAiringProgress() {
+  if (airingRefreshPending || document.hidden) return;
+  airingRefreshPending = true;
+  const collection = state.animes;
+  try {
+    const payload = await api("/api/airing");
+    // A profile change or collection refresh invalidates this request's owner.
+    if (state.animes !== collection) return;
+    const fresh = new Map((payload.animes || []).map((anime) => [anime.id, anime.airing]));
+    let changed = false;
+    for (const anime of collection) {
+      if (!fresh.has(anime.id)) continue;
+      const airing = fresh.get(anime.id) || undefined;
+      if (JSON.stringify(anime.airing) !== JSON.stringify(airing)) {
+        anime.airing = airing;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    if (state.activeView === "schedule") renderSchedule();
+    if (state.progressAnime && $("#progressModal")?.open) {
+      const anime = collection.find((item) => item.id === state.progressAnime.id);
+      if (anime) {
+        state.progressAnime.airing = anime.airing;
+        refreshEpisodeAiringStatus();
+      }
+    }
+  } catch {
+    // Cached progress stays available during a transient/offline request.
+  } finally {
+    airingRefreshPending = false;
+  }
+}
+
+function startAiringWatcher() {
+  clearInterval(airingRefreshTimer);
+  airingRefreshTimer = setInterval(refreshAiringProgress, 60000);
+  if (!startAiringWatcher.listening) {
+    document.addEventListener("visibilitychange", refreshAiringProgress);
+    window.addEventListener("focus", refreshAiringProgress);
+    startAiringWatcher.listening = true;
+  }
+}
+
 async function bootstrap() {
   try {
     const payload = await api("/api/bootstrap");
@@ -119,6 +166,7 @@ async function bootstrap() {
     adoptInitialWeeklyTheme();
     adoptInitialRandomTheme();
     initializeSchedule();
+    startAiringWatcher();
     applyTheme();
     if (typeof applyWeeklyThemeForToday === "function") applyWeeklyThemeForToday();
     if (typeof startThemePlanWatcher === "function") startThemePlanWatcher();

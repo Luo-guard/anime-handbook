@@ -23,7 +23,7 @@ import time
 from urllib.parse import unquote
 from urllib.parse import urlparse
 from .common import (BACKGROUND_ROOT, CATEGORY_NAMES, DATA_ROOT, MAX_JSON_BODY_BYTES, RECORD_IMAGE_ROOT, STATIC_ROOT, background_stem, configure_windows_autostart, find_background_asset, json_dumps, normalize_background_bytes, normalize_bgm_sources, safe_asset_id, with_initial_appearance)
-from .assets import prune_record_images
+from .assets import prune_record_images, profile_asset_references
 from .common import normalize_custom_search_links, normalize_detail_links, normalize_link_sync, normalize_schedule_grouping
 from .jumps import normalize_jump
 from .metadata import SyncService
@@ -85,7 +85,12 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         def sweep() -> None:
             try:
-                prune_record_images(database, root=root)
+                references = set()
+                if not hasattr(self, "services"):
+                    profiles = _desktop().PROFILES
+                    paths = {p["id"]: profiles.database_path(p["id"]) for p in profiles.list_profiles()}
+                    references, _ = profile_asset_references(paths)
+                prune_record_images(database, root=root, referenced_images=references)
             except Exception:
                 pass
 
@@ -389,6 +394,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "revision": self.database.revision,
                     }
                 )
+            elif path == "/api/airing":
+                animes = self._with_airing(self.database.list_anime())
+                self.send_json({"animes": [{"id": anime["id"], "airing": anime.get("airing")} for anime in animes]})
             elif path == "/api/collection-state":
                 self.send_json(
                     {

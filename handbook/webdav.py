@@ -142,14 +142,17 @@ class WebDAVSyncService:
         return base.rstrip("/") + "/" + "/".join(quote(piece, safe="_-.") for piece in relative.split("/"))
 
     @staticmethod
-    def _request(config: dict[str, Any], method: str, relative: str, body: bytes | None = None, content_type: str | None = None) -> tuple[int, bytes]:
+    def _request(config: dict[str, Any], method: str, relative: str, body: bytes | None = None, content_type: str | None = None, *, request_headers: dict[str, str] | None = None, response_headers: dict[str, str] | None = None) -> tuple[int, bytes]:
         token = base64.b64encode(f"{config['username']}:{config['password']}".encode("utf-8")).decode("ascii")
         headers = {"Authorization": f"Basic {token}", "User-Agent": "AnimeHandbook/1.0"}
+        headers.update(request_headers or {})
         if content_type:
             headers["Content-Type"] = content_type
         request = urllib.request.Request(WebDAVSyncService._url(str(config["url"]), relative), data=body, headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=25) as response:
+                if response_headers is not None:
+                    response_headers.update({"etag": str(response.headers.get("ETag") or "")})
                 return int(response.status), response.read()
         except urllib.error.HTTPError as error:
             return int(error.code), error.read()
@@ -269,26 +272,20 @@ class WebDAVSyncService:
 
         ``None`` means they are independent notes that merely share a second.
         """
-        left_text = str(left.get("content") or "").strip()
-        right_text = str(right.get("content") or "").strip()
-        if left_text and left_text == right_text:
+        left_uid, right_uid = left.get("record_uid"), right.get("record_uid")
+        if left_uid and right_uid:
+            if left_uid != right_uid:
+                return None
             return cls._newer_row(left, right, "updated_at")
-        same_id = left.get("id") is not None and str(left.get("id")) == str(right.get("id"))
-        contained = bool(left_text and right_text) and (
-            left_text in right_text or right_text in left_text
-        )
-        left_time = cls._row_moment(left, "updated_at")
-        right_time = cls._row_moment(right, "updated_at")
-        edited = bool(left_time and right_time and left_time != right_time)
-        # Same id alone is not proof: two devices can hand out the same SQLite
-        # id for unrelated notes written in the same second.  Treat them as one
-        # record only when the bodies overlap, or when the edit clock shows one
-        # of them was changed after creation.
-        if not contained and not (same_id and edited):
-            return None
-        if edited:
-            return right if right_time > left_time else left
-        return right if len(right_text) > len(left_text) else left
+        # Older clients lack durable identities. Only identical full records
+        # provide evidence; same SQLite id or overlapping prose is not enough.
+        fields = ("event_type", "anime_id", "created_at", "content", "raw_directives", "theme", "themes", "rating", "episodes")
+        if all(left.get(key) == right.get(key) for key in fields):
+            chosen = dict(cls._newer_row(left, right, "updated_at"))
+            if left_uid or right_uid:
+                chosen["record_uid"] = left_uid or right_uid
+            return chosen
+        return None
 
     @classmethod
     def _collapse_note_versions(cls, group: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -361,11 +358,30 @@ class WebDAVSyncService:
                     "" if event.get("anime_id") is None else str(event.get("anime_id")),
                     str(event.get("created_at") or ""),
                 )
+                if event.get("record_uid"):
+                    key = ("uid", str(event["record_uid"]), "")
                 note_groups.setdefault(key, []).append(event)
 
-        events: list[dict[str, Any]] = list(watch_events.values())
-        for group in note_groups.values():
-            events.extend(cls._collapse_note_versions(group))
+        notes = [event for group in note_groups.values() for event in cls._collapse_note_versions(group)]
+        # An older client can send an unchanged copy without record_uid. Match
+        # only its exact contents to one unambiguous identified record.
+        def legacy_key(event):
+            fields = ("event_type", "anime_id", "created_at", "content", "raw_directives", "theme", "themes", "rating", "episodes")
+            return json_dumps([event.get(field) for field in fields])
+        identified: dict[str, list[int]] = {}
+        for index, event in enumerate(notes):
+            if event.get("record_uid"):
+                identified.setdefault(legacy_key(event), []).append(index)
+        removed = set()
+        for index, event in enumerate(notes):
+            if event.get("record_uid"):
+                continue
+            matches = identified.get(legacy_key(event), [])
+            if len(matches) == 1:
+                target = matches[0]
+                notes[target] = cls._same_note_version(notes[target], event)
+                removed.add(index)
+        events: list[dict[str, Any]] = list(watch_events.values()) + [event for index, event in enumerate(notes) if index not in removed]
         # Device-local SQLite ids can collide. Retain one when unique and give
         # the other merged record a fresh id before importing it.
         used_ids: set[int] = set()
@@ -416,10 +432,9 @@ class WebDAVSyncService:
         return hive.parent if hive else None
 
     def _push_kazumi(self, database: HandbookDB) -> dict[str, Any] | None:
-        """把本机 Kazumi 收藏库推到云端，等价于替 Kazumi 按一次同步。
+        """把本机 Kazumi 收藏库推到云端，仅在已确认基线下安全推送，不替代 Kazumi 自身的双向合并。
 
-        只有在“云端自上次同步后没有任何第三方改动”时才会写入，否则只记录云端版本
-        并提示先打开 Kazumi 同步一次，避免覆盖手机等设备新增的数据。
+        只有在“云端自上次同步后没有任何第三方改动”时才会写入，否则不推进基线，并提示先打开 Kazumi 同步一次，避免覆盖手机等设备新增的数据。
         """
         if database.get_settings().get("webdav_kazumi_sync") is False:
             return None
@@ -437,37 +452,46 @@ class WebDAVSyncService:
         status, _ = self._request(config, "MKCOL", self.KAZUMI_ROOT)
         if status not in {201, 405}:
             return {"ok": False, "action": "error", "message": f"坚果云无法创建 Kazumi 目录（HTTP {status}）"}
+        # Read the complete local snapshot before any remote mutation.
+        try:
+            local = {name: path.read_bytes() for name, path in files.items()}
+        except OSError:
+            return {"ok": False, "action": "error", "message": "读取 Kazumi 收藏库失败，请关闭 Kazumi 后重试"}
+        hashes = {name: hashlib.sha256(data).hexdigest() for name, data in local.items()}
         remote: dict[str, str | None] = {}
+        etags: dict[str, str] = {}
         for name in files:
-            code, body = self._request(config, "GET", f"{self.KAZUMI_ROOT}/{name}.tmp")
+            headers: dict[str, str] = {}
+            code, body = self._request(config, "GET", f"{self.KAZUMI_ROOT}/{name}.tmp", response_headers=headers)
             if code == 404:
                 remote[name] = None
             elif code == 200:
                 remote[name] = hashlib.sha256(body).hexdigest()
             else:
                 return {"ok": False, "action": "error", "message": f"读取云端 Kazumi 数据失败（HTTP {code}）"}
-        baseline = item.get("kazumi_sync") if isinstance(item.get("kazumi_sync"), dict) else {}
-        if baseline:
-            dirty = [name for name in remote if remote[name] != baseline.get(name)]
-            if dirty:
-                item["kazumi_sync"] = remote
-                self._write(config)
-                return {"ok": False, "action": "changed", "message": "云端 Kazumi 数据有更新（可能来自手机），本次未推送；打开一次 Kazumi 同步后再点同步即可"}
-        elif any(value is not None for value in remote.values()):
-            item["kazumi_sync"] = remote
-            self._write(config)
-            return {"ok": False, "action": "baseline", "message": "已记录云端 Kazumi 版本，下次同步会把本机收藏一起传上去"}
-        uploaded: dict[str, str | None] = {}
-        for name, path in files.items():
-            try:
-                data = path.read_bytes()
-            except OSError:
-                return {"ok": False, "action": "error", "message": f"读取 {name}.hive 失败，请关闭 Kazumi 后重试"}
-            code, _ = self._request(config, "PUT", f"{self.KAZUMI_ROOT}/{name}.tmp", data, "application/octet-stream")
-            if code not in {200, 201, 204}:
-                return {"ok": False, "action": "error", "message": f"上传 Kazumi 数据失败（HTTP {code}）"}
-            uploaded[name] = hashlib.sha256(data).hexdigest()
-        item["kazumi_sync"] = uploaded
+            etags[name] = headers.get("etag", "")
+        # Old versions advanced kazumi_sync on observation alone. Never trust
+        # that field: v2 is established only by equal bytes or our successful PUT.
+        baseline = item.get("kazumi_sync_v2")
+        baseline = baseline if isinstance(baseline, dict) else {}
+        for name, fingerprint in remote.items():
+            if fingerprint is not None and fingerprint != hashes[name] and fingerprint != baseline.get(name):
+                return {"ok": False, "action": "changed", "message": "云端 Kazumi 数据与本机不同，未覆盖；请先用 Kazumi 完成同步，使两边一致后再试"}
+            if fingerprint != hashes[name] and fingerprint is not None and (not etags[name] or etags[name].startswith("W/")):
+                return {"ok": False, "action": "unversioned", "message": "云端未提供可用于安全写入的版本号，已跳过 Kazumi 推送"}
+        uploaded = dict(baseline)
+        for name, data in local.items():
+            if remote[name] != hashes[name]:
+                condition = {"If-None-Match": "*"} if remote[name] is None else {"If-Match": etags[name]}
+                code, _ = self._request(config, "PUT", f"{self.KAZUMI_ROOT}/{name}.tmp", data, "application/octet-stream", request_headers=condition)
+                if code not in {200, 201, 204}:
+                    # Preserve only files actually submitted. Never "acknowledge"
+                    # a conflicting remote version just because we downloaded it.
+                    item["kazumi_sync_v2"] = uploaded
+                    self._write(config)
+                    return {"ok": False, "action": "changed" if code == 412 else "error", "message": f"Kazumi 推送未完成（HTTP {code}），未覆盖变化中的云端文件"}
+            uploaded[name] = hashes[name]
+        item["kazumi_sync_v2"] = uploaded
         self._write(config)
         return {"ok": True, "action": "uploaded", "message": "已把本机 Kazumi 收藏同步到坚果云"}
 

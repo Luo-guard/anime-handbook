@@ -8,6 +8,8 @@
 # Windows automation.  This launcher instead owns one local Edge profile and
 # uses Edge's loopback DevTools endpoint to activate the exact handbook tab.
 
+$script:HandbookProjectRoot = Split-Path -Parent $PSScriptRoot
+
 function Test-HandbookServer {
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri "$Url/api/health" -TimeoutSec 1
@@ -66,16 +68,35 @@ function Initialize-BrowserProfile {
     if ((-not (Test-Path -LiteralPath $Profile)) -and (Test-Path -LiteralPath $Legacy)) {
         Write-Host "首次启动：正在把浏览器配置迁移到 $Profile（只需一次，请稍候）"
         New-Item -ItemType Directory -Path (Split-Path -Parent $Profile) -Force | Out-Null
-        $null = robocopy $Legacy $Profile /E /COPY:DAT /R:1 /W:1 /MT:8 /NFL /NDL /NJH /NJS
+        # A failed copy must not leave a seemingly complete final profile.
+        $staging = $Profile + ".migration-staging"
+        $null = robocopy $Legacy $staging /E /COPY:DAT /R:1 /W:1 /MT:8 /NFL /NDL /NJH /NJS
         if ($LASTEXITCODE -ge 8) {
             Write-Host "迁移失败，继续使用原目录。"
             return $Legacy
         }
         # 留一个标记：等新目录真的能启动浏览器之后，再删旧目录。
-        Set-Content -LiteralPath (Join-Path $Profile ".migrated-from") -Value $Legacy -Encoding utf8
+        Set-Content -LiteralPath (Join-Path $staging ".migrated-from") -Value $Legacy -Encoding utf8
+        Move-Item -LiteralPath $staging -Destination $Profile -ErrorAction Stop
     }
     New-Item -ItemType Directory -Path $Profile -Force | Out-Null
     return $Profile
+}
+
+function Test-BrowserProfileOwner {
+    param([string]$Profile)
+    try {
+        $listeners = @(Get-NetTCPConnection -LocalPort $DebugPort -State Listen -ErrorAction Stop)
+        foreach ($listener in $listeners) {
+            $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction Stop
+            $command = [string]$process.CommandLine
+            if ($command -match '(?:^|\s)--user-data-dir=(?:"([^"]+)"|([^\s]+))(?=\s|$)') {
+                $directory = if ($Matches[1]) { $Matches[1] } else { $Matches[2] }
+                if ([IO.Path]::GetFullPath($directory).TrimEnd('\') -ieq [IO.Path]::GetFullPath($Profile).TrimEnd('\')) { return $true }
+            }
+        }
+    } catch { }
+    return $false
 }
 
 function Complete-BrowserProfileMigration {
@@ -86,16 +107,21 @@ function Complete-BrowserProfileMigration {
     $marker = Join-Path $Profile ".migrated-from"
     if (-not (Test-Path -LiteralPath $marker)) { return }
     $legacy = ([string](Get-Content -LiteralPath $marker -Raw)).Trim()
-    if (-not $legacy) {
-        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-        return
-    }
+    if (-not $legacy) { return }
+    # The marker can only refer to the exact legacy directory, never a parent.
+    $expected = [IO.Path]::GetFullPath((Join-Path $script:HandbookProjectRoot "data\handbook-browser-profile")).TrimEnd('\')
+    try { $legacy = [IO.Path]::GetFullPath($legacy).TrimEnd('\') } catch { return }
+    if ($legacy -ine $expected -or $legacy -ieq [IO.Path]::GetFullPath($Profile).TrimEnd('\')) { return }
+    if (-not (Test-BrowserProfileOwner -Profile $Profile)) { return }
     $deadline = (Get-Date).AddSeconds(10)
     while ((Get-Date) -lt $deadline) {
         try {
             $null = Invoke-RestMethod -Uri "http://127.0.0.1:$DebugPort/json/version" -TimeoutSec 1
+            if (-not (Test-BrowserProfileOwner -Profile $Profile)) { return }
             if (Test-Path -LiteralPath $legacy) {
-                Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction SilentlyContinue
+                $entry = Get-Item -LiteralPath $legacy -Force
+                if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
+                Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction Stop
             }
             # 旧目录被占用时删除会失败；这时保留标记，下次启动再试。
             if (-not (Test-Path -LiteralPath $legacy)) {

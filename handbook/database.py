@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Iterator
 from pathlib import Path
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from datetime import date
 from datetime import datetime
 import json
@@ -12,6 +12,7 @@ import re
 import sqlite3
 import tempfile
 import threading
+import uuid
 from datetime import timedelta
 from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso,
     normalize_kazumi_category,
@@ -119,6 +120,13 @@ class HandbookDB:
         return filenames
 
     def initialize(self) -> None:
+        # Back up existing records before adding durable identities. Never
+        # guess which same-second bodies were edits of the same original note.
+        if self.path.is_file():
+            with closing(sqlite3.connect(self.path)) as probe:
+                columns = {row[1] for row in probe.execute("PRAGMA table_info(events)")}
+            if columns and "record_uid" not in columns:
+                self.export_snapshot(self.asset_root / "backups" / f"{self.path.stem}-before-record-identity-{uuid.uuid4().hex}.db")
         with self.connect() as db:
             db.execute("PRAGMA journal_mode = WAL")
             db.executescript(
@@ -359,6 +367,16 @@ class HandbookDB:
                 db.execute("ALTER TABLE events ADD COLUMN themes TEXT NOT NULL DEFAULT '[]'")
             if "updated_at" not in event_columns:
                 db.execute("ALTER TABLE events ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
+            if "record_uid" not in event_columns:
+                db.execute("ALTER TABLE events ADD COLUMN record_uid TEXT NOT NULL DEFAULT ''")
+            # Each legacy row is independent unless an explicit identity proves
+            # otherwise. A shorter edit and an unrelated substring both survive.
+            for row in db.execute("SELECT id FROM events WHERE record_uid = '' OR record_uid IS NULL").fetchall():
+                db.execute("UPDATE events SET record_uid = ? WHERE id = ?", (uuid.uuid4().hex, row["id"]))
+            db.execute("""CREATE TRIGGER IF NOT EXISTS events_record_uid AFTER INSERT ON events
+                WHEN NEW.record_uid = '' OR NEW.record_uid IS NULL BEGIN
+                UPDATE events SET record_uid = lower(hex(randomblob(16))) WHERE id = NEW.id;
+                END""")
             # Older rows carry no edit history; the creation time is the best
             # available stand-in and keeps merges deterministic.
             db.execute("UPDATE events SET updated_at = created_at WHERE updated_at = ''")
@@ -370,10 +388,6 @@ class HandbookDB:
                         "UPDATE events SET themes = ? WHERE id = ?",
                         (json_dumps(normalize_theme_ids(row["theme"])), row["id"]),
                     )
-            # Earlier sync merges turned every edit into an extra timeline row.
-            # Collapse the versions that are strict prefixes of the newest text;
-            # genuinely different notes written in the same second stay.
-            self._merge_note_versions(db)
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS anime_characters (
@@ -1867,43 +1881,6 @@ class HandbookDB:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def _merge_note_versions(self, db: sqlite3.Connection) -> int:
-        """Collapse older copies of an edited note left by previous sync merges.
-
-        The old merge key contained the whole body, so editing a note made the
-        previous text look like a second record.  Only groups in the same second
-        whose text is contained in the longest version are collapsed; two
-        genuinely different notes written in the same second stay untouched.
-        """
-        rows = db.execute(
-            """
-            SELECT id, event_type, anime_id, created_at, content
-            FROM events
-            WHERE event_type IN ('note', 'anime_comment')
-            ORDER BY created_at, id
-            """
-        ).fetchall()
-        groups: dict[tuple, list] = {}
-        for row in rows:
-            key = (row["event_type"], row["anime_id"], row["created_at"])
-            groups.setdefault(key, []).append(row)
-        removed = 0
-        for items in groups.values():
-            if len(items) < 2:
-                continue
-            keeper = max(items, key=lambda item: len(str(item["content"] or "")))
-            keeper_text = str(keeper["content"] or "").strip()
-            if not keeper_text:
-                continue
-            for item in items:
-                if item["id"] == keeper["id"]:
-                    continue
-                text = str(item["content"] or "").strip()
-                if text and text in keeper_text:
-                    db.execute("DELETE FROM events WHERE id = ?", (item["id"],))
-                    removed += 1
-        return removed
-
     def delete_event(self, event_id: int) -> bool:
         with self._write_lock, self.connect() as db:
             cursor = db.execute("DELETE FROM events WHERE id = ?", (event_id,))
@@ -1979,12 +1956,17 @@ class HandbookDB:
                     available = {
                         row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()
                     }
-                    columns = [column for column in rows[0] if column in available]
-                    if not columns:
-                        continue
-                    placeholders = ", ".join("?" for _ in columns)
-                    sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
-                    db.executemany(sql, [tuple(row.get(column) for column in columns) for row in rows])
+                    # Group rows by their actual columns so omitted legacy
+                    # fields use SQLite defaults instead of becoming NULL.
+                    batches: dict[tuple[str, ...], list[tuple]] = {}
+                    for row in rows:
+                        columns = tuple(column for column in row if column in available)
+                        if columns:
+                            batches.setdefault(columns, []).append(tuple(row[column] for column in columns))
+                    for columns, values in batches.items():
+                        placeholders = ", ".join("?" for _ in columns)
+                        sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
+                        db.executemany(sql, values)
                 # Snapshots written before edit tracking have no updated_at;
                 # fall back to the creation time so merges stay deterministic.
                 db.execute("UPDATE events SET updated_at = created_at WHERE updated_at = ''")

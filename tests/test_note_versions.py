@@ -19,6 +19,7 @@ def state(events):
 def note(event_id, content, *, updated_at=None, created_at=CREATED):
     return {
         "id": event_id,
+        "record_uid": f"test-record-{event_id}",
         "event_type": "note",
         "anime_id": None,
         "episodes": "[]",
@@ -60,14 +61,14 @@ class NoteMergeTest(unittest.TestCase):
         self.assertEqual(len(events), 2)
         self.assertEqual({event["content"] for event in events}, {"买牛奶", "修自行车"})
 
-    def test_legacy_snapshot_without_updated_at_still_collapses(self):
+    def test_same_identity_without_edit_clock_does_not_use_length(self):
         old = note(13, "旧内容", updated_at=None)
         new = note(13, "旧内容\n追加一行", updated_at=None)
         old.pop("updated_at")
         new.pop("updated_at")
         events = self.merge([new], [old])
         self.assertEqual(len(events), 1)
-        self.assertIn("追加一行", events[0]["content"])
+        self.assertIn(events[0]["content"], [old["content"], new["content"]])
 
     def test_merge_is_idempotent(self):
         new = note(14, "正文\n补充", updated_at="2026-11-04T13:00:00+08:00")
@@ -96,22 +97,19 @@ class NoteVersionMigrationTest(unittest.TestCase):
             )
             return int(cursor.lastrowid)
 
-    def test_strict_prefix_copies_are_collapsed(self):
+    def test_prefix_rows_without_shared_identity_are_preserved(self):
         short = self.insert("要更新的：\n周表完善")
         longer = self.insert("要更新的：\n周表完善\n\n主题随机")
         longest = self.insert("要更新的：\n周表完善\n\n主题随机\n\n播出进度")
-        with self.db._write_lock, self.db.connect() as db:
-            removed = self.db._merge_note_versions(db)
-        self.assertEqual(removed, 2)
+        self.db.initialize()
         with self.db.connect() as db:
             remaining = [row["content"] for row in db.execute("SELECT content FROM events")]
-        self.assertEqual(remaining, ["要更新的：\n周表完善\n\n主题随机\n\n播出进度"])
+        self.assertEqual(len(remaining), 3)
 
     def test_independent_notes_keep_both(self):
         self.insert("买牛奶")
         self.insert("修自行车")
-        with self.db._write_lock, self.db.connect() as db:
-            self.assertEqual(self.db._merge_note_versions(db), 0)
+        self.db.initialize()
         with self.db.connect() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM events").fetchone()[0], 2)
 

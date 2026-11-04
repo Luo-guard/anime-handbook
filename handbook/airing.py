@@ -8,6 +8,7 @@ is already available.
 from __future__ import annotations
 
 import re
+import math
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -90,11 +91,26 @@ def compute_airing(anime: dict[str, Any], item: dict[str, Any], now: datetime | 
     current = current.astimezone(BEIJING)
 
     total = max(len(episodes), int(anime.get("episode_count") or 0))
+    def number(episode):
+        try:
+            value = float(episode.get("sort", episode.get("ep")))
+            return int(value) if math.isfinite(value) and value > 0 and value.is_integer() else None
+        except (ValueError, TypeError):
+            return None
+    numbers = [number(episode) for episode in episodes]
+    known = [value for value in numbers if value is not None]
+    # Continued series can label this season 49..60. Normalize that offset,
+    # but keep gaps within 1..total (1,3 must never become episode 1,2).
+    offset = min(known) - 1 if known and min(known) > 1 and max(known) > total else 0
+    numbered = [(value - offset if value is not None else index, episode)
+                for index, (value, episode) in enumerate(zip(numbers, episodes), 1)]
+    numbered.sort(key=lambda pair: pair[0])
+    total = max(total, max(index for index, _ in numbered))
     aired = 0
     next_episode: tuple[int, dict[str, Any], datetime | date, str] | None = None
     precision = "minute"
     valid = 0
-    for index, episode in enumerate(episodes, 1):
+    for index, episode in numbered:
         at, level = airing_at(episode, item)
         if at is None:
             continue
@@ -105,7 +121,7 @@ def compute_airing(anime: dict[str, Any], item: dict[str, Any], now: datetime | 
         else:
             reached = at <= current
         if reached:
-            aired = index
+            aired = max(aired, index)
         elif next_episode is None:
             next_episode = (index, episode, at, level)
 

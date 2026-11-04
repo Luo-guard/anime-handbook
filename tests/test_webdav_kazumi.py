@@ -39,8 +39,10 @@ class KazumiCloudPushTests(unittest.TestCase):
     def run_push(self, service, database, hive, remote):
         calls = []
 
-        def fake_request(config, method, relative, body=None, content_type=None):
+        def fake_request(config, method, relative, body=None, content_type=None, *, request_headers=None, response_headers=None):
             calls.append((method, relative, body))
+            if response_headers is not None:
+                response_headers["etag"] = '"version1"'
             if method == "GET":
                 data = remote.get(relative)
                 return (404, b"") if data is None else (200, data)
@@ -68,7 +70,7 @@ class KazumiCloudPushTests(unittest.TestCase):
             service, database, hive = self.build(Path(folder))
             config = service._read()
             item = service._profile_config(config)
-            item["kazumi_sync"] = {
+            item["kazumi_sync_v2"] = {
                 "collectibles": hashlib.sha256(b"old").hexdigest(),
                 "collectchanges": hashlib.sha256(b"changes-v1").hexdigest(),
             }
@@ -81,15 +83,17 @@ class KazumiCloudPushTests(unittest.TestCase):
             self.assertFalse(result["ok"])
             self.assertEqual(result["action"], "changed")
             self.assertEqual(self.puts(calls), [])
-            # 云端版本被记为新的基线，下一次点击才会推送。
-            self.assertEqual(service._profile_config(service._read())["kazumi_sync"]["collectibles"], hashlib.sha256(b"from-phone").hexdigest())
+            again, calls = self.run_push(service, database, hive, remote)
+            self.assertEqual(again["action"], "changed")
+            self.assertEqual(self.puts(calls), [])
+            self.assertEqual(service._profile_config(service._read())["kazumi_sync_v2"]["collectibles"], hashlib.sha256(b"old").hexdigest())
 
     def test_pushes_when_cloud_unchanged_since_last_sync(self):
         with tempfile.TemporaryDirectory() as folder:
             service, database, hive = self.build(Path(folder))
             config = service._read()
             item = service._profile_config(config)
-            item["kazumi_sync"] = {
+            item["kazumi_sync_v2"] = {
                 "collectibles": hashlib.sha256(b"cloud-v1").hexdigest(),
                 "collectchanges": hashlib.sha256(b"changes-v1").hexdigest(),
             }
