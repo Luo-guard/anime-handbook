@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Url = "http://127.0.0.1:43127",
     [int]$WaitSeconds = 8,
     [int]$DebugPort = 43128
@@ -50,6 +50,64 @@ function Activate-ManagedHandbookTab {
     return $false
 }
 
+function Get-BrowserProfilePath {
+    # Chromium 的用户目录只是缓存和登录态，没有手账数据。留在 data/ 会让
+    # 备份、迁移、共享都拖上近 2 GB 可再生文件，所以放到 %LOCALAPPDATA%。
+    $root = if ($env:LOCALAPPDATA) {
+        Join-Path $env:LOCALAPPDATA "AnimeHandbook"
+    } else {
+        Join-Path $env:USERPROFILE "AppData\Local\AnimeHandbook"
+    }
+    return Join-Path $root "browser-profile"
+}
+
+function Initialize-BrowserProfile {
+    param([string]$Profile, [string]$Legacy)
+    if ((-not (Test-Path -LiteralPath $Profile)) -and (Test-Path -LiteralPath $Legacy)) {
+        Write-Host "首次启动：正在把浏览器配置迁移到 $Profile（只需一次，请稍候）"
+        New-Item -ItemType Directory -Path (Split-Path -Parent $Profile) -Force | Out-Null
+        $null = robocopy $Legacy $Profile /E /COPY:DAT /R:1 /W:1 /MT:8 /NFL /NDL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) {
+            Write-Host "迁移失败，继续使用原目录。"
+            return $Legacy
+        }
+        # 留一个标记：等新目录真的能启动浏览器之后，再删旧目录。
+        Set-Content -LiteralPath (Join-Path $Profile ".migrated-from") -Value $Legacy -Encoding utf8
+    }
+    New-Item -ItemType Directory -Path $Profile -Force | Out-Null
+    return $Profile
+}
+
+function Complete-BrowserProfileMigration {
+    # DevTools 端点能在新 profile 上应答，才算“迁移后的目录可用”。
+    # 只有这时才删旧目录，避免复制出错时连原来能用的配置一起丢了。
+    param([string]$Profile)
+    if (-not $Profile) { return }
+    $marker = Join-Path $Profile ".migrated-from"
+    if (-not (Test-Path -LiteralPath $marker)) { return }
+    $legacy = ([string](Get-Content -LiteralPath $marker -Raw)).Trim()
+    if (-not $legacy) {
+        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+        return
+    }
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $null = Invoke-RestMethod -Uri "http://127.0.0.1:$DebugPort/json/version" -TimeoutSec 1
+            if (Test-Path -LiteralPath $legacy) {
+                Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            # 旧目录被占用时删除会失败；这时保留标记，下次启动再试。
+            if (-not (Test-Path -LiteralPath $legacy)) {
+                Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+            }
+            return
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+}
+
 function Find-EdgeExecutable {
     $command = Get-Command msedge.exe -ErrorAction SilentlyContinue
     $paths = @(
@@ -81,10 +139,11 @@ if (Activate-ManagedHandbookTab) {
 
 $edge = Find-EdgeExecutable
 if ($edge) {
-    $profile = Join-Path (Split-Path -Parent $PSScriptRoot) "data\handbook-browser-profile"
-    New-Item -ItemType Directory -Path $profile -Force | Out-Null
+    $legacyProfile = Join-Path (Split-Path -Parent $PSScriptRoot) "data\handbook-browser-profile"
+    $profile = Initialize-BrowserProfile -Profile (Get-BrowserProfilePath) -Legacy $legacyProfile
     $arguments = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=$DebugPort --user-data-dir=`"$profile`" --new-window `"$Url`""
     Start-Process -FilePath $edge -ArgumentList $arguments
+    Complete-BrowserProfileMigration -Profile $profile
     exit 0
 }
 

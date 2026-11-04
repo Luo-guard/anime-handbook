@@ -3,7 +3,11 @@ import http.client
 import json
 import threading
 import unittest
-from handbook.control import DesktopHTTPServer
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from handbook.control import DesktopHTTPServer, DesktopRequestHandler
+from handbook.http import RequestHandler
 
 
 class DesktopShutdownTest(unittest.TestCase):
@@ -51,3 +55,55 @@ class DesktopShutdownTest(unittest.TestCase):
         self.server.server_close()
         with self.assertRaises(OSError):
             self.call('GET', '/api/health')
+
+
+class WriteGateScopeTest(unittest.TestCase):
+    """Network-bound writes must not freeze every other save in the window."""
+
+    def handler(self, path, gate, *, stopping=False):
+        handler = object.__new__(DesktopRequestHandler)
+        handler.server = SimpleNamespace(write_gate=gate, stopping=stopping)
+        handler.path = path
+        return handler
+
+    def test_network_writes_do_not_take_the_global_gate(self):
+        gate = threading.Lock()
+        gate.acquire()
+        handler = self.handler('/api/webdav/sync', gate)
+        handler.send_error_json = lambda *args, **kwargs: self.fail('unexpected rejection')
+        done = []
+        try:
+            with patch.object(RequestHandler, 'do_POST', return_value='posted'):
+                thread = threading.Thread(target=lambda: done.append(handler._write('POST')), daemon=True)
+                thread.start()
+                thread.join(timeout=2)
+        finally:
+            gate.release()
+        self.assertEqual(done, ['posted'], 'sync must not wait for an occupied write gate')
+
+    def test_ordinary_writes_still_serialise(self):
+        gate = threading.Lock()
+        gate.acquire()
+        handler = self.handler('/api/settings', gate)
+        done = []
+        try:
+            with patch.object(RequestHandler, 'do_POST', return_value='posted'):
+                thread = threading.Thread(target=lambda: done.append(handler._write('POST')), daemon=True)
+                thread.start()
+                thread.join(timeout=0.3)
+                self.assertEqual(done, [], 'an ordinary save still waits for the gate')
+                gate.release()
+                thread.join(timeout=2)
+        finally:
+            if gate.locked():
+                gate.release()
+        self.assertEqual(done, ['posted'])
+
+    def test_unlocked_writes_still_notice_a_pending_shutdown(self):
+        handler = self.handler('/api/collection-status', threading.Lock(), stopping=True)
+        calls = []
+        handler.send_error_json = lambda status, message: calls.append((status, message))
+        with patch.object(RequestHandler, 'do_POST') as do_post:
+            handler._write('POST')
+        self.assertEqual(calls, [(503, '后台正在关闭，请稍后重新启动手账')])
+        do_post.assert_not_called()

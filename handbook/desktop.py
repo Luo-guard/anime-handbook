@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Any
 from http.server import ThreadingHTTPServer
 import threading
+import traceback
 import urllib.request
 import webbrowser
-from .common import (HOST, PORT, migrate_legacy_backgrounds, path_identity)
+from .assets import run_housekeeping
+from .common import (DATA_ROOT, HOST, PORT, migrate_legacy_backgrounds, path_identity)
 from .database import HandbookDB
 from .metadata import SyncService
 from .related import AgeRelatedService
@@ -72,16 +74,48 @@ def server_is_running() -> bool:
         return False
 
 
+def _startup_repairs(database: HandbookDB, sync: SyncService) -> None:
+    """Repair legacy rows and sweep assets *after* the window is already open.
+
+    These steps used to run before the port was bound.  The episode-key repair
+    calls Bangumi for every mismatch, so a slow or offline network left the
+    launcher on a blank screen for tens of seconds.  None of it is needed to
+    render the first page; when it finishes we bump the revision so the page
+    reloads the collection exactly once.
+    """
+    try:
+        migrate_legacy_backgrounds()
+    except Exception:
+        traceback.print_exc()
+    try:
+        database.recover_progress_from_watch_events(
+            [int(item["id"]) for item in database.list_anime()]
+        )
+    except Exception:
+        traceback.print_exc()
+    try:
+        sync.repair_legacy_watch_episode_keys()
+    except Exception:
+        traceback.print_exc()
+    try:
+        accounts = {str(profile.get("id") or "") for profile in PROFILES.list_profiles()}
+        accounts.add("local")
+        accounts.discard("")
+        run_housekeeping(
+            database,
+            database.get_settings(),
+            accounts,
+            backup_root=DATA_ROOT / "backups",
+        )
+    except Exception:
+        traceback.print_exc()
+    try:
+        database._touch_revision()
+    except Exception:
+        traceback.print_exc()
+
+
 def main(*, open_browser: bool = True) -> None:
-    migrate_legacy_backgrounds()
-    # Repair any progress values left behind by older metadata-refresh builds
-    # before the browser reads the collection for the first time.
-    DATABASE.recover_progress_from_watch_events(
-        [int(item["id"]) for item in DATABASE.list_anime()]
-    )
-    # One-time-compatible repair for old refreshes that changed Bangumi episode
-    # keys into generated placeholders. It only calls the API for mismatches.
-    SYNC.repair_legacy_watch_episode_keys()
     url = f"http://{HOST}:{PORT}"
     if server_is_running():
         if open_browser:
@@ -94,6 +128,13 @@ def main(*, open_browser: bool = True) -> None:
     SYNC.start_background()
     SHARING.start_resident_refresh()
     WEBDAV.start_background(lambda: DATABASE)
+    # The window must come up first; repairs and asset sweeps run behind it.
+    threading.Thread(
+        target=_startup_repairs,
+        args=(DATABASE, SYNC),
+        name="handbook-startup-repairs",
+        daemon=True,
+    ).start()
     if open_browser:
         threading.Timer(0.35, lambda: webbrowser.open(url)).start()
     print(f"动漫手账已启动：{url}")

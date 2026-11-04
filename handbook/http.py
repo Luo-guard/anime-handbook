@@ -13,6 +13,7 @@ import base64
 import json
 import mimetypes
 import os
+import threading
 from urllib.parse import parse_qs
 import re
 from datetime import date, datetime, timedelta
@@ -22,6 +23,7 @@ import time
 from urllib.parse import unquote
 from urllib.parse import urlparse
 from .common import (BACKGROUND_ROOT, CATEGORY_NAMES, DATA_ROOT, MAX_JSON_BODY_BYTES, RECORD_IMAGE_ROOT, STATIC_ROOT, background_stem, configure_windows_autostart, find_background_asset, json_dumps, normalize_background_bytes, normalize_bgm_sources, safe_asset_id, with_initial_appearance)
+from .assets import prune_record_images
 from .common import normalize_custom_search_links, normalize_detail_links, normalize_link_sync, normalize_schedule_grouping
 from .jumps import normalize_jump
 from .metadata import SyncService
@@ -72,6 +74,22 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def require_write_access(self) -> None:
         _desktop().require_active_profile_write_access()
+
+    def sweep_record_images_later(self) -> None:
+        """Collect unreferenced record images after the response is written.
+
+        The caller already holds the desktop write gate, so walking the image
+        directory there would make every other save wait behind it.
+        """
+        database, root = self.database, self.record_image_root
+
+        def sweep() -> None:
+            try:
+                prune_record_images(database, root=root)
+            except Exception:
+                pass
+
+        threading.Thread(target=sweep, name="handbook-image-sweep", daemon=True).start()
 
     @property
     def database(self):
@@ -163,10 +181,23 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self.send_error(HTTPStatus.NOT_FOUND)
                     return
                 body = image.read_bytes()
+                # The URL carries ?v=<version> whenever the image changes, so a
+                # versioned request can be cached for good.  Older callers keep
+                # revalidating, but ETag makes that a 304 instead of megabytes.
+                etag = f'"{int(image.stat().st_mtime)}-{len(body)}"'
+                if self.headers.get("If-None-Match") == etag:
+                    self.send_response(HTTPStatus.NOT_MODIFIED)
+                    self.send_header("ETag", etag)
+                    self.end_headers()
+                    return
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", mimetypes.guess_type(image.name)[0] or "image/jpeg")
                 self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-cache")
+                self.send_header("ETag", etag)
+                self.send_header(
+                    "Cache-Control",
+                    "private, max-age=31536000, immutable" if query.get("v") else "no-cache",
+                )
                 self.end_headers()
                 self.wfile.write(body)
             elif path == "/api/health":
@@ -735,6 +766,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     raw_directives=str(body.get("raw_directives") or ""),
                     episode_text=str(body.get("episodes") or ""),
                 )
+                if updated:
+                    self.sweep_record_images_later()
                 self.send_json({"ok": updated}, 200 if updated else 404)
             elif path == "/api/settings":
                 allowed = {
@@ -1206,13 +1239,26 @@ class RequestHandler(BaseHTTPRequestHandler):
             if path == "/api/background":
                 theme_id = safe_asset_id(query.get("profile", [""])[0], "default")
                 account_id = safe_asset_id(query.get("account", [""])[0], str(self.profiles.profile().get("id") or "local"))
+                removed = 0
                 for image in self.background_root.glob(f"{background_stem(account_id, theme_id)}.*"):
                     image.unlink(missing_ok=True)
-                self.database.set_setting("custom_background_enabled", False)
-                self.send_json({"ok": True, "settings": self.database.get_settings()})
+                    removed += 1
+                # Only the background in use may turn the switch off.  Deleting a
+                # removed theme's image must not hide the background of the theme
+                # the window is currently showing.
+                settings = self.database.get_settings()
+                active_theme = safe_asset_id(settings.get("active_theme_profile"), "default")
+                active_account = safe_asset_id(
+                    str(self.profiles.profile().get("id") or "local"), "local"
+                )
+                if active_theme == theme_id and active_account == account_id:
+                    self.database.set_setting("custom_background_enabled", False)
+                self.send_json({"ok": True, "removed": removed, "settings": self.database.get_settings()})
             elif path.startswith("/api/events/"):
                 event_id = int(path.rsplit("/", 1)[1])
                 deleted = self.database.delete_event(event_id)
+                if deleted:
+                    self.sweep_record_images_later()
                 self.send_json({"ok": deleted}, 200 if deleted else 404)
             elif path.startswith("/api/custom-collections/") and "/items/" in path:
                 parts = path.split("/")

@@ -998,6 +998,18 @@ async function deleteThemeProfile(id) {
   // 先把界面切到保底方案，再一次性写入，避免删除后有一帧仍显示被删方案。
   Object.assign(state.settings, profileAppearance(fallback), { active_theme_profile: fallback.id });
   await persistThemeProfiles(remaining, fallback.id);
+  // 主题删了，它的背景也不该继续留在 data/background 里。删除失败不影响主流程，
+  // 下次启动的资产清扫会兜底。
+  if (target.custom_background_enabled) {
+    try {
+      await api(
+        `/api/background?profile=${encodeURIComponent(id)}&account=${encodeURIComponent(state.active_profile?.id || "local")}`,
+        { method: "DELETE" },
+      );
+    } catch (error) {
+      // 忽略：孤儿文件会在启动清扫时回收。
+    }
+  }
   if (planChanged) {
     try {
       await persistThemePlan(plan, state.settings.theme_weekly_plan_enabled === true);

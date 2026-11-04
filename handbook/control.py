@@ -6,6 +6,13 @@ from urllib.parse import urlparse
 
 from .http import RequestHandler
 
+# Endpoints whose real cost is a network round-trip.  Holding the global write
+# gate while a WebDAV sync retries (25 s per request) or while a collection
+# status change fetches Bangumi made every other save in the window wait, which
+# is what looked like a frozen UI.  Both already serialise their own database
+# writes, so they can run beside ordinary saves.
+UNLOCKED_WRITES = {'/api/webdav/sync', '/api/collection-status'}
+
 
 class DesktopRequestHandler(RequestHandler):
     def do_GET(self):
@@ -14,10 +21,17 @@ class DesktopRequestHandler(RequestHandler):
         return super().do_GET()
 
     def _write(self, method):
+        path = urlparse(self.path).path
+        if method == 'POST' and path in UNLOCKED_WRITES:
+            # No gate here: the request still has to notice a pending shutdown,
+            # but it must not block unrelated saves while it waits on the network.
+            if self.server.stopping:
+                return self.send_error_json(503, '后台正在关闭，请稍后重新启动手账')
+            return super().do_POST()
         with self.server.write_gate:
             if self.server.stopping:
                 return self.send_error_json(503, '后台正在关闭，请稍后重新启动手账')
-            if method == 'POST' and urlparse(self.path).path == '/api/desktop/shutdown':
+            if method == 'POST' and path == '/api/desktop/shutdown':
                 host = self.headers.get('Host', '')
                 allowed_hosts = {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
                 token = self.headers.get('X-Handbook-Shutdown', '')

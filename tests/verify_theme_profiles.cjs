@@ -43,6 +43,7 @@ const BOOT = {
 };
 const patches = [];
 const uploads = [];
+const deletes = [];
 
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://x').pathname;
@@ -53,6 +54,10 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/bootstrap') return send(200, BOOT);
   if (pathname === '/api/status') return send(200, { sync: { running: false }, stats: {}, revision: 1 });
   if (pathname === '/api/background' && req.method === 'GET') return send(200, PNG, 'image/png');
+  if (pathname === '/api/background' && req.method === 'DELETE') {
+    deletes.push(new URL(req.url, 'http://x').search);
+    return send(200, { ok: true, removed: 1 });
+  }
   if (pathname === '/api/background' && req.method === 'POST') {
     let raw = '';
     req.on('data', (chunk) => { raw += chunk; });
@@ -239,6 +244,8 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('.theme-card-main').count(), 2);
     assert.equal(patches.at(-1).theme_profiles.length, 2);
     assert.notEqual(patches.at(-1).active_theme_profile, createdId);
+    assert.equal(deletes.length, 1, 'deleting a theme also deletes its background image');
+    assert.match(deletes[0], new RegExp(`profile=${createdId}`));
 
     // 11) 刷新后仍是卡片上的那套方案。
     await page.reload({ waitUntil: 'load' });
