@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261105-schedule-corners" />
+  <link rel="stylesheet" href="/styles.css?v=20261105-main-settings-flat" />
   </head>
   <body>
     <div class="app-shell">
@@ -357,10 +357,10 @@
 </aside>
           <div class="settings-list">
           <div class="settings-section-title" data-settings-section="main">主界面设置</div>
-<details class="main-settings-section" open><summary>主题外观</summary><div class="main-settings-content">          
-          
-          <div class="theme-profile-grid" id="themeProfileGrid" role="list" aria-label="主题方案"></div>
-</div></details><details class="main-settings-section" open><summary>主题自动切换</summary><div class="main-settings-content">          <label class="setting-row">
+<h3 class="settings-subsection-title">主题外观</h3>
+<div class="theme-profile-grid" id="themeProfileGrid" role="list" aria-label="主题方案"></div>
+<h3 class="settings-subsection-title">主题自动切换</h3>
+<label class="setting-row">
             <span>
               <strong>打开时随机主题</strong>
               <small>每次打开手账或刷新页面，都从上面的方案里随机抽一套显示，各有各的配色和背景；方案本身的内容不会被改动。只有一套方案时就是它。开启周计划后，随机主题会暂停。</small>
@@ -382,7 +382,7 @@
             </span>
           </label>
           <div class="theme-weekly-plan" id="themeWeeklyPlan" role="group" aria-label="每周主题安排"></div>
-</div></details><details class="main-settings-section" open><summary>侧边栏与页面</summary><div class="main-settings-content">          
+<h3 class="settings-subsection-title">侧边栏与页面</h3>
 <div class="setting-row stacked"><span><strong>页面名称</strong><small>自定义五个页面的名称，侧边栏、页面标题和相关设置会统一更新；留空使用默认名称，最多 20 个字符。</small></span><div id="sidebarNameInputs"></div></div>
           <label class="setting-row">
             <span>
@@ -401,8 +401,8 @@
             </span>
             <div class="sidebar-settings-list" id="sidebarSettingsList"></div>
           </div>
-</div></details><details class="main-settings-section" open><summary>启动与后台</summary><div class="main-settings-content">          
-          <label class="setting-row">
+<h3 class="settings-subsection-title">启动与后台</h3>
+<label class="setting-row">
             <span>
               <strong>打开时默认页面</strong>
               <small>每次打开手账首先显示的页面</small>
@@ -437,7 +437,7 @@
             <span><strong>关闭手账后台</strong><small>停止本机后台服务；重新使用时需运行启动快捷方式。请先保存当前修改。</small></span>
             <button type="button" class="secondary-button compact-button" id="shutdownBackendSettings" data-desktop-shutdown>关闭后台</button>
           </div>
-</div></details>
+
           <div class="settings-section-title" data-settings-section="collection" data-page-label="collection">收藏夹</div>
           <h3 class="settings-subsection-title">主页与分类</h3>
           <label class="setting-row">

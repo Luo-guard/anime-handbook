@@ -98,7 +98,8 @@ const server = http.createServer((req, res) => {
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base);await page.waitForSelector('#settingsButton');
   await page.click('#settingsButton');await page.waitForSelector('#settingsModal[open]');
-  assert.deepEqual(await page.locator('.main-settings-section>summary').allTextContents(),['主题外观','主题自动切换','侧边栏与页面','启动与后台']);
+  assert.equal(await page.locator('.main-settings-section').count(),0);
+  assert.deepEqual((await page.locator('.settings-subsection-title').allTextContents()).slice(0,4),['主题外观','主题自动切换','侧边栏与页面','启动与后台']);
   assert.equal(await page.locator('#themePagePreview').isVisible(),false);
   await page.click('[data-theme-pick="night"]');
   assert.equal(SETTINGS.active_theme_profile,'default');assert.equal(patches.length,0);
