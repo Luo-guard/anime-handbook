@@ -17,7 +17,7 @@ chrome.tabs.onRemoved.addListener(id=>chrome.storage.session.remove(String(id)))
 async function saveVideoFromTab(tab){
  try{
   const url=new URL(tab.url||"");
-  const isVideo=url.protocol==="https:"&&["www.bilibili.com","bilibili.com"].includes(url.hostname)&&/^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname);
+  const isVideo=url.protocol==="https:"&&["www.bilibili.com","bilibili.com"].includes(url.hostname)&&/^(?:\/video\/BV[0-9A-Za-z]{10}|\/bangumi\/play\/(?:ss|ep)[1-9][0-9]{0,11})\/?$/.test(url.pathname);
   // 非 B 站视频页面也能存，按“其他链接”处理；只有 chrome:// 这类页面不能读。
   if(!isVideo&&!["http:","https:"].includes(url.protocol))throw Error("这个页面不能保存，请打开网页后重试");
   const [result]=await chrome.scripting.executeScript({target:{tabId:tab.id},func:()=>({url:location.href,title:document.querySelector("h1")?.textContent.trim()||document.title,uploader:document.querySelector(".up-name")?.textContent.trim()||document.querySelector(".up-detail-top a")?.textContent.trim()||""})});

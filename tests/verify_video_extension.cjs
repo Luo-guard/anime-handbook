@@ -52,5 +52,15 @@ try{
  await capture.locator('#videoCaptureSearch').click();await capture.locator('#videoCaptureTitle').click();assert.equal(await capture.locator('#videoAnimeOptions').isVisible(),false);
  await capture.locator('#videoCaptureSearch').fill('另一');await capture.getByRole('option',{name:'另一部番剧',exact:true}).click();await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);assert.equal(await capture.locator('#videoCaptureDefault').isChecked(),false);await capture.locator('#videoCaptureTitle').fill('自定义视频名');await capture.locator('#videoCaptureNote').fill('繁体');await capture.locator('#videoCaptureSave').click();await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
  assert.equal(writes.length,1);assert.equal(writes[0].anime_id,456);assert.equal(writes[0].note,'繁体');assert.equal(writes[0].title,'自定义视频名');assert(writes[0].url.includes('p=2'));assert.equal(writes[0].scope,'test-scope');assert.equal(writes[0].make_default,false,'save confirmation defaults to collection only');
+ for(const key of ['ss1293','ep35595']){
+  const official='https://www.bilibili.com/bangumi/play/'+key;
+  await worker.evaluate(url=>{chrome.scripting.executeScript=async()=>[{result:{url,title:'Official',uploader:''}}]},official);
+  await worker.evaluate(tab=>saveVideoFromTab(tab),{id:tab.id,url:official});
+  await capture.locator('#videoCaptureModal').waitFor({state:'visible'});
+  await capture.waitForFunction(()=>!document.querySelector('#videoCaptureSave').disabled);
+  await capture.locator('#videoCaptureSave').click();
+  await capture.locator('#videoCaptureModal').waitFor({state:'hidden'});
+  assert.equal(writes.at(-1).kind,'video');assert.equal(writes.at(-1).url,official);
+ }
  console.log('Extension capture -> same-origin handbook confirmation: first launch and existing-tab reuse without reload, catalog, association, reset, filter, explicit save and Part 2 passed.');
 }finally{if(context)await context.close();if(server)await new Promise(resolve=>server.close(resolve));if(!path.resolve(dir).startsWith(path.join(os.tmpdir(),'handbook-extension-')))throw Error('Unexpected directory');fs.rmSync(dir,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exit(1)});

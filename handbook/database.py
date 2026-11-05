@@ -179,6 +179,7 @@ class HandbookDB:
                     note TEXT NOT NULL DEFAULT '',
                     is_default INTEGER NOT NULL DEFAULT 0,
                     kind TEXT NOT NULL DEFAULT 'video',
+                    episode_urls TEXT NOT NULL DEFAULT '{}',
                     UNIQUE(anime_id, url)
                 );
                 CREATE TABLE IF NOT EXISTS jump_history (
@@ -360,6 +361,8 @@ class HandbookDB:
             }
             if "kind" not in video_link_columns:
                 db.execute("ALTER TABLE video_links ADD COLUMN kind TEXT NOT NULL DEFAULT 'video'")
+            if "episode_urls" not in video_link_columns:
+                db.execute("ALTER TABLE video_links ADD COLUMN episode_urls TEXT NOT NULL DEFAULT '{}'")
             # 自定义收藏夹 → Kazumi 收藏夹的映射（NULL 表示不映射）。
             custom_columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(custom_collections)").fetchall()

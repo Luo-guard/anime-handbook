@@ -67,5 +67,19 @@ assert.equal(await p.evaluate(()=>rows[0].url),'https://www.bilibili.com/video/B
 await p.evaluate(()=>{state.progressAnime.episodes=[];refreshSavedVideoTargets()});
 assert.equal(await defaultUrl(),'https://www.bilibili.com/video/BV1AgHK6jE64/?p=8&t=20','unknown chapters retain the source URL');
 assert.equal(await p.evaluate(()=>bilibiliResumeUrl({url:'https://example.com/watch?p=8',kind:'video'},state.progressAnime)),'https://example.com/watch?p=8');
+// Official seasons resolve cached ep identities rather than computing IDs.
+await p.evaluate(()=>{
+ state.progressAnime.episodes=Array.from({length:24},(_,i)=>({key:`bgm:${100+i}`,type:0,sort:i+1}));
+ state.pendingEpisodes=new Set(Array.from({length:16},(_,i)=>`bgm:${100+i}`));
+ rows=[{id:5,kind:'video',is_default:1,title:'Official',url:'https://www.bilibili.com/bangumi/play/ss1293',episode_urls:{'17':'https://www.bilibili.com/bangumi/play/ep90001','18':'https://www.bilibili.com/bangumi/play/ep70003'}}];
+ return renderVideoLinks(1);
+});
+assert.equal(await defaultUrl(),'https://www.bilibili.com/bangumi/play/ep90001');
+assert.equal(await p.locator('#savedVideoLinks .saved-video-open').getAttribute('href'),'https://www.bilibili.com/bangumi/play/ep90001');
+await p.evaluate(()=>{state.pendingEpisodes.add('bgm:116');refreshSavedVideoTargets()});
+assert.equal(await defaultUrl(),'https://www.bilibili.com/bangumi/play/ep70003');
+await p.evaluate(()=>{state.pendingEpisodes.add('bgm:117');refreshSavedVideoTargets()});
+assert.equal(await defaultUrl(),'https://www.bilibili.com/bangumi/play/ss1293');
+assert.equal(await p.evaluate(()=>parseVideoCapture('#save-video='+encodeURIComponent(JSON.stringify({url:'https://www.bilibili.com/bangumi/play/ep35595',title:'official',kind:'video'}))).kind),'video');
 console.log('Bilibili resume: 16 -> P17, OP/ED exclusion, pending progress, gaps, completion, source URL and ordinary links preserved.');
 console.log('Saved video cards: theme styling, no underline, default badge, hidden list retains shortcut, merged/separate modes, no-video fallback, empty state the separate saved-links block and jump recording passed.');}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});

@@ -2,9 +2,60 @@ import tempfile
 import unittest
 from pathlib import Path
 from handbook.database import HandbookDB
-from handbook.video_links import VideoLinks, canonical_video_url
+from handbook.video_links import VideoLinks, canonical_video_url, fetch_bangumi_episodes
+from unittest.mock import patch
+import json
+import io
 
 class VideoLinksTest(unittest.TestCase):
+    def test_official_urls_and_episode_identity_mapping(self):
+        payload = {"code": 0, "result": {"episodes": [{"title": "1", "id": 35595}, {"title": "17", "id": 90001}, {"title": "PV", "id": 123}]}}
+        for key, parameter in [("ss1293", "season_id=1293"), ("ep35595", "ep_id=35595")]:
+            self.assertEqual(canonical_video_url(f"https://www.bilibili.com/bangumi/play/{key}?spm_id=tracking"), f"https://www.bilibili.com/bangumi/play/{key}")
+            with patch("handbook.video_links.urllib.request.urlopen", return_value=io.BytesIO(json.dumps(payload).encode())) as request:
+                result = fetch_bangumi_episodes("https://www.bilibili.com/bangumi/play/" + key)
+            self.assertEqual(result, {"1": "https://www.bilibili.com/bangumi/play/ep35595", "17": "https://www.bilibili.com/bangumi/play/ep90001"})
+            self.assertIn(parameter, request.call_args.args[0].full_url)
+        for key in ["ss0", "ep-1", "ss1293/other"]:
+            with self.assertRaises(ValueError):
+                canonical_video_url("https://www.bilibili.com/bangumi/play/" + key)
+        for episodes in [[], [{"title": "1", "id": 101}, {"title": "1", "id": 202}]]:
+            raw = json.dumps({"code": 0, "result": {"episodes": episodes}}).encode()
+            with patch("handbook.video_links.urllib.request.urlopen", return_value=io.BytesIO(raw)):
+                with self.assertRaises(ValueError):
+                    fetch_bangumi_episodes("https://www.bilibili.com/bangumi/play/ss1293")
+
+    def test_official_video_cached_resume_survives_resave_and_network_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            db = HandbookDB(Path(temp)/"test.db", asset_root=Path(temp))
+            with db.connect() as connection:
+                connection.execute("INSERT INTO anime(id,name,collection_type,created_at,updated_at) VALUES(1,'test',1,'2026-11-05','2026-11-05')")
+            store = VideoLinks(db)
+            body = {"scope": store.scope, "anime_id": 1, "kind": "video", "url": "https://www.bilibili.com/bangumi/play/ss1293", "make_default": True}
+            mapping = {"17": "https://www.bilibili.com/bangumi/play/ep90001"}
+            with patch("handbook.video_links.fetch_bangumi_episodes", return_value=mapping):
+                row = store.update(body)[0]
+            self.assertEqual(row["episode_urls"], mapping)
+            self.assertEqual(row["is_default"], 1)
+            with patch("handbook.video_links.fetch_bangumi_episodes", side_effect=ValueError("offline")):
+                self.assertEqual(store.update(body)[0]["episode_urls"], mapping)
+                with self.assertRaises(ValueError):
+                    store.update({**body, "url": "https://www.bilibili.com/bangumi/play/ep35595"})
+            reopened = VideoLinks(HandbookDB(db.path, asset_root=Path(temp)))
+            self.assertEqual(len(reopened.list(1)), 1)
+            self.assertEqual(reopened.list(1)[0]["episode_urls"], mapping)
+
+    def test_old_video_schema_migrates_without_losing_links(self):
+        with tempfile.TemporaryDirectory() as temp:
+            db = HandbookDB(Path(temp)/"test.db", asset_root=Path(temp))
+            with db.connect() as connection:
+                connection.execute("ALTER TABLE video_links DROP COLUMN episode_urls")
+                connection.execute("INSERT INTO anime(id,name,collection_type,created_at,updated_at) VALUES(1,'test',1,'2026-11-05','2026-11-05')")
+                connection.execute("INSERT INTO video_links(anime_id,url,title) VALUES(1,'https://www.bilibili.com/video/BV1NJHG6eE9z/','saved')")
+            reopened = VideoLinks(HandbookDB(db.path, asset_root=Path(temp)))
+            self.assertEqual(reopened.list(1)[0]["title"], "saved")
+            self.assertEqual(reopened.list(1)[0]["episode_urls"], {})
+
     def test_url_validation_and_page(self):
         self.assertEqual(canonical_video_url("https://www.bilibili.com/video/BV1NJHG6eE9z/?p=2&vd_source=tracking"), "https://www.bilibili.com/video/BV1NJHG6eE9z/?p=2")
         for url in ["javascript:alert(1)", "https://evil.test/video/BV1NJHG6eE9z/", "https://www.bilibili.com.evil.test/video/BV1NJHG6eE9z/", "https://www.bilibili.com/video/BV1NJHG6eE9z/?p=bad", "https://user@www.bilibili.com/video/BV1NJHG6eE9z/", "https://www.bilibili.com:443/video/BV1NJHG6eE9z/"]:

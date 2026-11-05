@@ -98,8 +98,9 @@ function bilibiliResumeUrl(item, anime) {
   if (!anime || (item.kind || "video") !== "video") return original;
   let url;
   try { url = new URL(original); } catch { return original; }
+  const official = /^\/bangumi\/play\/(?:ss|ep)[1-9][0-9]{0,11}\/?$/.test(url.pathname);
   if (url.protocol !== "https:" || !["www.bilibili.com", "bilibili.com"].includes(url.hostname)
-      || !/^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)) return original;
+      || (!official && !/^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname))) return original;
   // Resolve chapter identities rather than counting watched items (OP/ED and
   // gaps must not move a main episode to the wrong part).
   const main = (Array.isArray(anime.episodes) ? anime.episodes : [])
@@ -112,6 +113,11 @@ function bilibiliResumeUrl(item, anime) {
     ? state.pendingEpisodes : (anime.watched_episode_keys || anime.watched_episodes || []);
   const watched = new Set([...selected].map(String));
   const next = main.find(episode => !watched.has(episode.key)) || main.at(-1);
+  if (official) {
+    const target = item.episode_urls?.[String(next.number)];
+    if (typeof target !== "string" || !/^https:\/\/www\.bilibili\.com\/bangumi\/play\/ep[1-9][0-9]{0,11}$/.test(target)) return original;
+    return target;
+  }
   url.searchParams.set("p", String(next.number));
   url.searchParams.delete("t");
   url.searchParams.delete("start_progress");
@@ -122,7 +128,7 @@ function refreshSavedVideoTargets() {
   const anime = state.progressAnime;
   if (!anime) return;
   document.querySelectorAll("[data-video-resume-url]").forEach(anchor => {
-    anchor.href = bilibiliResumeUrl({url: anchor.dataset.videoResumeUrl, kind: "video"}, anime);
+    anchor.href = bilibiliResumeUrl(anchor.savedVideoItem || {url: anchor.dataset.videoResumeUrl, kind: "video"}, anime);
   });
 }
 
@@ -132,10 +138,12 @@ function renderBilibiliEntrypoints(anime, preferred = null) {
   saved.classList.toggle("hidden",!preferred);
   if(preferred) {
     saved.dataset.videoResumeUrl = preferred.url;
+    saved.savedVideoItem = preferred;
     saved.href = bilibiliResumeUrl(preferred, anime);
   } else {
     saved.removeAttribute("href");
     delete saved.dataset.videoResumeUrl;
+    delete saved.savedVideoItem;
   }
   saved.onclick = preferred ? () => typeof recordJump === "function" && recordJump({
     anime_id: anime?.id || null,
@@ -226,6 +234,7 @@ async function renderVideoLinks(animeId) {
       kind: item.kind || "video",
     });
     panel.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
+      anchor.savedVideoItem = videos[index];
       if (videos[index]) anchor.addEventListener("click", () => remember(videos[index], anchor.href));
     });
     linkPanel?.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
@@ -246,7 +255,7 @@ function parseVideoCapture(fragment) {
   if (!fragment.startsWith("#save-video=")) return null;
   const payload=JSON.parse(decodeURIComponent(fragment.slice("#save-video=".length)));
   const url=new URL(payload.url);
-  const isVideo=url.protocol==="https:" && ["www.bilibili.com","bilibili.com"].includes(url.hostname) && !url.username && !url.password && !url.port && /^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname);
+  const isVideo=url.protocol==="https:" && ["www.bilibili.com","bilibili.com"].includes(url.hostname) && !url.username && !url.password && !url.port && /^(?:\/video\/BV[0-9A-Za-z]{10}|\/bangumi\/play\/(?:ss|ep)[1-9][0-9]{0,11})\/?$/.test(url.pathname);
   if (!isVideo) {
     // 非 B 站视频：可以当作普通链接保存，但地址必须是 http(s)。
     if (!["https:","http:"].includes(url.protocol)) throw Error("只能保存 http 或 https 链接");
