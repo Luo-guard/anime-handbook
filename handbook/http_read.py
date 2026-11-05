@@ -59,7 +59,14 @@ class ReadRoutes:
             elif path == "/api/schedule":
                 season = season_key(query.get("season", [""])[0])
                 source = query.get("source", ["yuc"])[0]
-                document = self.schedule.for_source(source).get(season, refresh=query.get("refresh", [""])[0] == "true")
+                if source == "as":
+                    document = self.as_calendar.get(season, week=query.get("week", [""])[0], refresh=query.get("refresh", [""])[0] == "true")
+                    cached = self.schedule.load(season) or {}
+                    metadata = {row["id"]: row for row in cached.get("items", []) if row.get("id")}
+                    # Enrich only by a verified Bangumi ID; never blend list membership.
+                    document = {**document, "items": [{**row, **{key: metadata.get(row.get("id"), {}).get(key, row.get(key)) for key in ("score", "votes", "votes_known", "summary")}} for row in document["items"]]}
+                else:
+                    document = self.schedule.for_source(source).get(season, refresh=query.get("refresh", [""])[0] == "true")
                 if source == "yuc":
                     document = {**document, "items": [row for row in document["items"] if not row["key"].startswith("bgm-")]}
                 with self.database.connect() as db:
@@ -69,10 +76,15 @@ class ReadRoutes:
                 document = attach_collection(document, local)
                 if self.database.get_settings().get("schedule_airing_source") == "as":
                     progress = self.animeschedule.get_many([row.get("id") or row.get("local_id") for row in document["items"]])
-                    document = {**document, "items": [{**row, "as_airing": progress.get(str(row.get("id") or row.get("local_id")))} for row in document["items"]]}
+                    for row in document["items"]:
+                        value = progress.get(str(row.get("id") or row.get("local_id")))
+                        row["as_airing"] = value if value and not value.get("unavailable") else row.get("as_airing") or value
                 self.send_json(document)
             elif path == "/api/schedule/cover":
-                body, mime = self.schedule.for_source(query.get("source", ["yuc"])[0]).cover(season_key(query.get("season", [""])[0]), query.get("key", [""])[0])
+                if query.get("source", ["yuc"])[0] == "as":
+                    body, mime = self.as_calendar.cover(query.get("week", [""])[0], query.get("key", [""])[0])
+                else:
+                    body, mime = self.schedule.for_source(query.get("source", ["yuc"])[0]).cover(season_key(query.get("season", [""])[0]), query.get("key", [""])[0])
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", mime)
                 self.send_header("Content-Length", str(len(body)))
@@ -237,6 +249,9 @@ class ReadRoutes:
                 if self.database.get_settings().get("schedule_airing_source") == "as":
                     ids = [int(value) for value in query.get("ids", [""])[0].split(",")[:500] if value.isdecimal()]
                     payload["schedule_airing"] = self.animeschedule.get_many(ids)
+                    if query.get("calendar_source", [""])[0] == "as":
+                        calendar = self.as_calendar.get("", week=query.get("week", [""])[0])
+                        payload["calendar_airing"] = {row["key"]: row.get("as_airing") for row in calendar["items"]}
                 self.send_json(payload)
             elif path == "/api/collection-state":
                 self.send_json(

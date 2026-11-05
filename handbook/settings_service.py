@@ -141,7 +141,7 @@ def _normalize_settings(body, settings):
                 if value not in {"handbook", "kazumi"}:
                     raise ValueError("冲突优先级无效")
             elif key == "schedule_source":
-                if value not in {"yuc", "kazumi"}:
+                if not isinstance(value, str) or value not in {"yuc", "kazumi", "as"}:
                     raise ValueError("周表来源无效")
             elif key == "show_schedule_source_switch":
                 value = bool(value)

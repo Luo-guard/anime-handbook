@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('static/schedule.js','utf8');
-const elements={};function element(selector){return elements[selector]??={innerHTML:'',textContent:'',hidden:false,disabled:false,insertAdjacentHTML(_,text){this.innerHTML+=text},addEventListener(){}}}
+const elements={};function element(selector){return elements[selector]??={innerHTML:'',textContent:'',hidden:false,disabled:false,setAttribute(name,value){this[name]=value},insertAdjacentHTML(_,text){this.innerHTML+=text},addEventListener(){}}}
 const categories=[1,2,3,4,5].map((id)=>({id,name:['在看','想看','搁置','看过','抛弃'][id-1]}));
 const state={settings:{},animes:[],activeView:'schedule'};
 const ctx=vm.createContext({state,CATEGORIES:categories,pageLabel:id=>({schedule:"周表"})[id],console,URLSearchParams,AbortController,Date,setTimeout,clearTimeout,$:element,$$:()=>[],escapeHtml:s=>String(s??'').replaceAll('<','&lt;').replaceAll('"','&quot;')});

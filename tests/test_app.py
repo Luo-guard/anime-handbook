@@ -209,6 +209,36 @@ class HandbookDBTest(unittest.TestCase):
             thread.join(timeout=3)
             desktop.DATABASE = previous_database
 
+    def test_as_calendar_routes_keep_unmapped_entries_and_use_own_cover(self) -> None:
+        self.db.import_kazumi([sample_item(91, 1, "同名作品")])
+        old_database = desktop.DATABASE
+        desktop.DATABASE = self.db
+        server = app.ThreadingHTTPServer(("127.0.0.1", 0), http.RequestHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            with patch.object(http.RequestHandler, "as_calendar", new_callable=PropertyMock) as provider, patch.object(http.RequestHandler, "animeschedule", new_callable=PropertyMock) as progress:
+                progress.return_value.get_many.return_value = {}
+                provider.return_value.get.return_value = {"source": "as", "season": "202610", "week": "2026-W45", "items": [{
+                    "key": "unmapped", "id": None, "title": "同名作品", "aliases": ["同名作品"], "as_airing": {"aired": 6, "total": 12},
+                }]}
+                provider.return_value.cover.return_value = (b"fixture", "image/jpeg")
+                with urlopen(base + "/api/schedule?source=as&season=202610&week=2026-W45", timeout=3) as response:
+                    data = app.json.loads(response.read())
+                self.assertIsNone(data["items"][0]["local_id"])
+                with urlopen(base + "/api/schedule/cover?source=as&week=2026-W45&key=unmapped", timeout=3) as response:
+                    self.assertEqual(response.read(), b"fixture")
+                self.db.set_setting("schedule_airing_source", "as")
+                with urlopen(base + "/api/airing?calendar_source=as&week=2026-W45", timeout=3) as response:
+                    data = app.json.loads(response.read())
+                self.assertEqual(data["calendar_airing"]["unmapped"]["aired"], 6)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+            desktop.DATABASE = old_database
+
     def test_status_poll_is_light_and_revision_gates_collections(self) -> None:
         """轮询接口不再整包返回收藏；前端靠 revision 决定何时拉全量。"""
         self.db.import_kazumi([sample_item(91, 1, "watching")])

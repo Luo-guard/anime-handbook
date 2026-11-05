@@ -1,6 +1,6 @@
-function scheduleSource() { return state.settings.schedule_source === "kazumi" ? "kazumi" : "yuc"; }
+function scheduleSource() { return ["yuc", "kazumi", "as"].includes(state.settings.schedule_source) ? state.settings.schedule_source : "yuc"; }
 /* Public season metadata is small; poster images and DOM cards load on demand. */
-const scheduleState = {season: "", day: 1, data: null, search: "", timer: null, abort: null, request: 0, shown: 30, initialized: false};
+const scheduleState = {season: "", week: "", day: 1, data: null, search: "", timer: null, abort: null, request: 0, shown: 30, initialized: false};
 const scheduleDays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const scheduleSortNames = {time: "时间顺序", score: "评分优先", popularity: "热度优先"};
 const scheduleCardFieldOptions = [
@@ -10,7 +10,7 @@ const scheduleCardFieldOptions = [
   ["score", "显示评分", "封面右上角的 Bangumi 评分。"],
   ["collection", "显示收藏状态", "封面左上角的在看、想看等收藏状态。"],
   ["airtime", "显示放送时间", "封面底部的具体放送时间；网络放送对应上线日期。"],
-  ["progress", "显示播出进度", "已收藏的番剧按逐集日程计算；未收藏的按首播日与每周放送时间推算，停播会偏差。"],
+  ["progress", "显示播出进度", "按下方选择的数据源显示；AS 无可靠资料时不推算。BGM 缺少逐集资料时的估算可能受停播影响。"],
 ];
 
 function scheduleCardVisibility() {
@@ -26,6 +26,32 @@ function scheduleToday(now = new Date()) {
 
 function scheduleSeasonName(season) {
   return `${season.slice(0, 4)} 年 · ${{"01":"冬", "04":"春", "07":"夏", "10":"秋"}[season.slice(4)]}季`;
+}
+
+function scheduleISOWeek(now = new Date()) {
+  const date = new Date(scheduleToday(now).date);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const year = date.getUTCFullYear();
+  const number = Math.ceil((((date - new Date(Date.UTC(year, 0, 1))) / 86400000) + 1) / 7);
+  return `${year}-W${String(number).padStart(2, "0")}`;
+}
+
+function scheduleWeekMonday(key) {
+  const year = Number(key.slice(0, 4)), week = Number(key.slice(-2));
+  const day = new Date(Date.UTC(year, 0, 4));
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7) + (week - 1) * 7);
+  return day;
+}
+
+function moveScheduleWeek(delta) {
+  const day = scheduleWeekMonday(scheduleState.week || scheduleISOWeek());
+  day.setUTCDate(day.getUTCDate() + delta * 7);
+  // Noon Beijing is safely inside the broadcast day.
+  scheduleState.week = scheduleISOWeek(new Date(day.getTime() + 4 * 3600000));
+  scheduleState.data = null;
+  scheduleState.shown = 30;
+  loadSchedule();
 }
 
 const scheduleGroupDefaults = {collection: ['collected', 'uncollected'], status: ['1', '2', '3', '4', '5', 'uncollected']};
@@ -198,10 +224,16 @@ async function loadSchedule(refresh = false) {
   const request = scheduleState.request;
   scheduleState.abort = new AbortController();
   if (scheduleState.data?.season !== scheduleState.season || scheduleState.dataSource !== scheduleSource()) scheduleState.data = null;
+  if (scheduleSource() === "as") {
+    if (scheduleState.day === 0) scheduleState.day = scheduleToday().day;
+    if (!scheduleState.week) scheduleState.week = scheduleISOWeek();
+    if (scheduleState.data?.week !== scheduleState.week) scheduleState.data = null;
+  }
   renderSchedule();
   $("#scheduleRefresh").disabled = true;
   try {
     const query = new URLSearchParams({season: scheduleState.season, source: scheduleSource()});
+    if (scheduleSource() === "as") query.set("week", scheduleState.week);
     if (refresh) query.set("refresh", "true");
     const data = await api(`/api/schedule?${query}`, {signal: scheduleState.abort.signal});
     if (request !== scheduleState.request) return;
@@ -220,6 +252,7 @@ async function loadSchedule(refresh = false) {
 }
 
 function scheduleTimeLabel(item) {
+  if (item.delayed) return "放送延期";
   if (item.kind === "network") return item.release || "上线日期待公布";
   // 新缓存带北京时间；旧缓存只有日本时间，刷新季度后自动切换。
   const clock = item.bj_time || item.time;
@@ -286,6 +319,7 @@ function scheduleProgress(item) {
       title: "按 Bangumi 逐集播出日期与放送时刻（北京时间）计算，不是资源站更新时间",
     };
   }
+  if (scheduleSource() === "as") return null;
   const episode = scheduleEstimatedEpisode(item);
   if (episode === null) return null;
   return {
@@ -305,7 +339,7 @@ function scheduleVotesLabel(item) {
 function scheduleCard(item) {
   const show = scheduleCardVisibility();
   const category = CATEGORIES.find((c) => c.id === item.collection_type);
-  const image = `/api/schedule/cover?source=${scheduleSource()}&${new URLSearchParams({season: scheduleState.season, key: item.key})}`;
+  const image = `/api/schedule/cover?source=${scheduleSource()}&${new URLSearchParams({season: scheduleState.season, key: item.key, ...(scheduleSource() === "as" ? {week: scheduleState.week} : {})})}`;
   const release = item.kind === "weekly" ? (item.release ? `${item.release.replace(/~$/, "")} 起` : "") : item.platforms?.[0]?.name || "";
   const votesHtml = show.votes ? `<span class="schedule-card-votes">${scheduleVotesLabel(item)}</span>` : "";
   const releaseHtml = show.release && release ? `<span class="schedule-card-release">${escapeHtml(release)}</span>` : "";
@@ -331,20 +365,35 @@ function scheduleCard(item) {
 
 function renderSchedule() {
   $("#scheduleSourceSwitch").hidden = state.settings.show_schedule_source_switch === false;
-  $("#scheduleSourceSwitch").textContent = scheduleSource() === "kazumi" ? "Kazumi / Bangumi ▾" : "長門番堂 ▾";
+  $("#scheduleSourceSwitch").value = scheduleSource();
   if (!scheduleState.season) return;
   const items = scheduleFilteredItems(), today = scheduleToday();
+  const useAS = scheduleSource() === "as";
+  $("#scheduleSearch").placeholder = useAS ? "搜索本周番剧" : "搜索本季番剧";
+  $("#scheduleSearch").setAttribute("aria-label", useAS ? "搜索本周番剧" : "搜索本季番剧");
+  $("#scheduleSeasonButton").hidden = useAS;
+  $("#scheduleASWeek").hidden = !useAS;
+  if (useAS) {
+    const key = scheduleState.week || scheduleISOWeek(), monday = scheduleWeekMonday(key);
+    const sunday = new Date(monday); sunday.setUTCDate(sunday.getUTCDate() + 6);
+    const label = day => `${day.getUTCMonth() + 1}/${day.getUTCDate()}`;
+    $("#scheduleASWeekTitle").textContent = `${key.slice(0, 4)} 年 · 第 ${Number(key.slice(-2))} 周`;
+    $("#scheduleASWeekDates").textContent = `${label(monday)} — ${label(sunday)}`;
+  }
+  if ($("#scheduleWeek").style) $("#scheduleWeek").style.gridTemplateColumns = useAS ? "repeat(7, minmax(0, 1fr))" : "";
   $("#scheduleSeasonButton strong").textContent = scheduleSeasonName(scheduleState.season);
   const currentSeason = `${today.year}${String(Math.floor((today.month - 1) / 3) * 3 + 1).padStart(2, "0")}`;
   $("#scheduleWeek").innerHTML = [...scheduleDays.map((label, index) => {
     const day = index + 1, count = items.filter((item) => item.kind === "weekly" && item.weekday === day).length;
-    const date = new Date(today.date); date.setUTCDate(date.getUTCDate() + day - today.day);
-    return `<button type="button" data-schedule-day="${day}" class="${scheduleState.day === day ? "active" : ""}" aria-pressed="${scheduleState.day === day}"><strong>${day === today.day && currentSeason === scheduleState.season ? "今天" : label}</strong><span>${currentSeason === scheduleState.season ? `${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")} · ` : ""}${count} 部</span></button>`;
-  }), `<button type="button" data-schedule-day="0" class="schedule-network-tab ${scheduleState.day === 0 ? "active" : ""}" aria-pressed="${scheduleState.day === 0}"><strong>网络放送</strong><span>单独上线 · ${items.filter((i) => i.kind === "network").length} 部</span></button>`].join("");
+    const date = useAS ? scheduleWeekMonday(scheduleState.week || scheduleISOWeek()) : new Date(today.date);
+    date.setUTCDate(date.getUTCDate() + (useAS ? day - 1 : day - today.day));
+    const isCurrent = useAS ? scheduleState.week === scheduleISOWeek() : currentSeason === scheduleState.season;
+    return `<button type="button" data-schedule-day="${day}" class="${scheduleState.day === day ? "active" : ""}" aria-pressed="${scheduleState.day === day}"><strong>${day === today.day && isCurrent ? "今天" : label}</strong><span>${useAS || currentSeason === scheduleState.season ? `${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")} · ` : ""}${count} 部</span></button>`;
+  }), ...(useAS ? [] : [`<button type="button" data-schedule-day="0" class="schedule-network-tab ${scheduleState.day === 0 ? "active" : ""}" aria-pressed="${scheduleState.day === 0}"><strong>网络放送</strong><span>单独上线 · ${items.filter((i) => i.kind === "network").length} 部</span></button>`])].join("");
   $$("[data-schedule-day]", $("#scheduleWeek")).forEach((button) => button.onclick = () => {scheduleState.day = Number(button.dataset.scheduleDay); scheduleState.shown = 30; renderSchedule();});
   const selected = items.filter((item) => scheduleState.day === 0 ? item.kind === "network" : item.kind === "weekly" && item.weekday === scheduleState.day).sort(scheduleComparator);
   const data = scheduleState.data;
-  const notices = [data?.loading ? "正在更新季度资料，已有缓存仍可浏览…" : "", data?.error || "", ...(data?.warnings || [])].filter(Boolean);
+  const notices = [data?.loading ? useAS ? "正在更新 AS 本周日程与条目关联，已有卡片仍可浏览…" : "正在更新季度资料，已有缓存仍可浏览…" : "", data?.error || "", ...(data?.warnings || [])].filter(Boolean);
   if (!data) notices.push(`正在读取${pageLabel("schedule")}…`);
   if (scheduleState.day === 0) notices.push("独立上线作品按日期排列；整季、分批或每周更新以平台公布为准，不推算集数。" );
   $("#scheduleNotice").textContent = notices.join(" · "); $("#scheduleNotice").hidden = !notices.length;
@@ -354,6 +403,7 @@ function renderSchedule() {
   $$("[data-schedule-key]", $("#scheduleGrid")).forEach((button) => button.onclick = () => showScheduleDetail(button.dataset.scheduleKey));
   $("#scheduleSource").innerHTML = `<span>播出日按北京时间 04:00—次日 03:59 划分；放送时间已换算为北京时间，不代表字幕上线时间。收藏进度按 Bangumi 逐集日程，未收藏的按首播日推算。</span><span>时间：<a href="https://yuc.wiki/${scheduleState.season}/" target="_blank" rel="noopener noreferrer">長門番堂</a> · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>　评分：Bangumi / Kazumi${data?.fetched_at ? `　缓存更新 ${new Date(data.fetched_at * 1000).toLocaleString("zh-CN")}` : ""}</span>`;
   if (scheduleSource() === "kazumi") $("#scheduleSource").textContent = "来源：Kazumi / Bangumi 放送列表。仅提供星期，不提供具体放送时刻；未收藏作品的进度只能按日期估算。";
+  if (useAS) $("#scheduleSource").innerHTML = '<span>北京时间 · 凌晨 4 点换日。采用 AS 原声／字幕的较早计划时间，合并重复放送；不代表各地区平台或字幕组同步上线。</span><span>日程：<a href="https://animeschedule.net" target="_blank" rel="noopener noreferrer">AnimeSchedule</a>　编号：<a href="https://github.com/Rhilip/BangumiExtLinker" target="_blank" rel="noopener noreferrer">BangumiExtLinker · CC BY 4.0</a>　评分：Bangumi / Kazumi</span>';
 }
 
 function scheduleStatusMarkup(statuses, name) {
@@ -388,9 +438,10 @@ function showScheduleDetail(key) {
   const siteBase = String(state.settings.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
   const anime = state.animes.find((row) => row.id === item.local_id || row.id === item.id);
   const keyword = String(anime?.name_cn || anime?.name || item.title || "").trim();
-  const scheduleLinks = buildDetailLinkItems(scheduleDetailLinks(), { id: item.id || null, title: keyword, site: siteBase })
+  let scheduleLinks = buildDetailLinkItems(scheduleDetailLinks(), { id: item.id || null, title: keyword, site: siteBase })
     .map((entry) => `<a href="${escapeHtml(entry.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.label)}</a>`)
     .join("");
+  if (item.as_url && /^https:\/\/animeschedule\.net\/anime\/[a-z0-9-]+$/.test(item.as_url)) scheduleLinks += ` <a href="${escapeHtml(item.as_url)}" target="_blank" rel="noopener noreferrer">AnimeSchedule ↗</a>`;
   const progress = scheduleProgress(item);
   const progressHtml = progress
     ? `<div class="schedule-detail-progress${progress.estimated ? " is-estimated" : ""}" title="${escapeHtml(progress.title)}"><strong>${escapeHtml(progress.text)}</strong>${progress.detail ? `<span>${escapeHtml(progress.detail)}</span>` : ""}</div>`
@@ -417,17 +468,23 @@ function initializeSchedule() {
   const today = scheduleToday();
   scheduleState.day = today.day;
   scheduleState.season = `${today.year}${String(Math.floor((today.month - 1) / 3) * 3 + 1).padStart(2, "0")}`;
-  $("#scheduleSourceSwitch").onclick = async () => {
-    const source = scheduleSource() === "yuc" ? "kazumi" : "yuc";
+  $("#schedulePreviousWeek").onclick = () => moveScheduleWeek(-1);
+  $("#scheduleNextWeek").onclick = () => moveScheduleWeek(1);
+  $("#scheduleSourceSwitch").onchange = async (event) => {
+    const source = event.target.value;
+    const control = $("#scheduleSourceSwitch");
+    control.disabled = true;
     try {
       const payload = await api("/api/settings", {method: "PATCH", body: JSON.stringify({schedule_source: source})});
       if (payload.settings?.schedule_source !== source) throw new Error("当前后台不支持周表来源切换，请重启后台后刷新页面。");
       state.settings = payload.settings;
       scheduleState.data = null;
       scheduleState.shown = 30;
+      if (source === "as" && scheduleState.day === 0) scheduleState.day = scheduleToday().day;
       renderScheduleSettings();
       loadSchedule();
-    } catch (error) { toast(error.message, "error"); }
+    } catch (error) { $("#scheduleSourceSwitch").value = scheduleSource(); toast(error.message, "error"); }
+    finally { control.disabled = false; }
   };
   $("#scheduleRefresh").onclick = () => loadSchedule(true);
   $("#scheduleFilterButton").onclick = openScheduleFilters;

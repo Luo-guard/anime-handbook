@@ -20,6 +20,7 @@ from .common import BACKGROUND_ROOT, DATA_ROOT, RECORD_IMAGE_ROOT, STATIC_ROOT, 
 from .assets import prune_record_images, profile_asset_references
 from .airing import BEIJING, compute_airing
 from .animeschedule import AnimeScheduleService
+from .as_calendar import ASCalendar
 
 
 SCHEDULE = ScheduleService(DATA_ROOT / "schedule")
@@ -88,6 +89,14 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
             for row in animes:
                 row["as_airing"] = progress.get(str(row["id"]))
         return animes
+
+    @property
+    def as_calendar(self):
+        service = self.animeschedule
+        with service.lock:
+            if not hasattr(service, "calendar"):
+                service.calendar = ASCalendar(service)
+            return service.calendar
 
     def require_write_access(self) -> None:
         _desktop().require_active_profile_write_access()

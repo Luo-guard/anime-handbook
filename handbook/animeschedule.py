@@ -69,6 +69,8 @@ def compute_progress(route, rows, total=0, now=None):
     for row in rows:
         if row.get("route") != route or row.get("airType") not in {"raw", "sub"}:
             continue
+        if row.get("airingStatus") in {"delayed-air", "cancelled", "canceled"}:
+            continue
         at = parse_time(row.get("episodeDate"))
         number = row.get("episodeNumber")
         if at is None or type(number) is not int or number <= 0:
@@ -100,6 +102,8 @@ class AnimeScheduleService:
     def __init__(self, root):
         self.root = Path(root)
         self.lock = threading.RLock()
+        self.request_lock = threading.Lock()
+        self.mapping_lock = threading.Lock()
         self.cache = self._read("progress.json", {"records": {}, "weeks": {}})
         if not isinstance(self.cache, dict):
             self.cache = {}
@@ -136,6 +140,10 @@ class AnimeScheduleService:
             return ""
 
     def _get(self, path):
+        with self.request_lock:
+            return self._request(path)
+
+    def _request(self, path):
         # 120/minute upstream limit; keep this worker below 90/minute.
         time.sleep(max(0, .7 - (time.monotonic() - self.last_request)))
         self.last_request = time.monotonic()
@@ -168,6 +176,29 @@ class AnimeScheduleService:
         return {str(row["bgm_id"]): {key: str(row[key]) for key in ID_FIELDS if row.get(key)}
                 for row in data if row.get("bgm_id")}
 
+    def ensure_mapping(self):
+        with self.mapping_lock:
+            if self.mapping is None or time.time() - self.mapping_loaded > 7 * 86400:
+                self.mapping = self._load_mapping()
+                self.mapping_loaded = time.time()
+        return self.mapping
+
+    def week_rows(self, year, week, *, force=False):
+        key = f"{year}-{week}"
+        with self.lock:
+            cached = self.cache["weeks"].get(key, {})
+        if not force and cached.get("schema") == 3 and time.time() - cached.get("fetched", 0) < 900:
+            return cached["rows"]
+        rows = self._get("timetables/all?" + urllib.parse.urlencode({"year": year, "week": week, "tz": "Asia/Shanghai"}))
+        if not isinstance(rows, list):
+            raise ValueError("Invalid AnimeSchedule timetable")
+        fields = ("route", "title", "native", "romaji", "english", "airType", "episodeDate", "episodeNumber", "episodes", "imageVersionRoute", "mediaTypes", "airingStatus")
+        compact = [{key: row[key] for key in fields if key in row} for row in rows if isinstance(row, dict)]
+        with self.lock:
+            self.cache["weeks"][key] = {"fetched": time.time(), "schema": 3, "rows": compact}
+            self._write("progress.json", self.cache)
+        return compact
+
     def _refresh_weeks(self):
         current = datetime.now(BEIJING)
         keys = []
@@ -175,26 +206,13 @@ class AnimeScheduleService:
             year, week, _ = (current + timedelta(weeks=offset)).isocalendar()
             key = f"{year}-{week}"
             keys.append(key)
-            with self.lock:
-                cached = self.cache["weeks"].get(key, {})
-            if time.time() - cached.get("fetched", 0) < 900:
-                continue
-            rows = self._get("timetables/all?" + urllib.parse.urlencode({"year": year, "week": week, "tz": "Asia/Shanghai"}))
-            if not isinstance(rows, list):
-                raise ValueError("Invalid AnimeSchedule timetable")
-            # Only cache the fields used for progress, never descriptions/images.
-            fields = ("route", "airType", "episodeDate", "episodeNumber", "episodes")
-            compact = [{key: row[key] for key in fields if key in row} for row in rows if isinstance(row, dict)]
-            with self.lock:
-                self.cache["weeks"][key] = {"fetched": time.time(), "rows": compact}
+            self.week_rows(year, week)
         with self.lock:
             self.cache["weeks"] = {key: value for key, value in self.cache["weeks"].items() if key in keys}
 
     def refresh(self, ids):
         """Worker entry point, also usable by isolated integration checks."""
-        if self.mapping is None or time.time() - self.mapping_loaded > 7 * 86400:
-            self.mapping = self._load_mapping()
-            self.mapping_loaded = time.time()
+        self.ensure_mapping()
         self._refresh_weeks()
         for bgm_id in ids:
             key = str(bgm_id)

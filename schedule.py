@@ -624,7 +624,7 @@ def attach_collection(document, local):
     items = []
     for row in document.get("items", []):
         match = by_id.get(row.get("id"))
-        if not row.get("id") and not match:
+        if document.get("source") != "as" and not row.get("id") and not match:
             # Account matching runs on every GET: exact indexed aliases are fast
             # and avoid assigning the wrong local sequel on fuzzy title matches.
             exact = {}

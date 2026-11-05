@@ -121,7 +121,14 @@ async function refreshAiringProgress() {
   try {
     const ids = (typeof scheduleState !== "undefined" ? scheduleState.data?.items || [] : [])
       .map((item) => item.id || item.local_id).filter(Boolean);
-    const query = state.settings.schedule_airing_source === "as" && ids.length ? `?ids=${ids.join(",")}` : "";
+    const params = new URLSearchParams();
+    if (state.settings.schedule_airing_source === "as") {
+      if (ids.length) params.set("ids", ids.join(","));
+      if (typeof scheduleSource === "function" && scheduleSource() === "as" && scheduleState.week) {
+        params.set("calendar_source", "as"); params.set("week", scheduleState.week);
+      }
+    }
+    const query = params.toString() ? `?${params}` : "";
     const payload = await api(`/api/airing${query}`);
     // A profile change or collection refresh invalidates this request's owner.
     if (state.animes !== collection) return;
@@ -143,7 +150,8 @@ async function refreshAiringProgress() {
     }
     if (payload.schedule_airing && typeof scheduleState !== "undefined") {
       for (const item of scheduleState.data?.items || []) {
-        const asAiring = payload.schedule_airing[String(item.id || item.local_id)];
+        const asAiring = payload.calendar_airing?.[item.key] || payload.schedule_airing[String(item.id || item.local_id)];
+        if (asAiring === undefined) continue;
         if (JSON.stringify(item.as_airing) !== JSON.stringify(asAiring)) {
           item.as_airing = asAiring;
           changed = true;
