@@ -36,7 +36,7 @@ final class RecordStateMerger {
     }
   }
 
-  private static String canonical(Object value) throws Exception {
+  static String canonical(Object value) throws Exception {
     if (value == null || value == JSONObject.NULL) return "null";
     if (value instanceof JSONObject) {
       JSONObject row = (JSONObject)value;
@@ -73,6 +73,21 @@ final class RecordStateMerger {
     identity.put("content", event.opt("content") == null ? JSONObject.NULL : event.opt("content"));
     identity.put("created", event.opt("created_at") == null ? JSONObject.NULL : event.opt("created_at"));
     return "event:" + canonical(identity);
+  }
+
+  private static Map<String, Set<String>> progress(JSONObject state) throws Exception {
+    Map<String, Set<String>> result=new LinkedHashMap<>();JSONArray anime=state.getJSONObject("tables").optJSONArray("anime");
+    for(int i=0;anime!=null&&i<anime.length();i++){JSONObject row=anime.getJSONObject(i);Set<String> keys=new HashSet<>();JSONArray values=arrayValue(row,"watched_episodes");for(int j=0;j<values.length();j++)keys.add(String.valueOf(values.get(j)));result.put(String.valueOf(row.opt("id")),keys);}return result;
+  }
+  static JSONObject merge(JSONObject local, JSONObject remote, JSONObject baseline) throws Exception {
+    JSONObject result=merge(local,remote);Map<String,Set<String>> a=progress(local),b=progress(remote),base=progress(baseline),removed=new LinkedHashMap<>();
+    // Removal of a previously shared episode wins; independent additions still merge.
+    for(String id:base.keySet()){
+      Set<String> deleted=new HashSet<>();for(String key:base.get(id))if((a.containsKey(id)&&!a.get(id).contains(key))||(b.containsKey(id)&&!b.get(id).contains(key)))deleted.add(key);removed.put(id,deleted);
+    }
+    JSONObject tables=result.getJSONObject("tables");JSONArray anime=tables.getJSONArray("anime");
+    for(int i=0;i<anime.length();i++){JSONObject row=anime.getJSONObject(i);Set<String> deleted=removed.get(String.valueOf(row.opt("id")));if(deleted==null||deleted.isEmpty())continue;JSONArray kept=new JSONArray(),keys=arrayValue(row,"watched_episodes");for(int j=0;j<keys.length();j++)if(!deleted.contains(String.valueOf(keys.get(j))))kept.put(keys.get(j));row.put("watched_episodes",kept.toString());}
+    JSONArray events=tables.getJSONArray("events"),kept=new JSONArray();for(int i=0;i<events.length();i++){JSONObject row=events.getJSONObject(i);Set<String> deleted=removed.get(String.valueOf(row.opt("anime_id")));if("watch".equals(row.optString("event_type"))&&deleted!=null){JSONArray keys=arrayValue(row,"episodes"),remaining=new JSONArray();for(int j=0;j<keys.length();j++)if(!deleted.contains(String.valueOf(keys.get(j))))remaining.put(keys.get(j));if(remaining.length()==0)continue;row.put("episodes",remaining.toString());}kept.put(row);}tables.put("events",kept);return result;
   }
 
   static JSONObject merge(JSONObject local, JSONObject remote) throws Exception {

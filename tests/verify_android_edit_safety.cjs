@@ -4,7 +4,7 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  const page=await browser.newPage();
  await page.setContent('<button id="sync"></button><main id="app"></main><nav></nav>');
  await page.evaluate(()=>{
-  window.messages=[];window.alert=text=>messages.push(text);
+  window.confirm=()=>true;window.messages=[];window.alert=text=>messages.push(text);
   window.saved={tables:{anime:[{id:1,name_cn:'测试番',collection_type:1,active:1,watched_episodes:'["01","02","03"]',episode_count:3}],events:[{id:1,event_type:'watch',anime_id:1,episodes:'["01","02","03"]',content:'原记录',created_at:'2026-11-04T12:00:00+08:00'}],settings:[]}};
   window.failSave=false;
   window.AndroidHandbook={state:()=>JSON.stringify(saved),saveState:raw=>{if(failSave)return false;saved=JSON.parse(raw);return true},config:()=>JSON.stringify({}),saveConfig:()=>{}};

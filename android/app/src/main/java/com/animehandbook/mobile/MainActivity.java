@@ -17,7 +17,6 @@ import java.net.HttpURLConnection;
 import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -64,7 +63,12 @@ public class MainActivity extends Activity {
     setContentView(web);
     web.loadUrl("file:///android_asset/index.html");
     restartAutoSync();
+    if(android.os.Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::navigateBack);
   }
+  private void navigateBack(){web.evaluateJavascript("window.HandbookMobile ? window.HandbookMobile.handleBack() : false", result->{if(!"true".equals(result))moveTaskToBack(true);});}
+  @Override public void onBackPressed(){navigateBack();}
+  @Override protected void onPause(){web.evaluateJavascript("window.HandbookMobile && window.HandbookMobile.persistUi()",null);super.onPause();}
+
 
   @Override protected void onDestroy() {
     autoSyncHandler.removeCallbacks(autoSyncTask);
@@ -96,15 +100,14 @@ public class MainActivity extends Activity {
 
   private String readState() { synchronized (stateLock) { return readStateLocked(); } }
   private String readStateLocked() {
-    if (!stateFile.isFile()) return "{\"format\":1,\"exported_at\":\"\",\"tables\":{\"anime\":[],\"events\":[],\"settings\":[],\"custom_collections\":[],\"custom_collection_items\":[],\"ranking_boards\":[],\"ranking_templates\":[],\"ranking_tiers\":[],\"ranking_items\":[]}}";
-    try (InputStream in = new FileInputStream(stateFile)) { return new String(in.readAllBytes(), StandardCharsets.UTF_8); }
+    if (!stateFile.isFile() && !new File(stateFile.getPath()+".bak").isFile()) return "{\"format\":1,\"exported_at\":\"\",\"tables\":{\"anime\":[],\"events\":[],\"settings\":[],\"custom_collections\":[],\"custom_collection_items\":[],\"ranking_boards\":[],\"ranking_templates\":[],\"ranking_tiers\":[],\"ranking_items\":[]}}";
+    try (InputStream in = new android.util.AtomicFile(stateFile).openRead()) { return new String(in.readAllBytes(), StandardCharsets.UTF_8); }
     catch (IOException error) { return "{}"; }
   }
   private void writeState(String value) throws IOException { synchronized (stateLock) { writeStateLocked(value); } }
   private void writeStateLocked(String value) throws IOException {
-    File temp = new File(getFilesDir(), "account-state.tmp");
-    try (OutputStream out = new FileOutputStream(temp)) { out.write(value.getBytes(StandardCharsets.UTF_8)); }
-    if (!temp.renameTo(stateFile)) throw new IOException("无法保存本地手账数据");
+    android.util.AtomicFile file=new android.util.AtomicFile(stateFile);FileOutputStream out=null;
+    try{out=file.startWrite();out.write(value.getBytes(StandardCharsets.UTF_8));file.finishWrite(out);}catch(IOException error){if(out!=null)file.failWrite(out);throw error;}
   }
   // A network response may only replace the snapshot it started from.
   private boolean acceptRemote(String base, String incoming) throws Exception {
@@ -114,16 +117,15 @@ public class MainActivity extends Activity {
       return true;
     }
   }
-  private static String rawDigest(String value) throws Exception {
-    byte[] hash = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-    StringBuilder text = new StringBuilder(); for (byte item : hash) text.append(String.format("%02x", item)); return text.toString();
+  private static String digest(String value) throws Exception { return AccountSync.digest(value); }
+  private void rememberSync(String value, String etag) throws Exception {
+    synchronized(stateLock){
+      android.util.AtomicFile file=new android.util.AtomicFile(new File(getFilesDir(),"account-base.json"));
+      FileOutputStream out=null;try{out=file.startWrite();out.write(value.getBytes(StandardCharsets.UTF_8));file.finishWrite(out);}catch(Exception e){if(out!=null)file.failWrite(out);throw e;}
+      if(!prefs.edit().putString("last_hash",digest(value)).putString("last_etag",etag).commit())throw new IOException("无法保存同步状态");
+    }
   }
-  private static String digest(String value) throws Exception {
-    // exported_at is only a bookkeeping timestamp.  Do not make an unchanged
-    // account look edited merely because a device prepared a sync snapshot.
-    JSONObject state = new JSONObject(value); state.remove("exported_at");
-    return rawDigest(state.toString());
-  }
+  private String baseline(){synchronized(stateLock){try(InputStream in=new FileInputStream(new File(getFilesDir(),"account-base.json"))){return new String(in.readAllBytes(),StandardCharsets.UTF_8);}catch(IOException e){return null;}}}
   private String endpoint(String part) {
     String base = prefs.getString("url", "https://dav.jianguoyun.com/dav/").replaceAll("/+$", "");
     return base + "/AnimeHandbook-v1/" + prefs.getString("account", "") + "/" + part;
@@ -139,71 +141,54 @@ public class MainActivity extends Activity {
     c.setRequestProperty("User-Agent", "AnimeHandbook Android/1.0");
     return c;
   }
-  private void ensureFolders() throws Exception {
-    String base = prefs.getString("url", "https://dav.jianguoyun.com/dav/").replaceAll("/+$", "");
-    for (String path : new String[]{"AnimeHandbook-v1", "AnimeHandbook-v1/" + prefs.getString("account", "")}) {
-      HttpURLConnection c = (HttpURLConnection)new URL(base + "/" + path).openConnection(Proxy.NO_PROXY); c.setRequestMethod("MKCOL");
-      String token = prefs.getString("username", "") + ":" + prefs.getString("password", "");
-      c.setRequestProperty("Authorization", "Basic " + Base64.getEncoder().encodeToString(token.getBytes(StandardCharsets.UTF_8)));
-      int code = c.getResponseCode(); if (code != 201 && code != 405) throw new IOException("坚果云无法创建同步目录（HTTP " + code + "）");
-    }
+  private AccountSync.Snapshot probeRemote() throws Exception {
+    HttpURLConnection c=connection("HEAD","account.json");try{return new AccountSync.Snapshot(c.getResponseCode(),null,c.getHeaderField("ETag"));}finally{c.disconnect();}
   }
-  private String getRemote() throws Exception {
-    HttpURLConnection c = connection("GET", "account.json"); int code = c.getResponseCode();
-    if (code == 404) return null;
-    if (code != 200) throw new IOException("读取坚果云失败（HTTP " + code + "）");
-    try (InputStream in = c.getInputStream()) { return new String(in.readAllBytes(), StandardCharsets.UTF_8); }
+  private AccountSync.Snapshot getRemote() throws Exception {
+    HttpURLConnection c=connection("GET","account.json");try{int code=c.getResponseCode();String value=null;if(code==200)try(InputStream in=c.getInputStream()){value=new String(in.readAllBytes(),StandardCharsets.UTF_8);}return new AccountSync.Snapshot(code,value,c.getHeaderField("ETag"));}finally{c.disconnect();}
   }
-  private static class RemoteProbe {
-    final int code; final String etag;
-    RemoteProbe(int code, String etag) { this.code = code; this.etag = etag == null ? "" : etag; }
-  }
-  private RemoteProbe probeRemote() throws Exception {
-    HttpURLConnection c = connection("HEAD", "account.json"); int code = c.getResponseCode();
-    return new RemoteProbe(code, c.getHeaderField("ETag"));
-  }
-  private void putRemote(String state) throws Exception {
-    JSONObject document = new JSONObject(); document.put("format", 1); document.put("updated_at", java.time.OffsetDateTime.now().toString()); document.put("state", new JSONObject(state));
-    HttpURLConnection c = connection("PUT", "account.json"); c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-    try (OutputStream out = c.getOutputStream()) { out.write(document.toString().getBytes(StandardCharsets.UTF_8)); }
-    int code = c.getResponseCode(); if (code != 200 && code != 201 && code != 204) throw new IOException("上传坚果云失败（HTTP " + code + "）");
+  private AccountSync.Snapshot putRemote(String state, String etag, boolean missing) throws Exception {
+    AccountSync.requireVersion(etag,missing);
+    JSONObject document=new JSONObject().put("format",1).put("updated_at",java.time.OffsetDateTime.now().toString()).put("state",new JSONObject(state));
+    HttpURLConnection c=connection("PUT","account.json");
+    try{
+      c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");c.setRequestProperty(missing?"If-None-Match":"If-Match",missing?"*":etag);
+      try(OutputStream out=c.getOutputStream()){out.write(document.toString().getBytes(StandardCharsets.UTF_8));}
+      int code=c.getResponseCode();if(code==412)throw new IOException("云端刚有新修改，本次未覆盖，请稍后重新同步");if(code!=200&&code!=201&&code!=204)throw new IOException("上传云端失败（HTTP "+code+"）");
+      return new AccountSync.Snapshot(code,null,c.getHeaderField("ETag"));
+    }finally{c.disconnect();}
   }
   private JSONObject sync(String resolution) throws Exception {
-    if (prefs.getString("username", "").isEmpty() || prefs.getString("password", "").isEmpty() || prefs.getString("account", "").length() < 8) throw new IOException("请先填写坚果云账号、应用密码和云端账号标识");
-    // HttpURLConnection on Android only permits a fixed list of HTTP verbs,
-    // so it cannot issue WebDAV MKCOL.  The computer client creates the
-    // account folder on its first sync; the phone then only GETs/PUTs the
-    // shared account file inside it.
-    String local = readState(), known = prefs.getString("last_hash", ""), previousEtag = prefs.getString("last_etag", "");
-    String localHash = digest(local), localLegacyHash = rawDigest(local);
-    RemoteProbe probe = probeRemote();
-    if (probe.code != 200 && probe.code != 404 && probe.code != 405) throw new IOException("读取坚果云失败（HTTP " + probe.code + "）");
-    JSONObject result = new JSONObject();
-    if (probe.code == 404) { putRemote(local); RemoteProbe uploaded = probeRemote(); prefs.edit().putString("last_hash", localHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "uploaded"); result.put("message", "已首次上传手机端账号数据"); return result; }
-    if (probe.code == 200 && !previousEtag.isEmpty() && previousEtag.equals(probe.etag) && !known.isEmpty()) {
-      if (localHash.equals(known)) { prefs.edit().putString("last_etag", probe.etag).apply(); result.put("action", "unchanged"); result.put("message", "两边数据已经是最新"); return result; }
-      putRemote(local); RemoteProbe uploaded = probeRemote(); prefs.edit().putString("last_hash", localHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "uploaded"); result.put("message", "已上传手机端最新数据"); return result;
-    }
-    String remoteDocument = getRemote();
-    if (remoteDocument == null) { putRemote(local); RemoteProbe uploaded = probeRemote(); prefs.edit().putString("last_hash", localHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "uploaded"); result.put("message", "已首次上传手机端账号数据"); return result; }
-    JSONObject remoteState = new JSONObject(remoteDocument).getJSONObject("state"); String remote = remoteState.toString();
-    String remoteHash = digest(remote), remoteLegacyHash = rawDigest(remote);
-    // Migrate the hash stored by earlier builds, which included exported_at.
-    if (known.equals(remoteLegacyHash)) known = remoteHash; else if (known.equals(localLegacyHash)) known = localHash;
-    if (known.isEmpty() || "remote".equals(resolution)) { boolean accepted = acceptRemote(local, remote); prefs.edit().putString("last_hash", remoteHash).putString("last_etag", probe.etag).apply(); result.put("action", "downloaded"); if (accepted) result.put("state", remoteState); else result.put("pendingLocal", true); result.put("message", "已从坚果云下载账号数据"); return result; }
-    if (!localHash.equals(known) && !remoteHash.equals(known) && !"local".equals(resolution)) {
-      JSONObject merged = RecordStateMerger.merge(new JSONObject(local), remoteState); String mergedText = merged.toString(); putRemote(mergedText); RemoteProbe uploaded = probeRemote(); String mergedHash = digest(mergedText);
-      boolean accepted = acceptRemote(local, mergedText); prefs.edit().putString("last_hash", mergedHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "merged"); if (accepted) result.put("state", merged); else result.put("pendingLocal", true); result.put("message", "已自动合并新增记录；同一番剧同一集保留较早观看时间"); return result;
-    }
-    if (!localHash.equals(known) || "local".equals(resolution)) { putRemote(local); RemoteProbe uploaded = probeRemote(); prefs.edit().putString("last_hash", localHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "uploaded"); result.put("message", "已上传手机端最新数据"); return result; }
-    if (!remoteHash.equals(known)) { boolean accepted = acceptRemote(local, remote); prefs.edit().putString("last_hash", remoteHash).putString("last_etag", probe.etag).apply(); result.put("action", "downloaded"); if (accepted) result.put("state", remoteState); else result.put("pendingLocal", true); result.put("message", "已下载坚果云最新数据"); return result; }
-    prefs.edit().putString("last_hash", known).putString("last_etag", probe.etag).apply(); result.put("action", "unchanged"); result.put("message", "两边数据已经是最新"); return result;
+    if(prefs.getString("username","").isEmpty()||prefs.getString("password","").isEmpty()||prefs.getString("account","").length()<8)throw new IOException("请先填写坚果云账号、应用密码和云端账号标识");
+    return AccountSync.run(new AccountSync.Store(){
+      public String read(){return readState();}
+      public String baseline(){return MainActivity.this.baseline();}
+      public boolean accept(String base,String incoming)throws Exception{return acceptRemote(base,incoming);}
+      public void checkpoint(String state,String etag)throws Exception{rememberSync(state,etag);}
+    },new AccountSync.Remote(){
+      public AccountSync.Snapshot probe()throws Exception{return probeRemote();}
+      public AccountSync.Snapshot get()throws Exception{return getRemote();}
+      public AccountSync.Snapshot put(String state,String etag,boolean missing)throws Exception{return putRemote(state,etag,missing);}
+    },prefs.getString("last_hash",""),prefs.getString("last_etag",""),resolution);
   }
   class Bridge {
     @JavascriptInterface public String config() { try { JSONObject data = new JSONObject(); data.put("url", prefs.getString("url", "https://dav.jianguoyun.com/dav/")); data.put("username", prefs.getString("username", "")); data.put("account", prefs.getString("account", "")); data.put("passwordSet", !prefs.getString("password", "").isEmpty()); data.put("autoSync", prefs.getBoolean("auto_sync", true)); return data.toString(); } catch(Exception e) { return "{}"; } }
     @JavascriptInterface public String state() { return readState(); }
-    @JavascriptInterface public boolean saveState(String value) { try { new JSONObject(value).getJSONObject("tables"); writeState(value); return true; } catch(Exception error) { return false; } }
-    @JavascriptInterface public void saveConfig(String raw) { try { JSONObject item = new JSONObject(raw); android.content.SharedPreferences.Editor edit = prefs.edit().putString("url", item.optString("url")).putString("username", item.optString("username")).putString("account", item.optString("account")).putBoolean("auto_sync", item.optBoolean("auto_sync", true)); if (!item.optString("password").isEmpty()) edit.putString("password", item.optString("password")); edit.apply(); restartAutoSync(); } catch(Exception ignored) {} }
+    @JavascriptInterface public boolean saveState(String value, String expected) {
+      synchronized(stateLock){try{new JSONObject(value).getJSONObject("tables");if(expected==null||!digest(expected).equals(digest(readStateLocked())))return false;writeStateLocked(value);return true;}catch(Exception error){return false;}}
+    }
+    @JavascriptInterface public boolean saveConfig(String raw) {
+      if(!syncRunning.compareAndSet(false,true))return false;
+      try{
+        JSONObject item=new JSONObject(raw);boolean changed=!item.optString("url").equals(prefs.getString("url",""))||!item.optString("account").equals(prefs.getString("account",""))||!item.optString("username").equals(prefs.getString("username",""));
+        android.content.SharedPreferences.Editor edit=prefs.edit().putString("url",item.optString("url")).putString("username",item.optString("username")).putString("account",item.optString("account")).putBoolean("auto_sync",item.optBoolean("auto_sync",true));
+        if(!item.optString("password").isEmpty())edit.putString("password",item.optString("password"));if(changed)edit.remove("last_hash").remove("last_etag");
+        if(!edit.commit())return false;if(changed)new File(getFilesDir(),"account-base.json").delete();autoSyncHandler.post(()->restartAutoSync());return true;
+      }catch(Exception e){return false;}finally{syncRunning.set(false);}
+    }
+    @JavascriptInterface public String uiState(){return getSharedPreferences("device-ui",MODE_PRIVATE).getString("state","{}");}
+    @JavascriptInterface public void saveUiState(String value){try{new JSONObject(value);getSharedPreferences("device-ui",MODE_PRIVATE).edit().putString("state",value).commit();}catch(Exception ignored){}}
+
     @JavascriptInterface public void sync(String resolution) { triggerSync(true, resolution == null ? "" : resolution); }
   }
 }
