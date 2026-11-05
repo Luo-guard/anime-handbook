@@ -8,7 +8,7 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
   await page.setContent(fs.readFileSync(path.join(assets,'index.html'),'utf8').replace(/<script[^>]*src="app.js"[^>]*><\/script>/,''));
   await page.addStyleTag({content:fs.readFileSync(path.join(assets,'style.css'),'utf8')});
   await page.evaluate(()=>{
-   window.AndroidHandbook={state:()=>JSON.stringify({tables:{anime:Array.from({length:100},(_,i)=>({id:i+1,name_cn:'测试番剧 '+i,collection_type:1,active:1,episode_count:12,watched_episodes:'[]'})),settings:[],events:[],custom_collection_items:[]}}),saveState:()=>{}};
+   window.AndroidHandbook={state:()=>JSON.stringify({tables:{anime:Array.from({length:100},(_,i)=>({id:i+1,name_cn:'测试番剧 '+i,collection_type:1,active:1,episode_count:12,watched_episodes:'[]'})),settings:[],events:[],custom_collection_items:[]}}),saveState:()=>true};
   });
   await page.addScriptTag({content:fs.readFileSync(path.join(assets,'app.js'),'utf8')});
   for(const y of [950,2400,5100]){

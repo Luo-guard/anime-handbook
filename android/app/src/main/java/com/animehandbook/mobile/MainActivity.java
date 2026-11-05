@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class MainActivity extends Activity {
   private WebView web;
   private File stateFile;
+  private final Object stateLock = new Object();
   private android.content.SharedPreferences prefs;
   private static final long AUTO_SYNC_INTERVAL_MS = 30L * 60L * 1000L;
   private final Handler autoSyncHandler = new Handler(Looper.getMainLooper());
@@ -75,11 +76,12 @@ public class MainActivity extends Activity {
     if (prefs.getBoolean("auto_sync", true)) autoSyncHandler.postDelayed(autoSyncTask, AUTO_SYNC_INTERVAL_MS);
   }
 
-  private void triggerSync(boolean notify) {
+  private void triggerSync(boolean notify) { triggerSync(notify, ""); }
+  private void triggerSync(boolean notify, String resolution) {
     if (!syncRunning.compareAndSet(false, true)) return;
     new Thread(() -> {
       try {
-        JSONObject result = MainActivity.this.sync("");
+        JSONObject result = MainActivity.this.sync(resolution);
         String script = "window.HandbookMobile.completeSync(" + JSONObject.quote(result.toString()) + "," + (!notify ? "true" : "false") + ")";
         web.post(() -> web.evaluateJavascript(script, null));
       } catch(Exception error) {
@@ -92,15 +94,25 @@ public class MainActivity extends Activity {
     }).start();
   }
 
-  private String readState() {
+  private String readState() { synchronized (stateLock) { return readStateLocked(); } }
+  private String readStateLocked() {
     if (!stateFile.isFile()) return "{\"format\":1,\"exported_at\":\"\",\"tables\":{\"anime\":[],\"events\":[],\"settings\":[],\"custom_collections\":[],\"custom_collection_items\":[],\"ranking_boards\":[],\"ranking_templates\":[],\"ranking_tiers\":[],\"ranking_items\":[]}}";
     try (InputStream in = new FileInputStream(stateFile)) { return new String(in.readAllBytes(), StandardCharsets.UTF_8); }
     catch (IOException error) { return "{}"; }
   }
-  private void writeState(String value) throws IOException {
+  private void writeState(String value) throws IOException { synchronized (stateLock) { writeStateLocked(value); } }
+  private void writeStateLocked(String value) throws IOException {
     File temp = new File(getFilesDir(), "account-state.tmp");
     try (OutputStream out = new FileOutputStream(temp)) { out.write(value.getBytes(StandardCharsets.UTF_8)); }
     if (!temp.renameTo(stateFile)) throw new IOException("无法保存本地手账数据");
+  }
+  // A network response may only replace the snapshot it started from.
+  private boolean acceptRemote(String base, String incoming) throws Exception {
+    synchronized (stateLock) {
+      if (!digest(readStateLocked()).equals(digest(base))) return false;
+      writeStateLocked(incoming);
+      return true;
+    }
   }
   private static String rawDigest(String value) throws Exception {
     byte[] hash = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
@@ -178,20 +190,20 @@ public class MainActivity extends Activity {
     String remoteHash = digest(remote), remoteLegacyHash = rawDigest(remote);
     // Migrate the hash stored by earlier builds, which included exported_at.
     if (known.equals(remoteLegacyHash)) known = remoteHash; else if (known.equals(localLegacyHash)) known = localHash;
-    if (known.isEmpty() || "remote".equals(resolution)) { writeState(remote); prefs.edit().putString("last_hash", remoteHash).putString("last_etag", probe.etag).apply(); result.put("action", "downloaded"); result.put("state", remoteState); result.put("message", "已从坚果云下载账号数据"); return result; }
+    if (known.isEmpty() || "remote".equals(resolution)) { boolean accepted = acceptRemote(local, remote); prefs.edit().putString("last_hash", remoteHash).putString("last_etag", probe.etag).apply(); result.put("action", "downloaded"); if (accepted) result.put("state", remoteState); else result.put("pendingLocal", true); result.put("message", "已从坚果云下载账号数据"); return result; }
     if (!localHash.equals(known) && !remoteHash.equals(known) && !"local".equals(resolution)) {
       JSONObject merged = RecordStateMerger.merge(new JSONObject(local), remoteState); String mergedText = merged.toString(); putRemote(mergedText); RemoteProbe uploaded = probeRemote(); String mergedHash = digest(mergedText);
-      writeState(mergedText); prefs.edit().putString("last_hash", mergedHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "merged"); result.put("state", merged); result.put("message", "已自动合并新增记录；同一番剧同一集保留较早观看时间"); return result;
+      boolean accepted = acceptRemote(local, mergedText); prefs.edit().putString("last_hash", mergedHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "merged"); if (accepted) result.put("state", merged); else result.put("pendingLocal", true); result.put("message", "已自动合并新增记录；同一番剧同一集保留较早观看时间"); return result;
     }
     if (!localHash.equals(known) || "local".equals(resolution)) { putRemote(local); RemoteProbe uploaded = probeRemote(); prefs.edit().putString("last_hash", localHash).putString("last_etag", uploaded.etag).apply(); result.put("action", "uploaded"); result.put("message", "已上传手机端最新数据"); return result; }
-    if (!remoteHash.equals(known)) { writeState(remote); prefs.edit().putString("last_hash", remoteHash).putString("last_etag", probe.etag).apply(); result.put("action", "downloaded"); result.put("state", remoteState); result.put("message", "已下载坚果云最新数据"); return result; }
+    if (!remoteHash.equals(known)) { boolean accepted = acceptRemote(local, remote); prefs.edit().putString("last_hash", remoteHash).putString("last_etag", probe.etag).apply(); result.put("action", "downloaded"); if (accepted) result.put("state", remoteState); else result.put("pendingLocal", true); result.put("message", "已下载坚果云最新数据"); return result; }
     prefs.edit().putString("last_hash", known).putString("last_etag", probe.etag).apply(); result.put("action", "unchanged"); result.put("message", "两边数据已经是最新"); return result;
   }
   class Bridge {
     @JavascriptInterface public String config() { try { JSONObject data = new JSONObject(); data.put("url", prefs.getString("url", "https://dav.jianguoyun.com/dav/")); data.put("username", prefs.getString("username", "")); data.put("account", prefs.getString("account", "")); data.put("passwordSet", !prefs.getString("password", "").isEmpty()); data.put("autoSync", prefs.getBoolean("auto_sync", true)); return data.toString(); } catch(Exception e) { return "{}"; } }
     @JavascriptInterface public String state() { return readState(); }
-    @JavascriptInterface public void saveState(String value) { try { new JSONObject(value); writeState(value); } catch(Exception ignored) {} }
+    @JavascriptInterface public boolean saveState(String value) { try { new JSONObject(value).getJSONObject("tables"); writeState(value); return true; } catch(Exception error) { return false; } }
     @JavascriptInterface public void saveConfig(String raw) { try { JSONObject item = new JSONObject(raw); android.content.SharedPreferences.Editor edit = prefs.edit().putString("url", item.optString("url")).putString("username", item.optString("username")).putString("account", item.optString("account")).putBoolean("auto_sync", item.optBoolean("auto_sync", true)); if (!item.optString("password").isEmpty()) edit.putString("password", item.optString("password")); edit.apply(); restartAutoSync(); } catch(Exception ignored) {} }
-    @JavascriptInterface public void sync(String resolution) { if (resolution == null || resolution.isEmpty()) { triggerSync(true); return; } new Thread(() -> { try { JSONObject result = MainActivity.this.sync(resolution); web.post(() -> web.evaluateJavascript("window.HandbookMobile.completeSync(" + JSONObject.quote(result.toString()) + ",false)", null)); } catch(Exception error) { String value = "{\"error\":" + JSONObject.quote(error.getMessage() == null ? "同步失败" : error.getMessage()) + "}"; web.post(() -> web.evaluateJavascript("window.HandbookMobile.completeSync(" + JSONObject.quote(value) + ",false)", null)); } }).start(); }
+    @JavascriptInterface public void sync(String resolution) { triggerSync(true, resolution == null ? "" : resolution); }
   }
 }

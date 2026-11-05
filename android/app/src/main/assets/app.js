@@ -3,7 +3,13 @@ let state=JSON.parse(native.state()); const tables=()=>state.tables||(state.tabl
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); const name=a=>a.name_cn||a.name||`Bangumi #${a.id}`;
 function nowIso(){const d=new Date(),p=n=>String(n).padStart(2,'0'),minutes=-d.getTimezoneOffset(),sign=minutes>=0?'+':'-',offset=Math.abs(minutes);return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${sign}${p(Math.floor(offset/60))}:${p(offset%60)}`}
 function formatTime(value){const d=new Date(value);return Number.isNaN(d.getTime())?String(value||''):new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(d).replace(/\//g,'-')}
-function save(){state.exported_at=nowIso();native.saveState(JSON.stringify(state));}
+function save(){
+ state.exported_at=nowIso();
+ if(native.saveState(JSON.stringify(state))===true)return true;
+ state=JSON.parse(native.state());
+ alert('保存到手机失败，修改尚未保存。请检查手机存储空间后重试。');
+ return false;
+}
 function cover(a){return a.image_url?`style="background-image:url('${esc('https://covers.animehandbook.local/?url='+encodeURIComponent(a.image_url))}')"`:''} function animes(){return tables().anime||[]}
 function settingMap(){const result={};for(const item of tables().settings||[]){try{result[item.key]=JSON.parse(item.value)}catch(_){result[item.key]=item.value}}return result}
 function collectionComparator(){
@@ -32,8 +38,13 @@ function settings(){const c=JSON.parse(native.config());app.innerHTML=`<div clas
 // Capture before replacing the grid: a shorter detail page clamps scrollY.
 let collectionScrollY=0;
 function showPage(p){page=p;selected=null; render();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));}function render(){if(selected!==null)return detail();if(page==='records')return records();if(page==='settings')return settings();home()}function setCat(c){category=c;render()}function openAnime(id){if(selected===null&&page==='home')collectionScrollY=window.scrollY;selected=id;render();window.scrollTo(0,0)}function backHome(){selected=null;render();window.scrollTo(0,collectionScrollY)}
-function toggleEpisode(id,key){const a=animes().find(x=>x.id===id);let w=JSON.parse(a.watched_episodes||'[]'), watched=!w.includes(key);w=watched?[...w,key]:w.filter(x=>x!==key);a.watched_episodes=JSON.stringify(w);a.updated_at=nowIso();const events=tables().events;if(watched){events.push({id:Date.now(),event_type:'watch',anime_id:id,episodes:JSON.stringify([key]),content:'',theme:'watch',themes:'["watch"]',rating:null,raw_directives:'',created_at:nowIso()})}else{const index=[...events].reverse().findIndex(e=>e.event_type==='watch'&&Number(e.anime_id)===Number(id)&&(()=>{try{return JSON.parse(e.episodes||'[]').includes(key)}catch(_){return false}})());if(index>=0)events.splice(events.length-1-index,1)}save();render()}
-function addNote(){const content=document.querySelector('#content').value.trim();if(!content)return;const events=tables().events;events.push({id:Date.now(),event_type:'note',anime_id:null,episodes:'[]',content,theme:'other',themes:'["other"]',rating:null,raw_directives:'',created_at:nowIso()});save();showPage('records')}
+function toggleEpisode(id,key){const a=animes().find(x=>x.id===id);let w=JSON.parse(a.watched_episodes||'[]'), watched=!w.includes(key);w=watched?[...w,key]:w.filter(x=>x!==key);a.watched_episodes=JSON.stringify(w);a.updated_at=nowIso();const events=tables().events;if(watched){events.push({id:Date.now(),event_type:'watch',anime_id:id,episodes:JSON.stringify([key]),content:'',theme:'watch',themes:'["watch"]',rating:null,raw_directives:'',created_at:nowIso()})}else{const index=[...events].reverse().findIndex(e=>e.event_type==='watch'&&Number(e.anime_id)===Number(id)&&(()=>{try{return JSON.parse(e.episodes||'[]').includes(key)}catch(_){return false}})());if(index>=0){const actual=events.length-1-index,event=events[actual],remaining=JSON.parse(event.episodes||'[]').filter(item=>item!==key);if(remaining.length)event.episodes=JSON.stringify(remaining);else events.splice(actual,1)}}save();render()}
+function addNote(){const content=document.querySelector('#content').value.trim();if(!content)return;const events=tables().events;events.push({id:Date.now(),event_type:'note',anime_id:null,episodes:'[]',content,theme:'other',themes:'["other"]',rating:null,raw_directives:'',created_at:nowIso()});if(save())showPage('records')}
 function saveConfig(){native.saveConfig(JSON.stringify({url:document.querySelector('#url').value.trim(),username:document.querySelector('#username').value.trim(),password:document.querySelector('#password').value,account:document.querySelector('#account').value.trim(),auto_sync:document.querySelector('#autoSync').checked}));alert('坚果云配置已保存')}
-function requestSync(resolution=''){native.sync(resolution)} window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if(r.error){if(!silent)alert(r.error);return}if(r.conflict){if(silent)return;if(confirm('手机和云端都修改过。确定：以手机为准；取消：以云端为准。'))requestSync('local');else requestSync('remote');return}if(r.state){state=r.state;save()}if(!silent)alert(r.message||'同步完成');render()}};
+function requestSync(resolution=''){native.sync(resolution)} window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if(r.error){if(!silent)alert(r.error);return}if(r.conflict){if(silent)return;if(confirm('手机和云端都修改过。确定：以手机为准；取消：以云端为准。'))requestSync('local');else requestSync('remote');return}if(r.state){
+ // Read the latest persisted snapshot, including edits made after the network finished.
+ state=JSON.parse(native.state());
+ const editing=!!document.querySelector('#content')||!!document.querySelector('#url');
+ if(!editing){const y=window.scrollY;render();window.scrollTo(0,y)}
+ }if(!silent)alert(r.pendingLocal?'同步已完成；期间的新修改已保留在手机，等待下次同步。':r.message||'同步完成')}};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelector('#sync').onclick=()=>requestSync();render();
