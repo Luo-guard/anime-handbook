@@ -59,6 +59,26 @@ class WireTest(unittest.TestCase):
         response=conn.getresponse(); payload=response.read(); result=(response.status,payload,dict(response.getheaders()))
         conn.close(); return result
 
+    def test_staged_background_does_not_change_settings_or_existing_image(self):
+        import base64
+        import io
+        from PIL import Image
+        output = io.BytesIO()
+        Image.new("RGB", (2, 2), "blue").save(output, "PNG")
+        before = self.db.get_settings()
+        root = self.root / "background"
+        root.mkdir()
+        existing = root / "saved-image.png"
+        existing.write_bytes(b"existing")
+        with patch.object(http, "BACKGROUND_ROOT", root):
+            body = json.dumps({"data": "data:image/png;base64," + base64.b64encode(output.getvalue()).decode(), "profile_id": "theme_staged", "defer_settings": True})
+            status, raw, _ = self.call("POST", "/api/background", body)
+            self.assertEqual(status, 200, raw)
+            self.assertGreater(json.loads(raw)["version"], 0)
+        self.assertEqual(self.db.get_settings(), before)
+        self.assertEqual(existing.read_bytes(), b"existing")
+        self.assertEqual(len(list(root.glob("*"))), 2)
+
     def test_object_content_type_length_and_encoding_validation(self):
         for body in [b"[]",b"null",b"true",b"1",b'"text"',b"{",b"\xff"]:
             self.assertEqual(self.call("POST","/api/notes",body)[0],400,body)

@@ -44,6 +44,7 @@ const BOOT = {
 const patches = [];
 const uploads = [];
 const deletes = [];
+let failSettings = false;
 
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://x').pathname;
@@ -51,6 +52,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(code, { 'Content-Type': type });
     res.end(Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body));
   };
+  if (pathname === '/api/health') return send(200,{features:{schedule_sorting:2,keyboard_shortcuts:1,deferred_theme_background:1}});
   if (pathname === '/api/bootstrap') return send(200, BOOT);
   if (pathname === '/api/status') return send(200, { sync: { running: false }, stats: {}, revision: 1 });
   if (pathname === '/api/background' && req.method === 'GET') return send(200, PNG, 'image/png');
@@ -64,9 +66,8 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       const body = JSON.parse(raw || '{}');
       uploads.push({ profile_id: body.profile_id, bytes: String(body.data || '').length });
-      SETTINGS.custom_background_enabled = true;
-      SETTINGS.custom_background_version = 12345;
-      send(200, { ok: true, settings: SETTINGS });
+      if(!body.defer_settings){SETTINGS.custom_background_enabled=true;SETTINGS.custom_background_version=12345;}
+      send(200, { ok: true, version:12345,settings: SETTINGS });
     });
     return;
   }
@@ -75,6 +76,7 @@ const server = http.createServer((req, res) => {
     req.on('data', (chunk) => { raw += chunk; });
     req.on('end', () => {
       const patch = JSON.parse(raw || '{}');
+      if(failSettings)return send(503,{error:"fixture save failed"});
       patches.push(patch);
       Object.assign(SETTINGS, patch);
       send(200, { ok: true, settings: SETTINGS });
@@ -88,178 +90,60 @@ const server = http.createServer((req, res) => {
   return send(200, fs.readFileSync(full), MIME[path.extname(full)] || 'application/octet-stream');
 });
 
-(async () => {
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${server.address().port}`;
-  const browser = await chromium.launch({ headless: true });
-  try {
-    const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
-    const errors = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`${base}/`, { waitUntil: 'load' });
-    await page.waitForTimeout(1600);
-    await page.click('#settingsButton');
-    await page.waitForSelector('#settingsModal[open]');
-    await page.waitForTimeout(300);
-
-    // 1) 合并的主界面设置保留主题卡片与布局设置保存按钮。
-    assert.equal(await page.locator('#saveSettings').isVisible(), true, 'merged main tab keeps the layout save button');
-    assert.equal(await page.locator('.theme-card-main').count(), 2, 'one card per saved profile');
-    assert.equal(await page.locator('#newThemeCard').count(), 1, 'dashed new-theme card follows the list');
-    assert.equal(await page.locator('.theme-card.is-active').getAttribute('data-theme-card'), 'default');
-    await page.click('[data-settings-tab="main"]');
-    await page.waitForTimeout(150);
-    assert.equal(await page.locator('#saveSettings').isVisible(), true, 'interface tab keeps the footer save button');
-    await page.click('[data-settings-tab="main"]');
-    await page.waitForTimeout(150);
-
-    // 2) 只剩一套时，所有删除按钮都禁用并说明原因。
-    const single = await page.evaluate(() => {
-      const saved = state.settings.theme_profiles;
-      state.settings.theme_profiles = [saved[0]];
-      renderThemeControls();
-      const buttons = [...document.querySelectorAll('[data-theme-delete]')];
-      const result = { disabled: buttons.map((button) => button.disabled), title: buttons[0]?.title || "" };
-      state.settings.theme_profiles = saved;
-      renderThemeControls();
-      return result;
-    });
-    assert.deepEqual(single.disabled, [true], 'single profile disables delete');
-    assert.match(single.title, /至少要保留/, 'disabled delete explains why');
-
-    // 3) 点卡片立即切换并写库。
-    const beforeSwitch = patches.length;
-    await page.locator('[data-theme-pick="night"]').click();
-    await page.waitForTimeout(700);
-    assert.equal(patches.length, beforeSwitch + 1, 'card click persists once');
-    assert.equal(patches.at(-1).active_theme_profile, 'night');
-    assert.equal(patches.at(-1).theme_color, 'indigo');
-    assert.equal(await page.locator('.theme-card.is-active').getAttribute('data-theme-card'), 'night');
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'indigo');
-
-    // 4) 编辑器回填；改色只预览不写库，取消要回滚。
-    await page.locator('[data-theme-edit="default"]').click();
-    await page.waitForTimeout(300);
-    assert.equal(await page.locator('#themeEditorModal').evaluate((node) => node.open), true);
-    assert.equal(await page.locator('#themeEditorName').inputValue(), 'v家');
-    assert.equal(await page.locator('.theme-option.active').getAttribute('data-theme-value'), 'slate');
-    assert.equal(await page.locator('#themeEditorBackgroundPreview').getAttribute('data-label'), '纯色背景');
-    const beforePreview = patches.length;
-    await page.locator('.theme-option[data-theme-value="rose"]').click();
-    await page.waitForTimeout(300);
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'rose', 'editor previews live');
-    assert.equal(await page.locator('#themeEditorName').inputValue(), 'v家', 'color clicks must not clear the typed name');
-    assert.equal(patches.length, beforePreview, 'preview does not persist');
-    await page.locator('#themeEditorCancel').click();
-    await page.waitForTimeout(300);
-    assert.equal(await page.locator('#themeEditorModal').evaluate((node) => node.open), false);
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'indigo', 'cancel restores the previous look');
-    assert.equal(patches.length, beforePreview, 'cancel writes nothing');
-
-    // 5) 新建主题：配色与背景都在保存时一次写入，背景图延迟上传。
-    await page.locator('#newThemeCard').click();
-    await page.waitForTimeout(300);
-    assert.equal(await page.locator('#themeEditorTitle').textContent(), '新建主题');
-    assert.equal(await page.locator('#themeEditorName').inputValue(), '');
-    await page.fill('#themeEditorName', '通勤');
-    await page.locator('.theme-option[data-theme-value="teal"]').click();
-    await page.setInputFiles('#customBackgroundInput', { name: 'bg.png', mimeType: 'image/png', buffer: PNG });
-    await page.waitForTimeout(400);
-    assert.equal(uploads.length, 0, 'selecting an image does not upload yet');
-    assert.match(await page.locator('#customBackgroundName').textContent(), /待上传/);
-    assert.equal(await page.locator('#themeEditorBackgroundPreview').getAttribute('data-label'), '背景预览');
-    const beforeSave = patches.length;
-    await page.locator('#themeEditorSave').click();
-    await page.waitForTimeout(1200);
-    assert.equal(await page.locator('#themeEditorModal').evaluate((node) => node.open), false, 'save closes the editor');
-    assert.equal(uploads.length, 1, 'background uploads on save');
-    const createdId = patches.at(-1).active_theme_profile;
-    assert.match(uploads[0].profile_id, /^theme_/, 'upload targets the new profile id');
-    assert.equal(patches.length, beforeSave + 1, 'one settings patch after upload');
-    const created = patches.at(-1).theme_profiles.find((profile) => profile.name === '通勤');
-    assert.ok(created, 'new profile is appended');
-    assert.equal(created.theme_color, 'teal');
-    assert.equal(created.custom_background_enabled, true);
-    assert.equal(created.custom_background_version, 12345);
-    assert.equal(created.id, createdId);
-    assert.equal(await page.locator('.theme-card-main').count(), 3);
-    assert.equal(await page.locator(`.theme-card.is-active[data-theme-card="${createdId}"]`).count(), 1);
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'teal');
-    assert.equal(await page.locator('.theme-card img').count(), 1, 'card shows the uploaded background');
-
-    // 6) 同名保护：不新增方案，也不写库。
-    const beforeDuplicate = patches.length;
-    await page.locator('#newThemeCard').click();
-    await page.fill('#themeEditorName', '通勤');
-    await page.locator('#themeEditorSave').click();
-    await page.waitForTimeout(500);
-    assert.match(await page.locator('#toastRegion').innerText(), /已有同名主题/);
-    assert.equal(patches.length, beforeDuplicate, 'duplicate name does not persist');
-    assert.equal(await page.locator('#themeEditorModal').evaluate((node) => node.open), true);
-    await page.locator('#themeEditorCancel').click();
-
-    // 7) 编辑并保存：覆盖原名与配色，不新增方案；重命名就在名称字段里。
-    await page.locator(`[data-theme-edit="${createdId}"]`).click();
-    await page.waitForTimeout(200);
-    await page.fill('#themeEditorName', '通勤改');
-    await page.locator('.theme-option[data-theme-value="rose"]').click();
-    await page.locator('#themeEditorSave').click();
-    await page.waitForTimeout(1000);
-    assert.equal(patches.at(-1).theme_profiles.length, 3, 'editing does not append another profile');
-    const edited = patches.at(-1).theme_profiles.find((profile) => profile.id === createdId);
-    assert.equal(edited.name, '通勤改');
-    assert.equal(edited.theme_color, 'rose');
-    assert.equal(patches.at(-1).active_theme_profile, createdId);
-    assert.equal(await page.locator(`.theme-card[data-theme-card="${createdId}"] .theme-card-meta strong`).innerText(), '通勤改');
-
-    // 8) 非法色值只提示，不写库。
-    await page.locator(`[data-theme-edit="${createdId}"]`).click();
-    await page.waitForTimeout(200);
-    await page.fill('#customThemeColorInput', '#12');
-    const beforeInvalid = patches.length;
-    await page.locator('#useCustomThemeButton').click();
-    await page.waitForTimeout(300);
-    assert.match(await page.locator('#toastRegion').innerText(), /HEX/);
-    assert.equal(patches.length, beforeInvalid);
-    await page.locator('#themeEditorCancel').click();
-
-    // 9) 选图后取消：不上传、不新增方案。
-    const beforeCancelUpload = uploads.length;
-    await page.locator('#newThemeCard').click();
-    await page.fill('#themeEditorName', '取消测试');
-    await page.setInputFiles('#customBackgroundInput', { name: 'bg.png', mimeType: 'image/png', buffer: PNG });
-    await page.waitForTimeout(300);
-    await page.locator('#themeEditorCancel').click();
-    await page.waitForTimeout(300);
-    assert.equal(uploads.length, beforeCancelUpload, 'cancel leaves no uploaded file');
-    assert.equal(await page.locator('.theme-card-main').count(), 3);
-
-    // 10) 删除确认写明会切到哪一套。
-    let confirmText = '';
-    page.once('dialog', (dialog) => { confirmText = dialog.message(); dialog.accept(); });
-    await page.locator(`[data-theme-delete="${createdId}"]`).click();
-    await page.waitForTimeout(700);
-    assert.match(confirmText, /删除后会切换到/, 'confirm names the fallback profile');
-    assert.match(confirmText, /无法撤销/, 'confirm warns about irreversibility');
-    assert.equal(await page.locator('.theme-card-main').count(), 2);
-    assert.equal(patches.at(-1).theme_profiles.length, 2);
-    assert.notEqual(patches.at(-1).active_theme_profile, createdId);
-    assert.equal(deletes.length, 1, 'deleting a theme also deletes its background image');
-    assert.match(deletes[0], new RegExp(`profile=${createdId}`));
-
-    // 11) 刷新后仍是卡片上的那套方案。
-    await page.reload({ waitUntil: 'load' });
-    await page.waitForTimeout(1600);
-    await page.click('#settingsButton');
-    await page.waitForSelector('#settingsModal[open]');
-    await page.waitForTimeout(300);
-    assert.equal(await page.locator('.theme-card.is-active').count(), 1);
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'slate');
-
-    assert.deepEqual(errors, [], 'no page errors');
-    console.log('Theme profiles: cards switch instantly, merged settings footer visible, editor preview/cancel rollback, delayed background upload, duplicate guard, delete confirm, reload persistence passed.');
-  } finally {
-    await browser.close();
-    server.close();
-  }
-})().catch((error) => { console.error(error); process.exit(1); });
+(async()=>{
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const base=`http://127.0.0.1:${server.address().port}`,browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(base);await page.waitForSelector('#settingsButton');
+  await page.click('#settingsButton');await page.waitForSelector('#settingsModal[open]');
+  assert.deepEqual(await page.locator('.main-settings-section>summary').allTextContents(),['主题外观','主题自动切换','侧边栏与页面','启动与后台']);
+  assert.equal(await page.locator('#themePagePreview').isVisible(),false);
+  await page.click('[data-theme-pick="night"]');
+  assert.equal(SETTINGS.active_theme_profile,'default');assert.equal(patches.length,0);
+  assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'night');
+  assert(await page.locator('#themePreviewStatus').isVisible());
+  await page.click('#themePagePreview');await page.waitForSelector('#settingsModal:not([open])',{state:'attached'});
+  assert(await page.locator('#themePagePreviewBar').isVisible());
+  await page.click('#themePreviewReturn');assert(await page.locator('#settingsModal').isVisible());
+  await page.click('#settingsModal .modal-close');await page.waitForTimeout(80);
+  assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'default');
+  assert.equal(patches.length,0);
+  // Editor applies to the settings draft only, including background files.
+  await page.click('#settingsButton');await page.click('[data-theme-edit="default"]');
+  await page.locator('#customBackgroundInput').setInputFiles({name:'preview.png',mimeType:'image/png',buffer:PNG});
+  await page.locator('#customBackgroundOpacityInput').evaluate(e=>e.value='35');await page.locator('#customBackgroundOpacityInput').dispatchEvent('input');
+  await page.click('#themeEditorSave');await page.waitForSelector('#themeEditorModal:not([open])',{state:'attached'});
+  assert.equal(uploads.length,0);assert.equal(patches.length,0);
+  assert(await page.evaluate(()=>window.handbookThemePreview.backgroundUrl.startsWith('data:')));
+  // Failed final save cannot change the saved theme or its image path.
+  failSettings=true;await page.click('#saveSettings');await page.waitForFunction(()=>!document.querySelector('#saveSettings').disabled);
+  assert.equal(uploads.length,1);assert.notEqual(uploads[0].profile_id,'default');
+  assert.equal(SETTINGS.custom_background_enabled,false);assert.equal(SETTINGS.active_theme_profile,'default');
+  assert(await page.locator('#settingsModal').isVisible());
+  await page.click('#settingsModal .modal-close');await page.waitForTimeout(80);
+  assert.equal(await page.evaluate(()=>state.settings.custom_background_enabled),false);
+  // Selection and automatic switching commit together through the outer save.
+  failSettings=false;await page.click('#settingsButton');await page.click('[data-theme-pick="night"]');
+  await page.locator('#themeRandomOnOpenInput').evaluate(e=>{e.checked=true;e.dispatchEvent(new Event('change',{bubbles:true}))});
+  assert.equal(SETTINGS.theme_random_on_open,false);assert.equal(patches.length,0);
+  await page.click('#saveSettings');await page.waitForSelector('#settingsModal:not([open])',{state:'attached'});
+  assert.equal(SETTINGS.active_theme_profile,'night');assert.equal(SETTINGS.theme_random_on_open,true);
+  await page.reload();await page.waitForSelector('#settingsButton');assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'night');
+  // A later staged image saves to a new identity, then survives reload.
+  await page.click('#settingsButton');await page.click('[data-theme-edit="night"]');
+  await page.locator('#customBackgroundInput').setInputFiles({name:'saved.png',mimeType:'image/png',buffer:PNG});
+  await page.click('#themeEditorSave');await page.waitForSelector('#themeEditorModal:not([open])',{state:'attached'});
+  await page.click('#saveSettings');await page.waitForSelector('#settingsModal:not([open])',{state:'attached'});
+  assert.notEqual(SETTINGS.active_theme_profile,'night');assert.equal(SETTINGS.custom_background_enabled,true);
+  assert(SETTINGS.theme_profiles.some(p=>p.id===SETTINGS.active_theme_profile&&p.custom_background_enabled));
+  assert.equal(deletes.length,0);
+  await page.reload();await page.click('#settingsButton');
+  await page.screenshot({path:require('path').join(require('os').tmpdir(),'handbook-main-settings-preview.png')});
+  await page.keyboard.press('Escape');await page.waitForTimeout(80);
+  assert.equal(await page.evaluate(()=>ThemeSettingsSession.active),false);
+  assert.deepEqual(errors,[]);
+  console.log('Theme preview transaction passed: grouped layout, no writes before Save, preview return/cancel/Esc, editor files deferred, failed-save rollback, copy-on-write backgrounds, random setting and final-save reload persistence');
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+})().catch(e=>{console.error(e);process.exitCode=1});

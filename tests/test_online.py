@@ -315,6 +315,17 @@ class OnlineTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(list(self.services().record_image_root.glob(".upload-*")), [])
 
+    def test_staged_background_preserves_saved_settings(self):
+        from PIL import Image
+        output = io.BytesIO()
+        Image.new("RGB", (2, 2), "blue").save(output, "PNG")
+        before = self.services().database.get_settings()
+        status, data, _ = self.call("POST", "/api/background?profile_id=theme_staged&defer_settings=1", output.getvalue(), self.alice, {"Content-Type": "image/png"})
+        self.assertEqual(status, 200, data)
+        self.assertTrue(data["version"])
+        self.assertEqual(self.services().database.get_settings(), before)
+        self.assertEqual(self.call("GET", "/api/background?profile=theme_staged", client=self.alice)[1], output.getvalue())
+
     def test_background_original_formats_replace_old_and_preserve_metadata(self):
         from PIL import Image
         from PIL.PngImagePlugin import PngInfo

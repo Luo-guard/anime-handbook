@@ -66,7 +66,7 @@ $("#collectionRatingToggle").addEventListener("change", async (event) => {
       method: "PATCH",
       body: JSON.stringify({ category_rating_visibility: visibility }),
     });
-    state.settings = payload.settings;
+    state.settings = ThemeSettingsSession.incoming(payload.settings);
     renderCollection();
   } catch (error) {
     toast(error.message, "error");
@@ -83,7 +83,7 @@ $("#progressBarToggle").addEventListener("change", async (event) => {
       method: "PATCH",
       body: JSON.stringify({ category_progress_visibility: visibility }),
     });
-    state.settings = payload.settings;
+    state.settings = ThemeSettingsSession.incoming(payload.settings);
     state.stats = payload.stats || state.stats;
     state.animes = payload.animes || state.animes;
     state.custom_collections = payload.custom_collections || state.custom_collections;
@@ -104,7 +104,7 @@ $$("[data-sort-mode]").forEach((row) => row.addEventListener("click", async (eve
       method: "PATCH",
       body: JSON.stringify({ collection_sort_modes: modes, collection_sort_directions: directions }),
     });
-    state.settings = payload.settings;
+    state.settings = ThemeSettingsSession.incoming(payload.settings);
     renderCollection();
   } catch (error) {
     toast(error.message, "error");
@@ -233,7 +233,7 @@ async function createRecordTheme() {
   const themes = [...allRecordThemes(), { id, name: name.trim(), color: color.toUpperCase(), builtin: false }];
   try {
     const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify({ record_themes: themes }) });
-    state.settings = payload.settings;
+    state.settings = ThemeSettingsSession.incoming(payload.settings);
     populateAnimeSelect();
     state.noteThemes = new Set([id]);
     updateNoteThemeLabel();
@@ -321,6 +321,8 @@ $("#noteComposer").addEventListener("submit", async (event) => {
 });
 
 $("#settingsButton").addEventListener("click", () => {
+  if(ThemeSettingsSession.suspended){ThemeSettingsSession.resume();return;}
+  ThemeSettingsSession.begin();
   $("#dayStartInput").value = state.settings.day_start_hour;
   $("#showEpisodeBalanceInput").checked = state.settings.show_episode_balance !== false;
   $("#episodeBalanceInitialInput").value = Number(state.settings.episode_balance_initial ?? 237);
@@ -519,7 +521,9 @@ $("#activateHandbookProfileButton").addEventListener("click", async () => {
   const profileId = $("#handbookProfileInput").value;
   try {
     const payload = await api("/api/profiles/activate", { method: "POST", body: JSON.stringify({ profile_id: profileId }) });
+    ThemeSettingsSession.finish(false);
     Object.assign(state, payload);
+    ThemeSettingsSession.begin();
     applyTheme();
     renderStats(); renderTabs(); renderCollection(); renderSettingsPanels();
     toast("已切换手账账号");
@@ -655,21 +659,8 @@ $("#themeEditorName").addEventListener("input", (event) => {
   }
 });
 
-// 主题区其它项都是“改了就存”，这个开关保持一致；本次页面已经加载完，
-// 所以提示里说明是“下次打开”生效。
-$("#themeRandomOnOpenInput").addEventListener("change", async (event) => {
-  const enabled = event.target.checked;
-  try {
-    const payload = await api("/api/settings", {
-      method: "PATCH",
-      body: JSON.stringify({ theme_random_on_open: enabled }),
-    });
-    if (payload.settings) state.settings = payload.settings;
-    toast(enabled ? "已开启：下次打开或刷新会随机使用一套主题" : "已关闭随机主题");
-  } catch (error) {
-    toast(error.message, "error");
-    event.target.checked = !enabled;
-  }
+$('#themeRandomOnOpenInput').addEventListener('change', event=>{
+  state.settings.theme_random_on_open=event.target.checked;ThemeSettingsSession.update();
 });
 
 $("#themeWeeklyPlanEnabledInput").addEventListener("change", () => saveThemeWeeklyPlan(true));
@@ -700,24 +691,29 @@ $("#customThemeColorInput").addEventListener("keydown", (event) => {
   applyCustomThemeColor();
 });
 
-// 选图只做本地预览，真正上传在「保存并应用」里，取消不会留下孤儿文件。
+// 选图只做本地预览，外层保存设置时才上传。
 $("#customBackgroundInput").addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   if (!file || !themeEditorState.open || !themeEditorState.draft) return;
   if (file.size > 8 * 1024 * 1024) { toast("背景图片不能超过 8 MB", "error"); return; }
+  const draft=themeEditorState.draft;
+  const token=Symbol();themeEditorState.fileToken=token;
+  themeEditorState.reading=true;$("#themeEditorSave").disabled=true;
   try {
     const dataUrl = await themeFileToDataUrl(file);
+    if(!themeEditorState.open||themeEditorState.draft!==draft||themeEditorState.fileToken!==token)return;
     themeEditorState.pendingFile = file;
     themeEditorState.localBackgroundUrl = dataUrl;
     themeEditorState.draft.custom_background_enabled = true;
     applyThemeDraft();
     renderThemeEditorFields();
   } catch (error) { toast(error.message, "error"); }
-  finally { event.target.value = ""; }
+  finally { event.target.value = "";if(themeEditorState.fileToken===token){themeEditorState.reading=false;$("#themeEditorSave").disabled=false;} }
 });
 
 $("#clearCustomBackgroundButton").addEventListener("click", () => {
   if (!themeEditorState.open || !themeEditorState.draft) return;
+  themeEditorState.fileToken=null;themeEditorState.reading=false;$("#themeEditorSave").disabled=false;
   themeEditorState.pendingFile = null;
   themeEditorState.localBackgroundUrl = null;
   themeEditorState.draft.custom_background_enabled = false;

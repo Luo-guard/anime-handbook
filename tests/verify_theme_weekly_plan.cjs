@@ -52,6 +52,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(code, { 'Content-Type': type });
     res.end(Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body));
   };
+  if (pathname === '/api/health') return send(200,{features:{schedule_sorting:2,keyboard_shortcuts:1}});
   if (pathname === '/api/bootstrap') return send(200, BOOT);
   if (pathname === '/api/status') return send(200, { sync: { running: false }, stats: {}, revision: 1 });
   if (pathname === '/api/background' && req.method === 'GET') return send(200, PNG, 'image/png');
@@ -100,7 +101,7 @@ const server = http.createServer((req, res) => {
     // 2) 开启：写入开关和 7 天空计划；随机开关暂停。
     await page.locator('#themeWeeklyPlanEnabledInput').evaluate((input) => input.click());
     await page.waitForTimeout(600);
-    let last = patches.at(-1);
+    let last = await page.evaluate(()=>state.settings);
     assert.equal(last.theme_weekly_plan_enabled, true);
     assert.deepEqual(Object.keys(last.theme_weekly_plan).sort(), ['1', '2', '3', '4', '5', '6', '7']);
     assert.equal(await page.locator('[data-theme-plan-day]:enabled').count(), 7, 'plan selects enabled');
@@ -109,7 +110,7 @@ const server = http.createServer((req, res) => {
     // 3) 给今天选一套：立即换肤并写库。
     await page.selectOption(`[data-theme-plan-day="${today}"]`, 'ocean');
     await page.waitForTimeout(700);
-    last = patches.at(-1);
+    last = await page.evaluate(()=>state.settings);
     assert.equal(last.theme_weekly_plan[today], 'ocean');
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'ocean', 'today plan applies immediately');
     assert.equal(await page.locator('.theme-card.is-active').getAttribute('data-theme-card'), 'ocean');
@@ -117,13 +118,13 @@ const server = http.createServer((req, res) => {
     // 4) 给别的日子选一套，不影响今天。
     await page.selectOption(`[data-theme-plan-day="${otherDay}"]`, 'ocean');
     await page.waitForTimeout(500);
-    assert.equal(patches.at(-1).theme_weekly_plan[otherDay], 'ocean');
+    assert.equal((await page.evaluate(()=>state.settings.theme_weekly_plan))[otherDay], 'ocean');
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'ocean', 'other days do not change today');
 
     // 5) 关闭后选择框禁用、随机恢复；计划内容保留。
     await page.locator('#themeWeeklyPlanEnabledInput').evaluate((input) => input.click());
     await page.waitForTimeout(600);
-    assert.equal(patches.at(-1).theme_weekly_plan_enabled, false);
+    assert.equal(await page.evaluate(()=>state.settings.theme_weekly_plan_enabled), false);
     assert.equal(await page.locator('[data-theme-plan-day]:disabled').count(), 7);
     assert.equal(await page.locator('#themeRandomOnOpenInput').isDisabled(), false);
     assert.equal(await page.locator(`[data-theme-plan-day="${today}"]`).inputValue(), 'ocean', 'plan values survive toggling off');
@@ -137,11 +138,14 @@ const server = http.createServer((req, res) => {
     page.once('dialog', (dialog) => dialog.accept());
     await page.locator('[data-theme-delete="indigo"]').click();
     await page.waitForTimeout(1000);
-    const planPatch = patches.filter((patch) => 'theme_weekly_plan' in patch).at(-1);
+    assert.equal(patches.length,0,'weekly plan is a preview until outer Save');
+    const planPatch = await page.evaluate(()=>state.settings);
     assert.equal(planPatch.theme_weekly_plan[today], '', 'deleted profile is removed from the plan');
     assert.equal(await page.locator(`[data-theme-plan-day="${today}"]`).inputValue(), '');
     assert.equal(await page.locator('.theme-card-main').count(), 2);
 
+    await page.click('#saveSettings');await page.waitForSelector('#settingsModal:not([open])',{state:'attached'});
+    assert.equal(patches.at(-1).theme_weekly_plan_enabled,true);
     // 7) 刷新后开关、计划和今天的选择都还在。
     await page.reload({ waitUntil: 'load' });
     await page.waitForTimeout(1600);

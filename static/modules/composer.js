@@ -90,7 +90,7 @@ function renderNoteThemePicker() {
   menu.querySelectorAll("[data-remove-theme]").forEach((button) => button.addEventListener("click", async () => {
     const id = button.dataset.removeTheme;
     if (!confirm("删除这个自定义主题？已有记录不会被删除。")) return;
-    try { const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify({ record_themes: allRecordThemes().filter((theme) => theme.id !== id) }) }); state.settings = payload.settings; state.noteThemes.delete(id); if (!state.noteThemes.size) state.noteThemes.add("other"); populateAnimeSelect(); } catch (error) { toast(error.message, "error"); }
+    try { const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify({ record_themes: allRecordThemes().filter((theme) => theme.id !== id) }) }); state.settings = ThemeSettingsSession.incoming(payload.settings); state.noteThemes.delete(id); if (!state.noteThemes.size) state.noteThemes.add("other"); populateAnimeSelect(); } catch (error) { toast(error.message, "error"); }
   }));
   $("#createRecordTheme", menu).addEventListener("click", createRecordTheme);
   updateNoteThemeLabel();

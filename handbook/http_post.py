@@ -115,9 +115,11 @@ class PostRoutes:
                 for old in self.background_root.glob(f"{stem}.*"):
                     old.unlink(missing_ok=True)
                 (self.background_root / f"{stem}.{extension}").write_bytes(image)
-                self.database.set_setting("custom_background_enabled", True)
-                self.database.set_setting("custom_background_version", int(time.time() * 1000))
-                self.send_json({"ok": True, "settings": self.database.get_settings()})
+                version = int(time.time() * 1000)
+                if body.get("defer_settings") is not True:
+                    self.database.set_setting("custom_background_enabled", True)
+                    self.database.set_setting("custom_background_version", version)
+                self.send_json({"ok": True, "version": version, "settings": self.database.get_settings()})
             elif path == "/api/record-images":
                 raw = str(body.get("data") or "")
                 match = re.fullmatch(

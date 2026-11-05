@@ -1,5 +1,5 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
-const source=require('./frontend_source.cjs'),start=source.indexOf('function setupSettingsTabs()'),end=source.indexOf('\n$$(".nav-item[data-view]")',start);
+const source=require('./frontend_source.cjs'),start=source.indexOf('function setupSettingsTabs()'),end=source.indexOf('\n}',start)+2;
 const order=['main','collection','detail','schedule','record','statistics','ranking','keyboard','data','sharing'];
 const original=[...order].reverse();
 const buttons=order.map(name=>({dataset:{settingsTab:name},addEventListener(){}}));

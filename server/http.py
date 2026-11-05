@@ -192,7 +192,7 @@ class Handler(http.RequestHandler):
             if write and self.headers.get("Origin") != self.server.origin:
                 return self.send_error_json(403, "请求来源不匹配")
             if path == "/api/health" and not write:
-                return self.send_json({"ok": True, "mode": "online", "features": {"schedule_sorting": 2, "keyboard_shortcuts": 1}})
+                return self.send_json({"ok": True, "mode": "online", "features": {"schedule_sorting": 2, "keyboard_shortcuts": 1, "deferred_theme_background": 1}})
             if path in {"/api/auth/login", "/api/auth/register", "/api/auth/guest"} and method == "POST":
                 body = self.read_json()
                 if path.endswith("/guest"):
@@ -341,7 +341,10 @@ class Handler(http.RequestHandler):
                 temporary.unlink(missing_ok=True)
             self.server.upload_slot.release()
         if path == "/api/background":
-            self.database.set_setting("custom_background_enabled", True)
-            self.database.set_setting("custom_background_version", secrets.token_hex(8))
-            return self.send_json({"ok": True, "settings": self.database.get_settings()})
+            version = secrets.token_hex(8)
+            staged = parse_qs(urlparse(self.path).query).get("defer_settings", [""])[0] == "1"
+            if not staged:
+                self.database.set_setting("custom_background_enabled", True)
+                self.database.set_setting("custom_background_version", version)
+            return self.send_json({"ok": True, "version": version, "settings": self.database.get_settings()})
         self.send_json({"ok": True, "url": "/api/record-images/" + filename}, 201)

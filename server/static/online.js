@@ -3,7 +3,8 @@
 window.handbookOnline = (() => {
   let revision = null, csrf = "", timer, polling = false, writes = 0, refreshPending = false;
   let mutationQueue = Promise.resolve();
-  const auth = fetch("/api/auth/me", {cache: "no-store"}).then(async (response) => {
+  const auth = withRequestDeadline("/api/auth/me", {}, async (options) => {
+    const response = await fetch("/api/auth/me", {...options, cache:"no-store"});
     if (response.status === 401) { location.replace("/login"); throw Error("请先登录"); }
     if (!response.ok) throw Error("无法连接手账服务器");
     const user = await response.json(); csrf = user.csrf; return user;
@@ -17,6 +18,7 @@ window.handbookOnline = (() => {
   }
   async function perform(path, options) {
     const user = await auth;
+    if (options.signal?.aborted) { const error = Error("请求已取消"); error.name = "AbortError"; throw error; }
     const method = options.method || "GET", write = method !== "GET";
     if (write && user.read_only && path !== "/api/auth/logout") {
       // View preferences are temporary within this tab, never sent to the server.
@@ -31,7 +33,15 @@ window.handbookOnline = (() => {
     try { response = await fetch(path, {...options, headers, cache: "no-store"}); }
     catch (error) { if (error.name !== "AbortError") offline(true); throw error; }
     if (response.status === 401) { location.replace("/login"); throw Error("登录已过期"); }
-    const payload = await response.json().catch(() => ({}));
+    let payload = {};
+    if (response.status !== 204) {
+      try { payload = await response.json(); }
+      catch (error) {
+        if (error.name === "AbortError") throw error;
+        throw Error("服务器响应不完整，请稍后重试；保存结果尚未确认");
+      }
+    }
+    if (options.signal?.aborted) { const error = Error("请求已取消"); error.name = "AbortError"; throw error; }
     if (!response.ok) {
       // Keep the old revision after conflicts: another save must never reuse stale form data.
       if (response.status !== 409 && write) {
@@ -49,6 +59,9 @@ window.handbookOnline = (() => {
     return payload;
   }
   function request(path, options = {}) {
+    return withRequestDeadline(path, options, bounded => enqueue(path, bounded));
+  }
+  function enqueue(path, options) {
     if (!options.method || options.method === "GET") return perform(path, options);
     if (/^\/api\/animes\/\d+\/progress$/.test(path) && state.progressAnime) {
       const body = JSON.parse(options.body || "{}");
@@ -61,9 +74,9 @@ window.handbookOnline = (() => {
     mutationQueue = task.catch(() => {}).finally(() => writes--);
     return task;
   }
-  function uploadImage(path, file, profileId) {
+  function uploadImage(path, file, profileId, staged = false) {
     if (!file.size || file.size > 8 * 1024 * 1024) return Promise.reject(Error("图片不能为空或超过 8 MB"));
-    const target = profileId ? `${path}?profile_id=${encodeURIComponent(profileId)}` : path;
+    const target = profileId ? `${path}?profile_id=${encodeURIComponent(profileId)}${staged ? "&defer_settings=1" : ""}` : path;
     return request(target, {method: "POST", headers: {"Content-Type": file.type || "application/octet-stream"}, body: file});
   }
   function editing() {

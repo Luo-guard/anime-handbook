@@ -38,15 +38,10 @@ const harness = [
     const button = row.locator('.setting-help');
     const popover = page.locator('#settingHelpPopover');
 
-    // 分区导语也收进标题问号，正文默认不显示。
-    assert.equal(await page.locator('.settings-lead').isVisible(), false, 'section lead is collapsed');
-    const themeHelp = page.locator('.settings-section-title', { hasText: '主题' }).locator('.setting-help');
-    assert.equal(await themeHelp.count(), 1, 'section title gets a help button');
-    await themeHelp.click();
-    await page.waitForTimeout(200);
-    assert.match(await popover.innerText(), /点卡片立即切换/, 'section help carries the lead text');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(150);
+    // Removed section copy stays removed instead of becoming a hidden tooltip.
+    assert.equal(await page.locator('.settings-lead').count(),0);
+    assert.equal(await page.locator('.main-settings-section>summary').count(),4);
+    assert(!await page.locator('#settingsModal').textContent().then(text=>text.includes('点卡片立即切换')));
 
     // 共享/同步的编号步骤说明同样收起。
     const step = page.locator('.sharing-step-heading').first();

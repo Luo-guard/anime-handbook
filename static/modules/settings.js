@@ -454,7 +454,7 @@ async function saveBgmSources(sources, activeId) {
     method: "PATCH",
     body: JSON.stringify({ bgm_sources: sources, active_bgm_source: activeId }),
   });
-  state.settings = payload.settings;
+  state.settings = ThemeSettingsSession.incoming(payload.settings);
   renderBgmSourceControls();
   return payload;
 }
@@ -560,7 +560,7 @@ function profileAppearance(profile) {
 
 function themeCardMarkup(profile, active, single) {
   const accent = themeAccentColor(profile);
-  const background = themeBackgroundUrl(profile);
+  const background = ThemeSettingsSession.background(profile);
   const deleteTitle = single ? "至少要保留一套主题方案" : `删除「${profile.name || "未命名主题"}」`;
   return `<article class="theme-card${active ? " is-active" : ""}" data-theme-card="${escapeHtml(profile.id)}" role="listitem">
     <button type="button" class="theme-card-main" data-theme-pick="${escapeHtml(profile.id)}" aria-pressed="${active}">
@@ -568,7 +568,7 @@ function themeCardMarkup(profile, active, single) {
         ${background ? `<img src="${escapeHtml(background)}" alt="" loading="lazy" onerror="this.remove()" />` : ""}
         <span class="theme-thumb-side" aria-hidden="true"></span>
         <span class="theme-thumb-lines" aria-hidden="true"><i></i><i></i><i></i></span>
-        ${active ? '<span class="theme-card-badge">使用中</span>' : ""}
+        ${active ? '<span class="theme-card-badge">已选择</span>' : ""}
       </span>
       <span class="theme-card-meta"><strong>${escapeHtml(profile.name || "未命名主题")}</strong><small>${escapeHtml(themeProfileSummary(profile))}</small></span>
     </button>
@@ -629,7 +629,7 @@ const themeEditorState = {
 function themeEditorBackgroundUrl(draft) {
   if (!draft?.custom_background_enabled) return "";
   return themeEditorState.localBackgroundUrl
-    || themeBackgroundUrl({ ...draft, id: draft.backgroundProfileId || draft.id });
+    || ThemeSettingsSession.background({ ...draft, id: draft.backgroundProfileId || draft.id });
 }
 
 // 编辑面板里的背景预览：遮罩强度和选图都在这里先看到效果。
@@ -653,8 +653,8 @@ function renderThemeEditorFields() {
   const subtitle = $("#themeEditorSubtitle");
   if (title) title.textContent = themeEditorState.mode === "edit" ? `编辑主题「${draft.name || "未命名"}」` : "新建主题";
   if (subtitle) subtitle.textContent = themeEditorState.mode === "edit"
-    ? "保存后会覆盖这套方案，并立即应用到界面。"
-    : "从当前外观开始，保存后立即应用。";
+    ? "调整后先预览，保存设置后才保留。"
+    : "创建后先预览，保存设置后才保留。";
   // 名称只在打开面板时回填；这里回写会在用户点颜色、选图片时把刚输入的名字清掉。
   $$(".theme-option").forEach((button) => {
     const active = button.dataset.themeValue === draft.theme_color;
@@ -688,9 +688,8 @@ function applyThemeDraft() {
     // 新建时背景图仍属于来源方案，预览要指回它，否则会 404。
     active_theme_profile: draft.backgroundProfileId || draft.id,
   });
-  window.handbookThemePreview = themeEditorState.localBackgroundUrl
-    ? { backgroundUrl: themeEditorState.localBackgroundUrl }
-    : null;
+  const previewUrl=themeEditorBackgroundUrl(draft);
+  window.handbookThemePreview = previewUrl ? { backgroundUrl: previewUrl } : null;
   applyTheme();
 }
 
@@ -728,6 +727,7 @@ function openThemeEditor(profileId = null) {
   themeEditorState.localBackgroundUrl = null;
   themeEditorState.copyBackgroundFrom = creating && source.custom_background_enabled === true ? source.id : "";
   themeEditorState.saving = false;
+  themeEditorState.reading=false;$("#themeEditorSave").disabled=false;
   themeEditorState.open = true;
   const status = $("#themeEditorStatus");
   if (status) status.textContent = "";
@@ -757,6 +757,7 @@ function closeThemeEditor(cancel = true) {
   themeEditorState.copyBackgroundFrom = "";
   window.handbookThemePreview = null;
   $("#themeEditorModal")?.close();
+  if (ThemeSettingsSession.active) ThemeSettingsSession.apply();
   if (cancel) {
     applyTheme();
     renderThemeControls();
@@ -772,12 +773,12 @@ function themeFileToDataUrl(file) {
   });
 }
 
-async function uploadThemeBackground(file, profileId) {
-  if (window.handbookOnline) return window.handbookOnline.uploadImage("/api/background", file, profileId);
+async function uploadThemeBackground(file, profileId, staged = false) {
+  if (window.handbookOnline) return window.handbookOnline.uploadImage("/api/background", file, profileId, staged);
   const data = await themeFileToDataUrl(file);
   return api("/api/background", {
     method: "POST",
-    body: JSON.stringify({ data, profile_id: profileId, account_id: themeAccountId() }),
+    body: JSON.stringify({ data, profile_id: profileId, account_id: themeAccountId(), defer_settings: staged }),
   });
 }
 
@@ -798,39 +799,12 @@ async function copyThemeBackground(profileId) {
 }
 
 async function persistThemeProfiles(profiles, activeId) {
-  // 顶层外观字段必须一起写：只写方案快照的话，响应里旧的 theme_color 会把
-  // 刚调好的配色覆盖回去，刷新页面后又变回来。
-  const payload = await api("/api/settings", {
-    method: "PATCH",
-    body: JSON.stringify({
-      theme_profiles: profiles,
-      active_theme_profile: activeId,
-      theme_color: state.settings.theme_color || "forest",
-      custom_theme_color: String(state.settings.custom_theme_color || "#2E6D4E").toUpperCase(),
-      custom_background_enabled: state.settings.custom_background_enabled === true,
-      custom_background_version: state.settings.custom_background_version || 0,
-      custom_background_overlay_opacity: Number(state.settings.custom_background_overlay_opacity ?? 82),
-    }),
-  });
-  // 后端异常时不要把整个 settings 冲掉，否则整个设置面板会变空。
-  if (payload.settings) state.settings = payload.settings;
-  renderThemeProfiles();
-  return payload;
+  state.settings.theme_profiles=profiles;state.settings.active_theme_profile=activeId;
+  ThemeSettingsSession.select(activeId);renderThemeProfiles();
 }
-
 async function persistThemePlan(plan, enabled) {
-  const payload = await api("/api/settings", {
-    method: "PATCH",
-    body: JSON.stringify({ theme_weekly_plan: plan, theme_weekly_plan_enabled: enabled }),
-  });
-  if (!payload.settings) throw new Error("后台没有返回设置");
-  // 旧后台会忽略未知字段；响应里没有这两个键时明确提示重启，而不是假装保存成功。
-  if (typeof payload.settings.theme_weekly_plan_enabled !== "boolean" || !payload.settings.theme_weekly_plan) {
-    throw new Error("当前后台还是旧版本，请重启手账后台并刷新页面");
-  }
-  state.settings = payload.settings;
-  renderThemeControls();
-  return payload;
+  state.settings.theme_weekly_plan=plan;state.settings.theme_weekly_plan_enabled=enabled;
+  ThemeSettingsSession.update();renderThemeControls();
 }
 
 async function saveThemeWeeklyPlan(notify = false) {
@@ -841,14 +815,11 @@ async function saveThemeWeeklyPlan(notify = false) {
     await persistThemePlan(plan, enabled);
     if (enabled) applyWeeklyThemeForToday(true);
     else {
-      applySavedThemeProfile();
+      ThemeSettingsSession.restoreSelection();
       renderThemeControls();
     }
-    if (notify) {
-      if (!enabled) toast("已关闭周计划");
-      else if (Object.values(plan).some(Boolean)) toast("已开启周计划：每天按指定主题切换");
-      else toast("已开启周计划：还没指定主题，今天保持当前方案");
-    }
+    ThemeSettingsSession.apply();
+
   } catch (error) {
     renderThemeControls();
     toast(error.message, "error");
@@ -865,6 +836,7 @@ function applySavedThemeProfile() {
 
 // 只改内存里的当前外观，不写数据库：周计划是“当天显示什么”，不是把方案改成当前。
 function applyWeeklyThemeForToday(force = false) {
+  if (ThemeSettingsSession.active && !force) return;
   if (state.settings?.theme_weekly_plan_enabled !== true) return;
   const day = themePlanTodayDay();
   if (!force && state.weeklyPlanDay === day) return;
@@ -898,7 +870,7 @@ function startThemePlanWatcher() {
 
 async function saveThemeEditor() {
   const draft = themeEditorState.draft;
-  if (!draft || themeEditorState.saving) return;
+  if (!draft || themeEditorState.saving || themeEditorState.reading) return;
   const nameInput = $("#themeEditorName");
   const name = String(nameInput?.value || "").trim();
   if (!name) {
@@ -917,25 +889,7 @@ async function saveThemeEditor() {
   if (saveButton) saveButton.disabled = true;
   setThemeEditorStatus("正在保存…");
   try {
-    let file = themeEditorState.pendingFile;
-    if (!file && themeEditorState.copyBackgroundFrom && draft.custom_background_enabled) {
-      setThemeEditorStatus("正在复制背景图…");
-      file = await copyThemeBackground(themeEditorState.copyBackgroundFrom);
-      if (!file) {
-        draft.custom_background_enabled = false;
-        toast("原背景图未能复制，已只保存配色", "error");
-      }
-    }
-    if (file) {
-      setThemeEditorStatus("正在上传背景图…");
-      const uploaded = await uploadThemeBackground(file, draft.id);
-      if (uploaded?.settings) state.settings = uploaded.settings;
-      draft.custom_background_enabled = true;
-      draft.custom_background_version = Number(state.settings.custom_background_version) || 0;
-      draft.backgroundProfileId = draft.id;
-    }
-    setThemeEditorStatus("正在写入主题…");
-    // 保存即应用：顶层外观与当前方案保持一致，避免刷新后又跳回旧配色。
+    ThemeSettingsSession.stage(draft.id,themeEditorState.pendingFile,themeEditorState.localBackgroundUrl,themeEditorState.copyBackgroundFrom,draft.custom_background_enabled);
     Object.assign(state.settings, { ...profileAppearance(draft), active_theme_profile: draft.id });
     const snapshot = {
       id: draft.id,
@@ -954,7 +908,7 @@ async function saveThemeEditor() {
     setThemeEditorStatus("");
     closeThemeEditor(false);
     renderThemeControls();
-    toast(themeEditorState.mode === "edit" ? `已保存「${name}」` : `已创建「${name}」`);
+    toast(`正在预览「${name}」，保存设置后保留`);
   } catch (error) {
     setThemeEditorStatus(error.message || "保存失败");
     toast(error.message, "error");
@@ -968,9 +922,7 @@ async function activateThemeProfile(id) {
   const profile = themeProfiles().find((item) => item.id === id);
   if (!profile) return;
   Object.assign(state.settings, profileAppearance(profile), { active_theme_profile: id });
-  const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify({ active_theme_profile: id, ...profileAppearance(profile) }) });
-  if (payload.settings) state.settings = payload.settings;
-  applyTheme();
+  ThemeSettingsSession.select(id);
   renderThemeControls();
 }
 
@@ -983,7 +935,7 @@ async function deleteThemeProfile(id) {
   const target = profiles.find((profile) => profile.id === id);
   const fallback = profiles.find((profile) => profile.id !== id);
   if (!target || !fallback) return;
-  if (!confirm(`删除主题方案「${target.name || "未命名"}」？\n删除后会切换到「${fallback.name || "另一套"}」，这一步无法撤销。`)) return;
+  if (!confirm(`删除主题方案「${target.name || "未命名"}」？\n保存设置后删除，取消设置可恢复。`)) return;
   const remaining = profiles.filter((profile) => profile.id !== id);
   // 周计划里指向被删方案的格子要一起清空，否则会留下一个永远取不到的主题 id。
   const plan = { ...themeWeeklyPlan() };
@@ -998,25 +950,7 @@ async function deleteThemeProfile(id) {
   // 先把界面切到保底方案，再一次性写入，避免删除后有一帧仍显示被删方案。
   Object.assign(state.settings, profileAppearance(fallback), { active_theme_profile: fallback.id });
   await persistThemeProfiles(remaining, fallback.id);
-  // 主题删了，它的背景也不该继续留在 data/background 里。删除失败不影响主流程，
-  // 下次启动的资产清扫会兜底。
-  if (target.custom_background_enabled) {
-    try {
-      await api(
-        `/api/background?profile=${encodeURIComponent(id)}&account=${encodeURIComponent(state.active_profile?.id || "local")}`,
-        { method: "DELETE" },
-      );
-    } catch (error) {
-      // 忽略：孤儿文件会在启动清扫时回收。
-    }
-  }
-  if (planChanged) {
-    try {
-      await persistThemePlan(plan, state.settings.theme_weekly_plan_enabled === true);
-    } catch (error) {
-      toast(`主题已删除，但周计划清理失败：${error.message}`, "error");
-    }
-  }
+  if(planChanged)await persistThemePlan(plan,state.settings.theme_weekly_plan_enabled===true);
   applyTheme();
   renderThemeControls();
   toast(`已删除「${target.name || "方案"}」，当前使用「${fallback.name || "另一套"}」`);

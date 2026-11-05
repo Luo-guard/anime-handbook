@@ -38,7 +38,7 @@ class ReadRoutes:
                 self.end_headers()
                 self.wfile.write(body)
             elif path == "/api/health":
-                self.send_json({"ok": True, "features": {"schedule_sorting": 2, "keyboard_shortcuts": 1}})
+                self.send_json({"ok": True, "features": {"schedule_sorting": 2, "keyboard_shortcuts": 1, "deferred_theme_background": 1}})
             elif path == "/api/bootstrap":
                 self.send_json(
                     {

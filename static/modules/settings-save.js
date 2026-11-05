@@ -6,6 +6,7 @@ const HandbookSettings = (() => {
     if (saving) return;
     saving = true;
     button.disabled = true;
+    ThemeSettingsSession.lock(true);
     try {
       const builtinVisibilityPayload = {};
       $$(".builtin-visibility-check").forEach((input) => {
@@ -40,7 +41,8 @@ const HandbookSettings = (() => {
           episode_balance_daily_target: Number($("#episodeBalanceDailyTargetInput").value),
           statistics_default_theme: $("#statisticsDefaultThemeInput").value,
           statistics_show_zero_periods: $("#showZeroStatisticsInput").checked,
-          // 主题外观由主题编辑器即时写入，这里不再重复提交，避免把弹窗里的草稿带进当前方案。
+          // 外观草稿与其他设置由同一次保存提交。
+          ...await ThemeSettingsSession.payload(),
           default_view: $("#defaultViewInput").value,
           ...scheduleSorting,
           kazumi_writeback: $("#kazumiWritebackInput").checked,
@@ -102,6 +104,7 @@ const HandbookSettings = (() => {
       if (!$("#showJumpHistoryButtonInput").checked && payload.settings.show_jump_history_button !== false) throw new Error("当前后台还不支持工具栏按钮设置，请重启手账后台并刷新后再试。");
       if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
       if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
+      ThemeSettingsSession.finish(true);
       state.settings = payload.settings;
       state.stats = payload.stats || state.stats;
       state.animes = payload.animes || state.animes;
@@ -131,6 +134,7 @@ const HandbookSettings = (() => {
     } finally {
       saving = false;
       button.disabled = false;
+      ThemeSettingsSession.lock(false);
     }
   }
   return {save};

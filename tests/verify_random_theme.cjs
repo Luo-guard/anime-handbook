@@ -128,9 +128,10 @@ function startServer() {
     // 真正的可点区域是视觉开关，隐藏的 checkbox 不接收指针事件。
     await page.locator('label.setting-row', { has: page.locator('#themeRandomOnOpenInput') }).locator('.switch').click();
     await page.waitForTimeout(500);
-    const last = patches.at(-1);
-    assert.deepEqual(last, { theme_random_on_open: false }, 'toggle persists on its own');
-    assert.match(await page.locator('#toastRegion').innerText(), /关闭随机主题/);
+    assert.equal(patches.length,0,'random toggle is only a draft');
+    assert.equal(await page.evaluate(()=>state.settings.theme_random_on_open),false);
+    await page.click('#settingsModal .modal-close');await page.waitForTimeout(80);
+    assert.equal(await page.evaluate(()=>state.settings.theme_random_on_open),true,'cancel restores random toggle');
 
     // 4) 关闭后不再采纳注入的随机方案（模拟旧页面/服务端未随机的情况）。
     await page.evaluate(() => {
@@ -142,7 +143,7 @@ function startServer() {
     assert.equal(await page.evaluate(() => state.settings.active_theme_profile), 'a', 'disabled toggle ignores the injected pick');
 
     assert.deepEqual(errors, [], 'no page errors');
-    console.log('Random theme on open: first paint matches the injected pick, boot keeps it, settings show it, toggle persists and disables adoption.');
+    console.log('Random theme on open: first paint matches the injected pick, boot keeps it, settings show it, toggle previews, cancels and disables adoption.');
   } finally {
     await browser.close();
     server.close();

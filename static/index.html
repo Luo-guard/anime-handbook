@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261104-main-settings" />
+  <link rel="stylesheet" href="/styles.css?v=20261105-theme-preview" />
   </head>
   <body>
     <div class="app-shell">
@@ -357,10 +357,10 @@
 </aside>
           <div class="settings-list">
           <div class="settings-section-title" data-settings-section="main">主界面设置</div>
-          <h3 class="settings-subsection-title">外观与主题</h3>
-          <p class="settings-lead">点卡片立即切换。配色、背景和遮罩分别存进每套方案，改完即时生效，不需要另外保存。</p>
+<details class="main-settings-section" open><summary>主题外观</summary><div class="main-settings-content">          
+          
           <div class="theme-profile-grid" id="themeProfileGrid" role="list" aria-label="主题方案"></div>
-          <label class="setting-row">
+</div></details><details class="main-settings-section" open><summary>主题自动切换</summary><div class="main-settings-content">          <label class="setting-row">
             <span>
               <strong>打开时随机主题</strong>
               <small>每次打开手账或刷新页面，都从上面的方案里随机抽一套显示，各有各的配色和背景；方案本身的内容不会被改动。只有一套方案时就是它。开启周计划后，随机主题会暂停。</small>
@@ -370,7 +370,7 @@
               <span class="switch"></span>
             </span>
           </label>
-          <h3 class="settings-subsection-title">周计划</h3>
+          
           <label class="setting-row">
             <span>
               <strong>按周计划切换主题</strong>
@@ -382,9 +382,26 @@
             </span>
           </label>
           <div class="theme-weekly-plan" id="themeWeeklyPlan" role="group" aria-label="每周主题安排"></div>
-          <h3 class="settings-subsection-title">布局与导航</h3>
-          <p class="settings-lead">调整后点击底部“保存设置”生效。</p>
-          <h3 class="settings-subsection-title">打开与启动</h3>
+</div></details><details class="main-settings-section" open><summary>侧边栏与页面</summary><div class="main-settings-content">          
+<div class="setting-row stacked"><span><strong>页面名称</strong><small>自定义五个页面的名称，侧边栏、页面标题和相关设置会统一更新；留空使用默认名称，最多 20 个字符。</small></span><div id="sidebarNameInputs"></div></div>
+          <label class="setting-row">
+            <span>
+              <strong>显示侧边栏开关</strong>
+              <small>显示用于收起或展开侧边栏的按钮。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="showSidebarToggleInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <div class="setting-row stacked">
+            <span>
+              <strong>侧边栏显示与顺序</strong>
+              <small data-page-text="可调整{collection}、{schedule}、{statistics}等页面的显示和顺序；设置始终保留，避免无法改回设置。">可调整收藏夹、周表、记录统计等页面的显示和顺序；设置始终保留，避免无法改回设置。</small>
+            </span>
+            <div class="sidebar-settings-list" id="sidebarSettingsList"></div>
+          </div>
+</div></details><details class="main-settings-section" open><summary>启动与后台</summary><div class="main-settings-content">          
           <label class="setting-row">
             <span>
               <strong>打开时默认页面</strong>
@@ -420,25 +437,7 @@
             <span><strong>关闭手账后台</strong><small>停止本机后台服务；重新使用时需运行启动快捷方式。请先保存当前修改。</small></span>
             <button type="button" class="secondary-button compact-button" id="shutdownBackendSettings" data-desktop-shutdown>关闭后台</button>
           </div>
-          <h3 class="settings-subsection-title">侧边栏</h3>
-<div class="setting-row stacked"><span><strong>页面名称</strong><small>自定义五个页面的名称，侧边栏、页面标题和相关设置会统一更新；留空使用默认名称，最多 20 个字符。</small></span><div id="sidebarNameInputs"></div></div>
-          <label class="setting-row">
-            <span>
-              <strong>显示侧边栏开关</strong>
-              <small>显示用于收起或展开侧边栏的按钮。</small>
-            </span>
-            <span class="switch-row compact">
-              <input type="checkbox" id="showSidebarToggleInput" />
-              <span class="switch"></span>
-            </span>
-          </label>
-          <div class="setting-row stacked">
-            <span>
-              <strong>侧边栏显示与顺序</strong>
-              <small data-page-text="可调整{collection}、{schedule}、{statistics}等页面的显示和顺序；设置始终保留，避免无法改回设置。">可调整收藏夹、周表、记录统计等页面的显示和顺序；设置始终保留，避免无法改回设置。</small>
-            </span>
-            <div class="sidebar-settings-list" id="sidebarSettingsList"></div>
-          </div>
+</div></details>
           <div class="settings-section-title" data-settings-section="collection" data-page-label="collection">收藏夹</div>
           <h3 class="settings-subsection-title">主页与分类</h3>
           <label class="setting-row">
@@ -884,7 +883,7 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button class="primary-button" type="button" id="saveSettings">保存设置</button>
+          <span id="themePreviewStatus" class="theme-preview-status" hidden>预览中 · 尚未保存</span><button type="button" class="secondary-button" id="themePagePreview" hidden>查看页面效果</button><button class="primary-button" type="button" id="saveSettings">保存设置</button>
         </div>
       </form>
     </dialog>
@@ -895,7 +894,7 @@
         <div class="theme-editor-scroll">
         <p class="eyebrow">THEME STUDIO</p>
         <h2 id="themeEditorTitle">新建主题</h2>
-        <p class="page-subtitle" id="themeEditorSubtitle">从当前外观开始，保存后立即应用。</p>
+        <p class="page-subtitle" id="themeEditorSubtitle">调整后先预览，保存设置后才保留。</p>
 
         <label class="theme-editor-field">
           <span>主题名称</span>
@@ -935,7 +934,7 @@
               <span class="custom-background-name" id="customBackgroundName">未设置</span>
               <button type="button" class="text-button danger" id="clearCustomBackgroundButton">移除</button>
             </span>
-            <p class="theme-editor-note">选图后只在本机预览，点「保存并应用」才会上传；取消不会留下文件。</p>
+            <p class="theme-editor-note">选图只用于预览，点击设置中的「保存设置」才会上传。</p>
           </div>
           <label class="theme-editor-slider">
             <span>背景遮罩强度</span>
@@ -948,7 +947,7 @@
         </div>
         <div class="modal-actions">
           <button type="button" class="secondary-button" id="themeEditorCancel">取消</button>
-          <button type="submit" class="primary-button" id="themeEditorSave">保存并应用</button>
+          <button type="submit" class="primary-button" id="themeEditorSave">加入预览</button>
         </div>
       </form>
     </dialog>
@@ -1051,6 +1050,7 @@
         <div class="modal-actions"><button type="button" class="secondary-button" id="videoCaptureCancel">取消</button><button type="submit" class="primary-button" id="videoCaptureSave" disabled>保存</button></div>
       </form>
     </dialog>
+    <div id="themePagePreviewBar" popover="manual"><span>主题预览 · 尚未保存</span><button type="button" id="themePreviewReturn">返回设置</button><button type="button" id="themePreviewCancel">取消预览</button></div>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
     <script src="/schedule.js?v=20261104-schedule-progress-right" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
@@ -1058,17 +1058,18 @@
     <script src="/modules/collection.js?v=20261023-modules" defer></script>
     <script src="/modules/presentation.js?v=20261104-airing-compact" defer></script>
     <script src="/modules/collection-cards.js?v=20261104-hardening" defer></script>
-    <script src="/modules/composer.js?v=20261023-modules" defer></script>
+    <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/video-links.js?v=20261101-jump-history" defer></script>
     <script src="/modules/details.js?v=20261104-airing-compact" defer></script>
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261104-airing-refresh" defer></script>
-    <script src="/modules/settings.js?v=20261104-main-settings" defer></script>
+    <script src="/modules/settings.js?v=20261105-theme-preview" defer></script>
+    <script src="/modules/theme-session.js?v=20261105-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
-    <script src="/modules/settings-save.js?v=20261104-hardening" defer></script>
-    <script src="/modules/events.js?v=20261104-hardening" defer></script>
+    <script src="/modules/settings-save.js?v=20261105-theme-preview" defer></script>
+    <script src="/modules/events.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

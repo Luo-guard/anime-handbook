@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const elements=new Map(),notices=[];let release,calls=0,shouldFail=false;
 const element=selector=>{if(!elements.has(selector))elements.set(selector,{value:'',checked:false,disabled:false,close(){this.closed=true}});return elements.get(selector)};
-const context={console,Set,JSON,Object,Number,Boolean,state:{settings:{},custom_collections:[],noteThemes:new Set(['other']),timelineThemes:new Set(),activeView:'collection'},
+const context={ThemeSettingsSession:{lock(){},payload:async()=>({}),finish(){}},console,Set,JSON,Object,Number,Boolean,state:{settings:{},custom_collections:[],noteThemes:new Set(['other']),timelineThemes:new Set(),activeView:'collection'},
  $:element,$$:selector=>selector==='.builtin-visibility-check'?[{dataset:{category:1},checked:true}]:[],
  toast:message=>notices.push(message),readDetailLinks:()=>[],readScheduleDetailLinks:()=>[],detailLinks:()=>[],syncLinkAdditions:()=>({detail:[],schedule:[],synced:[]}),
  readKeyboardSettings:()=>({}),keyboardPreferences:()=>({}),readScheduleSorting:()=>({schedule_sort:'time'}),requireScheduleSortingSupport:async()=>{},verifyScheduleSortingSaved(){},
