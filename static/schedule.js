@@ -299,13 +299,14 @@ function scheduleCard(item) {
   const progressHtml = progress
     ? `<span class="schedule-progress${progress.estimated ? " is-estimated" : ""}" title="${escapeHtml(progress.title)}">${escapeHtml(progress.text)}</span>`
     : "";
+  const hasCornerInfo = (show.score && Number(item.score) > 0) || (show.collection && category);
   const metaText = item.kind === "network" ? item.release_note || "网络放送" : item.tags?.slice(0, 2).join(" · ") || "每周放送";
   const metaHtml = show.tags ? `<p class="schedule-card-meta">${escapeHtml(metaText)}</p>` : "";
   // 固定三层：标题 / 出处与首播 / 评分人数与播出进度。每层各占一行，位置不随内容跳动。
   const metaRow = metaHtml || releaseHtml ? `<div class="schedule-meta-row">${metaHtml}${releaseHtml}</div>` : "";
   const statsRow = progressHtml || votesHtml ? `<div class="schedule-card-footer">${votesHtml}${progressHtml}</div>` : "";
   return `<button type="button" class="anime-card schedule-card" data-schedule-key="${escapeHtml(item.key)}" aria-label="查看${escapeHtml(item.title)}的放送信息">
-    <div class="poster-wrap">${item.image_url ? `<img src="${image}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'" />` : ""}
+    <div class="poster-wrap${hasCornerInfo ? " schedule-poster-shaded" : ""}">${item.image_url ? `<img src="${image}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" onerror="this.style.display='none'" />` : ""}
       ${show.score && Number(item.score) > 0 ? `<span class="poster-score">${Number(item.score).toFixed(1)}</span>` : ""}
       ${show.collection && category ? `<span class="schedule-collection-badge">${category.name}</span>` : ""}
       ${show.airtime ? `<span class="schedule-airtime ${item.bj_time || item.time || item.kind === "network" ? "" : "unknown"}">${escapeHtml(scheduleTimeLabel(item))}</span>` : ""}
