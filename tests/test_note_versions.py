@@ -165,6 +165,49 @@ class NoteVersionMigrationTest(unittest.TestCase):
         self.assertEqual(after["created_at"], before["created_at"], "timeline position must not move")
         self.assertGreaterEqual(after["updated_at"], before["updated_at"])
 
+    def test_move_time_keeps_identity_and_cloud_merge_single(self):
+        event_id = self.insert("before")
+        before = self.event_row(event_id)
+        self.db.update_event(event_id, content="after", anime_id=None, theme="other", time_mode="now")
+        after = self.event_row(event_id)
+        self.assertNotEqual(after["created_at"], before["created_at"])
+        self.assertEqual(after["record_uid"], before["record_uid"])
+        merged = webdav.WebDAVSyncService.merge_record_states(state([before]), state([after]))
+        self.assertEqual(len(merged["tables"]["events"]), 1)
+        self.assertEqual(merged["tables"]["events"][0]["content"], "after")
+
+    def test_copy_is_independent_and_retry_safe(self):
+        import uuid
+        event_id = self.insert("original")
+        before = self.event_row(event_id)
+        args = dict(content="edited", anime_id=None, theme="other", time_mode="copy", copy_uid=uuid.uuid4().hex)
+        self.db.update_event(event_id, **args)
+        self.db.update_event(event_id, **args)
+        rows = self.db.export_cloud_state()["tables"]["events"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(self.event_row(event_id), before)
+        self.assertEqual(len({row["record_uid"] for row in rows}), 2)
+        merged = webdav.WebDAVSyncService.merge_record_states(state(rows), state([before]))
+        self.assertEqual(len(merged["tables"]["events"]), 2)
+
+    def test_copy_watch_does_not_duplicate_watched_count(self):
+        import uuid
+        event_id = self.insert("watched")
+        with self.db.connect() as db:
+            db.execute("UPDATE events SET event_type='watch', episodes='[1,2]' WHERE id=?", (event_id,))
+        self.db.update_event(event_id, content="edited", anime_id=None, theme="watch", time_mode="copy", copy_uid=uuid.uuid4().hex)
+        rows = self.db.export_cloud_state()["tables"]["events"]
+        self.assertEqual([row["event_type"] for row in rows].count("watch"), 1)
+        self.assertEqual([row["event_type"] for row in rows].count("note"), 1)
+
+    def test_invalid_mode_and_copy_identity_leave_original_untouched(self):
+        event_id = self.insert("original")
+        before = self.event_row(event_id)
+        for mode, uid in [("unknown", ""), ("copy", "invalid")]:
+            with self.assertRaises(ValueError):
+                self.db.update_event(event_id, content="edited", anime_id=None, theme="other", time_mode=mode, copy_uid=uid)
+        self.assertEqual(self.event_row(event_id), before)
+
 
 if __name__ == "__main__":
     unittest.main()

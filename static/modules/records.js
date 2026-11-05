@@ -1,4 +1,52 @@
-// Measure after the editor is mounted so wrapped lines count toward its height.
+// Shared by timeline and anime-comment editors. Cancelling leaves the draft intact.
+function chooseRecordTimeMode() {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "modal record-time-modal";
+    dialog.setAttribute("aria-labelledby", "recordTimeHeading");
+    dialog.innerHTML = `<form class="modal-frame" method="dialog">
+      <button class="modal-close" value="cancel" aria-label="取消">×</button>
+      <h2 id="recordTimeHeading">如何保存这次修改？</h2>
+      <div class="record-time-options">
+        <label><input type="radio" name="time_mode" value="keep" checked /><span><strong>保留原时间</strong><small>更新内容，记录仍留在原来的位置。</small></span></label>
+        <label><input type="radio" name="time_mode" value="now" /><span><strong>改为当前时间</strong><small>更新内容，并将这条记录移到现在。</small></span></label>
+        <label><input type="radio" name="time_mode" value="copy" /><span><strong>保留原记录，另存一条</strong><small>原内容不变，修改后的内容作为新记录保存。不会重复增加已看集数。</small></span></label>
+      </div>
+      <div class="modal-actions"><button class="secondary-button" value="cancel">返回编辑</button><button class="primary-button" value="save">确认保存</button></div>
+    </form>`;
+    dialog.addEventListener("close", () => {
+      const mode = dialog.returnValue === "save" ? dialog.querySelector("input:checked").value : null;
+      dialog.remove();
+      resolve(mode);
+    }, { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+  });
+}
+
+async function saveEditedRecord(editor, eventId, body) {
+  if (editor.dataset.saving === "true") return false;
+  editor.dataset.saving = "true";
+  const submit = editor.querySelector('[type="submit"]');
+  submit.disabled = true;
+  const owner = state.active_profile?.id;
+  try {
+    const mode = await chooseRecordTimeMode();
+    if (!mode || !editor.isConnected || owner !== state.active_profile?.id) return false;
+    // Retain the operation ID if the response is lost and the user retries.
+    editor.dataset.copyUid ||= crypto.randomUUID();
+    await api(`/api/events/${eventId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...body, time_mode: mode, copy_uid: editor.dataset.copyUid }),
+    });
+    return true;
+  } finally {
+    editor.dataset.saving = "false";
+    submit.disabled = false;
+  }
+}
+
+// Measure after mounting so wrapped lines count toward the editor height.
 function fitRecordEditor(textarea) {
   const limit = Math.max(1, window.innerHeight * 0.8);
   const border = textarea.offsetHeight - textarea.clientHeight;
@@ -290,11 +338,9 @@ async function renderTimeline(append = false) {
         editor.addEventListener("submit", async (event) => {
           event.preventDefault();
           try {
-            await api(`/api/events/${button.dataset.eventId}`, {
-              method: "PATCH",
-              body: JSON.stringify(parseRecordText($("textarea", editor).value)),
-            });
+            if (!await saveEditedRecord(editor, button.dataset.eventId, parseRecordText($("textarea", editor).value))) return;
             await renderTimeline();
+            await refreshStatus();
           } catch (error) { toast(error.message, "error"); }
         });
       });

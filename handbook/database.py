@@ -1946,7 +1946,14 @@ class HandbookDB:
             cursor = db.execute("DELETE FROM events WHERE id = ?", (event_id,))
             return cursor.rowcount > 0
 
-    def update_event(self, event_id: int, *, content: str, anime_id: int | None, theme: str, themes: list[str] | None = None, rating: float | None = None, raw_directives: str = "", episode_text: str = "") -> bool:
+    def update_event(self, event_id: int, *, content: str, anime_id: int | None, theme: str, themes: list[str] | None = None, rating: float | None = None, raw_directives: str = "", episode_text: str = "", time_mode: str = "keep", copy_uid: str = "") -> bool:
+        if time_mode not in ("keep", "now", "copy"):
+            raise ValueError("记录时间处理方式无效")
+        if time_mode == "copy":
+            try:
+                copy_uid = uuid.UUID(copy_uid).hex
+            except (ValueError, TypeError, AttributeError):
+                raise ValueError("新增记录标识无效") from None
         content = content.strip()
         if not content and not raw_directives.strip():
             raise ValueError("正文不能为空")
@@ -1955,12 +1962,31 @@ class HandbookDB:
         theme_ids = normalize_theme_ids(themes if themes is not None else theme, theme)
         primary_theme = theme_ids[0] if theme_ids else "other"
         with self._write_lock, self.connect() as db:
+            original = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
+            if original is None:
+                return False
+            stamp = now_iso()
+            if time_mode == "copy":
+                # A retry of the same save must not insert a second copy.
+                existing = db.execute("SELECT id FROM events WHERE record_uid = ?", (copy_uid,)).fetchone()
+                if existing:
+                    if existing["id"] == event_id:
+                        raise ValueError("新增记录标识不能与原记录相同")
+                    return True
+                # Copying a watch entry creates a note, not another watch action:
+                # watched episodes and daily watch counts must not be duplicated.
+                event_type = "anime_comment" if original["event_type"] == "anime_comment" else "note"
+                db.execute(
+                    "INSERT INTO events(event_type, anime_id, episodes, content, theme, themes, rating, raw_directives, created_at, updated_at, record_uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (event_type, anime_id, original["episodes"], content, primary_theme, json_dumps(theme_ids), rating, raw_directives, stamp, stamp, copy_uid),
+                )
+                return True
             # episode_text is deliberately not converted to episode keys.  The
             # editable #集数 directive is free-form; existing keys are retained
             # only for quick-action annotations and progress bookkeeping.
             cursor = db.execute(
-                "UPDATE events SET anime_id = ?, content = ?, theme = ?, themes = ?, rating = ?, raw_directives = ?, updated_at = ? WHERE id = ?",
-                (anime_id, content, primary_theme, json_dumps(theme_ids), rating, raw_directives, now_iso(), event_id),
+                "UPDATE events SET anime_id = ?, content = ?, theme = ?, themes = ?, rating = ?, raw_directives = ?, updated_at = ?, created_at = ? WHERE id = ?",
+                (anime_id, content, primary_theme, json_dumps(theme_ids), rating, raw_directives, stamp, stamp if time_mode == "now" else original["created_at"], event_id),
             )
             return cursor.rowcount > 0
 

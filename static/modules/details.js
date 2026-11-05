@@ -260,15 +260,12 @@ function renderAnimeComments(comments) {
         if (!anime) return;
         const theme = eventTheme({ theme: "anime_comment" });
         try {
-          await api(`/api/events/${comment.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({
+          if (!await saveEditedRecord(editor, comment.id, {
               content,
               anime_id: anime.id,
               theme: "anime_comment",
               raw_directives: recordTextFormat({ theme: theme.name, anime: anime.display_name, content }),
-            }),
-          });
+          })) return;
           await Promise.all([renderAnimeComments(anime.id), renderTimeline()]);
           toast("番剧评论已更新");
         } catch (error) {

@@ -36,6 +36,8 @@ class PatchRoutes:
                     rating=float(body["rating"]) if body.get("rating") not in (None, "") else None,
                     raw_directives=str(body.get("raw_directives") or ""),
                     episode_text=str(body.get("episodes") or ""),
+                    time_mode=body.get("time_mode", "keep"),
+                    copy_uid=body.get("copy_uid", ""),
                 )
                 if updated:
                     self.sweep_record_images_later()
