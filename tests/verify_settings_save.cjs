@@ -9,6 +9,9 @@ const context={ThemeSettingsSession:{lock(){},payload:async()=>({}),finish(){}},
  api:async(path,options)=>{calls++;const body=JSON.parse(options.body);await new Promise(resolve=>release=resolve);if(shouldFail)throw Error('failed save');return {settings:body}},
 };
 for(const name of ['renderSyncButton','applyTheme','applyCharacterTabVisibility','applyCollectionEditingAvailability','ensureVisibleCollection','applySidebarLayout','applyNoteComposerMode','switchView','renderStats','renderTabs','renderCollection'])context[name]=()=>{};
+context.refreshAiringProgress=async()=>{};
+element('#collectionAiringSourceInput').value='bgm';
+element('#scheduleAiringSourceInput').value='bgm';
 vm.createContext(context);vm.runInContext(fs.readFileSync('static/modules/settings-save.js','utf8'),context);
 const save=()=>vm.runInContext('HandbookSettings.save()',context);
 (async()=>{

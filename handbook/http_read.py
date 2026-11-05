@@ -46,7 +46,7 @@ class ReadRoutes:
                         "active_profile": self.profiles.profile(),
                         "sharing": self.sharing.status(),
                         "webdav": self.webdav.status(),
-                        "animes": self._with_airing(self.database.list_anime()),
+                        "animes": self._with_progress(self.database.list_anime()),
                         "custom_collections": self.database.list_custom_collections(),
                         "ranking_boards": self.database.list_ranking_boards(),
                         "ranking_templates": self.database.list_ranking_templates(),
@@ -66,7 +66,11 @@ class ReadRoutes:
                     local = [dict(row) for row in db.execute(
                         "SELECT id,name,name_cn,collection_type,bgm_score,bgm_rating_total FROM anime WHERE active=1"
                     )]
-                self.send_json(attach_collection(document, local))
+                document = attach_collection(document, local)
+                if self.database.get_settings().get("schedule_airing_source") == "as":
+                    progress = self.animeschedule.get_many([row.get("id") or row.get("local_id") for row in document["items"]])
+                    document = {**document, "items": [{**row, "as_airing": progress.get(str(row.get("id") or row.get("local_id")))} for row in document["items"]]}
+                self.send_json(document)
             elif path == "/api/schedule/cover":
                 body, mime = self.schedule.for_source(query.get("source", ["yuc"])[0]).cover(season_key(query.get("season", [""])[0]), query.get("key", [""])[0])
                 self.send_response(HTTPStatus.OK)
@@ -171,7 +175,7 @@ class ReadRoutes:
                 anime_id = int(path.rsplit("/", 1)[1])
                 anime = self.database.get_anime(anime_id)
                 if anime:
-                    self.send_json({"anime": anime})
+                    self.send_json({"anime": self._with_progress([anime])[0]})
                 else:
                     self.send_error_json(404, "动漫不存在")
             elif path == "/api/timeline":
@@ -227,12 +231,17 @@ class ReadRoutes:
                     }
                 )
             elif path == "/api/airing":
-                animes = self._with_airing(self.database.list_anime())
-                self.send_json({"animes": [{"id": anime["id"], "airing": anime.get("airing")} for anime in animes]})
+                animes = self._with_progress(self.database.list_anime())
+                payload = {"animes": [{"id": anime["id"], "airing": anime.get("airing"),
+                    **({"as_airing": anime["as_airing"]} if "as_airing" in anime else {})} for anime in animes]}
+                if self.database.get_settings().get("schedule_airing_source") == "as":
+                    ids = [int(value) for value in query.get("ids", [""])[0].split(",")[:500] if value.isdecimal()]
+                    payload["schedule_airing"] = self.animeschedule.get_many(ids)
+                self.send_json(payload)
             elif path == "/api/collection-state":
                 self.send_json(
                     {
-                        "animes": self._with_airing(self.database.list_anime()),
+                        "animes": self._with_progress(self.database.list_anime()),
                         "custom_collections": self.database.list_custom_collections(),
                     }
                 )

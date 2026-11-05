@@ -6,7 +6,7 @@ import tempfile
 import threading
 import unittest
 from copy import deepcopy
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -256,6 +256,41 @@ class HandbookDBTest(unittest.TestCase):
             server.server_close()
             thread.join(timeout=3)
             desktop.DATABASE = previous_database
+
+    def test_as_progress_selection_is_independent_and_read_only(self) -> None:
+        item = sample_item(91, 1, "AS fixture")
+        item["air_date"] = app.date.today().isoformat()
+        self.db.import_kazumi([item])
+        self.db.set_settings({"collection_airing_source": "as", "schedule_airing_source": "bgm"})
+        old_database = desktop.DATABASE
+        desktop.DATABASE = self.db
+        server = app.ThreadingHTTPServer(("127.0.0.1", 0), http.RequestHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            with patch.object(http.RequestHandler, "animeschedule", new_callable=PropertyMock) as provider:
+                provider.return_value.get_many.side_effect = lambda ids: {
+                    str(value): {"source": "as", "aired": 6, "total": 12} for value in ids
+                }
+                revision = self.db.revision
+                with urlopen(base + "/api/airing?ids=99", timeout=3) as response:
+                    progress = app.json.loads(response.read())
+                self.assertEqual(progress["animes"][0]["as_airing"]["aired"], 6)
+                self.assertNotIn("schedule_airing", progress)
+                self.assertEqual(self.db.revision, revision)
+                self.db.set_settings({"collection_airing_source": "bgm", "schedule_airing_source": "as"})
+                with urlopen(base + "/api/airing?ids=99", timeout=3) as response:
+                    progress = app.json.loads(response.read())
+                self.assertEqual(progress["schedule_airing"]["99"]["aired"], 6)
+                with urlopen(base + "/api/collection-state", timeout=3) as response:
+                    collection = app.json.loads(response.read())
+                self.assertEqual(collection["animes"][0]["as_airing"]["aired"], 6)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+            desktop.DATABASE = old_database
 
     def test_stats_and_timeline_stay_fast_at_scale(self) -> None:
         """A6/A7 的 SQL 下推：几千条事件下 stats 与 timeline_page 仍应秒级。"""

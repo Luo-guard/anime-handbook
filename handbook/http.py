@@ -19,9 +19,12 @@ from urllib.parse import urlparse
 from .common import BACKGROUND_ROOT, DATA_ROOT, RECORD_IMAGE_ROOT, STATIC_ROOT, json_dumps, with_initial_appearance
 from .assets import prune_record_images, profile_asset_references
 from .airing import BEIJING, compute_airing
+from .animeschedule import AnimeScheduleService
 
 
 SCHEDULE = ScheduleService(DATA_ROOT / "schedule")
+AS_SERVICES = {}
+AS_SERVICES_LOCK = threading.Lock()
 
 
 def _desktop():
@@ -65,6 +68,26 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
     @property
     def schedule(self):
         return SCHEDULE
+
+    @property
+    def animeschedule(self):
+        runtime = getattr(self.server, "runtime", None)
+        root = (runtime.root / "cache" if runtime else DATA_ROOT) / "animeschedule"
+        with AS_SERVICES_LOCK:
+            if root not in AS_SERVICES:
+                AS_SERVICES[root] = AnimeScheduleService(root)
+            return AS_SERVICES[root]
+
+    def _with_progress(self, animes):
+        self._with_airing(animes)
+        settings = self.database.get_settings()
+        if any(settings.get(key) == "as" for key in ("collection_airing_source", "schedule_airing_source")):
+            cutoff = (datetime.now(BEIJING).date() - timedelta(days=200)).isoformat()
+            ids = [row["id"] for row in animes if str(row.get("air_date") or "") >= cutoff]
+            progress = self.animeschedule.get_many(ids)
+            for row in animes:
+                row["as_airing"] = progress.get(str(row["id"]))
+        return animes
 
     def require_write_access(self) -> None:
         _desktop().require_active_profile_write_access()

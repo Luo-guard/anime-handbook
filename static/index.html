@@ -487,6 +487,10 @@
             <select id="collectionRatingSourceInput"><option value="bgm">BGM 评分</option><option value="personal">个人评分</option></select>
           </label>
           <label class="setting-row">
+            <span><strong>已播集数来源</strong><small>用于收藏夹番剧的播出进度，不改变已看记录。AS 未匹配时不使用 BGM 代替。</small></span>
+            <select id="collectionAiringSourceInput"><option value="bgm">BGM / Bangumi</option><option value="as">AS / AnimeSchedule</option></select>
+          </label>
+          <label class="setting-row">
             <span><strong>显示“显示评分”开关</strong><small data-page-text="控制{collection}工具栏中是否出现“显示评分”开关。">控制收藏夹工具栏中是否出现“显示评分”开关。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="showCollectionRatingControlInput" /><span class="switch"></span></span>
           </label>
@@ -654,6 +658,11 @@
           <h3 class="settings-subsection-title">卡片内容</h3>
           <div class="setting-row stacked"><span><strong>卡片信息显示</strong><small>各项独立开关；关闭后不会影响排序、筛选或详细信息。</small></span></div>
           <div id="scheduleCardFieldInputs"></div>
+          <label class="setting-row">
+            <span><strong>已播集数来源</strong><small>独立于收藏夹和周表来源；只切换已播进度，不改变放送时刻。</small></span>
+            <select id="scheduleAiringSourceInput"><option value="bgm">BGM / Bangumi</option><option value="as">AS / AnimeSchedule</option></select>
+          </label>
+          <div class="setting-row"><span><small>AS 采用原声／字幕的较早放送计划，不代表所有地区平台同步上线。资料：<a href="https://animeschedule.net" target="_blank" rel="noopener noreferrer">AnimeSchedule</a>；编号对照：<a href="https://github.com/Rhilip/BangumiExtLinker" target="_blank" rel="noopener noreferrer">BangumiExtLinker · CC BY 4.0</a>。</small></span></div>
           <div class="setting-row stacked detail-link-settings">
             <span>
               <strong>卡片详情里的跳转链接</strong>
@@ -1052,11 +1061,11 @@
     </dialog>
     <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261105-schedule-corners" defer></script>
+    <script src="/schedule.js?v=20261105-as-progress" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
     <script src="/modules/collection.js?v=20261023-modules" defer></script>
-    <script src="/modules/presentation.js?v=20261104-airing-compact" defer></script>
+    <script src="/modules/presentation.js?v=20261105-as-progress" defer></script>
     <script src="/modules/collection-cards.js?v=20261104-hardening" defer></script>
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/video-links.js?v=20261105-official-bangumi" defer></script>
@@ -1064,11 +1073,11 @@
     <script src="/modules/records.js?v=20261031-editor-height-20261025-floating-sort" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
-    <script src="/modules/lifecycle.js?v=20261104-airing-refresh" defer></script>
-    <script src="/modules/settings.js?v=20261105-theme-preview" defer></script>
+    <script src="/modules/lifecycle.js?v=20261105-as-progress" defer></script>
+    <script src="/modules/settings.js?v=20261105-as-progress" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
-    <script src="/modules/settings-save.js?v=20261105-theme-preview" defer></script>
+    <script src="/modules/settings-save.js?v=20261105-as-progress" defer></script>
     <script src="/modules/events.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

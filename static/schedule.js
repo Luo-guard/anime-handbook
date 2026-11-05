@@ -261,6 +261,20 @@ function scheduleEstimatedEpisode(item, now = new Date()) {
 function scheduleProgress(item) {
   if (item.kind !== "weekly") return null;
   const anime = item.local_id ? state.animes.find((row) => row.id === item.local_id) : null;
+  if (state.settings.schedule_airing_source === "as") {
+    const airing = item.as_airing || anime?.as_airing;
+    if (!airing || airing.unavailable) return {
+      text: airing?.status === "loading" ? "AS 进度加载中" : "暂无 AS 进度",
+      estimated: true, detail: "", title: "未匹配或暂无可用 AS 资料，不使用其他来源代替",
+    };
+    const knownTotal = Number(airing.total) || Number(anime?.episode_count) || 0;
+    const total = knownTotal >= airing.aired ? knownTotal : 0;
+    return {
+      text: total ? `已播 ${airing.aired} / ${total}` : `已播 ${airing.aired} 集`,
+      estimated: false, detail: airing.next_label ? `下集 ${airing.next_label}（北京时间）` : "",
+      title: `${airing.stale ? "AS 缓存暂未更新；" : ""}已播集数来自 AnimeSchedule 原声／字幕放送计划；总集数缺失时沿用条目资料，不代表各地区资源站更新时间`,
+    };
+  }
   const airing = anime?.airing;
   if (airing && Number(airing.total) > 0) {
     const aired = Math.max(0, Number(airing.aired) || 0);
@@ -348,6 +362,7 @@ function scheduleStatusMarkup(statuses, name) {
 
 function renderScheduleSettings() {
   $("#scheduleSourceInput").value = scheduleSource();
+  $("#scheduleAiringSourceInput").value = state.settings.schedule_airing_source || "bgm";
   $("#scheduleSourceSwitchInput").checked = state.settings.show_schedule_source_switch !== false;
   const prefs = schedulePreferences();
   renderScheduleSorting("#scheduleSortingSettings");

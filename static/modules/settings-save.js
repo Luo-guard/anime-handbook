@@ -30,6 +30,10 @@ const HandbookSettings = (() => {
       const keyboardChanged = JSON.stringify(keyboardSettings) !== JSON.stringify(keyboardPreferences());
       if(keyboardChanged && !(await api("/api/health")).features?.keyboard_shortcuts) throw new Error("当前后台尚不支持保存快捷键，请重启手账后台并刷新页面。");
       const scheduleSorting = readScheduleSorting("#scheduleSortingSettings");
+      const progressSources = {
+        collection_airing_source: $("#collectionAiringSourceInput").value,
+        schedule_airing_source: $("#scheduleAiringSourceInput").value,
+      };
       await requireScheduleSortingSupport();
       const payload = await api("/api/settings", {
         method: "PATCH",
@@ -50,6 +54,7 @@ const HandbookSettings = (() => {
           kazumi_read_only: $("#kazumiReadOnlyInput").checked,
           kazumi_conflict: $("#kazumiConflictInput").value,
           schedule_source: $("#scheduleSourceInput").value,
+          ...progressSources,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
           schedule_statuses: $$("#scheduleStatusInputs input:checked").map((input) => Number(input.value)),
           schedule_uncollected: $("#scheduleUncollectedInput").checked,
@@ -104,6 +109,7 @@ const HandbookSettings = (() => {
       if (!$("#showJumpHistoryButtonInput").checked && payload.settings.show_jump_history_button !== false) throw new Error("当前后台还不支持工具栏按钮设置，请重启手账后台并刷新后再试。");
       if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
       if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
+      if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
       ThemeSettingsSession.finish(true);
       state.settings = payload.settings;
       state.stats = payload.stats || state.stats;
@@ -129,6 +135,7 @@ const HandbookSettings = (() => {
       toast("设置已保存");
       if (state.activeView === "timeline") await renderTimeline();
       if (state.activeView === "schedule") renderSchedule();
+      await refreshAiringProgress();
     } catch (error) {
       toast(error.message, "error");
     } finally {

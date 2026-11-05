@@ -20,14 +20,19 @@ function episodeGroupSummary(group, watchedSet) {
 
 function episodeReleaseStatus(anime, group) {
   if (Number(group.type) !== 0) return "";
-  // 只认 Bangumi 逐集日期 + 周表放送时刻算出的进度，不再用“到日期就算已播”。
-  const airing = anime.airing;
-  if (!airing || !Number(airing.total)) return "";
+  const useAS = state.settings.collection_airing_source === "as";
+  const airing = useAS ? anime.as_airing : anime.airing;
+  if (useAS && (!airing || airing.unavailable)) {
+    return `<span class="episode-release-status" title="未匹配或暂无可用 AS 资料，不使用其他来源代替">${airing?.status === "loading" ? "AS 进度加载中" : "暂无 AS 进度"}</span>`;
+  }
+  if (!airing) return "";
   const aired = Math.max(0, Number(airing.aired) || 0);
-  const total = Number(airing.total);
-  if (aired >= total) return "";
-  const detail = `按 Bangumi 逐集播出日期与放送时刻（北京时间）计算`;
-  const progress = `已播 ${aired} / ${total}`;
+  const knownTotal = Number(airing.total) || (useAS ? Number(anime.episode_count) : 0);
+  const total = useAS && aired > knownTotal ? 0 : knownTotal;
+  if (!useAS && !total) return "";
+  if (total && aired >= total) return "";
+  const detail = useAS ? `${airing.stale ? "AS 缓存暂未更新；" : ""}已播集数来自 AnimeSchedule 原声／字幕放送计划；总集数缺失时沿用条目资料` : "按 Bangumi 逐集播出日期与放送时刻（北京时间）计算";
+  const progress = total ? `已播 ${aired} / ${total}` : `已播 ${aired} 集`;
   if (!airing.next_label) return `<span class="episode-release-status" title="${escapeHtml(detail)}">${progress}</span>`;
   return `<details class="episode-release-status"><summary title="查看下一集更新时间">${progress}<span class="episode-airing-chevron" aria-hidden="true">⌄</span></summary><div class="episode-next-airing">下集 ${escapeHtml(airing.next_label)}<small>北京时间 · 放送计划</small></div></details>`;
 }

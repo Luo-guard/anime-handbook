@@ -119,10 +119,14 @@ async function refreshAiringProgress() {
   airingRefreshPending = true;
   const collection = state.animes;
   try {
-    const payload = await api("/api/airing");
+    const ids = (typeof scheduleState !== "undefined" ? scheduleState.data?.items || [] : [])
+      .map((item) => item.id || item.local_id).filter(Boolean);
+    const query = state.settings.schedule_airing_source === "as" && ids.length ? `?ids=${ids.join(",")}` : "";
+    const payload = await api(`/api/airing${query}`);
     // A profile change or collection refresh invalidates this request's owner.
     if (state.animes !== collection) return;
     const fresh = new Map((payload.animes || []).map((anime) => [anime.id, anime.airing]));
+    const freshAS = new Map((payload.animes || []).map((anime) => [anime.id, anime.as_airing]));
     let changed = false;
     for (const anime of collection) {
       if (!fresh.has(anime.id)) continue;
@@ -131,6 +135,20 @@ async function refreshAiringProgress() {
         anime.airing = airing;
         changed = true;
       }
+      const asAiring = freshAS.get(anime.id) || undefined;
+      if (JSON.stringify(anime.as_airing) !== JSON.stringify(asAiring)) {
+        anime.as_airing = asAiring;
+        changed = true;
+      }
+    }
+    if (payload.schedule_airing && typeof scheduleState !== "undefined") {
+      for (const item of scheduleState.data?.items || []) {
+        const asAiring = payload.schedule_airing[String(item.id || item.local_id)];
+        if (JSON.stringify(item.as_airing) !== JSON.stringify(asAiring)) {
+          item.as_airing = asAiring;
+          changed = true;
+        }
+      }
     }
     if (!changed) return;
     if (state.activeView === "schedule") renderSchedule();
@@ -138,6 +156,7 @@ async function refreshAiringProgress() {
       const anime = collection.find((item) => item.id === state.progressAnime.id);
       if (anime) {
         state.progressAnime.airing = anime.airing;
+        state.progressAnime.as_airing = anime.as_airing;
         refreshEpisodeAiringStatus();
       }
     }

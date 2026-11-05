@@ -29,6 +29,8 @@ def _normalize_settings(body, settings):
         "show_bgm_rating_in_collection",
         "show_collection_rating_control",
         "collection_rating_source",
+        "collection_airing_source",
+        "schedule_airing_source",
         "show_collection_progress_control",
         "show_create_collection_control",
         "show_collection_add_button",
@@ -121,7 +123,10 @@ def _normalize_settings(body, settings):
                 "episode_balance_daily_target",
             }:
                 continue
-            if key == "schedule_grouping":
+            if key in {"collection_airing_source", "schedule_airing_source"}:
+                if not isinstance(value, str) or value not in {"bgm", "as"}:
+                    raise ValueError("已播集数来源无效")
+            elif key == "schedule_grouping":
                 value = normalize_schedule_grouping(value)
             elif key == "kazumi_read_only":
                 if type(value) is not bool:
