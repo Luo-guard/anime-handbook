@@ -70,6 +70,17 @@ class NoteMergeTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertIn(events[0]["content"], [old["content"], new["content"]])
 
+    def test_approved_repair_prevents_old_cloud_copies_returning(self):
+        old = note(1, "old body")
+        kept = note(2, "complete body", updated_at="2026-11-05T15:00:00+08:00")
+        local = state([kept])
+        local["tables"]["settings"] = [{"key":"record_identity_aliases", "value":'{"test-record-1":"test-record-2"}'}]
+        for a,b in [(local,state([old])), (state([old]),local)]:
+            merged = webdav.WebDAVSyncService.merge_record_states(a,b)
+            self.assertEqual(len(merged["tables"]["events"]),1)
+            self.assertEqual(merged["tables"]["events"][0]["content"],"complete body")
+            self.assertEqual(len(webdav.WebDAVSyncService.merge_record_states(merged,state([old]))["tables"]["events"]),1)
+
     def test_merge_is_idempotent(self):
         new = note(14, "正文\n补充", updated_at="2026-11-04T13:00:00+08:00")
         old = note(14, "正文", updated_at="2026-11-01T10:00:00+08:00")
@@ -116,6 +127,29 @@ class NoteVersionMigrationTest(unittest.TestCase):
     def event_row(self, event_id):
         with self.db.connect() as db:
             return dict(db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone())
+
+    def test_legacy_reimport_preserves_identity_without_mutating_input(self):
+        event_id = self.db.add_note("legacy note")
+        original = self.event_row(event_id)
+        legacy = dict(original)
+        legacy.pop("record_uid")
+        snapshot = state([legacy])
+        self.db.import_cloud_state(snapshot)
+        self.assertEqual(self.event_row(event_id)["record_uid"], original["record_uid"])
+        self.assertNotIn("record_uid", snapshot["tables"]["events"][0])
+        self.db.import_cloud_state(snapshot)
+        self.assertEqual(self.event_row(event_id)["record_uid"], original["record_uid"])
+
+    def test_repaired_identity_survives_legacy_snapshot_restore(self):
+        import json
+        self.db.set_setting("record_identity_aliases", {"test-record-1":"test-record-2"})
+        old=note(1,"old body")
+        kept=note(2,"complete body",updated_at="2026-11-05T15:00:00+08:00")
+        self.db.import_cloud_state(state([old,kept]))
+        rows=self.db.export_cloud_state()["tables"]["events"]
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["content"],"complete body")
+        self.assertEqual(self.db.get_settings()["record_identity_aliases"],{"test-record-1":"test-record-2"})
 
     def test_editing_keeps_created_at_and_moves_updated_at(self):
         event_id = self.db.add_note("原始正文")

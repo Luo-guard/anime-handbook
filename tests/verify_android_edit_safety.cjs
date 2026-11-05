@@ -23,6 +23,7 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  assert((await page.evaluate(()=>messages.at(-1))).includes('尚未保存'));
  await page.evaluate(()=>{failSave=false;addNote();settings();document.querySelector('#username').value='未保存配置';HandbookMobile.completeSync(JSON.stringify({state:saved}),true)});
  assert.equal(await page.locator('#username').inputValue(),'未保存配置');
+ const note=await page.evaluate(()=>saved.tables.events.find(e=>e.event_type==='note'));assert.match(note.record_uid,/^[a-f0-9]{32}$/);assert(note.updated_at);
  // An older completion payload must never replace a newer successfully saved edit.
  await page.evaluate(()=>{showPage('home');const stale=JSON.parse(JSON.stringify(saved));saved.tables.anime[0].name_cn='同步期间的新修改';HandbookMobile.completeSync(JSON.stringify({state:stale}),true)});
  assert((await page.locator('.anime').textContent()).includes('同步期间的新修改'));

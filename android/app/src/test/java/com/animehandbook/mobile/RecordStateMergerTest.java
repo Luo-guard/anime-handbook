@@ -26,6 +26,45 @@ public class RecordStateMergerTest {
     return state.getJSONObject("tables").getJSONArray("events");
   }
 
+  private JSONObject note(long id, String uid, String content, String updated) throws Exception {
+    JSONObject row = new JSONObject().put("id",id).put("event_type","note").put("anime_id",JSONObject.NULL)
+      .put("episodes","[]").put("content",content).put("created_at","2026-10-23T17:05:44+08:00")
+      .put("updated_at",updated);
+    if(uid!=null)row.put("record_uid",uid);
+    return row;
+  }
+
+  @Test public void editedNoteUsesIdentityAndLatestClockIncludingShortenedBody() throws Exception {
+    JSONObject a=state(),b=state();
+    add(a,note(1,"shared","long original body","2026-11-01T10:00:00+08:00"));
+    add(b,note(200,"shared","short","2026-11-05T10:00:00+08:00"));
+    for(JSONObject merged:new JSONObject[]{RecordStateMerger.merge(a,b),RecordStateMerger.merge(b,a)}) {
+      assertEquals(1,events(merged).length());assertEquals("short",events(merged).getJSONObject(0).getString("content"));
+      assertEquals(1,events(RecordStateMerger.merge(merged,a)).length());
+    }
+  }
+
+  @Test public void independentIdenticalNotesStaySeparateAndLegacyAdoptionMustBeUnambiguous() throws Exception {
+    JSONObject a=state(),b=state();
+    add(a,note(1,"first","body","2026-11-01T10:00:00+08:00"));
+    add(b,note(1,"second","body","2026-11-01T10:00:00+08:00"));
+    assertEquals(2,events(RecordStateMerger.merge(a,b)).length());
+    JSONObject legacy=state();add(legacy,note(8,null,"body","2026-11-01T10:00:00+08:00"));
+    assertEquals(1,events(RecordStateMerger.merge(a,legacy)).length());
+    assertEquals(3,events(RecordStateMerger.merge(RecordStateMerger.merge(a,b),legacy)).length());
+  }
+
+  @Test public void approvedRepairSurvivesRepeatedOldSnapshotMerge() throws Exception {
+    JSONObject a=state(),b=state();
+    add(a,note(2,"kept","complete body","2026-11-05T10:00:00+08:00"));
+    add(b,note(1,"old","old body","2026-10-23T17:05:44+08:00"));
+    a.getJSONObject("tables").getJSONArray("settings").put(new JSONObject().put("key","record_identity_aliases").put("value","{\"old\":\"kept\"}"));
+    for(JSONObject merged:new JSONObject[]{RecordStateMerger.merge(a,b),RecordStateMerger.merge(b,a)}){
+      assertEquals(1,events(merged).length());assertEquals("complete body",events(merged).getJSONObject(0).getString("content"));
+      assertEquals(1,events(RecordStateMerger.merge(merged,b)).length());
+    }
+  }
+
   @Test public void earliestWatchWinsInBothDirectionsAcrossTimezones() throws Exception {
     JSONObject a = state(), b = state();
     add(a, watch(1, 1, "2026-09-15T10:00:00+08:00", "bgm:101"));

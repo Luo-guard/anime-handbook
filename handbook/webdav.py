@@ -18,6 +18,7 @@ import urllib.request
 from urllib.parse import urlparse
 from .common import (WEBDAV_CONFIG_PATH, json_dumps, json_list, now_iso)
 from .database import HandbookDB
+from .record_identity import read_aliases, canonical_uid, store_aliases
 from .profiles import ProfileManager
 
 class WebDAVSyncService:
@@ -319,6 +320,8 @@ class WebDAVSyncService:
             rows = local_tables.get(table, [])
             merged["tables"][table] = [dict(row) for row in rows if isinstance(row, dict)]
 
+        aliases = read_aliases(local_tables.get("settings", []), remote_tables.get("settings", []))
+        merged["tables"]["settings"] = store_aliases(merged["tables"]["settings"], aliases)
         local_anime = {str(row.get("id")): dict(row) for row in merged["tables"]["anime"] if row.get("id") is not None}
         for raw in remote_tables.get("anime", []):
             if not isinstance(raw, dict) or raw.get("id") is None:
@@ -343,6 +346,8 @@ class WebDAVSyncService:
                 if not isinstance(raw, dict):
                     continue
                 event = dict(raw)
+                if event.get("record_uid"):
+                    event["record_uid"] = canonical_uid(event["record_uid"], aliases)
                 if str(event.get("event_type") or "") == "watch" and event.get("anime_id") is not None:
                     episodes = json_list(event.get("episodes"))
                     if episodes:

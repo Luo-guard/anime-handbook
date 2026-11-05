@@ -14,6 +14,7 @@ import tempfile
 import uuid
 from datetime import timedelta
 from .concurrency import database_state
+from .record_identity import read_aliases, store_aliases, collapse_repaired
 from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso,
     normalize_kazumi_category,
 )
@@ -1964,6 +1965,25 @@ class HandbookDB:
         with self._write_lock, self.connect() as db:
             db.execute("PRAGMA foreign_keys = OFF")
             try:
+                # Re-importing an unchanged legacy snapshot must not assign a
+                # different random identity each time. Reuse only an unambiguous
+                # full-record match, never a device-local id or text prefix.
+                identity_fields = ("event_type", "anime_id", "created_at", "content", "raw_directives", "theme", "themes", "rating", "episodes")
+                def legacy_key(row):
+                    return json_dumps([row.get(field) for field in identity_fields])
+                existing_uids: dict[str, set[str]] = {}
+                for raw in db.execute("SELECT * FROM events"):
+                    row = dict(raw)
+                    if row.get("record_uid"):
+                        existing_uids.setdefault(legacy_key(row), set()).add(row["record_uid"])
+                aliases = read_aliases([dict(row) for row in db.execute("SELECT * FROM settings")], tables["settings"])
+                tables["settings"] = store_aliases(tables["settings"], aliases)
+                tables["events"] = [dict(row) for row in tables["events"]]
+                for row in tables["events"]:
+                    matches = existing_uids.get(legacy_key(row), set())
+                    if not row.get("record_uid") and len(matches) == 1:
+                        row["record_uid"] = next(iter(matches))
+                tables["events"] = collapse_repaired(tables["events"], aliases)
                 for table in (
                     "ranking_items", "ranking_tiers", "ranking_templates", "ranking_boards",
                     "custom_collection_items", "custom_collections", "events", "anime",

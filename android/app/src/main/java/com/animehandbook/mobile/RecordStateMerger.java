@@ -65,14 +65,32 @@ final class RecordStateMerger {
     return canonical(bRow).compareTo(canonical(aRow)) < 0 ? right : left;
   }
 
-  private static String eventKey(JSONObject event) throws Exception {
-    JSONObject identity = new JSONObject();
-    identity.put("type", event.opt("event_type") == null ? JSONObject.NULL : event.opt("event_type"));
-    identity.put("anime", event.opt("anime_id") == null ? JSONObject.NULL : event.opt("anime_id"));
-    identity.put("episodes", event.opt("episodes") == null ? JSONObject.NULL : event.opt("episodes"));
-    identity.put("content", event.opt("content") == null ? JSONObject.NULL : event.opt("content"));
-    identity.put("created", event.opt("created_at") == null ? JSONObject.NULL : event.opt("created_at"));
-    return "event:" + canonical(identity);
+  private static String legacyKey(JSONObject event) throws Exception {
+    JSONArray identity = new JSONArray();
+    for (String field : new String[]{"event_type", "anime_id", "created_at", "content", "raw_directives", "theme", "themes", "rating", "episodes"})
+      identity.put(event.opt(field) == null ? JSONObject.NULL : event.opt(field));
+    return canonical(identity);
+  }
+
+  private static String uid(JSONObject event) {
+    return event.isNull("record_uid") ? "" : event.optString("record_uid", "");
+  }
+
+  private static final String ALIAS_SETTING = "record_identity_aliases";
+  private static Map<String,String> aliases(JSONObject... sources) {
+    Map<String,String> result=new TreeMap<>();
+    for(JSONObject source:sources){JSONArray rows=source.optJSONArray("settings");
+      for(int i=0;rows!=null&&i<rows.length();i++){JSONObject row=rows.optJSONObject(i);
+        if(row==null||!ALIAS_SETTING.equals(row.optString("key")))continue;
+        try{JSONObject values=new JSONObject(row.optString("value","{}"));
+          for(java.util.Iterator<String> keys=values.keys();keys.hasNext();){String old=keys.next();Object value=values.opt(old);if(!(value instanceof String))continue;String target=(String)value;
+            if(!old.isEmpty()&&!target.isEmpty()&&!old.equals(target))result.merge(old,target,(a,b)->a.compareTo(b)<0?a:b);}
+        }catch(Exception ignored){/* Invalid optional repair metadata is not an identity. */}
+      }
+    }return result;
+  }
+  private static String canonicalUid(String value,Map<String,String> aliases){
+    Set<String> seen=new TreeSet<>();while(aliases.containsKey(value)){if(!seen.add(value))return seen.iterator().next();value=aliases.get(value);}return value;
   }
 
   private static Map<String, Set<String>> progress(JSONObject state) throws Exception {
@@ -95,6 +113,13 @@ final class RecordStateMerger {
     JSONObject merged = new JSONObject(local.toString());
     JSONObject tables = merged.getJSONObject("tables");
     JSONObject remoteTables = new JSONObject(remote.toString()).getJSONObject("tables");
+    Map<String,String> aliases=aliases(tables,remoteTables);
+    if(!aliases.isEmpty()){
+      JSONArray settings=new JSONArray(),original=tables.optJSONArray("settings");
+      for(int i=0;original!=null&&i<original.length();i++)if(!ALIAS_SETTING.equals(original.getJSONObject(i).optString("key")))settings.put(original.get(i));
+      settings.put(new JSONObject().put("key",ALIAS_SETTING).put("value",new JSONObject(aliases).toString()));tables.put("settings",settings);
+      for(JSONObject source:new JSONObject[]{tables,remoteTables}){JSONArray rows=source.optJSONArray("events");for(int i=0;rows!=null&&i<rows.length();i++){JSONObject row=rows.getJSONObject(i);if(!uid(row).isEmpty())row.put("record_uid",canonicalUid(uid(row),aliases));}}
+    }
     Map<String, JSONObject> byAnime = new LinkedHashMap<>();
     for (JSONObject source : new JSONObject[]{tables, remoteTables}) {
       JSONArray anime = source.optJSONArray("anime");
@@ -116,6 +141,16 @@ final class RecordStateMerger {
     JSONArray anime = new JSONArray(); for (JSONObject row : byAnime.values()) anime.put(row);
     tables.put("anime", anime);
 
+    // A legacy copy may lack a UID. Adopt an existing UID only for an exact,
+    // unambiguous full-record match; IDs and overlapping text are not evidence.
+    Map<String, Set<String>> identities = new LinkedHashMap<>();
+    for (JSONObject source : new JSONObject[]{tables, remoteTables}) {
+      JSONArray rows = source.optJSONArray("events");
+      for (int i = 0; rows != null && i < rows.length(); i++) {
+        JSONObject row = rows.getJSONObject(i);
+        if (!uid(row).isEmpty()) identities.computeIfAbsent(legacyKey(row), key -> new HashSet<>()).add(uid(row));
+      }
+    }
     Map<String, JSONObject> byEvent = new TreeMap<>();
     for (JSONObject source : new JSONObject[]{tables, remoteTables}) {
       JSONArray events = source.optJSONArray("events");
@@ -133,8 +168,15 @@ final class RecordStateMerger {
             byEvent.put(key, current == null ? item : select(current, item, "created_at", true));
           }
         } else {
-          String key = eventKey(event);
-          if (!byEvent.containsKey(key)) byEvent.put(key, event);
+          String recordUid = uid(event), legacy = legacyKey(event);
+          Set<String> matches = identities.get(legacy);
+          if (recordUid.isEmpty() && matches != null && matches.size() == 1) {
+            recordUid = matches.iterator().next();
+            event.put("record_uid", recordUid);
+          }
+          String key = recordUid.isEmpty() ? "legacy:" + legacy : "uid:" + recordUid;
+          JSONObject current = byEvent.get(key);
+          byEvent.put(key, current == null ? event : select(current, event, "updated_at", false));
         }
       }
     }
