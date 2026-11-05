@@ -125,6 +125,22 @@ const harness = [
     const statusVisible = await page.locator('#webdavStatus').evaluate(n => getComputedStyle(n).display !== 'none');
     assert.equal(statusVisible, true, 'dynamic status lines stay visible');
 
+    // 周表的来源导语也归入对应问号，来源链接仍可点击。
+    assert.equal(await page.locator('.schedule-settings-note').count(), 0);
+    const airingRow = page.locator('#scheduleAiringSourceInput').locator('..');
+    assert.equal(await airingRow.locator('.setting-help').count(), 1);
+    assert.equal(await airingRow.locator('small').isVisible(), false);
+    await airingRow.locator('.setting-help').click();
+    assert.match(await popover.innerText(), /不代表所有地区平台同步上线/);
+    assert(await popover.locator('a[href="https://animeschedule.net"]').isVisible());
+    assert(await popover.locator('a[href="https://github.com/Rhilip/BangumiExtLinker"]').isVisible());
+    await page.keyboard.press('Escape');
+    const sourceRow = page.locator('#scheduleSourceInput').locator('..');
+    await sourceRow.locator('.setting-help').click();
+    assert.match(await popover.innerText(), /凌晨 4 点/);
+    assert.match(await popover.innerText(), /已关联 Bangumi ID/);
+    await page.keyboard.press('Escape');
+
     // 重复初始化不会重复添加问号。
     const before2 = await page.locator('#settingsModal .setting-help').count();
     await page.evaluate(() => setupSettingHelp());
