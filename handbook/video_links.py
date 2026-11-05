@@ -2,6 +2,7 @@
 import hashlib
 import re
 from urllib.parse import urlsplit, parse_qs, urlencode
+from .http_support import request_integer
 
 
 def canonical_video_url(value):
@@ -47,7 +48,7 @@ class VideoLinks:
     def update(self, body):
         if body.get("scope") != self.scope:
             raise ValueError("手账账号已切换，请重新打开扩展后再保存")
-        anime_id = int(body.get("anime_id", 0))
+        anime_id = request_integer(body.get("anime_id"), "番剧 ID")
         if not self.database.get_anime(anime_id):
             raise ValueError("番剧不存在，请重新选择")
         action = body.get("action", "save")
@@ -72,7 +73,7 @@ class VideoLinks:
                 if kind == "link" or body.get("make_default") is False:
                     db.execute("UPDATE video_links SET is_default=0 WHERE id=? AND anime_id=?", (link_id,anime_id))
             elif action in {"delete", "default", "unset_default"}:
-                link_id = int(body.get("id", 0))
+                link_id = request_integer(body.get("id"), "视频 ID")
                 if not db.execute("SELECT 1 FROM video_links WHERE id=? AND anime_id=?", (link_id,anime_id)).fetchone():
                     raise ValueError("保存的视频不存在")
                 if action == "delete":

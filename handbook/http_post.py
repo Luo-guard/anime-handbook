@@ -1,6 +1,8 @@
 """Post route controller; transport and errors live on RequestHandler."""
 from __future__ import annotations
 from .http_context import (VideoLinks, _desktop, background_stem, base64, json, normalize_background_bytes, normalize_jump, re, safe_asset_id, save_collection, secrets, time, urlparse)
+from .http_support import validate_command_body
+from .assets import replace_background_bytes
 
 
 class PostRoutes:
@@ -8,6 +10,7 @@ class PostRoutes:
         path = urlparse(self.path).path
         try:
             body = self.read_json()
+            validate_command_body(path, body)
             write_exempt_paths = {
                 "/api/profiles",
                 "/api/profiles/activate",
@@ -44,11 +47,19 @@ class PostRoutes:
                 anime_id = int(body.get("anime_id", 0))
                 if anime_id <= 0:
                     raise ValueError("番剧条目 ID 无效")
-                subject = self.sync.fetch_bgm(anime_id)
-                anime = save_collection(self.database, subject, body.get("status"))
-                if anime.get("episode_count") is None:
-                    rating=subject.get("rating") or {}
-                    self.database.update_bgm_metadata(anime_id, episode_count=int(subject.get("total_episodes") or subject.get("eps") or 0), rating_score=rating.get("score"), rating_rank=rating.get("rank"), rating_total=rating.get("total"), rating_synced=True)
+                status = body.get("status")
+                if type(status) is not int or status not in range(1, 6):
+                    raise ValueError("收藏状态无效")
+                anime = self.database.change_collection_status(anime_id, status)
+                if anime is None:
+                    subject = self.sync.fetch_bgm(anime_id)
+                    if int(subject.get("id") or 0) != anime_id:
+                        raise ValueError("资料来源返回的番剧 ID 不匹配")
+                    with self.database.transaction():
+                        anime = save_collection(self.database, subject, status)
+                        if anime.get("episode_count") is None:
+                            rating=subject.get("rating") or {}
+                            self.database.update_bgm_metadata(anime_id, episode_count=int(subject.get("total_episodes") or subject.get("eps") or 0), rating_score=rating.get("score"), rating_rank=rating.get("rank"), rating_total=rating.get("total"), rating_synced=True)
                 self.send_json({"ok": True, "anime": self.database.get_anime(anime_id), "animes": self.database.list_anime(), "stats": self.database.stats()})
             elif path == "/api/profiles/activate":
                 profile = _desktop().activate_profile(str(body.get("profile_id") or ""))
@@ -112,9 +123,7 @@ class PostRoutes:
                 theme_id = safe_asset_id(body.get("profile_id"), "default")
                 account_id = safe_asset_id(body.get("account_id"), str(self.profiles.profile().get("id") or "local"))
                 stem = background_stem(account_id, theme_id)
-                for old in self.background_root.glob(f"{stem}.*"):
-                    old.unlink(missing_ok=True)
-                (self.background_root / f"{stem}.{extension}").write_bytes(image)
+                replace_background_bytes(self.background_root, stem, extension, image)
                 version = int(time.time() * 1000)
                 if body.get("defer_settings") is not True:
                     self.database.set_setting("custom_background_enabled", True)

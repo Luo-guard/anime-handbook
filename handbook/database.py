@@ -962,7 +962,7 @@ class HandbookDB:
 
     @staticmethod
     def _queue_kazumi_status(
-        db: sqlite3.Connection, anime_id: int, status: int, stamp: str
+        db: sqlite3.Connection, anime_id: int, status: int, stamp: str, *, reactivate: bool = False
     ) -> int | None:
         """按 save_collection 的同一协议写入 outbox，返回实际改为的分类。
 
@@ -972,7 +972,7 @@ class HandbookDB:
         if not row:
             return None
         current = int(row["collection_type"] or 0)
-        if current == status:
+        if current == status and (not reactivate or row["active"]):
             return None
         image = str(row["image_url"] or "")
         subject = {
@@ -990,8 +990,8 @@ class HandbookDB:
             },
         }
         db.execute(
-            "UPDATE anime SET collection_type = ?, updated_at = ? WHERE id = ?",
-            (status, stamp, anime_id),
+            "UPDATE anime SET collection_type = ?, active = ?, updated_at = ? WHERE id = ?",
+            (status, 1 if reactivate else row["active"], stamp, anime_id),
         )
         db.execute(
             """
@@ -1006,6 +1006,16 @@ class HandbookDB:
             (anime_id, status, current, json.dumps(subject, ensure_ascii=False), stamp),
         )
         return status
+
+    def change_collection_status(self, anime_id: int, status: int) -> dict[str, Any] | None:
+        """Change a cached subject locally and queue the existing Kazumi protocol."""
+        if type(status) is not int or status not in CATEGORY_NAMES:
+            raise ValueError("收藏状态无效")
+        with self._write_lock, self.connect() as db:
+            if not db.execute("SELECT 1 FROM anime WHERE id=?", (anime_id,)).fetchone():
+                return None
+            self._queue_kazumi_status(db, anime_id, status, now_iso(), reactivate=True)
+        return self.get_anime(anime_id)
 
     def add_to_custom_collection(
         self, collection_id: int, anime_id: int

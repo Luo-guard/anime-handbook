@@ -1,6 +1,7 @@
 """Patch route controller; transport and errors live on RequestHandler."""
 from __future__ import annotations
 from .http_context import (Any, CATEGORY_NAMES, save_settings, urlparse)
+from .http_support import validate_command_body
 
 
 class PatchRoutes:
@@ -8,6 +9,7 @@ class PatchRoutes:
         path = urlparse(self.path).path
         try:
             body = self.read_json()
+            validate_command_body(path, body)
             if not path.startswith("/api/profiles/"):
                 self.require_write_access()
             if path.startswith("/api/profiles/"):

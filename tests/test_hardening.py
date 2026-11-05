@@ -22,6 +22,8 @@ from handbook.concurrency import ReadWriteGate
 from handbook.settings_service import normalize_settings
 from handbook.observability import record_failure
 from handbook import common
+from handbook.collection import save_collection
+from handbook.video_links import VideoLinks
 
 
 class Profiles:
@@ -183,6 +185,96 @@ class WireTest(unittest.TestCase):
         settings = self.db.get_settings()
         normalized, _, _ = normalize_settings(settings, settings)
         self.assertEqual(normalized["builtin_collection_order"], settings["builtin_collection_order"])
+
+    def test_cached_collection_status_never_fetches_and_keeps_outbox_baseline(self):
+        save_collection(self.db, {"id": 123, "type": 2, "name": "Local", "summary": "saved"}, 1)
+        self.db.update_bgm_metadata(123, episode_count=12, rating_score=8, rating_rank=10, rating_total=100)
+        with self.db.connect() as connection:
+            connection.execute("DELETE FROM kazumi_outbox")
+        before = self.db.get_anime(123)
+        with patch.object(desktop.SYNC, "fetch_bgm", side_effect=TimeoutError("offline")) as fetch:
+            for status in [2, 3]:
+                code, raw, _ = self.call("POST", "/api/collection-status", json.dumps({"anime_id": 123, "status": status}))
+                self.assertEqual(code, 200, raw)
+            fetch.assert_not_called()
+        after = self.db.get_anime(123)
+        for key in ["name", "summary", "episode_count", "bgm_score", "bgm_rating_total", "watched_episodes"]:
+            self.assertEqual(after[key], before[key])
+        with self.db.connect() as connection:
+            job = connection.execute("SELECT * FROM kazumi_outbox").fetchone()
+        self.assertEqual((job["baseline"], job["status"]), (1, 3))
+
+    def test_cached_inactive_collection_reactivates_offline(self):
+        save_collection(self.db, {"id": 123, "type": 2, "name": "Local"}, 1)
+        with self.db.connect() as connection:
+            connection.execute("UPDATE anime SET active=0 WHERE id=123")
+            connection.execute("DELETE FROM kazumi_outbox")
+        with patch.object(desktop.SYNC, "fetch_bgm", side_effect=TimeoutError("offline")):
+            code, raw, _ = self.call("POST", "/api/collection-status", '{"anime_id":123,"status":1}')
+        self.assertEqual(code, 200, raw)
+        self.assertEqual(self.db.get_anime(123)["active"], 1)
+        with self.db.connect() as connection:
+            self.assertEqual(connection.execute("SELECT status FROM kazumi_outbox").fetchone()[0], 1)
+
+    def test_new_collection_network_failure_or_wrong_subject_never_creates_anime(self):
+        for result in [TimeoutError("offline"), {"id": 124, "type": 2, "name": "wrong"}]:
+            options = {"side_effect": result} if isinstance(result, Exception) else {"return_value": result}
+            with patch.object(desktop.SYNC, "fetch_bgm", **options):
+                code, _, _ = self.call("POST", "/api/collection-status", '{"anime_id":123,"status":1}')
+            self.assertIn(code, {400, 504})
+            self.assertIsNone(self.db.get_anime(123))
+        with self.db.connect() as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM kazumi_outbox").fetchone()[0], 0)
+
+    def test_malformed_command_fields_return_400_without_mutation(self):
+        scope = VideoLinks(self.db).scope
+        cases = [
+            ("POST", "/api/notes", {"content": "bad", "episode_keys": 1}),
+            ("POST", "/api/notes", {"content": "bad", "themes": {}}),
+            ("POST", "/api/video-links", {"scope": scope, "anime_id": None}),
+            ("POST", "/api/video-links", {"scope": scope, "anime_id": 1, "action": {}}),
+            ("POST", "/api/animes/123/progress", {"episodes": "1"}),
+            ("POST", "/api/animes/123/progress", {"episode_keys": [float("inf")]}),
+            ("POST", "/api/animes/123/progress", {"episode_keys": ["Infinity"]}),
+            ("POST", "/api/collection-status", {"anime_id": 10**100, "status": 1}),
+            ("POST", "/api/rankings/1/import", {"anime_ids": [None]}),
+            ("POST", "/api/rankings/1/move", {"placements": {"1": 3}}),
+            ("PATCH", "/api/events/1", {"rating": []}),
+        ]
+        revision = self.db.revision
+        for method, path, body in cases:
+            with self.subTest(path=path, body=body):
+                code, raw, _ = self.call(method, path, json.dumps(body))
+                self.assertEqual(code, 400, raw)
+                self.assertNotIn("后台暂时无法处理", json.loads(raw)["message"])
+        self.assertEqual(self.db.revision, revision)
+
+    def test_background_write_and_replace_failure_keep_previous_bytes_and_settings(self):
+        import base64
+        import io
+        from PIL import Image
+        output = io.BytesIO()
+        Image.new("RGB", (2, 2), "blue").save(output, "PNG")
+        body = json.dumps({"data": "data:image/png;base64," + base64.b64encode(output.getvalue()).decode()})
+        root = self.root / "background"
+        root.mkdir()
+        old = root / (common.background_stem("a", "default") + ".jpg")
+        old.write_bytes(b"old background")
+        before, revision = self.db.get_settings(), self.db.revision
+        with patch.object(http, "BACKGROUND_ROOT", root):
+            for target in ["pathlib.Path.write_bytes", "handbook.assets.os.replace"]:
+                with patch(target, side_effect=OSError("disk failure")):
+                    code, _, _ = self.call("POST", "/api/background", body)
+                self.assertEqual(code, 500)
+                self.assertEqual(old.read_bytes(), b"old background")
+                self.assertEqual(list(root.iterdir()), [old])
+                self.assertEqual(self.db.get_settings(), before)
+                self.assertEqual(self.db.revision, revision)
+            code, raw, _ = self.call("POST", "/api/background", body)
+            self.assertEqual(code, 200, raw)
+        self.assertFalse(old.exists())
+        self.assertEqual(len(list(root.iterdir())), 1)
+        self.assertEqual(next(root.iterdir()).read_bytes(), output.getvalue())
 
     def test_settings_autostart_failure_rolls_back_every_setting(self):
         kazumi = self.root / "kazumi.hive"

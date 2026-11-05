@@ -12,11 +12,31 @@ import time
 import json
 import re
 import sqlite3
+import os
+import tempfile
 from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
 
 from .common import BACKGROUND_ROOT, RECORD_IMAGE_ROOT, background_stem, safe_asset_id
+
+
+def replace_background_bytes(root: Path, stem: str, extension: str, content: bytes) -> None:
+    """Never discard the previous background before the replacement is ready."""
+    root.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=root, prefix=".background-", suffix=".tmp", delete=False) as stage:
+            temporary = Path(stage.name)
+        temporary.write_bytes(content)
+        destination = root / f"{stem}.{extension}"
+        os.replace(temporary, destination)
+        for old in root.glob(f"{stem}.*"):
+            if old != destination:
+                old.unlink(missing_ok=True)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 # An uploaded image becomes referenced only when the note is saved.
 RECORD_IMAGE_GRACE = 60 * 60
