@@ -93,16 +93,55 @@ function renderDetailLinks(anime, preferred = null) {
     });
 }
 
+function bilibiliResumeUrl(item, anime) {
+  const original = String(item?.url || "");
+  if (!anime || (item.kind || "video") !== "video") return original;
+  let url;
+  try { url = new URL(original); } catch { return original; }
+  if (url.protocol !== "https:" || !["www.bilibili.com", "bilibili.com"].includes(url.hostname)
+      || !/^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)) return original;
+  // Resolve chapter identities rather than counting watched items (OP/ED and
+  // gaps must not move a main episode to the wrong part).
+  const main = (Array.isArray(anime.episodes) ? anime.episodes : [])
+    .filter(episode => Number(episode.type || 0) === 0)
+    .map(episode => ({key: String(episode.key), number: Number(episode.sort ?? episode.ep ?? episode.label)}))
+    .filter(episode => Number.isInteger(episode.number) && episode.number > 0 && episode.number <= 10000)
+    .sort((a, b) => a.number - b.number);
+  if (!main.length) return original;
+  const selected = state.progressAnime?.id === anime.id && state.pendingEpisodes instanceof Set
+    ? state.pendingEpisodes : (anime.watched_episode_keys || anime.watched_episodes || []);
+  const watched = new Set([...selected].map(String));
+  const next = main.find(episode => !watched.has(episode.key)) || main.at(-1);
+  url.searchParams.set("p", String(next.number));
+  url.searchParams.delete("t");
+  url.searchParams.delete("start_progress");
+  return url.href;
+}
+
+function refreshSavedVideoTargets() {
+  const anime = state.progressAnime;
+  if (!anime) return;
+  document.querySelectorAll("[data-video-resume-url]").forEach(anchor => {
+    anchor.href = bilibiliResumeUrl({url: anchor.dataset.videoResumeUrl, kind: "video"}, anime);
+  });
+}
+
 function renderBilibiliEntrypoints(anime, preferred = null) {
   const saved=$("#savedVideoDefaultLink");
   saved.textContent="已存视频 ↗";
   saved.classList.toggle("hidden",!preferred);
-  if(preferred)saved.href=preferred.url;else saved.removeAttribute("href");
+  if(preferred) {
+    saved.dataset.videoResumeUrl = preferred.url;
+    saved.href = bilibiliResumeUrl(preferred, anime);
+  } else {
+    saved.removeAttribute("href");
+    delete saved.dataset.videoResumeUrl;
+  }
   saved.onclick = preferred ? () => typeof recordJump === "function" && recordJump({
     anime_id: anime?.id || null,
     anime_name: anime?.display_name || anime?.name_cn || "",
     title: preferred.title,
-    url: preferred.url,
+    url: saved.href,
     kind: preferred.kind || "video",
   }) : null;
   renderDetailLinks(anime,preferred);
@@ -116,7 +155,7 @@ function savedLinkHost(url) {
 
 function savedVideoRow(item) {
   return `<article class="saved-video-row">
-      <a class="saved-video-open" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
+      <a class="saved-video-open" data-video-resume-url="${escapeHtml(item.url)}" href="${escapeHtml(bilibiliResumeUrl(item, state.progressAnime))}" target="_blank" rel="noreferrer">
         <span class="saved-video-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"/></svg></span>
         <span class="saved-video-copy"><span class="saved-video-title">${escapeHtml(item.title)}</span>${item.uploader || item.note ? `<span class="saved-video-meta">${escapeHtml([item.uploader,item.note].filter(Boolean).join(" · "))}</span>` : ""}</span>
       </a>
@@ -179,18 +218,18 @@ async function renderVideoLinks(animeId) {
     if (linkPanel) bindSavedActions(linkPanel, animeId, result);
     // 点开已存视频/链接时记一笔跳转记录，方便下次直接从这里打开。
     const anime = state.progressAnime || {};
-    const remember = (item) => typeof recordJump === "function" && recordJump({
+    const remember = (item, url) => typeof recordJump === "function" && recordJump({
       anime_id: animeId,
       anime_name: anime.display_name || anime.name_cn || "",
       title: item.title,
-      url: item.url,
+      url,
       kind: item.kind || "video",
     });
     panel.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
-      if (videos[index]) anchor.addEventListener("click", () => remember(videos[index]));
+      if (videos[index]) anchor.addEventListener("click", () => remember(videos[index], anchor.href));
     });
     linkPanel?.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
-      if (links[index]) anchor.addEventListener("click", () => remember(links[index]));
+      if (links[index]) anchor.addEventListener("click", () => remember(links[index], anchor.href));
     });
   } catch(error) {
     if (version === videoLinksLoadVersion) {

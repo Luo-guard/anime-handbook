@@ -37,4 +37,35 @@ const jumps=await p.evaluate(()=>window.__jumps);
 assert.equal(jumps.length,2);
 assert.deepEqual(jumps.map(item=>[item.kind,item.anime_name,item.anime_id]),[['video','测试番剧',1],['link','测试番剧',1]]);
 assert.equal(jumps[1].url,'https://example.com/wiki?q=1');
+// Resume uses main episode identities, never total watched count or stored P.
+await p.evaluate(()=>{
+  state.progressAnime={id:1,display_name:'测试番剧',episodes:[
+    ...Array.from({length:24},(_,i)=>({key:`bgm:${100+i}`,type:0,sort:i+1,label:String(i+1)})),
+    {key:'op:1',type:2,sort:1},{key:'ed:1',type:3,sort:1}
+  ],watched_episodes:[...Array.from({length:16},(_,i)=>`bgm:${100+i}`),'op:1','ed:1']};
+  state.pendingEpisodes=new Set(state.progressAnime.watched_episodes);
+  rows=[{id:1,kind:'video',is_default:1,title:'合集',url:'https://www.bilibili.com/video/BV1AgHK6jE64/?p=8&t=20'},
+    {id:9,kind:'link',title:'普通链接',url:'https://www.bilibili.com/video/BV1AgHK6jE64/?p=8'}];
+  return renderVideoLinks(1);
+});
+const defaultUrl=()=>p.locator('#savedVideoDefaultLink').getAttribute('href');
+assert.equal(new URL(await defaultUrl()).searchParams.get('p'),'17');
+assert.equal(new URL(await defaultUrl()).searchParams.has('t'),false);
+assert.equal(new URL(await p.locator('#savedVideoLinks .saved-video-open').getAttribute('href')).searchParams.get('p'),'17');
+assert.equal(new URL(await p.locator('#savedLinks .saved-video-open').getAttribute('href')).searchParams.get('p'),'8');
+await p.evaluate(()=>{const a=document.querySelector('#savedVideoDefaultLink');a.addEventListener('click',e=>e.preventDefault());a.click()});
+assert.equal(new URL((await p.evaluate(()=>window.__jumps)).at(-1).url).searchParams.get('p'),'17');
+await p.evaluate(()=>{state.pendingEpisodes.add('bgm:116');refreshSavedVideoTargets()});
+assert.equal(new URL(await defaultUrl()).searchParams.get('p'),'18');
+await p.evaluate(()=>{state.pendingEpisodes.delete('bgm:109');refreshSavedVideoTargets()});
+assert.equal(new URL(await defaultUrl()).searchParams.get('p'),'10','a gap resumes the first unwatched main episode');
+await p.evaluate(()=>{state.pendingEpisodes=new Set(state.progressAnime.episodes.map(e=>e.key));refreshSavedVideoTargets()});
+assert.equal(new URL(await defaultUrl()).searchParams.get('p'),'24','completed series must not point beyond its last main episode');
+await p.evaluate(()=>{state.pendingEpisodes.clear();refreshSavedVideoTargets()});
+assert.equal(new URL(await defaultUrl()).searchParams.get('p'),'1');
+assert.equal(await p.evaluate(()=>rows[0].url),'https://www.bilibili.com/video/BV1AgHK6jE64/?p=8&t=20','saved source URL is never overwritten');
+await p.evaluate(()=>{state.progressAnime.episodes=[];refreshSavedVideoTargets()});
+assert.equal(await defaultUrl(),'https://www.bilibili.com/video/BV1AgHK6jE64/?p=8&t=20','unknown chapters retain the source URL');
+assert.equal(await p.evaluate(()=>bilibiliResumeUrl({url:'https://example.com/watch?p=8',kind:'video'},state.progressAnime)),'https://example.com/watch?p=8');
+console.log('Bilibili resume: 16 -> P17, OP/ED exclusion, pending progress, gaps, completion, source URL and ordinary links preserved.');
 console.log('Saved video cards: theme styling, no underline, default badge, hidden list retains shortcut, merged/separate modes, no-video fallback, empty state the separate saved-links block and jump recording passed.');}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});

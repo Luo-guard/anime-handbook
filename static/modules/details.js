@@ -480,6 +480,7 @@ function renderEpisodeGrid() {
   const validKeys = new Set(episodes.map((episode) => String(episode.key)));
   const valid = [...state.pendingEpisodes].filter((episode) => validKeys.has(String(episode)));
   state.pendingEpisodes = new Set(valid);
+  if (typeof refreshSavedVideoTargets === "function") refreshSavedVideoTargets();
   const groups = episodes.reduce((result, episode) => {
     const type = Number(episode.type || 0);
     let group = result.find((item) => item.type === type);
@@ -645,6 +646,7 @@ function renderEpisodeGrid() {
       else state.pendingEpisodes.add(episode);
       button.classList.toggle("watched");
       button.setAttribute("aria-pressed", String(state.pendingEpisodes.has(episode)));
+      if (typeof refreshSavedVideoTargets === "function") refreshSavedVideoTargets();
       $$(".episode-group").forEach((section) => {
         const keys = $$(".episode-cell", section).map((item) => item.dataset.episodeKey);
         const watched = keys.filter((key) => state.pendingEpisodes.has(String(key))).length;
