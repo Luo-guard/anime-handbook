@@ -152,11 +152,11 @@ class Handler(http.RequestHandler):
             html = core.with_initial_appearance((core.STATIC_ROOT / "index.html").read_text("utf-8"),
                                                 self.database.get_settings(), str(self.profiles.profile()["id"]))
             html = html.replace("<body>", '<body class="online-mode">')
-            html = html.replace("</head>", '<link rel="stylesheet" href="/online.css?v=20261105-ui-review" /></head>')
+            html = html.replace("</head>", '<link rel="stylesheet" href="/online.css" /></head>')
             html = html.replace('    <script src="/modules/collection.js', '    <script src="/online.js" defer></script>\n    <script src="/modules/collection.js')
             return self.file_response(html.encode(), "text/html; charset=utf-8")
         module_paths = {"/modules/" + path.name for path in core.STATIC_ROOT.joinpath("modules").glob("*.js")}
-        if request_path not in {"/app.js", "/schedule.js", "/styles.css", "/ui-refresh.css", "/appearance.js"} | module_paths:
+        if request_path not in {"/app.js", "/schedule.js", "/styles.css", "/appearance.js"} | module_paths:
             return self.send_error_json(404, "页面不存在")
         super().serve_static(request_path)
 
