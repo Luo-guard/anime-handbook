@@ -171,6 +171,20 @@ def windows_startup_script() -> Path | None:
     )
 
 
+def _write_startup_script(path: Path, content: bytes) -> None:
+    """Replace only after the complete launcher has been written successfully."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".handbook-startup-", delete=False) as out:
+            temporary = Path(out.name)
+            out.write(content)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def configure_windows_autostart(enabled: bool) -> bool:
     """Create or remove this user's silent Windows startup launcher."""
     startup_script = windows_startup_script()
@@ -182,14 +196,29 @@ def configure_windows_autostart(enabled: bool) -> bool:
     python_executable = Path(sys.executable)
     pythonw = python_executable.with_name("pythonw.exe")
     executable = pythonw if pythonw.is_file() else python_executable
-    startup_script.parent.mkdir(parents=True, exist_ok=True)
     command = f'"{executable}" "{APP_ROOT / "app.py"}"'
-    startup_script.write_text(
-        'Set shell = CreateObject("WScript.Shell")\r\n'
-        f'shell.Run "{command.replace(chr(34), chr(34) * 2)}", 0, False\r\n',
-        encoding="utf-8",
-    )
+    content = ('Set shell = CreateObject("WScript.Shell")\r\n'
+               f'shell.Run "{command.replace(chr(34), chr(34) * 2)}", 0, False\r\n')
+    _write_startup_script(startup_script, content.encode("utf-8"))
     return True
+
+
+@contextmanager
+def windows_autostart_change(enabled: bool):
+    """Restore the launcher if its enclosing settings transaction fails."""
+    path = windows_startup_script()
+    previous = path.read_bytes() if path is not None and path.exists() else None
+    try:
+        yield configure_windows_autostart(enabled)
+    except BaseException:
+        if path is not None:
+            current = path.read_bytes() if path.exists() else None
+            if current != previous:
+                if previous is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    _write_startup_script(path, previous)
+        raise
 
 CATEGORY_NAMES = {
     1: "在看",

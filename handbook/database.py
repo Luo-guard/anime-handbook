@@ -11,6 +11,7 @@ import os
 import re
 import sqlite3
 import tempfile
+import threading
 import uuid
 from datetime import timedelta
 from .concurrency import database_state
@@ -34,10 +35,15 @@ class HandbookDB:
         self._write_lock = self._state.write_lock
         self._connection_gate = self._state.gate
         self._revision_lock = self._state.revision_lock
+        self._transaction_local = threading.local()
         self.initialize()
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
+        current = getattr(self._transaction_local, "connection", None)
+        if current is not None:
+            yield current
+            return
         with self._connection_gate.read():
             connection = sqlite3.connect(self.path, timeout=15)
             try:
@@ -56,6 +62,23 @@ class HandbookDB:
                 raise
             finally:
                 connection.close()
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Join this instance's reads/writes into one thread-local transaction.
+
+        Only the outer connect commits and advances revision. Other threads keep
+        their own connections and cannot observe uncommitted settings.
+        """
+        if getattr(self._transaction_local, "connection", None) is not None:
+            raise RuntimeError("Nested transactions are not supported")
+        with self._write_lock, self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._transaction_local.connection = connection
+            try:
+                yield
+            finally:
+                del self._transaction_local.connection
 
     @property
     def revision(self) -> int:

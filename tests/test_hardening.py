@@ -21,6 +21,7 @@ from handbook import database, desktop, http, metadata
 from handbook.concurrency import ReadWriteGate
 from handbook.settings_service import normalize_settings
 from handbook.observability import record_failure
+from handbook import common
 
 
 class Profiles:
@@ -182,6 +183,110 @@ class WireTest(unittest.TestCase):
         settings = self.db.get_settings()
         normalized, _, _ = normalize_settings(settings, settings)
         self.assertEqual(normalized["builtin_collection_order"], settings["builtin_collection_order"])
+
+    def test_settings_autostart_failure_rolls_back_every_setting(self):
+        kazumi = self.root / "kazumi.hive"
+        self.db.set_setting("bound_kazumi_path", str(kazumi))
+        before, revision = self.db.get_settings(), self.db.revision
+        with patch.object(metadata.SyncService, "find_kazumi_database", return_value=kazumi), \
+             patch.object(common, "windows_startup_script", return_value=self.root / "startup.vbs"), \
+             patch.object(common, "configure_windows_autostart", side_effect=PermissionError("denied")):
+            status, _, _ = self.call("PATCH", "/api/settings", json.dumps({
+                "day_start_hour": 8, "launch_at_login": True,
+                "episode_balance_daily_target": 12, "active_bgm_source": "official"}))
+        self.assertEqual(status, 403)
+        self.assertEqual(self.db.get_settings(), before)
+        self.assertEqual(self.db.revision, revision)
+
+    def test_settings_failed_reply_build_restores_launcher_and_database(self):
+        kazumi, launcher = self.root / "kazumi.hive", self.root / "startup.vbs"
+        self.db.set_setting("bound_kazumi_path", str(kazumi))
+        # Existing / absent launchers and both enabling/disabling are reversible.
+        for original, enabled in [(b"old launcher", True), (None, True), (b"old launcher", False)]:
+            if original is None:
+                launcher.unlink(missing_ok=True)
+            else:
+                launcher.write_bytes(original)
+            before, revision = self.db.get_settings(), self.db.revision
+            with patch.object(metadata.SyncService, "find_kazumi_database", return_value=kazumi), \
+                 patch.object(common, "windows_startup_script", return_value=launcher), \
+                 patch.object(self.db, "stats", side_effect=RuntimeError("reply failure")):
+                status, _, _ = self.call("PATCH", "/api/settings", json.dumps({
+                    "day_start_hour": 7, "launch_at_login": enabled}))
+            self.assertEqual(status, 500)
+            self.assertEqual(self.db.get_settings(), before)
+            self.assertEqual(self.db.revision, revision)
+            self.assertEqual(launcher.read_bytes() if launcher.exists() else None, original)
+
+    def test_settings_late_sql_failure_restores_launcher(self):
+        kazumi, launcher = self.root / "kazumi.hive", self.root / "startup.vbs"
+        self.db.set_setting("bound_kazumi_path", str(kazumi))
+        launcher.write_bytes(b"old launcher")
+        with self.db.connect() as connection:
+            connection.execute("""CREATE TRIGGER reject_autostart BEFORE INSERT ON settings
+                WHEN NEW.key='autostart_active' BEGIN SELECT RAISE(ABORT,'audit'); END""")
+        before, revision = self.db.get_settings(), self.db.revision
+        with patch.object(metadata.SyncService, "find_kazumi_database", return_value=kazumi), \
+             patch.object(common, "windows_startup_script", return_value=launcher):
+            status, _, _ = self.call("PATCH", "/api/settings", json.dumps({
+                "day_start_hour": 7, "launch_at_login": True}))
+        self.assertEqual(status, 500)
+        self.assertEqual(self.db.get_settings(), before)
+        self.assertEqual(self.db.revision, revision)
+        self.assertEqual(launcher.read_bytes(), b"old launcher")
+
+    def test_settings_success_commits_once_including_derived_settings(self):
+        revision = self.db.revision
+        status, raw, _ = self.call("PATCH", "/api/settings", json.dumps({
+            "day_start_hour": 7, "episode_balance_initial": 42,
+            "episode_balance_daily_target": 12, "active_bgm_source": "official"}))
+        self.assertEqual(status, 200, raw)
+        saved = json.loads(raw)["settings"]
+        self.assertEqual(saved["episode_balance_initial"], 42)
+        self.assertEqual(saved["episode_balance_daily_target"], 12)
+        self.assertEqual(saved["bgm_api_base"], "https://api.bgm.tv")
+        self.assertEqual(self.db.revision, revision + 1)
+
+    def test_settings_commit_failure_rolls_back_and_restores_launcher(self):
+        kazumi, launcher = self.root / "kazumi.hive", self.root / "startup.vbs"
+        self.db.set_setting("bound_kazumi_path", str(kazumi))
+        launcher.write_bytes(b"old launcher")
+        before, revision = self.db.get_settings(), self.db.revision
+        original_connect = sqlite3.connect
+        class FailingCommit(sqlite3.Connection):
+            def commit(self):
+                raise sqlite3.OperationalError("simulated commit failure")
+        def connect(*args, **kwargs):
+            return original_connect(*args, **kwargs, factory=FailingCommit)
+        with patch.object(metadata.SyncService, "find_kazumi_database", return_value=kazumi), \
+             patch.object(common, "windows_startup_script", return_value=launcher), \
+             patch.object(database.sqlite3, "connect", side_effect=connect):
+            status, _, _ = self.call("PATCH", "/api/settings", json.dumps({
+                "day_start_hour": 7, "launch_at_login": True}))
+        self.assertEqual(status, 500)
+        self.assertEqual(self.db.get_settings(), before)
+        self.assertEqual(self.db.revision, revision)
+        self.assertEqual(launcher.read_bytes(), b"old launcher")
+
+    def test_settings_pending_changes_are_invisible_to_other_connections(self):
+        peer = database.HandbookDB(self.db.path, asset_root=self.root)
+        entered, release = threading.Event(), threading.Event()
+        original_stats = self.db.stats
+        def waiting_stats():
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError("test release timeout")
+            return original_stats()
+        before = peer.get_settings()["day_start_hour"]
+        with patch.object(self.db, "stats", side_effect=waiting_stats), ThreadPoolExecutor(1) as pool:
+            saving = pool.submit(self.call, "PATCH", "/api/settings", '{"day_start_hour":7}')
+            try:
+                self.assertTrue(entered.wait(3))
+                self.assertEqual(peer.get_settings()["day_start_hour"], before)
+            finally:
+                release.set()
+            self.assertEqual(saving.result(timeout=5)[0], 200)
+        self.assertEqual(peer.get_settings()["day_start_hour"], 7)
 
 
 class DataLoadTest(unittest.TestCase):

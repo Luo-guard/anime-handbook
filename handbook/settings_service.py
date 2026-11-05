@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 import re
 import copy
+from contextlib import ExitStack
 import os
-from .common import (CATEGORY_NAMES, normalize_schedule_grouping, normalize_detail_links, normalize_custom_search_links, normalize_link_sync, normalize_bgm_sources, configure_windows_autostart)
+from .common import (CATEGORY_NAMES, normalize_schedule_grouping, normalize_detail_links, normalize_custom_search_links, normalize_link_sync, normalize_bgm_sources, windows_autostart_change)
 from .shortcuts import normalize_shortcuts
 from .metadata import SyncService
 
@@ -361,7 +362,7 @@ def normalize_settings(body, settings):
         raise ValueError("设置内容格式不正确") from error
 
 
-def save_settings(self, body):
+def _save_settings_values(self, body, effects):
     pending_settings, balance_initial, balance_daily_target = normalize_settings(body, self.database.get_settings())
     # 收集完一次写入：逐键提交时 61 个键要开 61 次连接、61 个事务。
     self.database.set_settings(pending_settings)
@@ -394,20 +395,28 @@ def save_settings(self, body):
             == os.path.normcase(os.path.abspath(bound_kazumi))
         )
         if matches_local:
-            active = configure_windows_autostart(
+            active = effects.enter_context(windows_autostart_change(
                 bool(settings.get("launch_at_login"))
-            )
+            ))
             self.database.set_setting("autostart_active", active)
         else:
             # Never alter the computer's launcher for a profile bound to
             # another Kazumi database.
             self.database.set_setting("autostart_active", False)
-    self.send_json(
-        {
-            "ok": True,
-            "settings": self.database.get_settings(),
-            "stats": self.database.stats(),
-            "animes": self.database.list_anime(),
-            "custom_collections": self.database.list_custom_collections(),
-        }
-    )
+    return {
+        "ok": True,
+        "settings": self.database.get_settings(),
+        "stats": self.database.stats(),
+        "animes": self.database.list_anime(),
+        "custom_collections": self.database.list_custom_collections(),
+    }
+
+
+def save_settings(self, body):
+    # External launcher changes remain reversible until the DB commit succeeds.
+    # Build the reply inside the transaction too: a failed stats/list query must
+    # not turn a rejected save into partially persisted settings.
+    with ExitStack() as effects:
+        with self.database.transaction():
+            response = _save_settings_values(self, body, effects)
+    self.send_json(response)
