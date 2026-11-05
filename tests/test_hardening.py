@@ -168,6 +168,22 @@ class WireTest(unittest.TestCase):
         self.assertEqual(self.call("GET","/api/health")[0],200)
 
 
+    def test_collection_order_settings_save_and_persist(self):
+        body = {"builtin_collection_order": [5, 3, 1],
+                "show_collection_add_button": False}
+        status, payload, _ = self.call("PATCH", "/api/settings", json.dumps(body))
+        self.assertEqual(status, 200, payload)
+        saved = json.loads(payload)["settings"]
+        self.assertEqual(saved["builtin_collection_order"], [5, 3, 1, 2, 4])
+        self.assertFalse(saved["show_collection_add_button"])
+        self.assertEqual(self.db.get_settings()["builtin_collection_order"], [5, 3, 1, 2, 4])
+
+    def test_complete_settings_form_normalizes_collection_order(self):
+        settings = self.db.get_settings()
+        normalized, _, _ = normalize_settings(settings, settings)
+        self.assertEqual(normalized["builtin_collection_order"], settings["builtin_collection_order"])
+
+
 class DataLoadTest(unittest.TestCase):
     def test_large_collection_timeline_and_cover_query(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -228,6 +244,7 @@ class DataLoadTest(unittest.TestCase):
         self.assertEqual(json.dumps(settings,sort_keys=True),before)
         self.assertFalse(normalized["schedule_card_fields"]["tags"])
         with self.assertRaises(ValueError):normalize_settings({"schedule_grouping":{"mode":"bad"}},settings)
+
 
 
 if __name__ == "__main__":unittest.main()

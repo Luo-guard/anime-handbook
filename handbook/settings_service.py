@@ -4,7 +4,7 @@ from typing import Any
 import re
 import copy
 import os
-from .common import (normalize_schedule_grouping, normalize_detail_links, normalize_custom_search_links, normalize_link_sync, normalize_bgm_sources, configure_windows_autostart)
+from .common import (CATEGORY_NAMES, normalize_schedule_grouping, normalize_detail_links, normalize_custom_search_links, normalize_link_sync, normalize_bgm_sources, configure_windows_autostart)
 from .shortcuts import normalize_shortcuts
 from .metadata import SyncService
 
