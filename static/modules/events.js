@@ -613,7 +613,7 @@ $("#deleteBgmSourceButton").addEventListener("click", async () => {
 $("#themeProfileGrid").addEventListener("click", (event) => {
   const pick = event.target.closest("[data-theme-pick]");
   if (pick) {
-    activateThemeProfile(pick.dataset.themePick).catch((error) => toast(error.message, "error"));
+    activateThemeProfile(pick.dataset.themePick).then(() => ThemeSettingsSession.inspect()).catch((error) => toast(error.message, "error"));
     return;
   }
   const edit = event.target.closest("[data-theme-edit]");

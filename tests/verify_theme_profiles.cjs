@@ -100,14 +100,33 @@ const server = http.createServer((req, res) => {
   await page.click('#settingsButton');await page.waitForSelector('#settingsModal[open]');
   assert.equal(await page.locator('.main-settings-section').count(),0);
   assert.deepEqual((await page.locator('.settings-subsection-title').allTextContents()).slice(0,4),['主题外观','主题自动切换','侧边栏与页面','启动与后台']);
-  assert.equal(await page.locator('#themePagePreview').isVisible(),false);
+  await page.locator('#dayStartInput').evaluate(e=>e.value='8');
   await page.click('[data-theme-pick="night"]');
   assert.equal(SETTINGS.active_theme_profile,'default');assert.equal(patches.length,0);
   assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'night');
-  assert(await page.locator('#themePreviewStatus').isVisible());
-  await page.click('#themePagePreview');await page.waitForSelector('#settingsModal:not([open])',{state:'attached'});
+  await page.waitForSelector('#settingsModal:not([open])',{state:'attached'});
   assert(await page.locator('#themePagePreviewBar').isVisible());
-  await page.click('#themePreviewReturn');assert(await page.locator('#settingsModal').isVisible());
+  await page.screenshot({path:require('path').join(require('os').tmpdir(),'handbook-direct-theme-preview.png')});
+  assert.deepEqual(await page.locator('#themePagePreviewBar button').allTextContents(),['取消预览','保存设置']);
+  for(const width of [390,320]){
+    await page.setViewportSize({width,height:844});
+    const bounds=await page.locator('#themePagePreviewBar').boundingBox();
+    assert(bounds.x>=0&&bounds.x+bounds.width<=width);
+  }
+  await page.setViewportSize({width:1280,height:900});
+
+  await page.click('#themePreviewCancel');assert(await page.locator('#settingsModal').isVisible());
+  assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'default');
+  assert.equal(await page.locator('#dayStartInput').inputValue(),'8');
+  // Escape also cancels back to settings, without committing the theme.
+  await page.click('[data-theme-pick="night"]');await page.keyboard.press('Escape');
+  assert(await page.locator('#settingsModal').isVisible());
+  assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'default');
+  // Failed preview saves keep the preview and allow retry/cancel.
+  failSettings=true;await page.click('[data-theme-pick="night"]');
+  await page.click('#themePreviewSave');await page.waitForFunction(()=>!ThemeSettingsSession.busy);
+  assert(await page.locator('#themePreviewSave').isVisible());assert.equal(SETTINGS.active_theme_profile,'default');
+  await page.click('#themePreviewCancel');failSettings=false;
   await page.click('#settingsModal .modal-close');await page.waitForTimeout(80);
   assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'default');
   assert.equal(patches.length,0);
@@ -126,10 +145,13 @@ const server = http.createServer((req, res) => {
   await page.click('#settingsModal .modal-close');await page.waitForTimeout(80);
   assert.equal(await page.evaluate(()=>state.settings.custom_background_enabled),false);
   // Selection and automatic switching commit together through the outer save.
-  failSettings=false;await page.click('#settingsButton');await page.click('[data-theme-pick="night"]');
+  failSettings=false;await page.click('#settingsButton');
   await page.locator('#themeRandomOnOpenInput').evaluate(e=>{e.checked=true;e.dispatchEvent(new Event('change',{bubbles:true}))});
   assert.equal(SETTINGS.theme_random_on_open,false);assert.equal(patches.length,0);
-  await page.click('#saveSettings');await page.waitForSelector('#settingsModal:not([open])',{state:'attached'});
+  await page.click('[data-theme-pick="night"]');
+  assert(await page.locator('#themePreviewSave').isVisible());
+  assert.equal(await page.locator('#themePagePreviewBar button').count(),2);
+  await page.click('#themePreviewSave');await page.waitForFunction(()=>!ThemeSettingsSession.active);
   assert.equal(SETTINGS.active_theme_profile,'night');assert.equal(SETTINGS.theme_random_on_open,true);
   await page.reload();await page.waitForSelector('#settingsButton');assert.equal(await page.evaluate(()=>state.settings.active_theme_profile),'night');
   // A later staged image saves to a new identity, then survives reload.

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261105-main-settings-flat" />
+  <link rel="stylesheet" href="/styles.css?v=20261105-preview-actions" />
   </head>
   <body>
     <div class="app-shell">
@@ -883,7 +883,7 @@
           </div>
         </div>
         <div class="modal-actions">
-          <span id="themePreviewStatus" class="theme-preview-status" hidden>预览中 · 尚未保存</span><button type="button" class="secondary-button" id="themePagePreview" hidden>查看页面效果</button><button class="primary-button" type="button" id="saveSettings">保存设置</button>
+          <button class="primary-button" type="button" id="saveSettings">保存设置</button>
         </div>
       </form>
     </dialog>
@@ -1050,7 +1050,7 @@
         <div class="modal-actions"><button type="button" class="secondary-button" id="videoCaptureCancel">取消</button><button type="submit" class="primary-button" id="videoCaptureSave" disabled>保存</button></div>
       </form>
     </dialog>
-    <div id="themePagePreviewBar" popover="manual"><span>主题预览 · 尚未保存</span><button type="button" id="themePreviewReturn">返回设置</button><button type="button" id="themePreviewCancel">取消预览</button></div>
+    <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
     <script src="/schedule.js?v=20261105-schedule-corners" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
@@ -1066,10 +1066,10 @@
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261104-airing-refresh" defer></script>
     <script src="/modules/settings.js?v=20261105-theme-preview" defer></script>
-    <script src="/modules/theme-session.js?v=20261105-preview" defer></script>
+    <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261105-theme-preview" defer></script>
-    <script src="/modules/events.js?v=20261105-theme-preview" defer></script>
+    <script src="/modules/events.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

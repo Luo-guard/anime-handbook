@@ -6,7 +6,7 @@ const ThemeSettingsSession = (() => {
   const clone=value=>JSON.parse(JSON.stringify(value));
   const fields=()=>Object.fromEntries(keys.filter(key=>key in state.settings).map(key=>[key,clone(state.settings[key])]));
   function begin(){if(snapshot)return;snapshot=fields();account=themeAccountId();selectedId=activeThemeId();files.clear();previews.clear();sources.clear();update();}
-  function update(){const dirty=snapshot&&(files.size>0||sources.size>0||JSON.stringify(fields())!==JSON.stringify(snapshot));$('#themePreviewStatus').hidden=!dirty;$('#themePagePreview').hidden=!dirty;}
+  function update(){$('#themePreviewSave').disabled=busy;$('#themePreviewCancel').disabled=busy;}
   function apply(){const id=activeThemeId();window.handbookThemePreview=previews.has(id)?{backgroundUrl:previews.get(id)}:null;applyTheme();update();}
   function stage(id,file,url,source,enabled){
     if(!enabled){files.delete(id);previews.delete(id);sources.delete(id);return;}
@@ -19,7 +19,7 @@ const ThemeSettingsSession = (() => {
     if(!accepted&&account===themeAccountId()){for(const key of keys){if(key in snapshot)state.settings[key]=clone(snapshot[key]);else delete state.settings[key];}}
     snapshot=null;suspended=false;files.clear();previews.clear();sources.clear();window.handbookThemePreview=null;$('#themePagePreviewBar').hidePopover();applyTheme();update();
   }
-  function lock(value){busy=value;$('.settings-list').inert=value;$('#settingsModal .modal-close').disabled=value;}
+  function lock(value){busy=value;$('.settings-list').inert=value;$('#settingsModal .modal-close').disabled=value;update();}
   async function payload(){
     if(!snapshot||(!files.size&&!sources.size&&JSON.stringify(fields())===JSON.stringify(snapshot)))return {};
     if((files.size||sources.size)&&!(await api('/api/health')).features?.deferred_theme_background)throw Error('保存背景预览需要重启手账后台并刷新页面');
@@ -47,9 +47,17 @@ const ThemeSettingsSession = (() => {
   function restoreSelection(){const profile=themeProfiles().find(p=>p.id===selectedId);if(profile){Object.assign(state.settings,profileAppearance(profile),{active_theme_profile:selectedId});apply();}}
   function inspect(){suspended=true;$('#settingsModal').close();$('#themePagePreviewBar').showPopover();}
   function resume(){suspended=false;$('#themePagePreviewBar').hidePopover();$('#settingsModal').showModal();}
-  $('#settingsModal').addEventListener('close',()=>{if(!suspended)finish(false)});
+  $('#settingsModal').addEventListener('close',()=>{if(!suspended&&!$('#settingsModal').open)finish(false)});
   $('#settingsModal').addEventListener('cancel',event=>{if(busy)event.preventDefault()});
-  $('#themePagePreview').onclick=inspect;$('#themePreviewReturn').onclick=resume;$('#themePreviewCancel').onclick=()=>finish(false);
-  document.addEventListener('keydown',event=>{if(suspended&&event.key==='Escape'){event.preventDefault();finish(false)}});
-  return {begin,update,apply,stage,payload,lock,finish,resume,select,restoreSelection,incoming:value=>(snapshot&&account===themeAccountId()?{...value,...fields()}:value),background:profile=>previews.get(profile.id)||themeBackgroundUrl(profile),get active(){return !!snapshot},get suspended(){return suspended},get busy(){return busy}};
+  function cancelPreview(){
+    if(busy)return;
+    finish(false);begin();resume();
+    renderThemeProfiles();renderThemeWeeklyPlan();
+    $('#themeRandomOnOpenInput').checked=Boolean(state.settings.theme_random_on_open);
+    $('#themeWeeklyPlanEnabledInput').checked=Boolean(state.settings.theme_weekly_plan_enabled);
+  }
+  $('#themePreviewCancel').onclick=cancelPreview;
+  $('#themePreviewSave').onclick=()=>HandbookSettings.save();
+  document.addEventListener('keydown',event=>{if(suspended&&event.key==='Escape'){event.preventDefault();cancelPreview()}});
+  return {begin,update,apply,stage,payload,lock,finish,resume,inspect,select,restoreSelection,incoming:value=>(snapshot&&account===themeAccountId()?{...value,...fields()}:value),background:profile=>previews.get(profile.id)||themeBackgroundUrl(profile),get active(){return !!snapshot},get suspended(){return suspended},get busy(){return busy}};
 })();

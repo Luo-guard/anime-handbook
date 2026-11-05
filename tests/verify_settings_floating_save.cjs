@@ -7,8 +7,8 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  await page.evaluate(()=>{const spacer=document.createElement('div');spacer.style.height='5000px';document.querySelector('.settings-list').append(spacer);document.querySelector('#settingsModal').showModal()});
  for(const [width,height] of [[1920,1080],[1100,700],[390,844],[320,640]]){
   await page.setViewportSize({width,height});
-  for(const preview of [false,true]){
-   await page.evaluate(enabled=>{document.querySelector('#themePreviewStatus').hidden=!enabled;document.querySelector('#themePagePreview').hidden=!enabled},preview);
+  for(const preview of [false]){
+   const surface=await page.locator('#saveSettings').evaluate(e=>{const s=getComputedStyle(e.parentElement);return [s.backgroundColor,s.borderTopWidth,s.boxShadow]});assert.deepEqual(surface,['rgba(0, 0, 0, 0)','0px','none']);
    let initial;
    for(const fraction of [0,.5,1]){
     await page.evaluate(f=>{const modal=document.querySelector('#settingsModal');modal.scrollTop=f*(modal.scrollHeight-modal.clientHeight)},fraction);
