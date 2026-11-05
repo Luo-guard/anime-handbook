@@ -40,7 +40,8 @@ const harness = [
 
     // Removed section copy stays removed instead of becoming a hidden tooltip.
     assert.equal(await page.locator('.settings-lead').count(),0);
-    assert.equal(await page.locator('.main-settings-section>summary').count(),4);
+    assert.equal(await page.locator('.main-settings-section').count(),0);
+    assert.deepEqual((await page.locator('.settings-subsection-title').allTextContents()).slice(0,4),['主题外观','主题自动切换','侧边栏与页面','启动与后台']);
     assert(!await page.locator('#settingsModal').textContent().then(text=>text.includes('点卡片立即切换')));
 
     // 共享/同步的编号步骤说明同样收起。

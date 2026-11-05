@@ -16,3 +16,27 @@
 .guest-mode .ranking-drop-hint{display:none}.guest-mode .ranking-tier-name:disabled{opacity:1;color:inherit;-webkit-text-fill-color:currentColor}
 
 .online-mode .desktop-only { display: none !important; }
+
+/* UI review edition: account entry follows the same quiet visual hierarchy. */
+.login-page { color:#24313b; font-family:"Microsoft YaHei UI","PingFang SC",system-ui,sans-serif; background:#f3f6f8; }
+.login-card { width:min(440px,calc(100% - 32px)); padding:36px; border:1px solid #dfe4e8; border-radius:18px; background:white; box-shadow:0 12px 50px #16222e0b; }
+.login-mark { width:46px; height:46px; border-radius:12px; background:#e6ece9; color:#345344; }
+.login-eyebrow { display:none; }
+.login-card h1 { margin-top:22px; font-family:inherit; font-size:27px; line-height:1.4; letter-spacing:0; }
+.login-intro,.login-card small { color:#65717b; font-size:12px; line-height:1.8; }
+.login-card label { margin-top:18px; font-size:13px; font-weight:600; }
+.login-card input { min-height:44px; padding:11px 13px; border-color:#dfe4e8; border-radius:9px; background:#fff; }
+.login-card button { min-height:44px; border-radius:9px; font-size:13px; font-weight:600; background:#3e4d5e; transition:background-color 140ms ease; }
+.login-card button:hover { background:#4a596b; }
+.login-card .auth-tabs { padding:4px; gap:4px; border-radius:10px; background:#f0f3f6; }
+.login-card .auth-tabs button { min-height:36px; padding:8px; color:#65717b; }
+.login-card .auth-tabs button[aria-pressed="true"] { color:#24313b; background:white; box-shadow:0 1px 5px #16222e0c; }
+.login-card #guestLogin { color:#3e4d5e; border-color:#dfe4e8; }
+.login-card #guestLogin:hover { background:#f3f6f9; }
+.login-card :where(button,input,a):focus-visible { outline:2px solid #58677a; outline-offset:3px; }
+.online-dialog { border:1px solid #dfe4e8; border-radius:16px; padding:26px; background:#fafbfd; color:#24313b; }
+.online-dialog input,.online-dialog select { border-color:#dfe4e8; border-radius:9px; font:inherit; }
+.online-account button { border-radius:7px; }
+.guest-banner { border:1px solid #dce5e1; border-radius:10px; background:#f2f7f4; font-size:12px; }
+@media(max-width:600px){.login-card{padding:28px 24px}.login-card h1{font-size:25px}}
+@media(prefers-reduced-motion:reduce){.login-card button{transition:none}}

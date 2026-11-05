@@ -60,6 +60,12 @@ class OnlineTest(unittest.TestCase):
         conn.close()
         return status, result, response_headers
 
+    def test_ui_review_stylesheet_is_served_as_css(self):
+        status, raw, headers = self.call("GET", "/ui-refresh.css", client=self.alice)
+        self.assertEqual(status, 200)
+        self.assertIn("text/css", headers["Content-Type"])
+        self.assertIn(b"--ui-font", raw)
+
     def test_html_initial_appearance_is_private_and_account_scoped(self):
         self.services("alice").database.set_setting("theme_color", "slate")
         self.services("bobby").database.set_setting("theme_color", "custom")
