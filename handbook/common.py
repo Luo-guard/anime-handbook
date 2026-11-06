@@ -583,7 +583,7 @@ def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str
 
 
 MAX_DETAIL_LINKS = 12
-DETAIL_LINK_KINDS = {"bgm", "bilibili", "custom", "saved_video"}
+DETAIL_LINK_KINDS = {"bgm", "bilibili", "custom", "saved_video", "rules_menu"}
 
 
 def normalize_detail_links(value: Any) -> list[dict[str, Any]]:
@@ -608,12 +608,13 @@ def normalize_detail_links(value: Any) -> list[dict[str, Any]]:
         enabled = item.get("enabled", True)
         if type(enabled) is not bool:
             raise ValueError("详情页链接开关无效")
-        if kind == "saved_video":
-            # 已存视频入口指向“默认视频”，网址由收藏里的视频决定，不单独保存。
-            name = name or "已存视频"
+        if kind in ("saved_video", "rules_menu"):
+            # 两个内置入口都没有自己的网址：已存视频指向默认视频，总链接点开是规则站点列表。
+            name = name or ("已存视频" if kind == "saved_video" else "更多站点")
             if len(name) > 30:
                 raise ValueError("详情页链接的名称或网址过长")
-            links.append({"id": str(item.get("id") or "").strip()[:64] or "saved-video", "kind": kind, "name": name, "url": "", "enabled": enabled})
+            default_id = "saved-video" if kind == "saved_video" else "rules-menu"
+            links.append({"id": str(item.get("id") or "").strip()[:64] or default_id, "kind": kind, "name": name, "url": "", "enabled": enabled})
             continue
         if not name or not url:
             raise ValueError("详情页链接需要名称和网址")

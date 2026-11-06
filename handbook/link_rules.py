@@ -127,11 +127,17 @@ def load_cache(path: Path) -> dict[str, Any]:
 
 def refresh(path: Path, timeout: float = REQUEST_TIMEOUT) -> dict[str, Any]:
     items = fetch_rules(timeout=timeout)
+    # 和上一份缓存对比，告诉用户这次多了/少了哪些站点；固定过的链接不受影响。
+    previous = load_cache(path)
+    old_ids = {str(item.get("id")) for item in previous.get("items") or [] if isinstance(item, dict)}
+    new_ids = {str(item.get("id")) for item in items}
     document = {
         "items": items,
         "fetched_at": int(time.time()),
         "source": SOURCE_LABEL,
         "error": "",
+        "added": len(new_ids - old_ids) if old_ids else 0,
+        "removed": len(old_ids - new_ids),
     }
     target = Path(path)
     try:
@@ -156,4 +162,6 @@ def payload(document: dict[str, Any], limit: int, *, now: float | None = None) -
         "stale": bool(fetched_at) and current - fetched_at > CACHE_TTL,
         "limit": limit,
         "error": str(document.get("error") or ""),
+        "added": int(document.get("added") or 0),
+        "removed": int(document.get("removed") or 0),
     }

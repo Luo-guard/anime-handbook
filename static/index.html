@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-link-rules" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-rules-menu" />
   </head>
   <body>
     <div class="app-shell">
@@ -282,6 +282,19 @@
       </div>
     </div>
 
+    <dialog class="modal rules-menu-dialog" id="rulesMenuModal">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="rulesMenuClose" aria-label="关闭">×</button>
+        <p class="eyebrow">MORE SOURCES</p>
+        <h2 id="rulesMenuHeading">选择站点</h2>
+        <p class="page-subtitle" id="rulesMenuTitle">点一个站点就在新标签里搜索这部番。</p>
+        <div class="rules-toolbar">
+          <input type="search" id="rulesMenuSearch" placeholder="搜索站点名或域名" aria-label="搜索站点" autocomplete="off" />
+        </div>
+        <p class="rules-status" id="rulesMenuStatus" role="status"></p>
+        <div class="rules-list" id="rulesMenuList"></div>
+      </div>
+    </dialog>
     <dialog class="modal progress-modal" id="progressModal">
       <form method="dialog" class="modal-frame" id="progressForm">
         <button class="modal-close" value="cancel" aria-label="关闭">×</button>
@@ -629,8 +642,10 @@
             <div class="detail-link-actions">
               <button type="button" class="secondary-button compact-button" id="addDetailLink">新增链接</button>
               <button type="button" class="secondary-button compact-button" id="addDetailLinkFromRules">从 Kazumi 规则仓库导入</button>
+              <button type="button" class="secondary-button compact-button" id="refreshRuleCatalog">检查规则更新</button>
               <button type="button" class="secondary-button compact-button" id="resetDetailLinks">恢复预设</button>
             </div>
+            <small class="setting-status" id="ruleCatalogStatus">规则站点尚未获取</small>
           </div>
           <label class="setting-row">
             <span>
@@ -1097,17 +1112,18 @@
     <script src="/modules/presentation.js?v=20261105-as-progress" defer></script>
     <script src="/modules/collection-cards.js?v=20261104-hardening" defer></script>
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
-    <script src="/modules/video-links.js?v=20261106-link-order" defer></script>
+    <script src="/modules/video-links.js?v=20261106-rules-menu" defer></script>
+    <script src="/modules/rules-menu.js?v=20261106-rules-menu" defer></script>
     <script src="/modules/details.js?v=20261105-record-time" defer></script>
     <script src="/modules/records.js?v=20261106-timeline-defaults" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261105-as-calendar" defer></script>
-    <script src="/modules/settings.js?v=20261106-link-rules" defer></script>
+    <script src="/modules/settings.js?v=20261106-rules-menu" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261106-link-order" defer></script>
-    <script src="/modules/events.js?v=20261106-link-rules" defer></script>
+    <script src="/modules/events.js?v=20261106-rules-menu" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

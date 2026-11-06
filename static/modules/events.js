@@ -762,3 +762,8 @@ if ($("#addDetailLinkFromRules")) {
   });
   $("#linkRulesAdd").addEventListener("click", () => addSelectedLinkRules());
 }
+
+// 设置里的「检查规则更新」：只在你主动点击时联网，平时全部用本地缓存。
+if ($("#refreshRuleCatalog")) {
+  $("#refreshRuleCatalog").addEventListener("click", () => refreshLinkCatalog());
+}

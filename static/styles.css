@@ -3719,3 +3719,17 @@ dialog::backdrop {
 @media(max-width:650px){#themePagePreviewBar{right:16px;bottom:16px;gap:10px}}
 
 
+
+/* 详情页「更多站点」：一条内置链接，点开是规则站点列表。 */
+.detail-link-menu { border: 0; padding: 0; background: transparent; font: inherit; font-size: inherit; color: var(--green-800); cursor: pointer; }
+.detail-link-menu:hover, .detail-link-menu:focus-visible { text-decoration: underline; }
+.rules-menu-dialog .modal-frame { width: min(520px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
+.rules-menu-row { display: flex; align-items: center; gap: 6px; border-radius: 9px; }
+.rules-menu-row:hover { background: var(--green-50); }
+.rules-menu-open { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 9px; padding: 8px 10px; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.rules-menu-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rules-menu-host { margin-left: auto; flex: 0 0 auto; color: var(--muted); font-size: 11px; font-family: ui-monospace, "Cascadia Code", monospace; }
+.rules-menu-pin { flex: 0 0 auto; width: 34px; height: 30px; margin-right: 4px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; }
+.rules-menu-pin:hover:not(:disabled) { border-color: var(--active-inset); color: var(--green-800); background: var(--green-50); }
+.rules-menu-pin:disabled { opacity: .5; cursor: default; }
+@media (max-width: 650px) { .rules-menu-host { display: none; } }

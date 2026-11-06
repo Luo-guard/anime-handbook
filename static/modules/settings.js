@@ -14,7 +14,7 @@ function detailLinksFromDom() {
   }));
 }
 function readDetailLinks() {
-  return detailLinksFromDom().filter((link) => link.kind === "saved_video" || (link.name && link.url));
+  return detailLinksFromDom().filter((link) => ["saved_video", "rules_menu"].includes(link.kind) || (link.name && link.url));
 }
 function commitDetailLinks(links) {
   state.settings.detail_links = links;
@@ -37,7 +37,7 @@ function linkRowsFromDom(kind) {
   }));
 }
 function readLinkList(kind) {
-  return linkRowsFromDom(kind).filter((link) => link.kind === "saved_video" || (link.name && link.url));
+  return linkRowsFromDom(kind).filter((link) => ["saved_video", "rules_menu"].includes(link.kind) || (link.name && link.url));
 }
 function commitLinkList(kind, links) {
   state.settings[LINK_EDITORS[kind].setting] = links;
@@ -50,12 +50,12 @@ function editableLinks(kind) {
   if (!Array.isArray(saved)) return config.source();
   const rows = saved.map((item) => ({
     id: String(item?.id || "") || detailLinkId(),
-    kind: ["bgm", "bilibili", "saved_video"].includes(item?.kind) ? item.kind : "custom",
+    kind: ["bgm", "bilibili", "saved_video", "rules_menu"].includes(item?.kind) ? item.kind : "custom",
     name: String(item?.name ?? ""),
     url: String(item?.url ?? ""),
     enabled: item?.enabled !== false,
   }));
-  return kind === "detail" ? withSavedVideoLink(rows) : rows;
+  return kind === "detail" ? withBuiltinDetailLinks(rows) : rows;
 }
 function renderLinkList(kind) {
   const config = LINK_EDITORS[kind];
@@ -79,6 +79,11 @@ function renderLinkList(kind) {
       url = document.createElement("span");
       url.className = "detail-link-auto";
       url.textContent = "自动使用默认已存视频";
+    } else if (link.kind === "rules_menu") {
+      // 总链接点开才是站点列表，本身没有网址。
+      url = document.createElement("span");
+      url.className = "detail-link-auto";
+      url.textContent = "点击详情页按钮展开站点列表";
     } else {
       url = document.createElement("input");
       url.type = "text";
@@ -116,11 +121,12 @@ function renderLinkList(kind) {
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "secondary-button compact-button";
-    if (link.kind === "saved_video") {
+    if (link.kind === "saved_video" || link.kind === "rules_menu") {
+      const label = link.kind === "saved_video" ? "已存视频" : "更多站点";
       remove.textContent = "固定";
       remove.disabled = true;
-      remove.title = "已存视频入口固定存在，可用左侧开关隐藏";
-      remove.setAttribute("aria-label", "已存视频入口固定，不能删除");
+      remove.title = `${label}入口固定存在，可用左侧开关隐藏`;
+      remove.setAttribute("aria-label", `${label}入口固定，不能删除`);
     } else {
       remove.textContent = "删除";
       remove.setAttribute("aria-label", `删除链接 ${String(link.name || "").trim()}`);
@@ -167,7 +173,7 @@ function detailLinksFromDom() { return linkRowsFromDom("detail"); }
 function readDetailLinks() { return readLinkList("detail"); }
 function readScheduleDetailLinks() { return readLinkList("schedule"); }
 function commitDetailLinks(links) { commitLinkList("detail", links); }
-function renderDetailLinkSettings() { renderLinkList("detail"); }
+function renderDetailLinkSettings() { renderLinkList("detail"); updateRuleCatalogStatus(); }
 function renderScheduleDetailLinkSettings() { renderLinkList("schedule"); }
 
 // 自定义收藏夹管理：改名、删除、以及映射到哪个 Kazumi 收藏夹。
@@ -1075,9 +1081,59 @@ function updateLinkRulesStatus() {
   }
 }
 
+function updateRuleCatalogStatus() {
+  const status = $("#ruleCatalogStatus");
+  if (!status) return;
+  const count = linkRulesState.items.length;
+  const stamp = Number(linkRulesState.fetchedAt) || 0;
+  if (!count) {
+    status.textContent = "规则站点尚未获取，点「检查规则更新」拉取一次";
+    status.classList.remove("is-ok");
+    return;
+  }
+  const when = stamp
+    ? new Date(stamp * 1000).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "";
+  status.textContent = `已保存 ${count} 个规则站点${when ? ` · 上次更新 ${when}` : ""}；平时只用本地这份，不会自动联网`;
+  status.classList.add("is-ok");
+}
+
+async function refreshLinkCatalog() {
+  const button = $("#refreshRuleCatalog");
+  const label = button ? button.textContent : "";
+  const firstTime = !Number(linkRulesState.fetchedAt);
+  if (button) { button.disabled = true; button.textContent = "检查中…"; }
+  try {
+    const payload = await api("/api/link-rules/refresh", { method: "POST", body: "{}" });
+    linkRulesState.items = Array.isArray(payload.items) ? payload.items : [];
+    linkRulesState.fetchedAt = Number(payload.fetched_at) || 0;
+    linkRulesState.limit = Number(payload.limit) || LINK_RULES_FALLBACK_LIMIT;
+    linkRulesState.error = "";
+    const total = linkRulesState.items.length;
+    if (firstTime) {
+      toast(`已获取 ${total} 个规则站点，保存在本机`);
+    } else {
+      const added = Number(payload.added) || 0;
+      const removed = Number(payload.removed) || 0;
+      toast(added || removed
+        ? `规则已更新：新增 ${added} 个${removed ? `，移除 ${removed} 个` : ""}，现有 ${total} 个`
+        : `规则已是最新，现有 ${total} 个站点`);
+    }
+    updateRuleCatalogStatus();
+    renderLinkRules();
+  } catch (error) {
+    linkRulesState.error = error.message;
+    toast(error.message, "error");
+    updateRuleCatalogStatus();
+  } finally {
+    if (button) { button.disabled = false; button.textContent = label || "检查规则更新"; }
+  }
+}
+
 function renderLinkRules() {
   const list = $("#linkRulesList");
   if (!list) return;
+  updateRuleCatalogStatus();
   updateLinkRulesStatus();
   if (linkRulesState.loading) {
     list.innerHTML = `<p class="rules-empty">正在从规则仓库读取站点列表…</p>`;
