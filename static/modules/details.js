@@ -188,7 +188,7 @@ async function ensureEpisodeTitles(anime) {
     });
     const latest = result.anime;
     if (!latest) return;
-    state.animes = state.animes.map((item) => item.id === latest.id ? latest : item);
+    commitAnimes(state.animes.map((item) => item.id === latest.id ? latest : item), { render: false });
     if (state.progressAnime?.id === latest.id) {
       state.progressAnime = latest;
       state.pendingEpisodes = new Set(
@@ -331,6 +331,7 @@ async function updateCustomMembership(collectionId, checked) {
     if (result.anime) {
       const index = state.animes.findIndex((item) => item.id === result.anime.id);
       if (index >= 0) state.animes[index] = result.anime;
+      commitAnimes(state.animes, { render: false });
       if (state.progressAnime?.id === result.anime.id) state.progressAnime = result.anime;
       if (state.moveAnime?.id === result.anime.id) state.moveAnime = result.anime;
     }
@@ -660,6 +661,7 @@ async function saveProgress() {
     });
     const index = state.animes.findIndex((item) => item.id === result.anime.id);
     if (index >= 0) state.animes[index] = result.anime;
+    commitAnimes(state.animes, { render: false });
     $("#progressModal").close();
     renderCollection();
     await refreshStatus();

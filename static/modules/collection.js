@@ -210,7 +210,10 @@ function updateSortPicker() {
 
 function collectionComparator() {
   const mode = collectionSortMode();
-  const name = (a, b) => a.display_name.localeCompare(b.display_name, "zh-CN");
+  // 刚新建的条目可能暂时没有 display_name；不能让一次排序抛错把整次渲染中断，
+  // 否则新卡片会停留在它被追加的位置，看起来就是「刷新前在底部」。
+  const name = (a, b) => String(a.display_name || a.name_cn || a.name || "")
+    .localeCompare(String(b.display_name || b.name_cn || b.name || ""), "zh-CN");
   let comparator = name;
   if (mode === "rank") comparator = (a, b) => (Number(a.bgm_rank) || 999999999) - (Number(b.bgm_rank) || 999999999) || name(a, b);
   if (mode === "popularity") comparator = (a, b) => (Number(b.bgm_rating_total) || 0) - (Number(a.bgm_rating_total) || 0) || name(a, b);
@@ -323,3 +326,20 @@ function renderTabs() {
   updateSortPicker();
 }
 
+
+
+// 收藏数据的唯一写入口。以前各入口只是把新对象塞进 state.animes（通常是追加到
+// 末尾），而界面顺序由 filteredAnimes() 在渲染时另算，两套顺序会在「刚加入」和
+// 「刷新后」之间不一致。这里在写入那一刻就按当前排序规则把整个数组规范化，
+// 因此新增、改状态、移入/移出收纳夹、拖拽排序与刷新（bootstrap 也走这里）
+// 得到的顺序完全一致；comparator 稳定且幂等，已有条目的相对顺序不会被打乱，
+// 分类过滤仍由 filteredAnimes() 负责。
+function commitAnimes(animes, options = {}) {
+  if (!Array.isArray(animes)) return state.animes;
+  // 复制后再排序，不改变调用方持有的数组；重复提交结果相同。
+  state.animes = [...animes].sort(collectionComparator());
+  if (options.render !== false && typeof renderCollection === "function") {
+    renderCollection();
+  }
+  return state.animes;
+}

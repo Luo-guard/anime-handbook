@@ -90,7 +90,7 @@ const HandbookCollectionGrid = (() => {
       try {
         const animeIds = [...grid.querySelectorAll(".anime-card")].map(item => Number(item.dataset.animeId));
         const payload = await api("/api/animes/custom-sort", {method:"POST",body:JSON.stringify({anime_ids:animeIds})});
-        state.animes = payload.animes || state.animes;
+        commitAnimes(payload.animes || state.animes);
       } catch (error) { toast(error.message,"error"); renderCollection(); }
     });
   }

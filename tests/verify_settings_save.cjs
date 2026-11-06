@@ -12,6 +12,7 @@ for(const name of ['renderSyncButton','applyTheme','applyCharacterTabVisibility'
 context.refreshAiringProgress=async()=>{};
 element('#collectionAiringSourceInput').value='bgm';
 element('#scheduleAiringSourceInput').value='bgm';
+context.commitAnimes=(animes)=>{if(Array.isArray(animes))context.state.animes=[...animes];return context.state.animes;};
 vm.createContext(context);vm.runInContext(fs.readFileSync('static/modules/settings-save.js','utf8'),context);
 const save=()=>vm.runInContext('HandbookSettings.save()',context);
 (async()=>{

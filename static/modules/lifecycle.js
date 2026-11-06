@@ -71,7 +71,7 @@ async function refreshStatus(options = {}) {
   const collectionChanged = revision !== state.dataRevision;
   if (collectionChanged) {
     const fresh = await api("/api/collection-state");
-    state.animes = fresh.animes;
+    commitAnimes(fresh.animes, { render: false });
     state.custom_collections = fresh.custom_collections || state.custom_collections;
     // 拉取成功才记账，失败时下一次轮询会再试一次。
     state.dataRevision = revision;
@@ -189,6 +189,7 @@ async function bootstrap() {
   try {
     const payload = await api("/api/bootstrap");
     Object.assign(state, payload);
+    commitAnimes(state.animes, { render: false });
     state.dataRevision = Number(payload.revision || 0);
     adoptInitialWeeklyTheme();
     adoptInitialRandomTheme();
@@ -243,7 +244,7 @@ async function createCustomCollection(options = {}) {
     });
     state.custom_collections = payload.custom_collections || state.custom_collections;
     state.stats = payload.stats || state.stats;
-    state.animes = payload.animes || state.animes;
+    commitAnimes(payload.animes || state.animes, { render: false });
     if (selectAfterCreate) {
       state.collectionKind = "custom";
       state.customCollectionId = Number(payload.collection.id);
@@ -331,7 +332,7 @@ async function deleteCustomCollection(collectionId) {
     });
     state.custom_collections = payload.custom_collections || [];
     state.stats = payload.stats || state.stats;
-    state.animes = payload.animes || state.animes;
+    commitAnimes(payload.animes || state.animes, { render: false });
     ensureVisibleCollection();
     renderStats();
     renderTabs();

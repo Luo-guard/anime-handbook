@@ -120,7 +120,7 @@ const HandbookSettings = (() => {
       ThemeSettingsSession.finish(true);
       state.settings = payload.settings;
       state.stats = payload.stats || state.stats;
-      state.animes = payload.animes || state.animes;
+      commitAnimes(payload.animes || state.animes, { render: false });
       state.custom_collections = payload.custom_collections || state.custom_collections;
       renderSyncButton();
       const visibleThemeIds = new Set(recordThemes().map((theme) => theme.id));

@@ -140,7 +140,7 @@ function updateCollectionSearchBadges() {
 }
 async function changeCollectionStatus(id, status) {
   const result = await api("/api/collection-status", { method: "POST", body: JSON.stringify({ anime_id: Number(id), status: Number(status) }) });
-  state.animes = result.animes;
+  commitAnimes(result.animes, { render: false });
   if (result.stats) {
     state.stats = result.stats;
     renderStats();

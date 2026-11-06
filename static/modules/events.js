@@ -92,7 +92,7 @@ $("#progressBarToggle").addEventListener("change", async (event) => {
     });
     state.settings = ThemeSettingsSession.incoming(payload.settings);
     state.stats = payload.stats || state.stats;
-    state.animes = payload.animes || state.animes;
+    commitAnimes(payload.animes || state.animes, { render: false });
     state.custom_collections = payload.custom_collections || state.custom_collections;
     renderCollection();
   } catch (error) {

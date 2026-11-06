@@ -7,6 +7,7 @@ const harness=[
   "const CATEGORIES=[{id:1,name:'在看'},{id:2,name:'想看'}];",
   "const escapeHtml=s=>String(s);",
   "function renderCollection(){}",
+  "function commitAnimes(animes,options={}){if(!Array.isArray(animes))return state.animes;state.animes=[...animes];if(options.render!==false&&typeof renderCollection==='function')renderCollection();return state.animes;}",
   "function renderTabs(){}",
   "function renderStats(){}",
   "function toast(){}",
