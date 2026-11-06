@@ -17,6 +17,17 @@
 - 以上版式都用无头浏览器截图自查过实际渲染。
 - 新增 `tests/test_offline_download.py`（12）；`test_qbittorrent.py` 补 HTTP 表单层断言；`verify_rules_menu.cjs` 按删掉的说明句更新。全量后端 453 项通过 452（唯一失败仍是既有并发写只读缺陷）；前端 46 个脚本全过。
 
+### 页面内字幕：libass（jassub）本地打包接入
+- 之前 remux 已经把内封 `.ass` 抽出来了，但播放器里没渲染器，字幕等于白抽。现在接上 **jassub 2.5.35**（libass 编成 wasm 的版本，跟弹弹play / Kazumi 的 mpv→libass 是同一个引擎），播放器用原生 `<video>` 播放不变，字幕由覆盖在上面的 canvas 渲染，ASS 特效、定位、描边都在。
+- **资源全部本地化**，不依赖 CDN：jassub 主包打成 IIFE（32KB）、worker 打成单文件 ESM（120KB，避免裸 import 和缺扩展名的相对导入）、emscripten 的两套 worker+wasm（普通/SIMD，约 4MB）、默认字体。`handbook/http.py` 的静态服务补了 MIME：`.wasm` 精确返回 `application/wasm`（带 `charset` 会被部分浏览器拒绝实例化）、`.woff2` 返回 `font/woff2`，二进制资源不再附加字符集。
+- **中文字幕不再是豆腐块**：打包 Noto Sans SC 简体 400 权重 woff2（OFL 授权，1.1MB），把字幕组常见字体名（微软雅黑、思源黑体、方正兰亭黑、黑体、Arial…）映射到它，并设为默认回退字体。ASS 里写死的字体名本机没装时也能正常显示中文。
+- **预热 + 跨集复用**：打开离线面板时就在后台初始化渲染器（挂空字幕轨），点播放只做 `renderer.setTrack()` 换轨，不重新编译 wasm。实测干净环境：后台预热约 0.3 秒，第一集字幕就绪 71–148ms，切到第二集 56–87ms。播放器加了「字幕 · 开/关」，关闭时销毁会话但保留实例给下一集。
+- 调试中定位到一个**测试环境假象**：临时库缺封面时 `/api/covers/<id>` 会联网拉图并超时 10 秒，占满浏览器 6 个连接，把字幕接口（本身 12ms）一起拖到 10 秒。真实环境封面已缓存不受影响；顺带记录了「封面缺失会拖慢其它请求」这个既有现象。
+- 顺手修播放器弹窗：dialog 只有 740px 而 `.modal-frame` 写死 960px，左边被裁 40px、还有横向滚动。改成弹窗自己定宽、内容框 100%，实测 960/960 居中无溢出。
+- 播放器用原生 `<video>`，NijiLucid 这类抓帧超分扩展仍然能接管（字幕 canvas 是 `pointer-events:none` 的独立层，不挡 controls）。
+- 验证：真实浏览器里跑通「预热 → 播放 → 换轨 → 字幕开关 → 关闭播放器」全流程，无 JS 错误；后端 453 项通过 452（唯一失败是既有并发写只读缺陷），前端 46 个脚本全过。
+- **同步限制（待定）**：项目同步脚本只放行文本类扩展名，`.wasm` / `.woff2` 不在白名单，单文件还限 2 MiB（SIMD 版 wasm 为 2.09 MiB）。所以 `static/vendor/jassub/` 下这 8 个二进制资源**目前只在本机**，不进仓库；仓库代码在缺资源时会降级提示「页面内字幕没起来」，视频播放不受影响。重建方式：临时目录 `npm i jassub@2.5.35 esbuild`，用 esbuild 把 `jassub` 打成 IIFE（挂 `window.JASSUB`）、把 `dist/worker/worker.js` 打成单文件 ESM（避开裸 import 与缺扩展名的相对导入），再复制 `dist/wasm/*`、`dist/default.woff2`；中文字体取 `@fontsource/noto-sans-sc@5.2.8/files/noto-sans-sc-chinese-simplified-400-normal.woff2`。
+
 ### 详情弹窗：评分行沉到封面底边
 - 右侧信息列包一层 `.progress-hero-info`，`align-self: stretch` + `flex-direction: column`，评分行 `margin-top: auto` 贴底；封面本身是 grid 行里最高的元素，所以评分行底边与封面底边齐平。
 - 短标题（学生会也有洞！）实测：封面底 303px、评分行底 303px，误差 0；两者中间自然空出约 46px，正好把日期链接行与评分行分层。

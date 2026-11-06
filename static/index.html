@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-hero-bottom" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-player-width" />
   </head>
   <body>
     <div class="app-shell">
@@ -348,8 +348,13 @@
       <div class="modal-frame offline-player-frame">
         <button type="button" class="modal-close" id="offlinePlayerClose" aria-label="关闭">×</button>
         <h2 id="offlinePlayerTitle">播放</h2>
-        <video id="offlineVideo" controls playsinline preload="metadata"></video>
-        <p class="offline-player-meta" id="offlinePlayerMeta"></p>
+        <div class="offline-player-video">
+          <video id="offlineVideo" controls playsinline preload="metadata"></video>
+        </div>
+        <div class="offline-player-bar">
+          <p class="offline-player-meta" id="offlinePlayerMeta"></p>
+          <button type="button" class="offline-subtitle-toggle hidden" id="offlineSubtitleToggle" aria-pressed="true">字幕 · 开</button>
+        </div>
       </div>
     </dialog>
     <dialog class="modal progress-modal" id="progressModal">
@@ -1189,7 +1194,7 @@
     <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/offline.js?v=20261106-offline-v2" defer></script>
+    <script src="/modules/offline.js?v=20261106-jassub" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

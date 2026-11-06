@@ -8,6 +8,10 @@ const offlineView = {
   local: { files: [], jobs: [] },
   playing: null,
   resumeTimer: 0,
+  subtitle: null,
+  subtitleToken: 0,
+  jassubPromise: null,
+  subtitleBoot: null,
 };
 
 function offlineStatus(target, text, isError = false) {
@@ -42,6 +46,7 @@ function openOffline() {
   if (!dialog.open) dialog.showModal();
   switchOfflineTab("search");
   refreshOfflineLocal();
+  warmSubtitleRenderer();
   if (!offlineView.items.length && name) runOfflineSearch();
 }
 
@@ -281,10 +286,17 @@ function playLocalFile(fileId) {
   offlineView.playing = file;
   const video = $("#offlineVideo");
   $("#offlinePlayerTitle").textContent = `${offlineView.animeName || "本地文件"} · ${episodeLabelOf(file.episode_key)}`;
+  clearSubtitleSession();
+  const toggle = $("#offlineSubtitleToggle");
+  toggle.classList.toggle("hidden", !file.subtitle_path);
+  toggle.classList.remove("is-off");
+  toggle.textContent = "字幕 · 开";
+  toggle.setAttribute("aria-pressed", "true");
   $("#offlinePlayerMeta").textContent = file.subtitle_path
-    ? "字幕文件已就位，但页面内字幕渲染还没接上，先用外部播放器可看到字幕。"
+    ? "页面内字幕加载中（第一次约需十几秒，之后切集是即时的）…"
     : "这一集没有内封字幕。";
   video.src = `/api/offline/stream/${file.id}`;
+  if (file.subtitle_path) setupSubtitleRenderer(file, video);
   const dialog = $("#offlinePlayer");
   if (!dialog.open) dialog.showModal();
   video.addEventListener(
@@ -318,6 +330,7 @@ async function saveOfflineResume() {
 
 function closeOfflinePlayer() {
   saveOfflineResume();
+  clearSubtitleSession();
   window.clearInterval(offlineView.resumeTimer);
   const video = $("#offlineVideo");
   video.pause();
@@ -411,6 +424,7 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#offlineMediaRoot").value = "";
     $("#offlineDownloadRoot").value = "";
   });
+  $("#offlineSubtitleToggle")?.addEventListener("click", toggleSubtitleRenderer);
   $("#offlinePlayerClose")?.addEventListener("click", closeOfflinePlayer);
   $("#offlinePlayer")?.addEventListener("close", () => {
     if (offlineView.playing) closeOfflinePlayer();
@@ -633,4 +647,139 @@ async function migrateMediaRoot() {
     offlineStatus(status, error.message || "迁移失败", true);
     toast(error.message || "迁移失败", "error");
   }
+}
+
+
+// ---- 页面内字幕：jassub（libass 的 wasm 版，和弹弹play / Kazumi 同一个渲染引擎） ----
+// 资源全部打包在 /vendor/jassub 下，离线可用，不依赖任何 CDN。
+const JASSUB_ASSET = "/vendor/jassub";
+// 预热实例先挂一个空字幕轨，等真正播放时再用 setTrack 换成这一集的字幕，
+// 这样就不用为每集重新编译 2MB wasm（冷启动约 10 秒，换轨是瞬时的）。
+const EMPTY_ASS = "[Script Info]\nScriptType: v4.00+\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,20,1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
+
+function loadJassub() {
+  if (window.JASSUB) return Promise.resolve(window.JASSUB);
+  if (!offlineView.jassubPromise) {
+    offlineView.jassubPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = `${JASSUB_ASSET}/jassub.bundle.js`;
+      script.onload = () => (window.JASSUB ? resolve(window.JASSUB) : reject(new Error("字幕渲染器没有正常加载")));
+      script.onerror = () => reject(new Error("字幕渲染器加载失败"));
+      document.head.appendChild(script);
+    });
+  }
+  return offlineView.jassubPromise;
+}
+
+function warmSubtitleRenderer() {
+  if (offlineView.subtitleBoot) return offlineView.subtitleBoot;
+  const video = $("#offlineVideo");
+  if (!video) return null;
+  offlineView.subtitleBoot = loadJassub()
+    .then((JASSUB) => {
+      // 顺手把 worker/wasm/字体塞进 HTTP 缓存，避免点播放时和视频流抢连接。
+      [
+        "jassub-worker.bundle.js",
+        "wasm/jassub-worker.js",
+        "wasm/jassub-worker-modern.js",
+        "wasm/jassub-worker.wasm",
+        "wasm/jassub-worker-modern.wasm",
+        "default.woff2",
+        "noto-sans-sc-400.woff2",
+      ].forEach((name) => {
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.href = `${JASSUB_ASSET}/${name}`;
+        document.head.appendChild(link);
+      });
+      const instance = new JASSUB({
+        video,
+        subContent: EMPTY_ASS,
+        workerUrl: `${JASSUB_ASSET}/jassub-worker.bundle.js`,
+        wasmWorkerUrl: `${JASSUB_ASSET}/wasm/jassub-worker.js`,
+        wasmUrl: `${JASSUB_ASSET}/wasm/jassub-worker.wasm`,
+        modernWasmWorkerUrl: `${JASSUB_ASSET}/wasm/jassub-worker-modern.js`,
+        modernWasmUrl: `${JASSUB_ASSET}/wasm/jassub-worker-modern.wasm`,
+        // 字幕组的 ASS 里写死的字体名（方正兰亭黑、思源黑体…）本机不一定有，
+        // 全部回退到打包的 Noto Sans SC（OFL 授权，1.1MB，含简体中文），
+        // 否则中文字幕会变成一片豆腐块。
+        availableFonts: {
+          "liberation sans": `${JASSUB_ASSET}/default.woff2`,
+          "noto sans sc": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "noto sans cjk sc": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "source han sans": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "思源黑体": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "microsoft yahei": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "微软雅黑": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "simhei": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "黑体": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "方正兰亭黑": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+          "arial": `${JASSUB_ASSET}/noto-sans-sc-400.woff2`,
+        },
+        defaultFont: "noto sans sc",
+        queryFonts: false,
+      });
+      return instance.ready.then(() => ({
+        instance,
+        canvas: video.parentElement?.querySelector("canvas.JASSUB") || null,
+        enabled: true,
+        fileId: 0,
+      }));
+    })
+    .catch((error) => {
+      console.warn("字幕渲染器预热失败：", error);
+      offlineView.subtitleBoot = null;
+      return null;
+    });
+  return offlineView.subtitleBoot;
+}
+
+async function setupSubtitleRenderer(file, video) {
+  const token = ++offlineView.subtitleToken;
+  try {
+    const response = await fetch(`/api/offline/subtitle/${file.id}`);
+    if (!response.ok) throw new Error("字幕文件读取失败");
+    const subContent = await response.text();
+    const boot = warmSubtitleRenderer();
+    if (!boot) throw new Error("字幕渲染器不可用");
+    // 首次要编译 wasm，给足时间；超时只影响提示，不影响视频播放。
+    const session = await Promise.race([
+      boot,
+      new Promise((_, reject) => window.setTimeout(() => reject(new Error("字幕渲染器启动超时")), 30000)),
+    ]);
+    if (!session) throw new Error("字幕渲染器启动失败");
+    if (token !== offlineView.subtitleToken) return; // 期间已经换集或关掉播放器
+    if (session.fileId !== file.id) {
+      await session.instance.renderer.setTrack(subContent);
+      session.fileId = file.id;
+    }
+    if (token !== offlineView.subtitleToken) return;
+    session.enabled = true;
+    if (session.canvas) session.canvas.style.display = "";
+    offlineView.subtitle = session;
+    $("#offlinePlayerMeta").textContent = "页面内字幕已开启，右侧可随时关闭；视频播放不受字幕影响。";
+  } catch (error) {
+    if (token !== offlineView.subtitleToken) return;
+    console.warn("字幕渲染器初始化失败：", error);
+    $("#offlineSubtitleToggle").classList.add("hidden");
+    $("#offlinePlayerMeta").textContent = "页面内字幕没起来，可用外部播放器打开这一集；视频播放不受影响。";
+  }
+}
+
+// 只结束这一集的会话，渲染器实例留着给下一集复用。
+function clearSubtitleSession() {
+  offlineView.subtitleToken += 1;
+  offlineView.subtitle = null;
+  $("#offlineSubtitleToggle")?.classList.add("hidden");
+}
+
+function toggleSubtitleRenderer() {
+  const current = offlineView.subtitle;
+  if (!current) return;
+  current.enabled = !current.enabled;
+  if (current.canvas) current.canvas.style.display = current.enabled ? "" : "none";
+  const button = $("#offlineSubtitleToggle");
+  button.textContent = current.enabled ? "字幕 · 开" : "字幕 · 关";
+  button.setAttribute("aria-pressed", String(current.enabled));
+  button.classList.toggle("is-off", !current.enabled);
 }

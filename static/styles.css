@@ -3860,3 +3860,16 @@ dialog::backdrop {
    短标题时封面更高，会多出一段留白；长标题折行时空间自然收窄，不会重叠。 */
 .progress-hero-info { align-self: stretch; display: flex; flex-direction: column; min-width: 0; }
 .progress-hero-info .progress-info-row { margin-top: auto; padding-top: 14px; }
+
+/* 页面内字幕：jassub 会把 canvas 插在 video 后面并绝对定位，父容器负责给参照系。 */
+.offline-player-video { position: relative; line-height: 0; }
+.offline-player-video canvas.JASSUB { z-index: 2; }
+.offline-player-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 8px; }
+.offline-player-bar .offline-player-meta { margin: 0; flex: 1 1 auto; }
+.offline-subtitle-toggle { appearance: none; flex: 0 0 auto; border: 1px solid var(--line); background: transparent; color: var(--green-800); border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.offline-subtitle-toggle:hover { background: var(--green-50); }
+.offline-subtitle-toggle.is-off { color: var(--muted); border-style: dashed; }
+
+/* 播放器弹窗也别让内容框比 dialog 宽：否则左边会被裁掉、还出现横向滚动。 */
+.offline-player { width: min(960px, calc(100vw - 28px)); max-width: calc(100vw - 28px); padding: 0; }
+.offline-player .modal-frame { width: 100%; max-width: 100%; box-sizing: border-box; }

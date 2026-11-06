@@ -249,7 +249,18 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
         if requested.name == "index.html":
             body = with_initial_appearance(body.decode("utf-8"), self.database.get_settings(),
                                            str(self.profiles.profile()["id"])).encode("utf-8")
-        mime = mimetypes.guess_type(requested.name)[0] or "application/octet-stream"
-        cache = "private, no-store" if requested.suffix == ".html" else "public, no-cache"
-        send_asset(self, body, f"{mime}; charset=utf-8", cache=cache, compress=requested.suffix in {".js", ".css", ".html", ".svg"})
+        # WebAssembly 实例化要求 Content-Type 的 essence 精确为 application/wasm，
+        # 带上 charset 会被部分浏览器拒绝；字体同理走二进制，不加字符集。
+        binary_mime = {
+            ".wasm": "application/wasm",
+            ".woff2": "font/woff2",
+            ".woff": "font/woff",
+            ".ttf": "font/ttf",
+            ".otf": "font/otf",
+        }
+        suffix = requested.suffix.lower()
+        mime = binary_mime.get(suffix) or mimetypes.guess_type(requested.name)[0] or "application/octet-stream"
+        content_type = mime if suffix in binary_mime else f"{mime}; charset=utf-8"
+        cache = "private, no-store" if suffix == ".html" else "public, no-cache"
+        send_asset(self, body, content_type, cache=cache, compress=suffix in {".js", ".css", ".html", ".svg"})
 
