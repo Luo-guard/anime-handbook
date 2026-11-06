@@ -34,6 +34,8 @@ const HandbookSettings = (() => {
         collection_airing_source: $("#collectionAiringSourceInput").value,
         schedule_airing_source: $("#scheduleAiringSourceInput").value,
       };
+      // 只有默认展示记录真的变了，才覆盖时间线当前的临时筛选。
+      const previousTimelineDefaults = JSON.stringify(Array.isArray(state.settings.timeline_default_themes) ? state.settings.timeline_default_themes : []);
       await requireScheduleSortingSupport();
       const payload = await api("/api/settings", {
         method: "PATCH",
@@ -69,6 +71,7 @@ const HandbookSettings = (() => {
           show_sidebar_toggle: $("#showSidebarToggleInput").checked,
           show_shutdown_button: $("#showShutdownButtonInput").checked,
           new_record_defaults_to_other: $("#newRecordDefaultsToOtherInput").checked,
+          timeline_default_themes: $$("#timelineDefaultThemesMenu input:checked").map((input) => input.value),
           launch_at_login: $("#launchAtLoginInput").checked,
           show_episode_review_record: $("#showEpisodeReviewRecordInput").checked,
           show_oped_record: $("#showOpedRecordInput").checked,
@@ -107,6 +110,7 @@ const HandbookSettings = (() => {
       if (!$("#showSearchBgmLinkInput").checked && payload.settings.show_search_bgm_link !== false) throw new Error("当前后台还不支持搜索页 Bangumi 入口开关，请重启手账后台并刷新后再试。");
       if (detailLinksChanged && !Array.isArray(payload.settings.detail_links)) throw new Error("当前后台还不支持详情页链接，请重启手账后台并刷新后再试。");
       if (!$("#showJumpHistoryButtonInput").checked && payload.settings.show_jump_history_button !== false) throw new Error("当前后台还不支持工具栏按钮设置，请重启手账后台并刷新后再试。");
+      if (!Array.isArray(payload.settings.timeline_default_themes) && $$("#timelineDefaultThemesMenu input:checked").length) throw new Error("当前后台还不支持默认展示记录，请重启手账后台并刷新后再试。");
       if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
       if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
@@ -119,7 +123,12 @@ const HandbookSettings = (() => {
       const visibleThemeIds = new Set(recordThemes().map((theme) => theme.id));
       state.noteThemes = new Set([...state.noteThemes].filter((id) => visibleThemeIds.has(id)));
       if (!state.noteThemes.size) state.noteThemes.add("other");
-      state.timelineThemes = new Set([...state.timelineThemes].filter((id) => visibleThemeIds.has(id)));
+      const savedTimelineDefaults = Array.isArray(payload.settings.timeline_default_themes)
+        ? payload.settings.timeline_default_themes
+        : [];
+      state.timelineThemes = JSON.stringify(savedTimelineDefaults) === previousTimelineDefaults
+        ? new Set([...state.timelineThemes].filter((id) => visibleThemeIds.has(id)))
+        : new Set(savedTimelineDefaults.filter((id) => visibleThemeIds.has(id)));
       applyTheme();
       applyCharacterTabVisibility();
       applyCollectionEditingAvailability();

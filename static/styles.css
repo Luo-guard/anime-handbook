@@ -661,6 +661,12 @@ h1 {
 .timeline-theme-menu label { display:flex; align-items:center; gap:8px; padding:8px; border-radius:7px; cursor:pointer; font-size:13px; }
 .timeline-theme-menu label:hover { background:var(--green-50); }
 .timeline-theme-menu input { accent-color:var(--green-700); }
+.timeline-default-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:4px 10px; margin-top:4px; }
+.timeline-default-grid label { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; font-size:13px; }
+.timeline-default-grid label:hover { background:var(--green-50); }
+.timeline-default-grid input { accent-color:var(--green-700); }
+.timeline-default-grid .timeline-default-all { grid-column:1/-1; justify-self:start; margin-top:2px; font-size:12px; }
+@media (max-width:650px) { .timeline-default-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:2px 4px; } .timeline-default-grid label { gap:6px; padding:6px; font-size:11.5px; } }
 .theme-dot { width:9px; height:9px; border-radius:50%; background:var(--theme-dot); }
 .note-theme-picker { position:relative; }
 .note-theme-menu { position:absolute; z-index:25; bottom:calc(100% + 8px); left:0; display:grid; min-width:180px; padding:7px; border:1px solid var(--line); border-radius:11px; background:var(--surface); box-shadow:var(--shadow); }

@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=require('./frontend_source.cjs');
-const start=source.indexOf('let timelineRequest ='),end=source.indexOf('\nfunction switchView',start);
+const start=source.indexOf('let timelineDefaultsApplied = false;'),end=source.indexOf('\nfunction switchView',start);
 const elements={};const pending=[];const errors=[];
 function element(key){return elements[key]??={innerHTML:'',classList:{add(){},toggle(){}},insertAdjacentHTML(_,html){this.innerHTML+=html;if(html.includes('id="timelineMore"'))element('#timelineMore')},remove(){delete elements[key]}}}
 const state={activeView:'timeline',timelineSearch:'',timelineThemes:new Set()};

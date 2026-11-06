@@ -20,6 +20,7 @@ def _normalize_settings(body, settings):
         "episode_balance_initial",
         "episode_balance_daily_target",
         "statistics_default_theme",
+        "timeline_default_themes",
         "statistics_show_zero_periods",
         "show_watch_events",
         "show_note_events",
@@ -171,6 +172,10 @@ def _normalize_settings(body, settings):
                 value = normalize_shortcuts(value)
             elif key == "statistics_default_theme":
                 value = str(value or "watch").strip() or "watch"
+            elif key == "timeline_default_themes":
+                if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                    raise ValueError("默认展示记录无效")
+                value = list(dict.fromkeys(item.strip()[:40] for item in value if item.strip()))[:40]
             elif key in {
                 "category_episode_visibility",
                 "category_rating_visibility",

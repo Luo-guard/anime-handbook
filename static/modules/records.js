@@ -227,6 +227,17 @@ function timelineEvent(event) {
   `;
 }
 
+// 页面加载后第一次进入看番记录时套用设置里的默认类型；本次会话内再手动改筛选不会被覆盖。
+let timelineDefaultsApplied = false;
+function applyTimelineDefaults() {
+  if (timelineDefaultsApplied) return;
+  timelineDefaultsApplied = true;
+  const saved = Array.isArray(state.settings?.timeline_default_themes) ? state.settings.timeline_default_themes : [];
+  if (!saved.length) return;
+  const known = new Set(recordThemes().map((theme) => theme.id));
+  state.timelineThemes = new Set(saved.map(String).filter((id) => known.has(id)));
+}
+
 let timelineRequest = 0;
 let timelineAbort = null;
 let timelineOffset = 0;
@@ -244,6 +255,7 @@ async function renderTimeline(append = false) {
     $("#timeline").innerHTML = "";
     $("#timelineEmpty").classList.add("hidden");
   }
+  if (!append) applyTimelineDefaults();
   const request = ++timelineRequest;
   timelineAbort = new AbortController();
   timelineLoading = true;

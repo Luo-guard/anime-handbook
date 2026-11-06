@@ -50,6 +50,13 @@ $("#timelineSearchInput").addEventListener("input", (event) => {
   timelineSearchTimer = setTimeout(renderTimeline, 180);
 });
 setupDismissibleMenu("#timelineThemeFilterButton", "#timelineThemeFilterMenu");
+// 设置页的默认展示记录：勾选只改草稿，保存时才写入；「全选」等于清空筛选。
+$("#timelineDefaultThemesMenu").addEventListener("click", (event) => {
+  if (!event.target.closest("#timelineDefaultThemesAll")) return;
+  $$("#timelineDefaultThemesMenu input").forEach((input) => {
+    input.checked = false;
+  });
+});
 
 $("#syncButton").addEventListener("click", syncPrimaryAction);
 $("#emptySyncButton").addEventListener("click", startSync);

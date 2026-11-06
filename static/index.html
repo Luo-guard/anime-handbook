@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261105-record-time" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-timeline-defaults" />
   </head>
   <body>
     <div class="app-shell">
@@ -700,6 +700,13 @@
               <span class="switch"></span>
             </span>
           </label>
+          <div class="setting-row stacked">
+            <span>
+              <strong>默认展示记录</strong>
+              <small>打开看番记录时默认勾选这些类型；一个都不选表示显示全部。改动需要点右下角「保存设置」。</small>
+            </span>
+            <div class="timeline-default-grid" id="timelineDefaultThemesMenu" role="group" aria-label="默认展示的记录类型"></div>
+          </div>
           <div class="settings-section-title" data-settings-section="statistics" data-page-label="statistics">记录统计</div>
           <h3 class="settings-subsection-title">统计默认选项</h3>
           <label class="setting-row">
@@ -1073,15 +1080,15 @@
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/video-links.js?v=20261105-official-bangumi" defer></script>
     <script src="/modules/details.js?v=20261105-record-time" defer></script>
-    <script src="/modules/records.js?v=20261105-record-time" defer></script>
+    <script src="/modules/records.js?v=20261106-timeline-defaults" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261105-as-calendar" defer></script>
-    <script src="/modules/settings.js?v=20261105-as-progress" defer></script>
+    <script src="/modules/settings.js?v=20261106-timeline-defaults" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
-    <script src="/modules/settings-save.js?v=20261105-as-progress" defer></script>
-    <script src="/modules/events.js?v=20261105-direct-preview" defer></script>
+    <script src="/modules/settings-save.js?v=20261106-timeline-defaults" defer></script>
+    <script src="/modules/events.js?v=20261106-timeline-defaults" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

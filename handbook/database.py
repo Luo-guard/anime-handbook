@@ -473,6 +473,7 @@ class HandbookDB:
                 "episode_balance_daily_target": 8,
                 "episode_balance_anchor": "",
                 "statistics_default_theme": "watch",
+                "timeline_default_themes": [],
                 "keyboard_shortcuts": {},
                 "statistics_show_zero_periods": True,
                 "show_watch_events": True,

@@ -213,6 +213,7 @@ function renderSettingsPanels() {
   $("#showSidebarToggleInput").checked = showSidebarToggle();
   $("#showShutdownButtonInput").checked = enabledSetting("show_shutdown_button");
   $("#newRecordDefaultsToOtherInput").checked = newRecordDefaultsToOther();
+  renderTimelineDefaultThemes();
   $("#topSyncActionInput").value = topSyncAction();
   $("#launchAtLoginInput").checked = launchAtLogin();
   const boundPath = state.settings.bound_kazumi_path || "";
@@ -1004,3 +1005,20 @@ function setupSettingsTabs() {
   switchSettingsTab("main");
 }
 
+
+// 看番记录默认筛选：设置页只改草稿，点「保存设置」才写入；空集合表示显示全部。
+function timelineDefaultThemes() {
+  const saved = state.settings?.timeline_default_themes;
+  return Array.isArray(saved) ? saved.map(String) : [];
+}
+
+function renderTimelineDefaultThemes() {
+  const grid = $("#timelineDefaultThemesMenu");
+  if (!grid) return;
+  const selected = new Set(timelineDefaultThemes());
+  grid.innerHTML =
+    recordThemes()
+      .map((theme) => `<label><input type="checkbox" value="${escapeHtml(theme.id)}"${selected.has(theme.id) ? " checked" : ""} /><span class="theme-dot" style="--theme-dot:${escapeHtml(theme.color)}"></span>${escapeHtml(theme.name)}</label>`)
+      .join("") +
+    `<button type="button" class="text-button timeline-default-all" id="timelineDefaultThemesAll">清空选择（显示全部）</button>`;
+}
