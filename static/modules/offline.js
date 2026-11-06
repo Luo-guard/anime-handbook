@@ -33,13 +33,25 @@ function formatOfflineSize(text) {
 
 function openOffline() {
   const anime = state.progressAnime || {};
-  offlineView.animeId = Number(anime.id || 0);
+  const animeId = Number(anime.id || 0);
   const name = anime.display_name || anime.name_cn || anime.name || "";
+  // 换了一部番就要把上一部的关键词、结果、字幕组筛选和本地文件缓存全部换掉。
+  // 只在「搜索框为空」时填名字会留着旧番的词，用户得手动清空重搜。
+  const switched = offlineView.animeId !== animeId || offlineView.animeName !== name;
+  offlineView.animeId = animeId;
   offlineView.animeName = name;
   $("#offlineHeading").textContent = "离线下载";
   $("#offlineTarget").textContent = name || "";
   $("#offlineTarget").classList.toggle("hidden", !name);
-  if (!$("#offlineQuery").value.trim()) $("#offlineQuery").value = name;
+  if (switched) {
+    $("#offlineQuery").value = name;
+    offlineView.items = [];
+    offlineView.group = "";
+    offlineView.local = { files: [], jobs: [] };
+    $("#offlineGroups").innerHTML = "";
+    renderOfflineList();
+    renderOfflineLocal();
+  }
   offlineStatus("#offlineStatus", "");
   offlineStatus("#offlineLocalStatus", "");
   const dialog = $("#offlineModal");
@@ -47,7 +59,8 @@ function openOffline() {
   switchOfflineTab("search");
   refreshOfflineLocal();
   warmSubtitleRenderer();
-  if (!offlineView.items.length && name) runOfflineSearch();
+  // 换番必搜；同一部番里用户手动改过的关键词保留，只在结果为空时补搜一次。
+  if (name && (switched || !offlineView.items.length)) runOfflineSearch();
 }
 
 function switchOfflineTab(tab) {
