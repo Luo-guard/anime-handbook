@@ -3797,3 +3797,15 @@ dialog::backdrop {
 .offline-subscribe:hover { border-color: var(--green-700); color: var(--green-700); background: var(--green-50); }
 .offline-subs { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
 .offline-sub-list { display: grid; gap: 2px; max-height: 190px; overflow: auto; }
+
+/* 详情弹窗头部重排：标题、日期链接、评分与收藏状态各归各位。 */
+.progress-hero { align-items: start; gap: 18px; }
+.progress-hero h2 { margin: 0 42px 7px 0; font-size: 22px; line-height: 1.42; }
+.progress-hero p { margin-bottom: 0; }
+.progress-meta { margin-top: 0; margin-bottom: 0; line-height: 1.95; }
+.meta-separator { margin: 0 9px; }
+/* 评分、个人评分、收藏按钮并成一行；收藏靠右，和评分基线对齐。 */
+.progress-info-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 9px; }
+.progress-info-row .anime-rating,
+.progress-info-row .personal-rating { margin-top: 0; }
+.progress-info-row .collect-detail-row { margin-top: 0; margin-left: auto; }
