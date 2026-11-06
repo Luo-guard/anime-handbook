@@ -7,6 +7,7 @@ from contextlib import ExitStack
 import os
 from .common import (CATEGORY_NAMES, normalize_schedule_grouping, normalize_detail_links, normalize_custom_search_links, normalize_link_sync, normalize_bgm_sources, windows_autostart_change)
 from .shortcuts import normalize_shortcuts
+from .episode_gestures import normalize_episode_gestures
 from .metadata import SyncService
 
 def _normalize_settings(body, settings):
@@ -15,6 +16,7 @@ def _normalize_settings(body, settings):
     body = copy.deepcopy(body)
     allowed = {
         "keyboard_shortcuts",
+        "episode_gestures",
         "day_start_hour",
         "show_episode_balance",
         "episode_balance_initial",
@@ -170,6 +172,8 @@ def _normalize_settings(body, settings):
                 value = min(100, max(0, int(value)))
             elif key == "keyboard_shortcuts":
                 value = normalize_shortcuts(value)
+            elif key == "episode_gestures":
+                value = normalize_episode_gestures(value)
             elif key == "statistics_default_theme":
                 value = str(value or "watch").strip() or "watch"
             elif key == "timeline_default_themes":

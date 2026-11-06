@@ -225,6 +225,7 @@ function renderSettingsPanels() {
   $("#kazumiConflictInput").value=state.settings.kazumi_conflict||"handbook";
   applyKazumiReadOnlyControls();
   renderKeyboardSettings();
+  if (typeof renderEpisodeGestureSettings === "function") renderEpisodeGestureSettings();
   renderDetailLinkSettings();
   renderScheduleDetailLinkSettings();
   $("#showZeroStatisticsInput").checked = enabledSetting("statistics_show_zero_periods");

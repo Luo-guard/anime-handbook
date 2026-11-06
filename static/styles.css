@@ -3887,3 +3887,26 @@ dialog::backdrop {
 .offline-modal .offline-panel > :not(.offline-list):not(.offline-settings) { flex-shrink: 0; }
 .offline-modal .offline-list { flex: 1 1 auto; min-height: 0; }
 .offline-modal .offline-settings { flex: 1 1 auto; min-height: 0; }
+
+/* 六格扇区：方位由设置里的 slots 决定，坐标固定在这里。
+   菜单本体 pointer-events:none，只有可见的扇区圆钮能接收点击（B 版点选要用）。 */
+.episode-quick-action.top { left: 0; top: -94px; }
+.episode-quick-action.bottom { left: 0; top: 94px; }
+.episode-quick-action.top_right { left: 82px; top: -54px; }
+.episode-quick-action.bottom_right { left: 82px; top: 54px; }
+.episode-quick-action.top_left { left: -82px; top: -54px; }
+.episode-quick-action.bottom_left { left: -82px; top: 54px; }
+.episode-quick-menu.visible .episode-quick-action { pointer-events: auto; cursor: pointer; }
+.episode-quick-menu.visible .episode-quick-action.top { transition-delay: 0ms; }
+.episode-quick-menu.visible .episode-quick-action.top_right { transition-delay: 20ms; }
+.episode-quick-menu.visible .episode-quick-action.bottom_right { transition-delay: 40ms; }
+.episode-quick-menu.visible .episode-quick-action.bottom { transition-delay: 60ms; }
+.episode-quick-menu.visible .episode-quick-action.bottom_left { transition-delay: 80ms; }
+.episode-quick-menu.visible .episode-quick-action.top_left { transition-delay: 100ms; }
+
+/* 单集手势设置：两列下拉网格，和快捷键设置保持同一套密度。 */
+.eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px 16px; margin-top: 9px; }
+.eg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+.eg-row > span { color: var(--ink); white-space: nowrap; }
+.eg-row select { flex: 1 1 auto; min-width: 0; max-width: 175px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 12px; }
+.eg-warning { margin: 10px 0 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--green-50); color: var(--ink); font-size: 12px; line-height: 1.65; }

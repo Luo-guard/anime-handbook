@@ -5,6 +5,22 @@
 
 ## 2026-11-06
 
+### 片源字体优先：抽取 MKV 内封字体附件
+- 字幕组常把 ASS 用到的字体塞进 MKV 附件。归档时用 ffprobe 列出附件流、用 `ffmpeg -dump_attachment:t:N` 抽到 `<番名>/_fonts/`（实测 0.14 秒、字节完全一致），一个合集任务只抽一次。
+- 注意 `-dump_attachment:t:N` 的 N 是**附件流序号**，不是 ffprobe 的全局 stream index；附件名有时是绝对路径，统一取 basename 防路径穿越。抽不到不能让归档失败。
+- 新增 `GET /api/offline/fonts/<id>`（清单）与 `/api/offline/font/<id>/<name>`（二进制，正确 `font/woff2` 等 MIME）；带目录穿越校验。
+- 播放器换集时调 `renderer.addFonts()` 把片源字体注册进 libass，ASS 里写死的字体名优先命中这些附件，匹配不到才回退打包的 Noto Sans SC。状态栏会显示「已加载 N 个片源字体」。
+- 真实浏览器验证：174ms 完成换集并加载 1 个片源字体，无 JS 错误。新增 `tests/test_media_fonts.py`（6 项）。
+
+### 单集手势系统：六格扇区 + 绑定表
+- 新增 `handbook/episode_gestures.py`（独立校验表，**不与全局键盘快捷键混在一张表**）：手势→动作、一个动作最多 4 个手势、`Click` 保留给「切换已看」不可改绑、槽位可置空。`settings_service` 与默认设置同步接入。
+- 新增 `static/modules/episode-gesture.js` 统一识别：左键单击固定记已看；右键 / 长按 / 修饰键组合 / 双击 / 中键走绑定表。A 版（按住滑到扇区松手即执行）与 B 版（弹出后点选）共用一套状态机，只由「松手后保留菜单」开关区分。
+- 扇区从 4 格（全挤在右侧）改成 6 格：播放上、下载下、评分右上、评价右下、ED 左上、OP 左下；方位与是否显示由设置决定。菜单可见时圆钮才接收点击，避免挡住原生控件。
+- 设置里「快捷键」页签下新增一块：总开关、松手保留菜单、六格各自的下拉、11 个常用手势的绑定下拉、绑定双击时的 0.25 秒延迟提示、超 4 个手势的冲突提示、恢复默认。保存走现有 PATCH 流程并做回读校验。
+- 双击默认不绑；一旦绑定，单击会等 250ms 判定，双击只执行绑定动作而不误记已看。
+- 验证：`tests/test_episode_gestures.py`（12）、`tests/verify_episode_gestures.cjs`（六格/点选/滑选/keep 开关/Ctrl+Alt 绑定/去掉槽位/双击延迟）、`tests/verify_gesture_settings.cjs`（渲染/双击警告/冲突/恢复默认）。真实服务 PATCH 保存成功、非法配置正确返回 400。
+- 后端全量 471 项通过 470（唯一失败仍是既有的并发写只读缺陷）；前端 48 个脚本全过。
+
 ### 修复：窗口偏矮时离线下载面板顶部内容被裁
 - 现象：番名、页签、字幕组筛选行只剩半截，像被一条横线切断（用户截图）。
 - 根因：`.offline-modal .modal-frame` 是 flex 纵向布局且带 `max-height: calc(100vh - 28px)`，所有子项默认 `flex-shrink: 1`。窗口一矮，头部和工具栏这些**固定块也被压缩**，再被 `overflow: hidden` 裁掉文字。实测 600px 高窗口下番名从 18px 压到 9px、筛选行从 23px 压到 10px；之前只在 900px 高度验证过，所以没暴露。列表原有的 `min-height: 180px` 也在抢空间，是挤压来源之一。

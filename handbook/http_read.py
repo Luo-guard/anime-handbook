@@ -3,6 +3,9 @@ from __future__ import annotations
 from .http_context import (HTTPStatus, Path, ScheduleService, VideoLinks, attach_collection, find_background_asset, json, mimetypes, parse_qs, re, safe_asset_id, season_key, send_asset, urlparse)
 from .common import MAX_DETAIL_LINKS
 from .link_rules import cache_path, load_cache, payload as rules_payload
+from urllib.parse import quote, unquote
+
+from . import media as media_tools
 from . import offline_config
 from .offline import OfflineStore
 from .offline_service import OfflineError, OfflineService
@@ -211,6 +214,38 @@ class ReadRoutes:
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)
+            elif path.startswith("/api/offline/fonts/"):
+                file_id = int(path.rsplit("/", 1)[-1])
+                row = OfflineStore(self.database).file(file_id)
+                if not row:
+                    raise ValueError("这一集没有本地文件")
+                folder = Path(str(row.get("file_path") or "")).parent / "_fonts"
+                items = []
+                if folder.is_dir():
+                    for candidate in sorted(folder.iterdir()):
+                        if not candidate.is_file() or candidate.suffix.lower() not in media_tools.FONT_SUFFIXES:
+                            continue
+                        items.append({
+                            "name": candidate.name,
+                            "url": f"/api/offline/font/{file_id}/{quote(candidate.name, safe='')}",
+                            "size": candidate.stat().st_size,
+                        })
+                self.send_json({"ok": True, "items": items})
+            elif path.startswith("/api/offline/font/"):
+                rest = path[len("/api/offline/font/"):]
+                file_id_text, _, encoded_name = rest.partition("/")
+                file_id = int(file_id_text)
+                name = unquote(encoded_name)
+                row = OfflineStore(self.database).file(file_id)
+                if not row or not name or "/" in name or "\\" in name or name.startswith("."):
+                    self.send_error_json(404, "字体不存在")
+                    return
+                target = Path(str(row.get("file_path") or "")).parent / "_fonts" / name
+                if not target.is_file() or target.suffix.lower() not in media_tools.FONT_SUFFIXES:
+                    self.send_error_json(404, "字体不存在")
+                    return
+                mime = media_tools.FONT_MIME.get(target.suffix.lower(), "application/octet-stream")
+                send_asset(self, target.read_bytes(), mime, cache="private, no-cache")
             elif path == "/api/jump-history":
                 limit = int(query.get("limit", ["80"])[0] or 80)
                 self.send_json({"items": self.database.list_jumps(limit)})

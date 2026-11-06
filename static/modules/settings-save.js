@@ -27,6 +27,7 @@ const HandbookSettings = (() => {
       const detailLinkPayloadFinal = linkSync.detail;
       const scheduleLinkPayloadFinal = linkSync.schedule;
       const keyboardSettings = readKeyboardSettings();
+      const gestureSettings = typeof readEpisodeGestureSettings === "function" ? readEpisodeGestureSettings() : null;
       const keyboardChanged = JSON.stringify(keyboardSettings) !== JSON.stringify(keyboardPreferences());
       if(keyboardChanged && !(await api("/api/health")).features?.keyboard_shortcuts) throw new Error("当前后台尚不支持保存快捷键，请重启手账后台并刷新页面。");
       const scheduleSorting = readScheduleSorting("#scheduleSortingSettings");
@@ -41,6 +42,7 @@ const HandbookSettings = (() => {
         method: "PATCH",
         body: JSON.stringify({
           keyboard_shortcuts: keyboardSettings,
+          ...(gestureSettings ? { episode_gestures: gestureSettings } : {}),
           day_start_hour: Number($("#dayStartInput").value),
           show_episode_balance: $("#showEpisodeBalanceInput").checked,
           episode_balance_initial: Number($("#episodeBalanceInitialInput").value),
@@ -113,6 +115,7 @@ const HandbookSettings = (() => {
       if (!Array.isArray(payload.settings.timeline_default_themes) && $$("#timelineDefaultThemesMenu input:checked").length) throw new Error("当前后台还不支持默认展示记录，请重启手账后台并刷新后再试。");
       if (payload.settings.schedule_source !== $("#scheduleSourceInput").value || payload.settings.show_schedule_source_switch !== $("#scheduleSourceSwitchInput").checked) throw new Error("后台未保存周表来源设置，请重启后台并刷新后重试。");
       if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
+      if (gestureSettings && !payload.settings.episode_gestures) throw new Error("单集手势未成功保存，请重启后台并刷新后再试。");
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
       ThemeSettingsSession.finish(true);
       state.settings = payload.settings;

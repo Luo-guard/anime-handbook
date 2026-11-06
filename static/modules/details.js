@@ -524,30 +524,14 @@ function renderEpisodeGrid() {
         </section>
       `).join("")
     : `<div class="empty-state"><p>暂未取得章节。</p></div>`;
+  // 标注气泡仍按格子绑定；所有点击/长按/右键交给 episode-gesture.js 的委托，
+  // 扇区格数与绑定表都由设置驱动，这里不再散着写事件。
   $$(".episode-cell", $("#episodeGrid")).forEach((button) => {
-    const episode = episodes.find((item) => String(item.key) === String(button.dataset.episodeKey));
     const annotations = state.episodeRecordAnnotations?.[String(button.dataset.episodeKey)] || [];
-    let pressTimer = null;
-    let quickMenuOpen = false;
-    let suppressClick = false;
-    const stopPressTimer = () => {
-      if (pressTimer) window.clearTimeout(pressTimer);
-      pressTimer = null;
-    };
-    const closeQuickMenu = () => {
-      const menu = document.querySelector("#episodeQuickMenu");
-      if (!menu) return;
-      menu.classList.remove("visible");
-      menu.classList.add("closing");
-      window.setTimeout(() => menu.remove(), 150);
-      quickMenuOpen = false;
-    };
-    const closeEpisodeAnnotation = () => {
-      $("#episodeAnnotationPopover")?.remove();
-    };
-    const openEpisodeAnnotation = () => {
-      if (!annotations.length) return;
-      closeEpisodeAnnotation();
+    if (!annotations.length) return;
+    const close = () => $("#episodeAnnotationPopover")?.remove();
+    const open = () => {
+      close();
       const rect = button.getBoundingClientRect();
       const popover = document.createElement("aside");
       popover.id = "episodeAnnotationPopover";
@@ -555,103 +539,63 @@ function renderEpisodeGrid() {
       popover.innerHTML = episodeAnnotationMarkup(annotations);
       $("#progressModal").append(popover);
       const width = Math.min(260, window.innerWidth - 24);
-      const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.right - width));
-      const placeBelow = rect.top < 180;
       popover.style.width = `${width}px`;
-      popover.style.left = `${left}px`;
+      popover.style.left = `${Math.max(12, Math.min(window.innerWidth - width - 12, rect.right - width))}px`;
       const height = popover.getBoundingClientRect().height;
-      popover.style.top = `${placeBelow ? rect.bottom + 10 : Math.max(12, rect.top - height - 10)}px`;
+      popover.style.top = `${rect.top < 180 ? rect.bottom + 10 : Math.max(12, rect.top - height - 10)}px`;
     };
-    const updateQuickTarget = (event) => {
-      const menu = document.querySelector("#episodeQuickMenu");
-      if (!menu) return;
-      const originX = Number(menu.dataset.originX);
-      const originY = Number(menu.dataset.originY);
-      const deltaX = event.clientX - originX;
-      const deltaY = event.clientY - originY;
-      const dragDistance = Math.min(112, Math.hypot(deltaX, deltaY));
-      menu.style.setProperty("--drag-x", `${Math.max(-110, Math.min(110, deltaX))}px`);
-      menu.style.setProperty("--drag-y", `${Math.max(-110, Math.min(110, deltaY))}px`);
-      menu.style.setProperty("--drag-distance", `${dragDistance}px`);
-      menu.style.setProperty("--drag-angle", `${Math.atan2(deltaY, deltaX)}rad`);
-      menu.classList.toggle("dragging", dragDistance > 10);
-      const choices = {
-        score: [0, -94], op: [82, -54], ed: [82, 54], review: [0, 98],
-      };
-      let target = "";
-      let distance = Infinity;
-      for (const [name, [x, y]] of Object.entries(choices)) {
-        if (!quickRecordActionEnabled(name)) continue;
-        const next = Math.hypot(event.clientX - (originX + x), event.clientY - (originY + y));
-        if (next < distance) { distance = next; target = name; }
-      }
-      menu.querySelectorAll("[data-episode-action]").forEach((item) => item.classList.toggle("active", item.dataset.episodeAction === target && distance < 62));
-    };
-    const openQuickMenu = (event) => {
-      const rect = button.getBoundingClientRect();
-      const originX = rect.left + rect.width / 2;
-      const originY = rect.top + rect.height / 2;
-      const menu = document.createElement("div");
-      menu.id = "episodeQuickMenu";
-      menu.className = "episode-quick-menu";
-      menu.dataset.originX = String(originX);
-      menu.dataset.originY = String(originY);
-      menu.style.setProperty("--quick-x", `${originX}px`);
-      menu.style.setProperty("--quick-y", `${originY}px`);
-      menu.innerHTML = `
-        <span class="episode-quick-halo"></span>
-        <span class="episode-quick-trail"></span>
-        <span class="episode-quick-cursor"></span>
-        ${showEpisodeRatingRecord() ? '<span class="episode-quick-action score" data-episode-action="score">评分</span>' : ""}
-        ${showOpedRecord() ? '<span class="episode-quick-action op" data-episode-action="op">OP</span><span class="episode-quick-action ed" data-episode-action="ed">ED</span>' : ""}
-        ${showEpisodeReviewRecord() ? '<span class="episode-quick-action review" data-episode-action="review">评价</span>' : ""}
-      `;
-      $("#progressModal").append(menu);
-      requestAnimationFrame(() => menu.classList.add("visible"));
-      quickMenuOpen = true;
-      updateQuickTarget(event);
-    };
-    button.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || !episode || !hasEnabledQuickRecordActions()) return;
-      suppressClick = false;
-      button.setPointerCapture?.(event.pointerId);
-      pressTimer = window.setTimeout(() => openQuickMenu(event), 420);
-    });
-    if (annotations.length) {
-      button.addEventListener("pointerenter", openEpisodeAnnotation);
-      button.addEventListener("pointerleave", closeEpisodeAnnotation);
-      button.addEventListener("focusin", openEpisodeAnnotation);
-      button.addEventListener("focusout", closeEpisodeAnnotation);
-    }
-    button.addEventListener("pointermove", (event) => {
-      if (quickMenuOpen) updateQuickTarget(event);
-    });
-    const finishQuickAction = async (event) => {
-      stopPressTimer();
-      if (!quickMenuOpen || !episode) return;
-      suppressClick = true;
-      updateQuickTarget(event);
-      const target = document.querySelector("#episodeQuickMenu .episode-quick-action.active")?.dataset.episodeAction;
-      closeQuickMenu();
-      if (target) await createEpisodeQuickRecord(episode, target);
-    };
-    button.addEventListener("pointerup", finishQuickAction);
-    button.addEventListener("pointercancel", () => { stopPressTimer(); closeQuickMenu(); });
-    button.addEventListener("click", () => {
-      if (suppressClick) { suppressClick = false; return; }
-      const episode = String(button.dataset.episodeKey);
-      if (state.pendingEpisodes.has(episode)) state.pendingEpisodes.delete(episode);
-      else state.pendingEpisodes.add(episode);
+    button.addEventListener("pointerenter", open);
+    button.addEventListener("pointerleave", close);
+    button.addEventListener("focusin", open);
+    button.addEventListener("focusout", close);
+  });
+
+  if (typeof installEpisodeGestures !== "function") return;
+  installEpisodeGestures($("#episodeGrid"), {
+    onToggleWatched: (button) => {
+      const key = String(button.dataset.episodeKey);
+      if (state.pendingEpisodes.has(key)) state.pendingEpisodes.delete(key);
+      else state.pendingEpisodes.add(key);
       button.classList.toggle("watched");
-      button.setAttribute("aria-pressed", String(state.pendingEpisodes.has(episode)));
+      button.setAttribute("aria-pressed", String(state.pendingEpisodes.has(key)));
       if (typeof refreshSavedVideoTargets === "function") refreshSavedVideoTargets();
       $$(".episode-group").forEach((section) => {
         const keys = $$(".episode-cell", section).map((item) => item.dataset.episodeKey);
-        const watched = keys.filter((key) => state.pendingEpisodes.has(String(key))).length;
+        const watched = keys.filter((item) => state.pendingEpisodes.has(String(item))).length;
         $("[data-episode-group-summary]", section).textContent = `已看 ${watched} / ${keys.length}`;
       });
-    });
+    },
+    onAction: (action, key, button) => runEpisodeGestureAction(action, key, button),
   });
+
+}
+
+async function runEpisodeGestureAction(action, key, button) {
+  const episodes = Array.isArray(state.progressAnime?.episodes) ? state.progressAnime.episodes : [];
+  const episode = episodes.find((item) => String(item.key) === String(key)) || {
+    key,
+    label: String(button?.textContent || "").trim(),
+  };
+  if (["score", "review", "op", "ed"].includes(action)) {
+    return createEpisodeQuickRecord(episode, action);
+  }
+  if (action === "open_menu") return;
+  if (action === "play") {
+    if (typeof refreshOfflineLocal === "function") refreshOfflineLocal();
+    const files = (typeof offlineView !== "undefined" && offlineView.local?.files) || [];
+    const file = files.find((item) => String(item.episode_key) === String(key));
+    if (file && typeof playLocalFile === "function") return playLocalFile(file.id);
+    toast("这一集还没下载，先用「找资源」下下来", "error");
+    return;
+  }
+  if (action === "download" || action === "redownload") {
+    if (typeof openOffline === "function") return openOffline();
+  }
+  // 单集详情、在文件夹中打开、删除等还没做成独立面板，统一带到离线面板，
+  // 在那里能看清删的是什么、也能二次确认，不会出现「点了没反应」。
+  if (typeof openOffline === "function") openOffline();
+  if (typeof switchOfflineTab === "function") switchOfflineTab("local");
+  toast(`${EG_ACTION_LABELS[action] || action}：请在离线面板里操作这一集`, "error");
 }
 
 async function createEpisodeQuickRecord(episode, action) {

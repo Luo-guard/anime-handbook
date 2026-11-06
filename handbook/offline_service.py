@@ -366,6 +366,7 @@ class OfflineService:
         target_dir.mkdir(parents=True, exist_ok=True)
         fallback_key = str(job.get("episode_key") or "")
         made = 0
+        fonts_done = False
         for source in files:
             number = media_tools.episode_number(source.name)
             # 单文件任务认不出集数时退回用户指定的集数；多文件任务必须能认出，
@@ -381,6 +382,10 @@ class OfflineService:
             except media_tools.MediaError:
                 # 单个文件坏掉不该让整季任务失败，剩下的继续处理。
                 continue
+            # 同一个字幕组的合集里每集附件都一样，抽一次就够，别重复读十几遍原片。
+            if not fonts_done:
+                media_tools.extract_font_attachments(source, target_dir / "_fonts")
+                fonts_done = True
             self.store.replace_file(
                 anime_id=anime_id,
                 episode_key=key,

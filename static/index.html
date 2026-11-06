@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-offline-noshrink" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-gesture-settings" />
   </head>
   <body>
     <div class="app-shell">
@@ -847,6 +847,11 @@
           <div class="settings-section-title" data-settings-section="keyboard">快捷键</div>
           <label class="setting-row"><span><strong>启用快捷键</strong><small>仅在手账页面生效；输入、输入法选字和弹窗编辑期间不响应。按住组合键时请一起按下。</small></span><span class="switch-row compact"><input type="checkbox" id="keyboardEnabledInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键或鼠标前进／后退侧键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，到达第一个或最后一个界面后不再移动。侧键一旦绑定，就不会再触发浏览器自身的前进／后退。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
+          <h3 class="settings-subsection-title">单集格子手势</h3>
+          <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击固定用于记录已看，不参与绑定；右键、长按、修饰键组合、双击和中键都可以自定义。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
+          <label class="setting-row"><span><strong>松手后保留菜单</strong><small>开着：长按或右键弹出扇区后，滑过去松手直接执行，不滑就留着再用左键点选。关掉：不滑松手就直接收起菜单，变成纯滑动操作。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
+          <div class="setting-row stacked"><span><strong>扇区六格</strong><small>每个方位放哪个动作，选「（空）」就是把这一格去掉。默认：上播放、下下载、右上评分、右下评价、左上 ED、左下 OP。</small></span><div id="episodeGestureSlots" class="eg-grid"></div></div>
+          <div class="setting-row stacked"><span><strong>手势与动作</strong><small>一个手势只能绑一个动作，同一个动作最多绑 4 个手势。退格等操作习惯与上面的快捷键不同：这里直接下拉选择。</small></span><div id="episodeGestureBindings" class="eg-grid"></div><p class="eg-warning" id="episodeGestureDoubleWarning" hidden>已绑定双击：单击格子记录已看会延迟约 0.25 秒才响应（这是识别双击的必要代价），所有番剧的格子都会受影响；取消双击绑定后立即恢复。</p><p id="episodeGestureStatus" role="status"></p><button type="button" id="resetEpisodeGestures" class="secondary-button compact-button">恢复默认手势</button></div>
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
           <h3 class="settings-subsection-title">Bangumi 资料来源</h3>
           <div class="setting-row stacked">
@@ -1178,7 +1183,8 @@
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/video-links.js?v=20261106-links-defaults" defer></script>
     <script src="/modules/rules-menu.js?v=20261106-no-hint" defer></script>
-    <script src="/modules/details.js?v=20261106-airing-chip" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261106-gesture-settings" defer></script>
+    <script src="/modules/details.js?v=20261106-gesture-settings" defer></script>
     <script src="/modules/records.js?v=20261106-timeline-defaults" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
@@ -1194,7 +1200,7 @@
     <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/offline.js?v=20261106-jassub" defer></script>
+    <script src="/modules/offline.js?v=20261106-gesture-settings" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

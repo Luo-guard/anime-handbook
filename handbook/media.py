@@ -16,6 +16,14 @@ from typing import Any
 
 VIDEO_SUFFIXES = {".mkv", ".mp4", ".m4v", ".avi", ".ts", ".flv", ".webm", ".mov"}
 SUBTITLE_SUFFIXES = {".ass", ".ssa", ".srt"}
+# 字幕组常把 ASS 用到的字体作为 MKV 附件一起发布；抽出来给 libass 用，
+# 比任何回退字体都准（OP/ED 特效字幕尤其依赖原字体）。
+FONT_SUFFIXES = {".ttf", ".otf", ".ttc", ".otc", ".woff", ".woff2"}
+FONT_MIME = {
+    ".ttf": "font/ttf", ".otf": "font/otf", ".ttc": "font/collection",
+    ".otc": "font/collection", ".woff": "font/woff", ".woff2": "font/woff2",
+}
+FONT_TIMEOUT = 120
 
 # 方括号里几乎都是画质/字幕组/语言标记，先整体去掉再找集数，能避开
 # “[1080p]”“[10bit]”“[01-12+SPx1]” 这类噪声。
@@ -183,6 +191,91 @@ def extract_subtitle(
         dst.unlink(missing_ok=True)
         return ""
     return str(dst)
+
+
+def font_attachments(
+    path: Path | str,
+    *,
+    ffprobe: str = "",
+    timeout: float = PROBE_TIMEOUT,
+) -> list[dict[str, Any]]:
+    """列出 MKV 里的字体附件。
+
+    ``t_index`` 是 ffmpeg ``-dump_attachment:t:N`` 要用的**附件流序号**，
+    不是 ffprobe 的全局 stream index；两者在有视频/音频/字幕轨时并不相等。
+    """
+    binary = ffprobe or tool_path("ffprobe")
+    target = Path(path)
+    if not binary or not target.is_file():
+        return []
+    command = [binary, "-v", "error", "-print_format", "json", "-show_streams", str(target)]
+    try:
+        completed = subprocess.run(command, capture_output=True, timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if completed.returncode != 0:
+        return []
+    try:
+        document = json.loads(completed.stdout.decode("utf-8", "replace"))
+    except ValueError:
+        return []
+    found: list[dict[str, Any]] = []
+    t_index = 0
+    for item in document.get("streams") or []:
+        if item.get("codec_type") != "attachment":
+            continue
+        # ffprobe 有时回绝对路径（取决于压制时 -attach 的参数），统一取 basename。
+        filename = Path(str((item.get("tags") or {}).get("filename") or "")).name
+        if Path(filename).suffix.lower() in FONT_SUFFIXES:
+            found.append({"t_index": t_index, "filename": filename})
+        t_index += 1
+    return found
+
+
+def extract_font_attachments(
+    source: Path | str,
+    target_dir: Path | str,
+    *,
+    ffprobe: str = "",
+    ffmpeg: str = "",
+    timeout: float = FONT_TIMEOUT,
+) -> list[str]:
+    """把字体附件抽到 ``target_dir``，返回抽出的路径列表。
+
+    抽不到或抽失败都返回空列表：字体只是字幕观感，绝不能让归档失败。
+    """
+    attachments = font_attachments(source, ffprobe=ffprobe)
+    binary = ffmpeg or tool_path("ffmpeg")
+    if not attachments or not binary:
+        return []
+    src = Path(source)
+    root = Path(target_dir)
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return []
+    made: list[str] = []
+    for item in attachments:
+        # 只取 basename，避免附件名里的 ../ 写到媒体库外面。
+        name = Path(str(item["filename"])).name
+        if Path(name).suffix.lower() not in FONT_SUFFIXES:
+            continue
+        destination = root / name
+        command = [
+            binary, "-y", "-v", "error",
+            f"-dump_attachment:t:{int(item['t_index'])}", str(destination),
+            "-i", str(src),
+            "-f", "null", "-",
+        ]
+        try:
+            completed = subprocess.run(command, capture_output=True, timeout=timeout, check=False)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if completed.returncode != 0 or not destination.is_file() or destination.stat().st_size == 0:
+            destination.unlink(missing_ok=True)
+            continue
+        made.append(str(destination))
+    return made
 
 
 def episode_number(name: str) -> int:

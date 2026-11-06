@@ -737,7 +737,12 @@ function warmSubtitleRenderer() {
 async function setupSubtitleRenderer(file, video) {
   const token = ++offlineView.subtitleToken;
   try {
-    const response = await fetch(`/api/offline/subtitle/${file.id}`);
+    const [response, fontData] = await Promise.all([
+      fetch(`/api/offline/subtitle/${file.id}`),
+      fetch(`/api/offline/fonts/${file.id}`)
+        .then((result) => (result.ok ? result.json() : { items: [] }))
+        .catch(() => ({ items: [] })),
+    ]);
     if (!response.ok) throw new Error("字幕文件读取失败");
     const subContent = await response.text();
     const boot = warmSubtitleRenderer();
@@ -749,6 +754,15 @@ async function setupSubtitleRenderer(file, video) {
     ]);
     if (!session) throw new Error("字幕渲染器启动失败");
     if (token !== offlineView.subtitleToken) return; // 期间已经换集或关掉播放器
+    // 片源自带的字体优先：libass 按 ASS 里写死的字体名匹配这些附件，
+    // 匹配不到才回退到打包的 Noto Sans SC。同一套字体不重复加载。
+    const fontUrls = (fontData.items || []).map((item) => item.url).filter(Boolean);
+    const fontKey = fontUrls.join("|");
+    if (fontUrls.length && session.loadedFontKey !== fontKey) {
+      await session.instance.renderer.addFonts(fontUrls);
+      session.loadedFontKey = fontKey;
+    }
+    if (token !== offlineView.subtitleToken) return;
     if (session.fileId !== file.id) {
       await session.instance.renderer.setTrack(subContent);
       session.fileId = file.id;
@@ -757,7 +771,8 @@ async function setupSubtitleRenderer(file, video) {
     session.enabled = true;
     if (session.canvas) session.canvas.style.display = "";
     offlineView.subtitle = session;
-    $("#offlinePlayerMeta").textContent = "页面内字幕已开启，右侧可随时关闭；视频播放不受字幕影响。";
+    const fontNote = fontUrls.length ? ` · 已加载 ${fontUrls.length} 个片源字体` : "";
+    $("#offlinePlayerMeta").textContent = `页面内字幕已开启${fontNote}，右侧可随时关闭；视频播放不受字幕影响。`;
   } catch (error) {
     if (token !== offlineView.subtitleToken) return;
     console.warn("字幕渲染器初始化失败：", error);

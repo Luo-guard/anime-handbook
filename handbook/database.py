@@ -532,6 +532,7 @@ class HandbookDB:
                 "statistics_default_theme": "watch",
                 "timeline_default_themes": [],
                 "keyboard_shortcuts": {},
+                "episode_gestures": {},
                 "statistics_show_zero_periods": True,
                 "show_watch_events": True,
                 "show_note_events": True,

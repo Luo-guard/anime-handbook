@@ -4,12 +4,12 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  const page=await browser.newPage();
  const videos=fs.readFileSync('static/modules/video-links.js','utf8');
  const resume=videos.slice(videos.indexOf('function bilibiliResumeUrl'),videos.indexOf('function renderBilibiliEntrypoints'));
- await page.setContent('<style>'+fs.readFileSync('static/styles.css','utf8')+'</style><main style="max-width:820px;margin:24px auto;background:var(--surface);padding:20px"><h2>佐佐木与文鸟小哔 第二季</h2><a id="resume" data-video-resume-url="https://www.bilibili.com/video/BV1AgHK6jE64/?p=8"></a><input id="episodeCountInput" value="12" hidden><div id="episodeGrid" class="episode-grid"></div></main>');
+ await page.setContent('<style>'+fs.readFileSync('static/styles.css','utf8')+'</style><main style="max-width:820px;margin:24px auto;background:var(--surface);padding:20px"><h2>佐佐木与文鸟小哔 第二季</h2><a id="resume" data-video-resume-url="https://www.bilibili.com/video/BV1AgHK6jE64/?p=8"></a><input id="episodeCountInput" value="12" hidden><div id="progressModal"><div id="episodeGrid" class="episode-grid"></div></div></main>');
  await page.addScriptTag({content:`
  const $=(s,root=document)=>root.querySelector(s),$$=(s,root=document)=>[...root.querySelectorAll(s)];
  const escapeHtml=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
  const state={settings:{},pendingEpisodes:new Set(['0:1']),episodeRecordAnnotations:{},progressAnime:{airing:{aired:4,total:14,next_label:'11/04 20:00'},episodes:[...Array.from({length:12},(_,i)=>({key:'0:'+(i+1),type:0,type_label:'本篇',label:String(i+1).padStart(2,'0')})),{key:'2:1',type:2,type_label:'OP',label:'01'},{key:'3:1',type:3,type_label:'ED',label:'01'}]}};
- `+resume+'\n'+fs.readFileSync('static/modules/presentation.js','utf8')+'\n'+fs.readFileSync('static/modules/details.js','utf8')+'\nrenderEpisodeGrid();'});
+ `+resume+'\n'+fs.readFileSync('static/modules/presentation.js','utf8')+'\n'+fs.readFileSync('static/modules/episode-gesture.js','utf8')+'\n'+fs.readFileSync('static/modules/details.js','utf8')+'\nrenderEpisodeGrid();'});
  assert.equal(new URL(await page.locator('#resume').getAttribute('href')).searchParams.get('p'),'2');
  for(const width of [920,390,320]){
   await page.setViewportSize({width,height:800});
