@@ -3805,7 +3805,53 @@ dialog::backdrop {
 .progress-meta { margin-top: 0; margin-bottom: 0; line-height: 1.95; }
 .meta-separator { margin: 0 9px; }
 /* 评分、个人评分、收藏按钮并成一行；收藏靠右，和评分基线对齐。 */
-.progress-info-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 9px; }
+.progress-info-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 17px; }
 .progress-info-row .anime-rating,
 .progress-info-row .personal-rating { margin-top: 0; }
 .progress-info-row .collect-detail-row { margin-top: 0; margin-left: auto; }
+
+/* 离线面板 v2：宽度交给弹窗自己控制，避免 frame 比 dialog 宽导致横向滚动。 */
+.offline-modal { width: min(860px, calc(100vw - 28px)); }
+.offline-modal .modal-frame { width: 100%; padding: 26px 28px 22px; max-height: calc(100vh - 28px); display: flex; flex-direction: column; }
+.offline-modal .modal-close { top: 16px; right: 18px; }
+.offline-modal .eyebrow { margin: 0 0 3px; font-size: 10px; letter-spacing: .16em; }
+#offlineHeading { margin: 0; font-family: inherit; font-size: 17px; font-weight: 700; line-height: 1.35; letter-spacing: .2px; }
+.offline-target { margin: 3px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.offline-modal .offline-tabs { margin: 13px 0 14px; gap: 2px; }
+.offline-modal .offline-tab { padding: 7px 12px; font-size: 13px; }
+.offline-toolbar { align-items: center; margin-bottom: 10px; }
+.offline-toolbar input { padding: 9px 12px; background: var(--surface); font-size: 13px; }
+.offline-toolbar .primary-button { flex: 0 0 auto; padding: 9px 18px; border-radius: 10px; font-size: 13px; }
+.offline-filter { gap: 5px; margin-bottom: 9px; max-height: 64px; overflow-y: auto; }
+.offline-chip { padding: 3px 10px; font-size: 11.5px; }
+.offline-status { margin: 0 0 8px; font-size: 11.5px; }
+.offline-list { padding: 0; gap: 0; background: var(--surface); border-radius: 12px; overflow-x: hidden; overflow-y: auto; }
+.offline-row { align-items: flex-start; gap: 12px; padding: 11px 14px; border-radius: 0; }
+.offline-row + .offline-row { border-top: 1px solid var(--line); }
+.offline-row:hover { background: var(--green-50); border-radius: 0; }
+.offline-row-main { min-width: 0; }
+.offline-row-title { margin: 0 0 5px; font-size: 13px; font-weight: 500; line-height: 1.5; }
+.offline-row-meta { gap: 7px; font-size: 11.5px; }
+.offline-group { padding: 1px 6px; border-radius: 5px; background: var(--green-50); color: var(--green-800); font-size: 11px; font-weight: 600; }
+.offline-tag { padding: 0 5px; border-radius: 5px; font-size: 11px; color: var(--muted); }
+.offline-size { color: var(--ink); font-size: 11.5px; font-weight: 600; }
+.offline-date { color: var(--muted); font-size: 11.5px; }
+.offline-row-actions { padding-top: 1px; gap: 2px; }
+.offline-download { border: 0; background: var(--green-700); color: #fff; border-radius: 8px; padding: 6px 15px; font-size: 12px; font-weight: 600; }
+.offline-download:hover:not(:disabled) { background: var(--green-800); }
+.offline-download:disabled { opacity: .5; cursor: default; }
+.offline-subscribe { border: 0; background: transparent; color: var(--muted); padding: 6px 9px; border-radius: 8px; font-size: 12px; }
+.offline-subscribe:hover { color: var(--green-700); background: var(--green-50); }
+
+/* 页签上的数量做成小药丸，标题与行文字左右对齐。 */
+.offline-modal .offline-tab { display: inline-flex; align-items: center; gap: 6px; }
+#offlineLocalCount:not(:empty) { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 999px; background: var(--green-50); color: var(--green-800); font-size: 11px; font-weight: 600; line-height: 1; }
+.offline-section-title { margin: 10px 14px 3px; }
+
+/* 详情头部：日期链接行与评分行拉开，评分行下方也留一点，别贴着页签。 */
+.progress-meta { padding-bottom: 3px; }
+.progress-hero { padding-bottom: 15px; }
+
+/* 说明句删掉后，空的状态行不该再占一行留白。 */
+.rules-status:empty { display: none; }
+.rules-menu-dialog .rules-toolbar { margin-bottom: 10px; }

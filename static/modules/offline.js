@@ -32,7 +32,9 @@ function openOffline() {
   offlineView.animeId = Number(anime.id || 0);
   const name = anime.display_name || anime.name_cn || anime.name || "";
   offlineView.animeName = name;
-  $("#offlineHeading").textContent = name ? `离线下载 · ${name}` : "离线下载";
+  $("#offlineHeading").textContent = "离线下载";
+  $("#offlineTarget").textContent = name || "";
+  $("#offlineTarget").classList.toggle("hidden", !name);
   if (!$("#offlineQuery").value.trim()) $("#offlineQuery").value = name;
   offlineStatus("#offlineStatus", "");
   offlineStatus("#offlineLocalStatus", "");
@@ -86,6 +88,11 @@ async function runOfflineSearch() {
   }
 }
 
+// 标题开头的 [字幕组] 与下面单独显示的字幕组重复，去掉再显示。
+function cleanTorrentTitle(title) {
+  return String(title || "").replace(/^\s*[\[【][^\]】]{1,40}[\]】]\s*/, "");
+}
+
 function renderOfflineGroups() {
   const host = $("#offlineGroups");
   const groups = [...new Set(offlineView.items.map((item) => item.group).filter(Boolean))];
@@ -131,7 +138,7 @@ function renderOfflineList() {
       return `
         <article class="offline-row" data-index="${index}">
           <div class="offline-row-main">
-            <p class="offline-row-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</p>
+            <p class="offline-row-title" title="${escapeHtml(item.title)}">${escapeHtml(cleanTorrentTitle(item.title))}</p>
             <p class="offline-row-meta">
               <span class="offline-group">${escapeHtml(item.group || "未标注字幕组")}</span>
               ${tags}

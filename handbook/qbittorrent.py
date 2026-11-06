@@ -160,7 +160,7 @@ class Client:
         category: str = "",
         tags: tuple[str, ...] = (),
         paused: bool = False,
-        skip_checking: bool = True,
+        skip_checking: bool = False,
     ) -> None:
         """提交一个已下载到本地的 .torrent。
 
@@ -176,9 +176,13 @@ class Client:
             fields["category"] = str(category)
         if tags:
             fields["tags"] = ",".join(str(tag) for tag in tags if str(tag).strip())
-        fields["paused"] = "true" if paused else "false"
-        fields["stopped"] = "true" if paused else "false"
-        fields["skip_checking"] = "true" if skip_checking else "false"
+        # qB 对布尔参数只认存在与否，传 "false" 也可能被当成 true；
+        # 不暂停时干脆不发这两个字段。
+        if paused:
+            fields["paused"] = "true"
+            fields["stopped"] = "true"
+        if skip_checking:
+            fields["skip_checking"] = "true"
         boundary = "----AnimeHandbook" + uuid.uuid4().hex
         body = build_multipart(fields, {"torrents": (filename, payload)}, boundary)
         raw = self._request(

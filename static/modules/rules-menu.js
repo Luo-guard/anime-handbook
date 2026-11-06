@@ -69,10 +69,6 @@ function renderRulesMenu() {
   const list = $("#rulesMenuList");
   if (!list) return;
   const cache = rulesMenuCache();
-  const title = String(rulesMenuValues?.title || "").trim();
-  $("#rulesMenuTitle").textContent = title
-    ? `点一个站点就在新标签里搜索「${title}」；右侧图钉可以把常用站点固定到详情页。`
-    : "点一个站点就在新标签里搜索这部番；右侧图钉可以把常用站点固定到详情页。";
 
   if (!cache) {
     list.innerHTML = `<p class="rules-empty">规则还没加载。</p>`;

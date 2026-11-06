@@ -15,6 +15,7 @@ from typing import Any
 
 from . import media as media_tools
 from . import mikan, offline_config
+from .torrent_meta import TorrentMetaError, torrent_infohash, torrent_name
 from .offline import OfflineStore
 from .common import now_iso
 from .qbittorrent import QBError, Client, normalise_base
@@ -140,9 +141,32 @@ class OfflineService:
             payload = mikan.fetch_torrent(torrent_url)
         except mikan.MikanError as error:
             raise OfflineError(str(error)) from error
-        # 每次任务打一个独有标签，提交后靠它把任务从 qB 里认回来，避免按名字猜。
+        # infohash 是种子自身的身份，先算出来；提交后用它认回任务最可靠。
+        # 之前只按标签查，qB 刚 add 完还没注册完就会查不到，误报「没接住」。
+        try:
+            infohash = torrent_infohash(payload)
+        except TorrentMetaError:
+            infohash = ""
+        display_name = torrent_name(payload) or str(title or "")
         tag = "hb" + uuid.uuid4().hex[:10]
         client = self.client(config)
+
+        # 同一个种子已经在 qB 里时不要重复提交：qB 会直接回 "Fails."，
+        # 之前把它当成失败，用户就会反复点、反复报错。
+        existing = client.torrent(infohash) if infohash else None
+        if existing:
+            return self._register_job(
+                anime_id=anime_id,
+                task=existing,
+                title=title,
+                display_name=display_name,
+                episode_key=episode_key,
+                group_name=group_name,
+                resolution=resolution,
+                codec=codec,
+                download_root=paths["download_root"],
+                reused=True,
+            )
         try:
             client.add_torrent(
                 payload,
@@ -152,26 +176,91 @@ class OfflineService:
                 tags=("handbook", tag),
                 paused=False,
             )
-            found = client.torrents(tag=tag)
         except QBError as error:
-            raise OfflineError(str(error)) from error
-        if not found:
-            raise OfflineError("qBittorrent 没有接住这个种子，请检查它是否在运行")
-        task = found[0]
+            # "Fails." 最常见的原因就是重复种子；再按 infohash 找一次，
+            # 找得到就当复用，找不到才把原始错误交给用户。
+            if infohash:
+                existing = client.torrent(infohash)
+                if existing:
+                    return self._register_job(
+                        anime_id=anime_id,
+                        task=existing,
+                        title=title,
+                        display_name=display_name,
+                        episode_key=episode_key,
+                        group_name=group_name,
+                        resolution=resolution,
+                        codec=codec,
+                        download_root=paths["download_root"],
+                        reused=True,
+                    )
+            raise OfflineError(
+                f"{error}（常见原因：下载器里已有一条相同任务，或保存目录不可写）"
+            ) from error
+        # qB 的 add 返回「Ok.」时任务可能还没进列表，短轮询等它出现。
+        task: dict[str, Any] | None = None
+        for _ in range(12):
+            if infohash:
+                task = client.torrent(infohash)
+            if task:
+                break
+            found = client.torrents(tag=tag)
+            if found:
+                task = found[0]
+                break
+            time.sleep(0.2)
+        if not task:
+            raise OfflineError(
+                "种子已经提交给 qBittorrent，但没能确认任务编号。"
+                "请到 qB 里看一下是不是被合并进已有任务了，或稍后点一下刷新。"
+            )
+        return self._register_job(
+            anime_id=anime_id,
+            task=task,
+            title=title,
+            display_name=display_name,
+            episode_key=episode_key,
+            group_name=group_name,
+            resolution=resolution,
+            codec=codec,
+            download_root=paths["download_root"],
+            reused=False,
+        )
+
+    def _register_job(
+        self,
+        *,
+        anime_id: int,
+        task: dict[str, Any],
+        title: str,
+        display_name: str,
+        episode_key: str,
+        group_name: str,
+        resolution: str,
+        codec: str,
+        download_root: str,
+        reused: bool,
+    ) -> dict[str, Any]:
         job = self.store.create_job(
             anime_id=int(anime_id),
             torrent_hash=str(task.get("hash") or ""),
-            torrent_name=str(task.get("name") or title),
+            torrent_name=str(task.get("name") or display_name),
             source_title=str(title or ""),
             episode_key=str(episode_key or ""),
             group_name=str(group_name or ""),
             resolution=str(resolution or ""),
             codec=str(codec or ""),
-            save_path=str(paths["download_root"]),
+            save_path=str(download_root),
         )
         if group_name:
             offline_config.remember_group(self.asset_root, anime_id, group_name)
-        return {"ok": True, "job": job, "download_root": paths["download_root"]}
+        return {
+            "ok": True,
+            "job": job,
+            "download_root": download_root,
+            "reused": reused,
+            "task_state": str(task.get("state") or ""),
+        }
 
     # ---- 进度同步 -----------------------------------------------------
 

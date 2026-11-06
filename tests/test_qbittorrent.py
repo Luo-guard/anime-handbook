@@ -83,6 +83,16 @@ class AddTorrentTest(unittest.TestCase):
             Client(opener=opener).add_torrent(b"d4:infodee")
         self.assertIn("拒绝", str(caught.exception))
 
+    def test_no_paused_or_skip_checking_fields_when_running(self):
+        # qB 把布尔参数「出现」当成真值，所以正常运行时不该发这些字段，
+        # 也不该开 skip_checking（新下载需要正常校验，否则容易 missingFiles）。
+        opener = Recorder(FakeResponse(b"Ok."))
+        Client(opener=opener).add_torrent(b"d4:infodee")
+        body = opener.requests[0].data
+        self.assertNotIn(b'name="paused"', body)
+        self.assertNotIn(b'name="stopped"', body)
+        self.assertNotIn(b'name="skip_checking"', body)
+
     def test_empty_payload_rejected_before_network(self):
         opener = Recorder()
         with self.assertRaises(QBError):

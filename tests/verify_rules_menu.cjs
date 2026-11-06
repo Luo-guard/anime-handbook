@@ -72,7 +72,8 @@ async function loadLinkRules() { return linkRulesState.items; }
     await page.locator('#detailLinks .detail-link-menu').click();
     assert.equal(await page.locator('#rulesMenuModal').evaluate((node) => node.open), true);
     assert.equal(await page.locator('#rulesMenuList .rules-menu-row').count(), 3);
-    assert.match(await page.locator('#rulesMenuTitle').textContent(), /测试番剧/);
+    // 那句「点一个站点就在新标签里搜索…」已删除，弹窗只保留标题、搜索框和列表。
+    assert.equal(await page.locator('#rulesMenuTitle').count(), 0);
     assert.match(await page.locator('#rulesMenuStatus').textContent(), /共 3 个站点/);
 
     // 3) 搜索按名称与域名过滤。

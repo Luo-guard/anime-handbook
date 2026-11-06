@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-hero-layout" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-rules-tight" />
   </head>
   <body>
     <div class="app-shell">
@@ -287,7 +287,6 @@
         <button type="button" class="modal-close" id="rulesMenuClose" aria-label="关闭">×</button>
         <p class="eyebrow">MORE SOURCES</p>
         <h2 id="rulesMenuHeading">选择站点</h2>
-        <p class="page-subtitle" id="rulesMenuTitle">点一个站点就在新标签里搜索这部番。</p>
         <div class="rules-toolbar">
           <input type="search" id="rulesMenuSearch" placeholder="搜索站点名或域名" aria-label="搜索站点" autocomplete="off" />
         </div>
@@ -300,7 +299,7 @@
         <button type="button" class="modal-close" id="offlineClose" aria-label="关闭">×</button>
         <p class="eyebrow">OFFLINE</p>
         <h2 id="offlineHeading">离线下载</h2>
-        <p class="page-subtitle">在蜜柑里搜关键词，挑一条种子交给本机的 qBittorrent。</p>
+        <p class="offline-target" id="offlineTarget"></p>
         <div class="offline-tabs" role="tablist">
           <button type="button" class="offline-tab active" data-offline-tab="search" role="tab" aria-selected="true">找资源</button>
           <button type="button" class="offline-tab" data-offline-tab="local" role="tab" aria-selected="false">本地文件 <span id="offlineLocalCount"></span></button>
@@ -1173,7 +1172,7 @@
     <script src="/modules/collection-cards.js?v=20261104-hardening" defer></script>
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/video-links.js?v=20261106-links-defaults" defer></script>
-    <script src="/modules/rules-menu.js?v=20261106-rules-menu" defer></script>
+    <script src="/modules/rules-menu.js?v=20261106-no-hint" defer></script>
     <script src="/modules/details.js?v=20261105-record-time" defer></script>
     <script src="/modules/records.js?v=20261106-timeline-defaults" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
@@ -1190,7 +1189,7 @@
     <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/offline.js?v=20261106-offline-final" defer></script>
+    <script src="/modules/offline.js?v=20261106-offline-v2" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>
