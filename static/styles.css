@@ -3855,3 +3855,8 @@ dialog::backdrop {
 /* 说明句删掉后，空的状态行不该再占一行留白。 */
 .rules-status:empty { display: none; }
 .rules-menu-dialog .rules-toolbar { margin-bottom: 10px; }
+
+/* 评分行沉到封面底边：右侧信息列撑满与封面同高，评分行用 auto 贴底。
+   短标题时封面更高，会多出一段留白；长标题折行时空间自然收窄，不会重叠。 */
+.progress-hero-info { align-self: stretch; display: flex; flex-direction: column; min-width: 0; }
+.progress-hero-info .progress-info-row { margin-top: auto; padding-top: 14px; }
