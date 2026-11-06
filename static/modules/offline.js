@@ -139,7 +139,10 @@ function renderOfflineList() {
               <span class="offline-date">${escapeHtml(String(item.published_at || "").slice(0, 10))}</span>
             </p>
           </div>
-          <button type="button" class="offline-download" data-index="${index}">下载</button>
+          <div class="offline-row-actions">
+            <button type="button" class="offline-subscribe" data-subscribe="${index}" title="以后这个字幕组有新集就自动下载">订阅</button>
+            <button type="button" class="offline-download" data-index="${index}">下载</button>
+          </div>
         </article>`;
     })
     .join("");
@@ -373,9 +376,18 @@ document.addEventListener("DOMContentLoaded", () => {
     renderOfflineList();
   });
   $("#offlineList")?.addEventListener("click", (event) => {
+    const subscribe = event.target.closest("[data-subscribe]");
+    if (subscribe) return subscribeFromResult(Number(subscribe.dataset.subscribe));
     const button = event.target.closest(".offline-download");
     if (button) startOfflineDownload(Number(button.dataset.index));
   });
+  $("#offlineSubList")?.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-sub-toggle]");
+    if (toggle) return toggleSubscription(toggle.dataset.subToggle, toggle.dataset.enabled !== "1");
+    const remove = event.target.closest("[data-sub-del]");
+    if (remove) return removeSubscription(remove.dataset.subDel);
+  });
+  $("#offlineCheckSubs")?.addEventListener("click", checkSubscriptions);
   $("#offlineLocalList")?.addEventListener("click", (event) => {
     const task = event.target.closest("[data-task]");
     if (task) return taskAction(task.dataset.task, task.dataset.action);
@@ -387,6 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (remove.dataset.job) return removeJob(remove.dataset.job);
   });
   $("#offlineSaveSettings")?.addEventListener("click", saveOfflineSettings);
+  $("#offlineMigrate")?.addEventListener("click", migrateMediaRoot);
   $("#offlineResetRoot")?.addEventListener("click", () => {
     $("#offlineMediaRoot").value = "";
     $("#offlineDownloadRoot").value = "";
@@ -449,11 +462,13 @@ async function loadOfflineSettings() {
     $("#offlineMediaRoot").placeholder = data.default_media_root || "";
     $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
     const writable = data.writable || {};
+    const room = writable.free_gb ? `，剩余 ${writable.free_gb} GB` : "";
     offlineStatus(
       status,
-      writable.ok ? "目录可写，qBittorrent 连接正常" : writable.error || "目录不可写",
+      writable.ok ? `目录可写${room}` : writable.error || "目录不可写",
       !writable.ok,
     );
+    refreshSubscriptions();
   } catch (error) {
     offlineStatus(status, error.message || "读取设置失败", true);
   }
@@ -483,5 +498,132 @@ async function saveOfflineSettings() {
   } catch (error) {
     offlineStatus(status, error.message || "保存失败", true);
     toast(error.message || "保存失败", "error");
+  }
+}
+
+
+async function subscribeFromResult(index) {
+  const item = offlineVisibleItems()[index];
+  if (!item) return;
+  const keyword = $("#offlineQuery").value.trim();
+  if (!keyword) return;
+  try {
+    await api("/api/offline/subscribe", {
+      method: "POST",
+      body: JSON.stringify({
+        anime_id: offlineView.animeId,
+        keyword,
+        group_name: item.group || "",
+        enabled: true,
+      }),
+    });
+    toast(`已订阅「${item.group || "这个关键词"}」的新集`);
+    refreshSubscriptions();
+  } catch (error) {
+    toast(error.message || "订阅失败", "error");
+  }
+}
+
+async function refreshSubscriptions() {
+  const host = $("#offlineSubList");
+  if (!host) return;
+  try {
+    const data = await api(`/api/offline/subscriptions?anime_id=${offlineView.animeId}`);
+    const items = data.items || [];
+    if (!items.length) {
+      host.innerHTML = `<p class="offline-empty">还没有订阅。到「找资源」页，在结果上点「订阅」。</p>`;
+      return;
+    }
+    host.innerHTML = items
+      .map((sub) => {
+        const enabled = Number(sub.enabled || 0) === 1;
+        const checked = sub.last_checked ? String(sub.last_checked).slice(0, 16).replace("T", " ") : "还没检查";
+        return `
+          <article class="offline-row">
+            <div class="offline-row-main">
+              <p class="offline-row-title">${escapeHtml(sub.keyword)}</p>
+              <p class="offline-row-meta"><span class="offline-group">${escapeHtml(sub.group_name || "不限字幕组")}</span><span class="offline-date">上次检查 ${escapeHtml(checked)}</span>${enabled ? "" : '<span class="offline-tag">已暂停</span>'}</p>
+            </div>
+            <div class="offline-row-actions">
+              <button type="button" class="offline-play" data-sub-toggle="${sub.id}" data-enabled="${enabled ? 1 : 0}">${enabled ? "暂停" : "恢复"}</button>
+              <button type="button" class="offline-remove" data-sub-del="${sub.id}">取消</button>
+            </div>
+          </article>`;
+      })
+      .join("");
+  } catch (error) {
+    host.innerHTML = `<p class="offline-empty">${escapeHtml(error.message || "读取订阅失败")}</p>`;
+  }
+}
+
+async function toggleSubscription(subId, enabled) {
+  try {
+    await api("/api/offline/subscribe", {
+      method: "POST",
+      body: JSON.stringify({ id: Number(subId), enabled }),
+    });
+    refreshSubscriptions();
+  } catch (error) {
+    toast(error.message || "操作失败", "error");
+  }
+}
+
+async function removeSubscription(subId) {
+  if (!window.confirm("取消这条追番订阅？已经下好的文件不受影响。")) return;
+  try {
+    await api("/api/offline/unsubscribe", {
+      method: "POST",
+      body: JSON.stringify({ id: Number(subId) }),
+    });
+    toast("已取消订阅");
+    refreshSubscriptions();
+  } catch (error) {
+    toast(error.message || "取消失败", "error");
+  }
+}
+
+async function checkSubscriptions() {
+  try {
+    const data = await api("/api/offline/check", {
+      method: "POST",
+      body: JSON.stringify({ force: true }),
+    });
+    const downloaded = Number(data.downloaded || 0);
+    const checked = Number(data.checked || 0);
+    toast(checked ? (downloaded ? `检查 ${checked} 条，下载了 ${downloaded} 集` : `检查 ${checked} 条，没有新集`) : "没有需要检查的订阅");
+    refreshSubscriptions();
+    refreshOfflineLocal();
+  } catch (error) {
+    toast(error.message || "检查失败", "error");
+  }
+}
+
+
+async function migrateMediaRoot() {
+  const target = $("#offlineMediaRoot").value.trim();
+  if (!target) {
+    toast("先在上面「媒体库目录」填目标路径", "error");
+    return;
+  }
+  if (!window.confirm(`把已入库的文件复制到\n${target}\n\n复制并逐个校验大小，全部成功才切换目录；原文件保留不删。`)) return;
+  const status = "#offlineSettingsStatus";
+  offlineStatus(status, "正在复制…文件多的时候会慢一会儿");
+  try {
+    const data = await api("/api/offline/migrate", {
+      method: "POST",
+      body: JSON.stringify({ target }),
+    });
+    const failed = data.failed || [];
+    if (failed.length) {
+      offlineStatus(status, `${data.copied} 集已复制，但有 ${failed.length} 集失败，目录没有切换`, true);
+      toast("有文件没复制成功，已保持原目录", "error");
+    } else {
+      offlineStatus(status, `已迁移 ${data.copied} 集，目录已切换`);
+      toast(`迁移完成：${data.copied} 集`);
+      refreshOfflineLocal();
+    }
+  } catch (error) {
+    offlineStatus(status, error.message || "迁移失败", true);
+    toast(error.message || "迁移失败", "error");
   }
 }

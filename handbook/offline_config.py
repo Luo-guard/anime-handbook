@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -138,9 +139,10 @@ def ensure_dirs(config: dict[str, Any]) -> dict[str, Any]:
             result["error"] = f"{target} 不可写：{error}"
             return result
     try:
-        usage = os.statvfs(paths["media_root"]) if hasattr(os, "statvfs") else None
-        if usage is not None:
-            result["free_gb"] = round(usage.f_bavail * usage.f_frsize / (1 << 30), 1)
+        # shutil.disk_usage 在 Windows 上也能用，os.statvfs 不行。
+        usage = shutil.disk_usage(paths["media_root"])
+        result["free_gb"] = round(usage.free / (1 << 30), 1)
+        result["total_gb"] = round(usage.total / (1 << 30), 1)
     except OSError:
         pass
     return result

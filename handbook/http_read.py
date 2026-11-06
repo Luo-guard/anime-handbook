@@ -174,6 +174,10 @@ class ReadRoutes:
                 if anime_id <= 0:
                     raise ValueError("番剧 ID 无效")
                 self.send_json(OfflineService(self.database).state(anime_id))
+            elif path == "/api/offline/subscriptions":
+                raw = query.get("anime_id", [""])[0]
+                anime_id = int(raw) if str(raw).isdigit() and int(raw) > 0 else None
+                self.send_json(OfflineService(self.database).subscriptions(anime_id))
             elif path == "/api/offline/summary":
                 self.send_json(OfflineService(self.database).summary())
             elif path == "/api/offline/settings":

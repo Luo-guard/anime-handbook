@@ -16,6 +16,7 @@ from typing import Any
 from . import media as media_tools
 from . import mikan, offline_config
 from .offline import OfflineStore
+from .common import now_iso
 from .qbittorrent import QBError, Client, normalise_base
 
 
@@ -62,8 +63,12 @@ def _seconds_stale(iso_text: str) -> float:
 
 
 # 归档（remux）放在后台线程做：一季 12 集串行封装要几十秒，不能卡住 GET。
+CHECK_INTERVAL_SECONDS = 6 * 3600
+
 _ARCHIVING: set[int] = set()
 _ARCHIVE_LOCK = threading.Lock()
+_AUTO_CHECK_LOCK = threading.Lock()
+_AUTO_CHECK_RUNNING = False
 
 
 class OfflineService:
@@ -315,6 +320,7 @@ class OfflineService:
             jobs = self.store.jobs_for_anime(int(anime_id))
         for job in jobs:
             job["live"] = live.get(int(job["id"]), {})
+        self.maybe_auto_check()
         files = self.store.files_for_anime(int(anime_id))
         ready = {str(item.get("episode_key")) for item in files}
         return {
@@ -325,6 +331,32 @@ class OfflineService:
             "counts": self.store.summary(),
             "paths": offline_config.resolved(self.config()),
         }
+
+    def maybe_auto_check(self) -> None:
+        """在后台跑一次订阅检查；不阻塞当前请求。
+
+        自动追番关着的时候什么都不做；同一条订阅 6 小时内只查一次，所以即使
+        前端每隔几秒轮询一次状态，也不会真的反复联网。
+        """
+        if not self.config().get("auto_follow"):
+            return
+        global _AUTO_CHECK_RUNNING
+        with _AUTO_CHECK_LOCK:
+            if _AUTO_CHECK_RUNNING:
+                return
+            _AUTO_CHECK_RUNNING = True
+
+        def worker() -> None:
+            global _AUTO_CHECK_RUNNING
+            try:
+                self.check_subscriptions()
+            except Exception:  # noqa: BLE001 - 后台线程不能把异常抛给无人接收的地方
+                pass
+            finally:
+                with _AUTO_CHECK_LOCK:
+                    _AUTO_CHECK_RUNNING = False
+
+        threading.Thread(target=worker, name="handbook-offline-check", daemon=True).start()
 
     # ---- 删除 ---------------------------------------------------------
 
@@ -402,6 +434,202 @@ class OfflineService:
                     pass
         self.store.delete_job(int(media_id))
         return {"ok": True, "kept_files": not delete_files and keep_files}
+
+
+    # ---- 自动追番 -----------------------------------------------------
+
+    def subscribe(self, *, anime_id: int, keyword: str, group_name: str = "", enabled: bool = True) -> dict[str, Any]:
+        sub = self.store.add_subscription(
+            anime_id=int(anime_id), keyword=keyword, group_name=group_name, enabled=enabled
+        )
+        return {"ok": True, "subscription": sub}
+
+    def unsubscribe(self, sub_id: int) -> dict[str, Any]:
+        if not self.store.delete_subscription(int(sub_id)):
+            raise OfflineError("订阅不存在")
+        return {"ok": True}
+
+    def subscriptions(self, anime_id: int | None = None) -> dict[str, Any]:
+        return {"ok": True, "items": self.store.subscriptions(anime_id)}
+
+    def check_subscriptions(self, *, force: bool = False) -> dict[str, Any]:
+        """按订阅搜一遍，有更新的集就下最新一条。
+
+        几条刻意的保守规则：
+        1. 自动模式没开就不跑，只有手动「立即检查」能强制跑；
+        2. 每条订阅最多 6 小时查一次，避免反复请求蜜柑；
+        3. 第一次检查只记基准、不下载——否则刚订阅就会把旧集全灌进来；
+        4. 一次只下最新一条，就算积压了十集也不会一口气塞满硬盘；
+        5. 同一条种子下过就不再下（按 torrent id 比对）。
+        """
+        config = self.config()
+        if not force and not config.get("auto_follow"):
+            return {"ok": True, "skipped": True, "reason": "自动追番未开启", "checked": 0, "downloaded": 0, "items": []}
+        subscriptions = self.store.subscriptions()
+        results: list[dict[str, Any]] = []
+        downloaded = 0
+        for sub in subscriptions:
+            if not int(sub.get("enabled") or 0):
+                continue
+            last = str(sub.get("last_checked") or "")
+            if not force and last and _seconds_stale(last) < CHECK_INTERVAL_SECONDS:
+                continue
+            entry = {"id": sub["id"], "keyword": sub["keyword"], "group": sub.get("group_name") or "", "status": "", "title": ""}
+            try:
+                found = mikan.search(
+                    str(sub["keyword"]),
+                    prefer=str(config.get("mikan_host") or ""),
+                    limit=100,
+                )
+            except mikan.MikanError as error:
+                entry["status"] = "error"
+                entry["title"] = str(error)
+                results.append(entry)
+                continue
+            predicate_group = str(sub.get("group_name") or "")
+            candidates = [
+                item
+                for item in found["items"]
+                if item.get("torrent_url")
+                and (not predicate_group or item.get("group") == predicate_group)
+                and str(item.get("id") or "") != str(sub.get("last_torrent") or "")
+            ]
+            candidates.sort(key=lambda item: str(item.get("published_at") or ""))
+            if not last:
+                # 首次检查：把当前最新一条记成基准，不下载。
+                newest = candidates[-1] if candidates else None
+                self.store.touch_subscription(
+                    sub["id"],
+                    last_checked=str((newest or {}).get("published_at") or now_iso()),
+                    last_torrent=str((newest or {}).get("id") or ""),
+                )
+                entry["status"] = "baseline"
+                entry["title"] = (newest or {}).get("title") or "还没有可记录的条目"
+                results.append(entry)
+                continue
+            fresh = [item for item in candidates if str(item.get("published_at") or "") > last]
+            if not fresh:
+                self.store.touch_subscription(sub["id"], last_checked=now_iso(), last_torrent=str(sub.get("last_torrent") or ""))
+                entry["status"] = "nothing"
+                results.append(entry)
+                continue
+            target = fresh[-1]
+            try:
+                self.download(
+                    anime_id=int(sub.get("anime_id") or 0),
+                    torrent_url=str(target["torrent_url"]),
+                    title=str(target.get("title") or ""),
+                    episode_key="",
+                    group_name=str(target.get("group") or predicate_group),
+                    resolution=str(target.get("resolution") or ""),
+                    codec=str(target.get("codec") or ""),
+                )
+                self.store.touch_subscription(
+                    sub["id"],
+                    last_checked=str(target.get("published_at") or now_iso()),
+                    last_torrent=str(target.get("id") or ""),
+                )
+                entry["status"] = "downloaded"
+                entry["title"] = str(target.get("title") or "")
+                downloaded += 1
+            except OfflineError as error:
+                entry["status"] = "error"
+                entry["title"] = str(error)
+                # 失败也推进检查时间，否则前端轮询会反复重试同一条种子。
+                self.store.touch_subscription(sub["id"], last_checked=now_iso())
+            results.append(entry)
+        return {
+            "ok": True,
+            "skipped": False,
+            "checked": len(results),
+            "downloaded": downloaded,
+            "items": results,
+        }
+
+    # ---- 迁移媒体库 ---------------------------------------------------
+
+    def migrate_media_root(self, target_root: str, *, delete_source: bool = False) -> dict[str, Any]:
+        """把已入库的文件搬到新目录。
+
+        刻意做成「先复制、校验大小、再切换指向」，全部成功才改配置；只要有一条
+        失败就原地不动，避免数据库指向一堆没搬过去的路径。默认不删源文件——
+        真要删是另一个明确的开关，不藏在默认行为里。
+        """
+        target_text = str(target_root or "").strip().replace("\\", "/").rstrip("/")
+        if not target_text:
+            raise OfflineError("请填写目标目录")
+        config = self.config()
+        current_text = offline_config.resolved(config)["media_root"].replace("\\", "/").rstrip("/")
+        if target_text == current_text:
+            raise OfflineError("目标目录和当前目录是同一个")
+        current_path = Path(current_text)
+        target_path = Path(target_text)
+        try:
+            target_path.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise OfflineError(f"无法创建目标目录：{error}") from error
+        copied = 0
+        failed: list[dict[str, str]] = []
+        for row in self.store.all_files():
+            source = Path(str(row.get("file_path") or ""))
+            if not source.is_file():
+                failed.append({"file": str(source), "reason": "源文件不存在"})
+                continue
+            try:
+                relative = source.relative_to(current_path)
+            except ValueError:
+                # 文件本来就不在媒体库里（手动挪过），平铺到目标根目录。
+                relative = Path(source.name)
+            destination = target_path / relative
+            try:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+                if destination.stat().st_size != source.stat().st_size:
+                    raise OfflineError("复制后大小不一致")
+            except (OSError, OfflineError) as error:
+                failed.append({"file": str(source), "reason": str(error)})
+                continue
+            subtitle_path = ""
+            subtitle = Path(str(row.get("subtitle_path") or ""))
+            if subtitle.is_file():
+                try:
+                    subtitle_relative = subtitle.relative_to(current_path)
+                except ValueError:
+                    subtitle_relative = Path(subtitle.name)
+                subtitle_target = target_path / subtitle_relative
+                try:
+                    subtitle_target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(subtitle, subtitle_target)
+                    subtitle_path = str(subtitle_target)
+                except OSError:
+                    subtitle_path = str(subtitle)
+            self.store.replace_file(
+                anime_id=int(row["anime_id"]),
+                episode_key=str(row["episode_key"]),
+                file_path=str(destination),
+                file_size=int(row.get("file_size") or 0),
+                duration_ms=int(row.get("duration_ms") or 0),
+                media_id=int(row.get("media_id") or 0),
+                subtitle_path=subtitle_path or str(row.get("subtitle_path") or ""),
+            )
+            copied += 1
+            if delete_source:
+                try:
+                    source.unlink()
+                except OSError:
+                    pass
+        switched = not failed
+        if switched:
+            config["media_root"] = target_text
+            offline_config.save(self.asset_root, config)
+        return {
+            "ok": True,
+            "copied": copied,
+            "failed": failed,
+            "target": target_text,
+            "switched": switched,
+            "deleted_source": delete_source,
+        }
 
     # ---- 汇总 ---------------------------------------------------------
 

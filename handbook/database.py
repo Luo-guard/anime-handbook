@@ -239,6 +239,21 @@ class HandbookDB:
                 -- 一集只保留一个成品文件；换源时替换而不是叠加。
                 CREATE UNIQUE INDEX IF NOT EXISTS local_files_episode
                     ON local_files(anime_id, episode_key);
+                -- 自动追番订阅：一部番 + 一个关键词 + 一个字幕组，一条记录。
+                -- 关键词单独存，是因为用户可能用与番名不同的词去搜；字幕组为空表示不限。
+                CREATE TABLE IF NOT EXISTS local_subscriptions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    anime_id INTEGER NOT NULL DEFAULT 0,
+                    keyword TEXT NOT NULL DEFAULT '',
+                    group_name TEXT NOT NULL DEFAULT '',
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    last_checked TEXT NOT NULL DEFAULT '',
+                    last_torrent TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS local_subscriptions_key
+                    ON local_subscriptions(anime_id, keyword, group_name);
                 CREATE TABLE IF NOT EXISTS anime (
                     id INTEGER PRIMARY KEY,
                     name TEXT NOT NULL DEFAULT '',

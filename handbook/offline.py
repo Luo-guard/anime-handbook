@@ -241,6 +241,11 @@ class OfflineStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def all_files(self) -> list[dict[str, Any]]:
+        with self.db.connect() as db:
+            rows = db.execute("SELECT * FROM local_files ORDER BY anime_id, episode_key").fetchall()
+        return [dict(row) for row in rows]
+
     def set_resume(self, anime_id: int, episode_key: str, resume_ms: int) -> None:
         with self.db.connect() as db:
             db.execute(
@@ -255,6 +260,71 @@ class OfflineStore:
                 "DELETE FROM local_files WHERE anime_id = ? AND episode_key = ?",
                 (int(anime_id), str(episode_key or "")),
             )
+        return cursor.rowcount > 0
+
+
+    # ---- 订阅 ---------------------------------------------------------
+
+    def add_subscription(
+        self,
+        *,
+        anime_id: int,
+        keyword: str,
+        group_name: str = "",
+        enabled: bool = True,
+    ) -> dict[str, Any]:
+        key = " ".join(str(keyword or "").split())
+        if not key:
+            raise ValueError("订阅关键词不能为空")
+        stamp = now_iso()
+        with self.db.connect() as db:
+            db.execute(
+                "INSERT INTO local_subscriptions (anime_id, keyword, group_name, enabled,"
+                " last_checked, last_torrent, created_at, updated_at)"
+                " VALUES (?,?,?,?,'','',?,?)"
+                " ON CONFLICT(anime_id, keyword, group_name) DO UPDATE SET"
+                " enabled = excluded.enabled, updated_at = excluded.updated_at",
+                (int(anime_id), key, str(group_name or ""), 1 if enabled else 0, stamp, stamp),
+            )
+        with self.db.connect() as db:
+            row = db.execute(
+                "SELECT * FROM local_subscriptions WHERE anime_id = ? AND keyword = ? AND group_name = ?",
+                (int(anime_id), key, str(group_name or "")),
+            ).fetchone()
+        return dict(row) if row else {}
+
+    def subscriptions(self, anime_id: int | None = None) -> list[dict[str, Any]]:
+        with self.db.connect() as db:
+            if anime_id is None:
+                rows = db.execute("SELECT * FROM local_subscriptions ORDER BY id DESC").fetchall()
+            else:
+                rows = db.execute(
+                    "SELECT * FROM local_subscriptions WHERE anime_id = ? ORDER BY id DESC",
+                    (int(anime_id),),
+                ).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_subscription_enabled(self, sub_id: int, enabled: bool) -> dict[str, Any] | None:
+        with self.db.connect() as db:
+            db.execute(
+                "UPDATE local_subscriptions SET enabled = ?, updated_at = ? WHERE id = ?",
+                (1 if enabled else 0, now_iso(), int(sub_id)),
+            )
+        with self.db.connect() as db:
+            row = db.execute("SELECT * FROM local_subscriptions WHERE id = ?", (int(sub_id),)).fetchone()
+        return dict(row) if row else None
+
+    def touch_subscription(self, sub_id: int, *, last_checked: str, last_torrent: str = "") -> None:
+        with self.db.connect() as db:
+            db.execute(
+                "UPDATE local_subscriptions SET last_checked = ?, last_torrent = ?, updated_at = ?"
+                " WHERE id = ?",
+                (str(last_checked), str(last_torrent), now_iso(), int(sub_id)),
+            )
+
+    def delete_subscription(self, sub_id: int) -> bool:
+        with self.db.connect() as db:
+            cursor = db.execute("DELETE FROM local_subscriptions WHERE id = ?", (int(sub_id),))
         return cursor.rowcount > 0
 
     # ---- 汇总 ---------------------------------------------------------

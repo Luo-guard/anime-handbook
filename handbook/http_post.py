@@ -70,6 +70,32 @@ class PostRoutes:
                     anime_id, episode_key, int(body.get("resume_ms") or 0)
                 )
                 self.send_json({"ok": True})
+            elif path == "/api/offline/subscribe":
+                service = OfflineService(self.database)
+                if body.get("id") and not str(body.get("keyword") or "").strip():
+                    # 只带 id 表示改已有订阅的开关，不新增记录。
+                    updated = service.store.set_subscription_enabled(
+                        int(body.get("id") or 0), body.get("enabled") is not False
+                    )
+                    if not updated:
+                        raise ValueError("订阅不存在")
+                    self.send_json({"ok": True, "subscription": updated})
+                else:
+                    self.send_json(service.subscribe(
+                        anime_id=int(body.get("anime_id") or 0),
+                        keyword=str(body.get("keyword") or ""),
+                        group_name=str(body.get("group_name") or ""),
+                        enabled=body.get("enabled") is not False,
+                    ))
+            elif path == "/api/offline/unsubscribe":
+                self.send_json(OfflineService(self.database).unsubscribe(int(body.get("id") or 0)))
+            elif path == "/api/offline/check":
+                self.send_json(OfflineService(self.database).check_subscriptions(force=bool(body.get("force"))))
+            elif path == "/api/offline/migrate":
+                self.send_json(OfflineService(self.database).migrate_media_root(
+                    str(body.get("target") or ""),
+                    delete_source=bool(body.get("delete_source")),
+                ))
             elif path == "/api/offline/task":
                 self.send_json(OfflineService(self.database).task_action(
                     int(body.get("media_id") or 0), str(body.get("action") or "")

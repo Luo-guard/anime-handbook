@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-offline-settings" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-offline-final" />
   </head>
   <body>
     <div class="app-shell">
@@ -330,10 +330,16 @@
             <label class="offline-field"><span>下载分类</span><input type="text" id="offlineQbCategory" autocomplete="off" /></label>
             <label class="offline-switch"><input type="checkbox" id="offlineSeedAfter" /><span>下载完成后继续做种<small>关掉会在归档后删除原始文件，省一半空间</small></span></label>
             <label class="offline-switch"><input type="checkbox" id="offlineAutoFollow" /><span>自动追新番<small>默认关闭；开启后才会定时检查你订阅过的番</small></span></label>
+            <div class="offline-subs">
+              <h3 class="offline-section-title">追番订阅 · 这部番</h3>
+              <div class="offline-sub-list" id="offlineSubList"></div>
+              <button type="button" class="text-button" id="offlineCheckSubs">立即检查全部订阅</button>
+            </div>
             <p class="offline-status" id="offlineSettingsStatus" role="status"></p>
             <div class="offline-settings-actions">
               <button type="button" class="primary-button" id="offlineSaveSettings">保存</button>
               <button type="button" class="text-button" id="offlineResetRoot">用默认目录</button>
+              <button type="button" class="text-button" id="offlineMigrate">迁移已有文件</button>
             </div>
           </div>
         </section>
@@ -1182,7 +1188,7 @@
     <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/offline.js?v=20261106-offline-settings" defer></script>
+    <script src="/modules/offline.js?v=20261106-offline-final" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>
