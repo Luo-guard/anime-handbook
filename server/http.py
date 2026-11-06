@@ -25,7 +25,7 @@ ASSETS = Path(__file__).parent / "static"
 LOG = logging.getLogger("animehandbook.online")
 READ_ROUTES = re.compile(r"/api/(?:video-links|link-rules|offline/(?:search|state|summary|settings|subscriptions|stream/[1-9]\d*|subtitle/[1-9]\d*|fonts/[1-9]\d*|font/[1-9]\d*/[^/]+)|animes(?:/[1-9]\d*(?:/(?:characters|episode-records|comments))?)?|collection-state|airing|timeline|statistics|status|schedule(?:/cover)?|covers/[1-9]\d*|character-covers/[1-9]\d*/[1-9]\d*|record-images/[\w-]+\.(?:jpg|png|webp)|background|rankings(?:/[1-9]\d*)?|ranking-templates)\Z")
 WRITE_ROUTES = {
-    "POST": re.compile(r"/api/(?:video-links|link-rules/refresh|offline/(?:download|delete|settings|resume|task|subscribe|unsubscribe|check|migrate)|notes|custom-collections(?:/[1-9]\d*/items)?|rankings(?:/[1-9]\d*/(?:tiers|import|move))?|ranking-templates|animes/custom-sort|animes/[1-9]\d*/(?:rating|comments|characters|episode-titles|progress|episode-count))\Z"),
+    "POST": re.compile(r"/api/(?:video-links|link-rules/refresh|offline/(?:download|delete|settings|resume|task|subscribe|unsubscribe|check|migrate|retry)|notes|custom-collections(?:/[1-9]\d*/items)?|rankings(?:/[1-9]\d*/(?:tiers|import|move))?|ranking-templates|animes/custom-sort|animes/[1-9]\d*/(?:rating|comments|characters|episode-titles|progress|episode-count))\Z"),
     "PATCH": re.compile(r"/api/(?:settings|events/[1-9]\d*|custom-collections/[1-9]\d*|categories/[1-5]|rankings/[1-9]\d*(?:/tiers/[1-9]\d*)?)\Z"),
     "DELETE": re.compile(r"/api/(?:events/[1-9]\d*|custom-collections/[1-9]\d*(?:/items/[1-9]\d*)?|ranking-templates/[1-9]\d*|rankings/[1-9]\d*(?:/items/[1-9]\d*)?)\Z"),
 }

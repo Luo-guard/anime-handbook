@@ -268,6 +268,15 @@ class OfflineService:
         """刷新任务状态，并顺手把「速度、剩余时间、qB 原始状态」带回去给界面。"""
         active = [job for job in jobs if job.get("status") in ("queued", "downloading", "processing")]
         live: dict[int, dict[str, Any]] = {}
+        # 归档失败以前会让任务永远停在 failed，刷新也不再处理。给一个限频的自动重试，
+        # 文件晚一点就绪、或 qB 当时还没写好 content_path 都能自己恢复。
+        for job in jobs:
+            if (
+                job.get("status") == "failed"
+                and str(job.get("error") or "").startswith("归档失败")
+                and _seconds_stale(job.get("updated_at") or "") > 30
+            ):
+                self._schedule_archive(int(job["id"]))
         if not active:
             return live
         client = self.client()
@@ -348,14 +357,39 @@ class OfflineService:
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可写"))
         torrent_hash = str(job.get("torrent_hash") or "")
-        task = self.client(config).torrent(torrent_hash) if torrent_hash else None
-        content = str(
-            (task or {}).get("content_path")
-            or (task or {}).get("save_path")
-            or job.get("save_path")
-            or paths["download_root"]
-        )
-        files = media_tools.video_files(content)
+        client = self.client(config)
+        files: list[Any] = []
+        # qB 报 100% 到文件真正落盘/重命名之间有一小段窗口，content_path 可能还没指向成品。
+        # 后台线程里短轮询等它就绪，并确认大小稳定，避免读到半成品或误判成永久失败。
+        for _attempt in range(10):
+            try:
+                task = client.torrent(torrent_hash) if torrent_hash else None
+            except QBError:
+                task = None
+            exact = Path(str((task or {}).get("content_path") or ""))
+            if exact.is_file():
+                candidates = [exact] if exact.suffix.lower() in media_tools.VIDEO_SUFFIXES else []
+            elif exact.is_dir():
+                candidates = media_tools.video_files(exact)
+            else:
+                # 只能退回下载目录时，只取最近修改的一个，别把别的任务的文件一起归档。
+                folder = str(
+                    (task or {}).get("save_path")
+                    or job.get("save_path")
+                    or paths["download_root"]
+                )
+                found = media_tools.video_files(folder)
+                candidates = sorted(
+                    found, key=lambda item: item.stat().st_mtime, reverse=True
+                )[:1] if found else []
+            if candidates:
+                before = [item.stat().st_size for item in candidates]
+                time.sleep(1)
+                after = [item.stat().st_size for item in candidates if item.exists()]
+                if before == after and any(before):
+                    files = candidates
+                    break
+            time.sleep(1)
         if not files:
             raise OfflineError("下载目录里没有找到视频文件，可能还没写完或已被移走")
         anime = self.db.get_anime(anime_id) or {}
@@ -365,6 +399,12 @@ class OfflineService:
         target_dir = Path(paths["media_root"]) / folder
         target_dir.mkdir(parents=True, exist_ok=True)
         fallback_key = str(job.get("episode_key") or "")
+        if not fallback_key:
+            from_title = media_tools.episode_number(
+                str(job.get("source_title") or job.get("torrent_name") or "")
+            )
+            if from_title > 0:
+                fallback_key = media_tools.episode_key(from_title)
         made = 0
         fonts_done = False
         for source in files:
@@ -402,7 +442,7 @@ class OfflineService:
         if not config.get("seed_after_done"):
             # 不保留做种时，归档完就清掉原始文件，免得同一集占两份空间。
             try:
-                self.client(config).delete([torrent_hash], delete_files=True)
+                client.delete([torrent_hash], delete_files=True)
             except QBError:
                 pass
 
@@ -489,6 +529,15 @@ class OfflineService:
                 pass
         self.store.delete_file(int(anime_id), str(episode_key))
         return {"ok": True, "moved_to": moved}
+
+    def retry_archive(self, media_id: int) -> dict[str, Any]:
+        """手动重试一次归档，让已经卡在 failed 的任务立刻重新整理。"""
+        job = self.store.job(int(media_id))
+        if not job:
+            raise OfflineError("下载记录不存在")
+        self.store.set_status(int(media_id), "processing", error="")
+        self._schedule_archive(int(media_id))
+        return {"ok": True, "media_id": int(media_id)}
 
     def task_action(self, media_id: int, action: str) -> dict[str, Any]:
         """暂停或继续一个下载任务。"""

@@ -36,6 +36,10 @@ _PATTERNS = (
     re.compile(r"^(\d{1,4})$"),
 )
 _TRAILING_NUMBER_RE = re.compile(r"(\d{1,4})(?![\dpP])")
+_BRACKET_CONTENT_RE = re.compile(r"[\[【（(]([^\]】）)]*)[\]】）)]")
+_BRACKET_EPISODE_RE = re.compile(r"(?:第\s*(\d{1,4})\s*[话話集])|(?:[Ee][Pp]?\.?\s*(\d{1,4}))")
+# 纯数字方括号里，这些是画质/年份而不是集数。
+_NON_EPISODE_NUMBERS = {480, 576, 720, 1080, 1440, 2160, 4320}
 
 PROBE_TIMEOUT = 40
 REMUX_TIMEOUT = 900
@@ -282,6 +286,20 @@ def episode_number(name: str) -> int:
     """从文件名认集数；认不出返回 0，由调用方决定跳过还是让用户手填。"""
     text = str(name or "")
     stem = Path(text).stem if Path(text).suffix.lower() in VIDEO_SUFFIXES | SUBTITLE_SUFFIXES else text
+    # 字幕组最常用的命名把集数放在方括号里：「[字幕组] 番名 [05][1080p]」。
+    # 旧逻辑先把所有方括号删掉，[05] 就一起丢了，单集种子会认不出集数。
+    for content in _BRACKET_CONTENT_RE.findall(stem):
+        candidate = content.strip()
+        pure = re.fullmatch(r"(\d{1,4})", candidate)
+        if pure:
+            value = int(pure.group(1))
+            if 0 < value <= 1000 and value not in _NON_EPISODE_NUMBERS and not (1900 <= value <= 2100):
+                return value
+        labelled = _BRACKET_EPISODE_RE.search(candidate)
+        if labelled:
+            value = int(labelled.group(1) or labelled.group(2))
+            if 0 < value <= 1000:
+                return value
     cleaned = _BRACKET_RE.sub(" ", stem).strip()
     for pattern in _PATTERNS:
         matched = pattern.search(cleaned)

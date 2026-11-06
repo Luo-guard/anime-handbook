@@ -96,6 +96,10 @@ class PostRoutes:
                     str(body.get("target") or ""),
                     delete_source=bool(body.get("delete_source")),
                 ))
+            elif path == "/api/offline/retry":
+                self.send_json(OfflineService(self.database).retry_archive(
+                    int(body.get("media_id") or 0)
+                ))
             elif path == "/api/offline/task":
                 self.send_json(OfflineService(self.database).task_action(
                     int(body.get("media_id") or 0), str(body.get("action") or "")

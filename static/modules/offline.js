@@ -282,7 +282,10 @@ function renderOfflineLocal() {
             <p class="offline-row-title" title="${escapeHtml(job.source_title || job.torrent_name)}">${escapeHtml(job.torrent_name || job.source_title || "未命名任务")}</p>
             <p class="offline-row-meta"><span class="offline-error">${escapeHtml(job.error || "未知原因")}</span></p>
           </div>
-          <div class="offline-row-actions"><button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button></div>
+          <div class="offline-row-actions">
+            <button type="button" class="offline-play" data-retry="${job.id}" title="文件已经下好时，重新整理入库">重试归档</button>
+            <button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button>
+          </div>
         </article>`),
     );
   }
@@ -422,6 +425,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#offlineCheckSubs")?.addEventListener("click", checkSubscriptions);
   $("#offlineLocalList")?.addEventListener("click", (event) => {
+    const retry = event.target.closest("[data-retry]");
+    if (retry) return retryEpisodeArchive(retry.dataset.retry);
     const task = event.target.closest("[data-task]");
     if (task) return taskAction(task.dataset.task, task.dataset.action);
     const play = event.target.closest(".offline-play");
@@ -464,6 +469,22 @@ function formatEta(seconds) {
   if (hours > 0) return `${hours} 小时 ${minutes} 分`;
   if (minutes > 0) return `${minutes} 分`;
   return `${value} 秒`;
+}
+
+async function retryEpisodeArchive(mediaId) {
+  const button = $(`#offlineLocalList [data-retry="${mediaId}"]`);
+  if (button) { button.disabled = true; button.textContent = "整理中…"; }
+  try {
+    await api("/api/offline/retry", {
+      method: "POST",
+      body: JSON.stringify({ media_id: Number(mediaId) }),
+    });
+    toast("已重新开始整理，稍等一下");
+    window.setTimeout(refreshOfflineLocal, 1500);
+  } catch (error) {
+    if (button) { button.disabled = false; button.textContent = "重试归档"; }
+    toast(error.message || "重试失败", "error");
+  }
 }
 
 async function taskAction(mediaId, action) {
