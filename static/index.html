@@ -1024,9 +1024,9 @@
         </header>
         <section id="importSetup" class="import-setup">
           <label class="import-drop" id="importDrop">
-            <input type="file" id="importFile" accept=".csv,.tsv,.txt,.json" hidden />
+            <input type="file" id="importFile" accept=".xlsx,.csv,.tsv,.txt,.json" hidden />
             <strong>拖入文件，或点击选择</strong>
-            <small>支持 CSV / TSV / TXT（每行一个番名，可含表头）与 JSON（字符串数组，或含 name / title 的对象）</small>
+            <small>支持 Excel（.xlsx）、CSV / TSV / TXT（每行一个番名，可含表头）与 JSON（字符串数组，或含 name / title 的对象）</small>
           </label>
           <textarea id="importPaste" rows="6" aria-label="番剧名单" placeholder="也可以直接粘贴：每行一个番剧名。从 Excel 复制整列粘贴进来也行。"></textarea>
           <div class="import-actions">
@@ -1093,7 +1093,7 @@
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/collection-import.js?v=20261031-import-in-search" defer></script>
+    <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
