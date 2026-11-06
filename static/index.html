@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-links-defaults" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-offline-settings" />
   </head>
   <body>
     <div class="app-shell">
@@ -304,6 +304,7 @@
         <div class="offline-tabs" role="tablist">
           <button type="button" class="offline-tab active" data-offline-tab="search" role="tab" aria-selected="true">找资源</button>
           <button type="button" class="offline-tab" data-offline-tab="local" role="tab" aria-selected="false">本地文件 <span id="offlineLocalCount"></span></button>
+          <button type="button" class="offline-tab" data-offline-tab="settings" role="tab" aria-selected="false">设置</button>
         </div>
         <section class="offline-panel" id="offlineSearchPanel">
           <div class="offline-toolbar">
@@ -317,6 +318,24 @@
         <section class="offline-panel hidden" id="offlineLocalPanel">
           <p class="offline-status" id="offlineLocalStatus" role="status"></p>
           <div class="offline-list" id="offlineLocalList"></div>
+        </section>
+        <section class="offline-panel hidden" id="offlineSettingsPanel">
+          <div class="offline-settings">
+            <label class="offline-field"><span>媒体库目录</span><input type="text" id="offlineMediaRoot" placeholder="留空使用默认目录" autocomplete="off" /><small id="offlineMediaHint"></small></label>
+            <label class="offline-field"><span>下载临时目录</span><input type="text" id="offlineDownloadRoot" placeholder="留空使用 媒体库/_incoming" autocomplete="off" /></label>
+            <div class="offline-field-row">
+              <label class="offline-field"><span>qBittorrent 地址</span><input type="text" id="offlineQbHost" autocomplete="off" /></label>
+              <label class="offline-field offline-field-small"><span>端口</span><input type="number" id="offlineQbPort" min="1" max="65535" /></label>
+            </div>
+            <label class="offline-field"><span>下载分类</span><input type="text" id="offlineQbCategory" autocomplete="off" /></label>
+            <label class="offline-switch"><input type="checkbox" id="offlineSeedAfter" /><span>下载完成后继续做种<small>关掉会在归档后删除原始文件，省一半空间</small></span></label>
+            <label class="offline-switch"><input type="checkbox" id="offlineAutoFollow" /><span>自动追新番<small>默认关闭；开启后才会定时检查你订阅过的番</small></span></label>
+            <p class="offline-status" id="offlineSettingsStatus" role="status"></p>
+            <div class="offline-settings-actions">
+              <button type="button" class="primary-button" id="offlineSaveSettings">保存</button>
+              <button type="button" class="text-button" id="offlineResetRoot">用默认目录</button>
+            </div>
+          </div>
         </section>
       </div>
     </dialog>
@@ -1163,7 +1182,7 @@
     <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/offline.js?v=20261106-offline" defer></script>
+    <script src="/modules/offline.js?v=20261106-offline-settings" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

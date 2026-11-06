@@ -51,6 +51,8 @@ function switchOfflineTab(tab) {
   });
   $("#offlineSearchPanel").classList.toggle("hidden", tab !== "search");
   $("#offlineLocalPanel").classList.toggle("hidden", tab !== "local");
+  $("#offlineSettingsPanel").classList.toggle("hidden", tab !== "settings");
+  if (tab === "settings") loadOfflineSettings();
 }
 
 async function runOfflineSearch() {
@@ -217,13 +219,27 @@ function renderOfflineLocal() {
     blocks.push(
       `<h3 class="offline-section-title">正在下载 · ${active.length}</h3>`,
       ...active.map((job) => {
-        const progress = Number(job.progress || 0).toFixed(0);
-        const label = job.status === "processing" ? "正在整理" : job.status === "queued" ? "排队中" : `${progress}%`;
+        const live = job.live || {};
+        const percent = Math.max(0, Math.min(100, Number(job.progress || 0)));
+        const paused = String(live.state || "").toLowerCase().startsWith("paused");
+        const label = job.status === "processing" ? "正在整理" : paused ? "已暂停" : job.status === "queued" ? "排队中" : `${percent.toFixed(1)}%`;
+        const detail = [
+          live.dlspeed ? `${formatSpeed(live.dlspeed)}/s` : "",
+          live.eta && live.eta > 0 && live.eta < 604800 ? `剩余 ${formatEta(live.eta)}` : "",
+          live.seeds ? `${live.seeds} 个做种` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
         return `
-          <article class="offline-row">
+          <article class="offline-row offline-row-task">
             <div class="offline-row-main">
               <p class="offline-row-title" title="${escapeHtml(job.source_title || job.torrent_name)}">${escapeHtml(job.torrent_name || job.source_title || "未命名任务")}</p>
-              <p class="offline-row-meta"><span class="offline-tag">${escapeHtml(label)}</span>${job.error ? `<span class="offline-error">${escapeHtml(job.error)}</span>` : ""}</p>
+              <div class="offline-bar"><span style="width:${percent}%"></span></div>
+              <p class="offline-row-meta"><span class="offline-tag">${escapeHtml(label)}</span>${detail ? `<span>${escapeHtml(detail)}</span>` : ""}${job.error ? `<span class="offline-error">${escapeHtml(job.error)}</span>` : ""}</p>
+            </div>
+            <div class="offline-row-actions">
+              <button type="button" class="offline-play" data-task="${job.id}" data-action="${paused ? "resume" : "pause"}">${paused ? "继续" : "暂停"}</button>
+              <button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button>
             </div>
           </article>`;
       }),
@@ -361,12 +377,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (button) startOfflineDownload(Number(button.dataset.index));
   });
   $("#offlineLocalList")?.addEventListener("click", (event) => {
+    const task = event.target.closest("[data-task]");
+    if (task) return taskAction(task.dataset.task, task.dataset.action);
     const play = event.target.closest(".offline-play");
     if (play) return playLocalFile(play.dataset.file);
     const remove = event.target.closest(".offline-remove");
     if (!remove) return;
     if (remove.dataset.file) return removeLocalFile(remove.dataset.file);
     if (remove.dataset.job) return removeJob(remove.dataset.job);
+  });
+  $("#offlineSaveSettings")?.addEventListener("click", saveOfflineSettings);
+  $("#offlineResetRoot")?.addEventListener("click", () => {
+    $("#offlineMediaRoot").value = "";
+    $("#offlineDownloadRoot").value = "";
   });
   $("#offlinePlayerClose")?.addEventListener("click", closeOfflinePlayer);
   $("#offlinePlayer")?.addEventListener("close", () => {
@@ -376,3 +399,89 @@ document.addEventListener("DOMContentLoaded", () => {
     saveOfflineResume();
   });
 });
+
+
+function formatSpeed(bytes) {
+  const value = Number(bytes || 0);
+  if (value <= 0) return "0 B";
+  if (value >= 1 << 20) return `${(value / (1 << 20)).toFixed(1)} MB`;
+  if (value >= 1 << 10) return `${(value / (1 << 10)).toFixed(0)} KB`;
+  return `${value} B`;
+}
+
+function formatEta(seconds) {
+  const value = Number(seconds || 0);
+  if (value <= 0) return "";
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  if (hours > 0) return `${hours} 小时 ${minutes} 分`;
+  if (minutes > 0) return `${minutes} 分`;
+  return `${value} 秒`;
+}
+
+async function taskAction(mediaId, action) {
+  try {
+    await api("/api/offline/task", {
+      method: "POST",
+      body: JSON.stringify({ media_id: Number(mediaId), action }),
+    });
+    toast(action === "pause" ? "已暂停" : "已继续");
+    refreshOfflineLocal();
+  } catch (error) {
+    toast(error.message || "操作失败", "error");
+  }
+}
+
+async function loadOfflineSettings() {
+  const status = "#offlineSettingsStatus";
+  offlineStatus(status, "读取设置…");
+  try {
+    const data = await api("/api/offline/settings");
+    const config = data.config || {};
+    $("#offlineMediaRoot").value = config.media_root || "";
+    $("#offlineDownloadRoot").value = config.download_root || "";
+    $("#offlineQbHost").value = config.qb_host || "127.0.0.1";
+    $("#offlineQbPort").value = config.qb_port || 8080;
+    $("#offlineQbCategory").value = config.qb_category || "AnimeHandbook";
+    $("#offlineSeedAfter").checked = config.seed_after_done !== false;
+    $("#offlineAutoFollow").checked = config.auto_follow === true;
+    const paths = data.paths || {};
+    $("#offlineMediaRoot").placeholder = data.default_media_root || "";
+    $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
+    const writable = data.writable || {};
+    offlineStatus(
+      status,
+      writable.ok ? "目录可写，qBittorrent 连接正常" : writable.error || "目录不可写",
+      !writable.ok,
+    );
+  } catch (error) {
+    offlineStatus(status, error.message || "读取设置失败", true);
+  }
+}
+
+async function saveOfflineSettings() {
+  const status = "#offlineSettingsStatus";
+  offlineStatus(status, "保存中…");
+  try {
+    const data = await api("/api/offline/settings", {
+      method: "POST",
+      body: JSON.stringify({
+        media_root: $("#offlineMediaRoot").value.trim(),
+        download_root: $("#offlineDownloadRoot").value.trim(),
+        qb_host: $("#offlineQbHost").value.trim() || "127.0.0.1",
+        qb_port: Number($("#offlineQbPort").value) || 8080,
+        qb_category: $("#offlineQbCategory").value.trim() || "AnimeHandbook",
+        seed_after_done: $("#offlineSeedAfter").checked,
+        auto_follow: $("#offlineAutoFollow").checked,
+      }),
+    });
+    const paths = data.paths || {};
+    $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
+    const writable = data.writable || {};
+    offlineStatus(status, writable.ok ? "已保存，目录可写" : writable.error || "已保存，但目录不可写", !writable.ok);
+    toast("离线设置已保存");
+  } catch (error) {
+    offlineStatus(status, error.message || "保存失败", true);
+    toast(error.message || "保存失败", "error");
+  }
+}

@@ -3774,3 +3774,21 @@ dialog::backdrop {
 .offline-player .modal-frame { width: min(960px, 96vw); }
 .offline-player-frame video { width: 100%; max-height: 72vh; border-radius: 10px; background: #000; display: block; }
 .offline-player-meta { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+/* 离线面板：下载任务进度条与设置页。 */
+.offline-row-task { align-items: flex-start; }
+.offline-bar { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 6px 0 5px; }
+.offline-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--green-700); transition: width .3s ease; }
+.offline-settings { display: flex; flex-direction: column; gap: 13px; overflow: auto; padding: 2px 2px 8px; }
+.offline-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.offline-field > span { font-weight: 600; color: var(--ink); font-size: 12.5px; }
+.offline-field input { padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+.offline-field input:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
+.offline-field small { font-size: 11px; line-height: 1.6; }
+.offline-field-row { display: flex; gap: 10px; }
+.offline-field-row .offline-field { flex: 1 1 auto; min-width: 0; }
+.offline-field-row .offline-field-small { flex: 0 0 110px; }
+.offline-switch { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; line-height: 1.5; }
+.offline-switch input { margin: 3px 0 0; accent-color: var(--green-700); flex: 0 0 auto; }
+.offline-switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.offline-settings-actions { display: flex; gap: 12px; align-items: center; margin-top: 2px; }

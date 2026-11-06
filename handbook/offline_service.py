@@ -170,10 +170,12 @@ class OfflineService:
 
     # ---- 进度同步 -----------------------------------------------------
 
-    def _sync(self, jobs: list[dict[str, Any]]) -> None:
+    def _sync(self, jobs: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+        """刷新任务状态，并顺手把「速度、剩余时间、qB 原始状态」带回去给界面。"""
         active = [job for job in jobs if job.get("status") in ("queued", "downloading", "processing")]
+        live: dict[int, dict[str, Any]] = {}
         if not active:
-            return
+            return live
         client = self.client()
         for job in active:
             torrent_hash = str(job.get("torrent_hash") or "")
@@ -189,6 +191,14 @@ class OfflineService:
                     job["id"], "failed", error="qBittorrent 里找不到这个任务，可能被手动删除了"
                 )
                 continue
+            live[int(job["id"])] = {
+                "dlspeed": int(task.get("dlspeed") or 0),
+                "upspeed": int(task.get("upspeed") or 0),
+                "eta": int(task.get("eta") or 0),
+                "state": str(task.get("state") or ""),
+                "seeds": int(task.get("num_seeds") or 0),
+                "size": int(task.get("size") or 0),
+            }
             progress = float(task.get("progress") or 0) * 100
             status = map_qb_state(str(task.get("state") or ""), task.get("progress") or 0)
             if status == "failed":
@@ -208,6 +218,7 @@ class OfflineService:
             self.store.set_status(job["id"], status, progress=progress, error="")
             if status == "processing":
                 self._schedule_archive(int(job["id"]))
+        return live
 
     # ---- 归档（remux + 抽字幕）-----------------------------------------
 
@@ -298,9 +309,12 @@ class OfflineService:
 
     def state(self, anime_id: int, *, refresh: bool = True) -> dict[str, Any]:
         jobs = self.store.jobs_for_anime(int(anime_id))
+        live: dict[int, dict[str, Any]] = {}
         if refresh:
-            self._sync(jobs)
+            live = self._sync(jobs)
             jobs = self.store.jobs_for_anime(int(anime_id))
+        for job in jobs:
+            job["live"] = live.get(int(job["id"]), {})
         files = self.store.files_for_anime(int(anime_id))
         ready = {str(item.get("episode_key")) for item in files}
         return {
@@ -349,6 +363,25 @@ class OfflineService:
                 pass
         self.store.delete_file(int(anime_id), str(episode_key))
         return {"ok": True, "moved_to": moved}
+
+    def task_action(self, media_id: int, action: str) -> dict[str, Any]:
+        """暂停或继续一个下载任务。"""
+        job = self.store.job(int(media_id))
+        if not job:
+            raise OfflineError("下载记录不存在")
+        torrent_hash = str(job.get("torrent_hash") or "")
+        if not torrent_hash:
+            raise OfflineError("这个任务没有对应的种子，无法操作")
+        client = self.client()
+        if action == "pause":
+            client.pause([torrent_hash])
+            self.store.set_status(int(media_id), "downloading", error="已暂停")
+        elif action == "resume":
+            client.resume([torrent_hash])
+            self.store.set_status(int(media_id), "downloading", error="")
+        else:
+            raise ValueError("任务操作无效")
+        return {"ok": True, "action": action}
 
     def delete_job(self, media_id: int, *, delete_files: bool = False, keep_files: bool = True) -> dict[str, Any]:
         """从下载器移除任务。

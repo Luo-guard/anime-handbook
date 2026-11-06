@@ -70,6 +70,10 @@ class PostRoutes:
                     anime_id, episode_key, int(body.get("resume_ms") or 0)
                 )
                 self.send_json({"ok": True})
+            elif path == "/api/offline/task":
+                self.send_json(OfflineService(self.database).task_action(
+                    int(body.get("media_id") or 0), str(body.get("action") or "")
+                ))
             elif path == "/api/offline/delete":
                 service = OfflineService(self.database)
                 mode = str(body.get("mode") or "task")
