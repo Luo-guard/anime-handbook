@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-link-order" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-link-rules" />
   </head>
   <body>
     <div class="app-shell">
@@ -628,6 +628,7 @@
             <div id="detailLinkList" class="detail-link-list"></div>
             <div class="detail-link-actions">
               <button type="button" class="secondary-button compact-button" id="addDetailLink">新增链接</button>
+              <button type="button" class="secondary-button compact-button" id="addDetailLinkFromRules">从 Kazumi 规则仓库导入</button>
               <button type="button" class="secondary-button compact-button" id="resetDetailLinks">恢复预设</button>
             </div>
           </div>
@@ -973,6 +974,24 @@
 
     <dialog class="modal schedule-dialog" id="scheduleSeasonModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">SEASON ARCHIVE</p><h2>选择放送季度</h2><p class="page-subtitle">按年份回看，按季节寻找。</p><div class="schedule-years" id="scheduleYears"></div></form></dialog>
     <dialog class="modal schedule-dialog" id="scheduleFilterModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">MAKE IT YOURS</p><h2>排序与筛选</h2><p class="schedule-field-title">排列方式</p><div class="schedule-sorting-editor" id="scheduleSortOptions"></div><p class="schedule-field-title">显示收藏状态 · 可多选</p><div class="schedule-status-options" id="scheduleFilterStatuses"></div><label class="schedule-uncollected"><input type="checkbox" id="scheduleFilterUncollected" />也显示未收藏的番剧</label><p class="schedule-filter-note" data-page-text="这些选项会记住，并与“设置 → {schedule}”保持一致。">这些选项会记住，并与“设置 → 周表”保持一致。</p><div class="modal-actions"><button type="button" class="primary-button" id="scheduleApplyFilter">应用筛选</button></div></form></dialog>
+    <dialog class="modal rules-dialog" id="linkRulesModal">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="linkRulesClose" aria-label="关闭">×</button>
+        <p class="eyebrow">KAZUMI RULES</p>
+        <h2>从规则仓库添加链接</h2>
+        <p class="page-subtitle">读取 Kazumi 规则仓库里的站点名与搜索地址，生成「去该站搜索这部番」的链接。只做跳转，不使用规则里的解析配置，也不下载任何内容。</p>
+        <div class="rules-toolbar">
+          <input type="search" id="linkRulesSearch" placeholder="搜索站点名或域名" aria-label="搜索规则" autocomplete="off" />
+          <button type="button" class="secondary-button compact-button" id="linkRulesRefresh">刷新规则</button>
+        </div>
+        <p class="rules-status" id="linkRulesStatus" role="status"></p>
+        <div class="rules-list" id="linkRulesList"></div>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" id="linkRulesCancel">取消</button>
+          <button type="button" class="primary-button" id="linkRulesAdd" disabled>添加选中的 0 个</button>
+        </div>
+      </div>
+    </dialog>
     <dialog class="modal schedule-dialog" id="scheduleDetailModal"><div class="modal-frame"><button type="button" class="modal-close" id="scheduleCloseDetail" aria-label="关闭">×</button><div id="scheduleDetail"></div></div></dialog>
 
     <dialog class="modal backend-closed-dialog" id="backendClosedDialog"><div class="modal-frame"><h2 id="backendClosedTitle">后台已关闭</h2><p id="backendClosedMessage">再次使用时，请运行“启动动漫手账”快捷方式，然后刷新此页面。</p></div></dialog>
@@ -1084,11 +1103,11 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261105-as-calendar" defer></script>
-    <script src="/modules/settings.js?v=20261106-link-order" defer></script>
+    <script src="/modules/settings.js?v=20261106-link-rules" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261106-link-order" defer></script>
-    <script src="/modules/events.js?v=20261106-timeline-defaults" defer></script>
+    <script src="/modules/events.js?v=20261106-link-rules" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

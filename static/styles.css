@@ -3403,6 +3403,23 @@ dialog::backdrop {
 .detail-link-row input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; }
 .detail-link-row input:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
 .detail-link-auto { display: flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
+
+/* 从 Kazumi 规则仓库挑选跳转链接 */
+.rules-dialog .modal-frame { width: min(560px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
+.rules-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.rules-toolbar input { flex: 1 1 auto; min-width: 0; }
+.rules-status { min-height: 1.3em; margin: 0 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.rules-status.is-error { color: #9b3434; }
+.rules-list { flex: 1 1 auto; min-height: 200px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 12px; display: grid; align-content: start; gap: 2px; }
+.rules-row { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 9px; cursor: pointer; font-size: 13px; }
+.rules-row:hover { background: var(--green-50); }
+.rules-row.is-added { opacity: .45; cursor: default; }
+.rules-row.is-added:hover { background: transparent; }
+.rules-row input { accent-color: var(--green-700); }
+.rules-row .rules-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rules-row .rules-host { margin-left: auto; flex: 0 0 auto; color: var(--muted); font-size: 11px; font-family: ui-monospace, "Cascadia Code", monospace; }
+.rules-empty { padding: 28px 12px; text-align: center; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+@media (max-width: 650px) { .rules-dialog .modal-frame { width: 94vw; max-height: 88vh; } .rules-row .rules-host { display: none; } }
 .detail-link-order { display: inline-flex; gap: 2px; }
 .detail-link-order-button { width: 24px; height: 26px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; line-height: 1; cursor: pointer; }
 .detail-link-order-button:hover:not(:disabled) { border-color: var(--active-inset); color: var(--green-800); background: var(--green-50); }

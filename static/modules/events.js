@@ -745,3 +745,20 @@ $("#kazumiReadOnlyInput").addEventListener("change", applyKazumiReadOnlyControls
 
 $("#saveSettings").addEventListener("click", HandbookSettings.save);
 
+
+// 从 Kazumi 规则仓库挑选跳转链接：只改设置草稿，保存设置时才写库。
+if ($("#addDetailLinkFromRules")) {
+  $("#addDetailLinkFromRules").addEventListener("click", () => openLinkRules());
+  $("#linkRulesClose").addEventListener("click", () => $("#linkRulesModal").close());
+  $("#linkRulesCancel").addEventListener("click", () => $("#linkRulesModal").close());
+  $("#linkRulesRefresh").addEventListener("click", () => loadLinkRules(true));
+  $("#linkRulesSearch").addEventListener("input", () => renderLinkRules());
+  $("#linkRulesList").addEventListener("change", (event) => {
+    const input = event.target.closest("input[type=checkbox]");
+    if (!input) return;
+    if (input.checked) linkRulesState.selected.add(input.value);
+    else linkRulesState.selected.delete(input.value);
+    renderLinkRules();
+  });
+  $("#linkRulesAdd").addEventListener("click", () => addSelectedLinkRules());
+}

@@ -1,6 +1,8 @@
 """Read route controller; transport and errors live on RequestHandler."""
 from __future__ import annotations
 from .http_context import (HTTPStatus, Path, ScheduleService, VideoLinks, attach_collection, find_background_asset, json, mimetypes, parse_qs, re, safe_asset_id, season_key, send_asset, urlparse)
+from .common import MAX_DETAIL_LINKS
+from .link_rules import cache_path, load_cache, payload as rules_payload
 
 
 class ReadRoutes:
@@ -101,6 +103,9 @@ class ReadRoutes:
                 })
             elif path == "/api/webdav":
                 self.send_json({"webdav": self.webdav.status()})
+            elif path == "/api/link-rules":
+                # 只读本机缓存；用户点「刷新规则」才会联网，见 POST 同名接口。
+                self.send_json(rules_payload(load_cache(cache_path(self.database.asset_root)), MAX_DETAIL_LINKS))
             elif path == "/api/jump-history":
                 limit = int(query.get("limit", ["80"])[0] or 80)
                 self.send_json({"items": self.database.list_jumps(limit)})

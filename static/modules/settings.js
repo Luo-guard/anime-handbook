@@ -1038,3 +1038,152 @@ function renderTimelineDefaultThemes() {
       .join("") +
     `<button type="button" class="text-button timeline-default-all" id="timelineDefaultThemesAll">清空选择（显示全部）</button>`;
 }
+
+// —— 从 Kazumi 规则仓库挑选跳转链接 ——
+// 只取规则里的站点名与搜索地址；规则本身（解析、播放、弹幕）不使用。
+const LINK_RULES_FALLBACK_LIMIT = 12;
+const linkRulesState = { items: [], selected: new Set(), loading: false, error: "", fetchedAt: 0, limit: LINK_RULES_FALLBACK_LIMIT };
+
+function linkRulesUsedCount() {
+  return editableLinks("detail").length;
+}
+
+function linkRulesRemaining() {
+  const limit = linkRulesState.limit || LINK_RULES_FALLBACK_LIMIT;
+  return Math.max(0, limit - linkRulesUsedCount());
+}
+
+function linkRuleExistingUrls() {
+  return new Set(editableLinks("detail").map((link) => String(link.url || "").trim()).filter(Boolean));
+}
+
+function updateLinkRulesStatus() {
+  const status = $("#linkRulesStatus");
+  const add = $("#linkRulesAdd");
+  const selected = linkRulesState.selected.size;
+  const remaining = linkRulesRemaining();
+  if (status) {
+    if (linkRulesState.loading) status.textContent = "正在获取规则…";
+    else if (linkRulesState.error) status.textContent = linkRulesState.error;
+    else if (!linkRulesState.items.length) status.textContent = "还没有规则缓存，点「刷新规则」获取。";
+    else status.textContent = `共 ${linkRulesState.items.length} 个站点可用 · 链接总数上限 ${linkRulesState.limit || LINK_RULES_FALLBACK_LIMIT} 条，还能加 ${remaining} 条`;
+    status.classList.toggle("is-error", Boolean(linkRulesState.error));
+  }
+  if (add) {
+    add.textContent = `添加选中的 ${selected} 个`;
+    add.disabled = !selected || remaining <= 0;
+  }
+}
+
+function renderLinkRules() {
+  const list = $("#linkRulesList");
+  if (!list) return;
+  updateLinkRulesStatus();
+  if (linkRulesState.loading) {
+    list.innerHTML = `<p class="rules-empty">正在从规则仓库读取站点列表…</p>`;
+    return;
+  }
+  if (!linkRulesState.items.length) {
+    list.innerHTML = `<p class="rules-empty">${escapeHtml(linkRulesState.error || "还没有规则。点「刷新规则」联网获取一次，之后会保存在本机。")}</p>`;
+    return;
+  }
+  const keyword = String($("#linkRulesSearch")?.value || "").trim().toLowerCase();
+  const existing = linkRuleExistingUrls();
+  const remaining = linkRulesRemaining();
+  const matched = linkRulesState.items.filter((item) => !keyword
+    || String(item.name || "").toLowerCase().includes(keyword)
+    || String(item.host || "").toLowerCase().includes(keyword));
+  if (!matched.length) {
+    list.innerHTML = `<p class="rules-empty">没有匹配「${escapeHtml(keyword)}」的站点。</p>`;
+    return;
+  }
+  // 已经加过的排到后面，打开面板先看到可用的。
+  const ordered = [...matched].sort((left, right) => Number(existing.has(left.template)) - Number(existing.has(right.template)));
+  const scroll = list.scrollTop;
+  list.replaceChildren();
+  ordered.forEach((item) => {
+    const added = existing.has(item.template);
+    const checked = !added && linkRulesState.selected.has(item.id);
+    const row = document.createElement("label");
+    row.className = `rules-row${added ? " is-added" : ""}`;
+    row.title = added ? "已经在列表里" : item.template;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = item.id;
+    input.checked = checked;
+    input.disabled = added || (!checked && linkRulesState.selected.size >= remaining);
+    const name = document.createElement("span");
+    name.className = "rules-name";
+    name.textContent = item.name;
+    const host = document.createElement("span");
+    host.className = "rules-host";
+    host.textContent = added ? "已添加" : item.host;
+    row.append(input, name, host);
+    list.append(row);
+  });
+  list.scrollTop = scroll;
+}
+
+async function loadLinkRules(force = false) {
+  if (linkRulesState.loading) return;
+  linkRulesState.loading = true;
+  linkRulesState.error = "";
+  renderLinkRules();
+  try {
+    let payload = null;
+    if (!force) {
+      const cached = await api("/api/link-rules");
+      if (Array.isArray(cached.items) && cached.items.length) payload = cached;
+    }
+    // 没有缓存时顺手拉一次：用户已经主动打开这个面板，不算后台自动请求。
+    if (!payload) payload = await api("/api/link-rules/refresh", { method: "POST", body: "{}" });
+    linkRulesState.items = Array.isArray(payload.items) ? payload.items : [];
+    linkRulesState.fetchedAt = Number(payload.fetched_at) || 0;
+    linkRulesState.limit = Number(payload.limit) || LINK_RULES_FALLBACK_LIMIT;
+    const known = new Set(linkRulesState.items.map((item) => item.id));
+    linkRulesState.selected = new Set([...linkRulesState.selected].filter((id) => known.has(id)));
+  } catch (error) {
+    linkRulesState.error = error.message;
+  } finally {
+    linkRulesState.loading = false;
+    renderLinkRules();
+  }
+}
+
+function openLinkRules() {
+  if (!$("#linkRulesModal")) return;
+  linkRulesState.selected = new Set();
+  linkRulesState.error = "";
+  const search = $("#linkRulesSearch");
+  if (search) search.value = "";
+  $("#linkRulesModal").showModal();
+  renderLinkRules();
+  loadLinkRules(false);
+}
+
+function addSelectedLinkRules() {
+  const chosen = linkRulesState.items.filter((item) => linkRulesState.selected.has(item.id));
+  if (!chosen.length) return;
+  const remaining = linkRulesRemaining();
+  if (remaining <= 0) {
+    toast(`详情页链接最多 ${linkRulesState.limit} 条，请先删掉一些再加`, "error");
+    return;
+  }
+  const existing = linkRuleExistingUrls();
+  const rows = editableLinks("detail");
+  let added = 0;
+  chosen.forEach((item) => {
+    if (added >= remaining || existing.has(item.template)) return;
+    rows.push({ id: detailLinkId(), kind: "custom", name: item.name, url: item.template, enabled: true });
+    existing.add(item.template);
+    added += 1;
+  });
+  if (!added) {
+    toast("选中的站点都已经在列表里了", "error");
+    return;
+  }
+  commitLinkList("detail", rows);
+  linkRulesState.selected = new Set();
+  $("#linkRulesModal").close();
+  toast(`已添加 ${added} 个搜索链接，点右下角「保存设置」生效`);
+}

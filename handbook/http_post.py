@@ -3,6 +3,8 @@ from __future__ import annotations
 from .http_context import (VideoLinks, _desktop, background_stem, base64, json, normalize_background_bytes, normalize_jump, re, safe_asset_id, save_collection, secrets, time, urlparse)
 from .http_support import validate_command_body
 from .assets import replace_background_bytes
+from .common import MAX_DETAIL_LINKS
+from .link_rules import RuleFetchError, cache_path, payload as rules_payload, refresh as refresh_rules
 
 
 class PostRoutes:
@@ -24,10 +26,19 @@ class PostRoutes:
                 "/api/webdav/configure",
                 "/api/webdav/test",
                 "/api/webdav/sync",
+                # 规则仓库缓存是全局文件，与当前账号能否写入收藏无关。
+                "/api/link-rules/refresh",
             }
             if path not in write_exempt_paths:
                 self.require_write_access()
-            if path == "/api/jump-history":
+            if path == "/api/link-rules/refresh":
+                try:
+                    document = refresh_rules(cache_path(self.database.asset_root))
+                except RuleFetchError as error:
+                    self.send_json({"ok": False, "error": str(error), "items": [], "limit": MAX_DETAIL_LINKS}, 502)
+                    return
+                self.send_json(rules_payload(document, MAX_DETAIL_LINKS))
+            elif path == "/api/jump-history":
                 if str(body.get("action") or "") == "clear":
                     self.database.clear_jumps()
                     self.send_json({"ok": True, "items": []})

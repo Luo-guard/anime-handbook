@@ -11,7 +11,7 @@ from .http import RequestHandler
 # status change fetches Bangumi made every other save in the window wait, which
 # is what looked like a frozen UI.  Both already serialise their own database
 # writes, so they can run beside ordinary saves.
-UNLOCKED_WRITES = {'/api/webdav/sync', '/api/collection-status'}
+UNLOCKED_WRITES = {'/api/webdav/sync', '/api/collection-status', '/api/link-rules/refresh'}
 
 
 class DesktopRequestHandler(RequestHandler):
