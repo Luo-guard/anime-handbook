@@ -447,10 +447,10 @@ function episodeAnnotationMarkup(annotations) {
 function refreshEpisodeAiringStatus() {
   if (!state.progressAnime) return;
   $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
-    const expanded = !!element.querySelector("details[open]");
     element.innerHTML = episodeReleaseStatus(state.progressAnime, {type: Number(element.dataset.episodeAiringType)});
-    const disclosure = element.querySelector("details");
-    if (disclosure && expanded) disclosure.open = true;
+  });
+  $$("[data-episode-next-airing]", $("#episodeGrid")).forEach((element) => {
+    element.innerHTML = episodeNextAiringNote(state.progressAnime, {type: 0});
   });
 }
 
@@ -520,6 +520,7 @@ function renderEpisodeGrid() {
               `;
             }).join("")}
           </div>
+          ${Number(group.type) === 0 ? `<div class="episode-next-airing-slot" data-episode-next-airing>${episodeNextAiringNote(anime, group)}</div>` : ""}
         </section>
       `).join("")
     : `<div class="empty-state"><p>暂未取得章节。</p></div>`;

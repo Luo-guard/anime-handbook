@@ -15,10 +15,14 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
   await page.setViewportSize({width,height:800});
   const result=await page.locator('.episode-group').first().evaluate(section=>{
    const head=section.querySelector('.episode-group-head'),info=section.querySelector('.episode-airing-info'),grid=section.querySelector('.episode-group-grid');
-   return {head:head.textContent,info:info.textContent,separate:head.contains(info),clear:grid.getBoundingClientRect().top>=info.getBoundingClientRect().bottom,overflow:section.scrollWidth>section.clientWidth};
+   const note=section.querySelector('.episode-next-airing-note');
+   return {head:head.textContent,info:info.textContent,separate:head.contains(info),clear:grid.getBoundingClientRect().top>=info.getBoundingClientRect().bottom,overflow:section.scrollWidth>section.clientWidth,note:note?note.textContent:'',noteBelow:note?note.getBoundingClientRect().top>=grid.getBoundingClientRect().bottom:false};
   });
-  assert(result.head.includes('已看 1 / 12')); assert(result.head.includes('已播 4 / 14'));
-  assert(result.info.includes('已播 4 / 14')); assert.equal(await page.locator('.episode-next-airing').isVisible(),false); await page.locator('.episode-release-status summary').click(); assert.equal(await page.locator('.episode-next-airing').isVisible(),true); await page.locator('.episode-release-status summary').click();
+  assert(result.head.includes('已看 1 / 12')); assert(result.head.includes('已播 4'));
+  assert(result.info.includes('已播 4')); assert(!result.info.includes('已播 4 / 14'));
+  assert.equal(await page.locator('.episode-next-airing').count(),0,'no overlay covering the episode cells');
+  assert(result.note.includes('下集 11/04 20:00')&&result.note.includes('北京时间'),JSON.stringify(result));
+  assert(result.noteBelow,'next time sits below the episode grid');
   assert(result.separate&&result.clear&&!result.overflow,JSON.stringify(result));
  }
  assert.equal(await page.locator('[data-episode-airing-type]').count(),1);
@@ -26,9 +30,9 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  assert.equal(new URL(await page.locator('#resume').getAttribute('href')).searchParams.get('p'),'3');
  await page.evaluate(()=>{window.savedCell=document.querySelector('.episode-cell');state.progressAnime.airing.aired=5;refreshEpisodeAiringStatus()});
  assert(await page.evaluate(()=>savedCell===document.querySelector('.episode-cell')));
- assert((await page.locator('.episode-airing-info').textContent()).includes('已播 5 / 14'));
+ assert((await page.locator('.episode-airing-info').textContent()).includes('已播 5'));
  await page.setViewportSize({width:920,height:620});await page.screenshot({path:path.join(os.tmpdir(),'handbook-detail-airing-layout.png')});
  await page.evaluate(()=>{state.progressAnime.airing=undefined;refreshEpisodeAiringStatus()});
  assert.equal(await page.locator('.episode-airing-info').isVisible(),false);
- console.log('Detail airing layout: compact header at 920/390/320px with collapsed next-episode disclosure, no overflow, watch selection preserved, live text refresh and empty-row collapse passed.');
+ console.log('Detail airing layout: early-style pill + next-episode footnote below grid at 920/390/320px, no overlay, no overflow, watch selection preserved, live text refresh and empty-row collapse passed.');
 }finally{await browser.close()}})().catch(error=>{console.error(error);process.exit(1)});
