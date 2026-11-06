@@ -3733,3 +3733,39 @@ dialog::backdrop {
 .rules-menu-pin:hover:not(:disabled) { border-color: var(--active-inset); color: var(--green-800); background: var(--green-50); }
 .rules-menu-pin:disabled { opacity: .5; cursor: default; }
 @media (max-width: 650px) { .rules-menu-host { display: none; } }
+
+/* 离线下载面板：与规则菜单保持同一套视觉语言。 */
+.offline-trigger { margin-left: 2px; }
+.offline-modal .modal-frame { width: min(780px, 96vw); max-height: 88vh; display: flex; flex-direction: column; }
+.offline-tabs { display: flex; gap: 6px; margin: 4px 0 12px; border-bottom: 1px solid var(--line); }
+.offline-tab { appearance: none; border: 0; background: transparent; padding: 8px 14px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+.offline-tab.active { color: var(--green-700); border-bottom-color: var(--green-700); font-weight: 600; }
+.offline-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.offline-toolbar { display: flex; gap: 8px; margin-bottom: 10px; }
+.offline-toolbar input { flex: 1 1 auto; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 13px; background: transparent; color: inherit; }
+.offline-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.offline-chip { appearance: none; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; cursor: pointer; }
+.offline-chip.active { border-color: var(--green-700); color: var(--green-700); background: var(--green-50); }
+.offline-status { min-height: 1.3em; margin: 0 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.offline-status.is-error { color: #9b3434; }
+.offline-list { flex: 1 1 auto; min-height: 180px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 12px; display: grid; align-content: start; gap: 4px; }
+.offline-empty { margin: 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.offline-row { display: flex; align-items: center; gap: 12px; padding: 9px 11px; border-radius: 10px; }
+.offline-row:hover { background: var(--green-50); }
+.offline-row-main { min-width: 0; flex: 1 1 auto; }
+.offline-row-title { margin: 0 0 3px; font-size: 13px; font-weight: 600; line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.offline-row-meta { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.offline-group { font-weight: 600; }
+.offline-tag { border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; font-size: 11px; }
+.offline-size { font-variant-numeric: tabular-nums; }
+.offline-error { color: #9b3434; }
+.offline-row-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.offline-download, .offline-play, .offline-remove { appearance: none; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 9px; padding: 6px 13px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.offline-download { border-color: var(--green-700); color: var(--green-700); }
+.offline-download:disabled { opacity: .5; cursor: default; }
+.offline-download:hover:not(:disabled), .offline-play:hover { background: var(--green-50); }
+.offline-remove:hover { border-color: #9b3434; color: #9b3434; }
+.offline-section-title { margin: 10px 8px 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.offline-player .modal-frame { width: min(960px, 96vw); }
+.offline-player-frame video { width: 100%; max-height: 72vh; border-radius: 10px; background: #000; display: block; }
+.offline-player-meta { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }

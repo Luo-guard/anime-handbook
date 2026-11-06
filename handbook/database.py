@@ -197,6 +197,48 @@ class HandbookDB:
                     anime_id INTEGER PRIMARY KEY, status INTEGER NOT NULL, baseline INTEGER,
                     subject TEXT NOT NULL, revision TEXT NOT NULL, error TEXT NOT NULL DEFAULT ''
                 );
+                -- 离线下载记录分两层：
+                --   local_media 是「一个 BT 任务」，合集种子一个任务能出十几集；
+                --   local_files 是「一集一个成品文件」，播放和进度都记在这里。
+                -- 刻意不给 anime_id 加外键：番剧移出收藏时，已经下到硬盘的视频
+                -- 不该跟着消失，这里只留一条孤儿记录，界面上忽略即可。
+                CREATE TABLE IF NOT EXISTS local_media (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    anime_id INTEGER NOT NULL DEFAULT 0,
+                    episode_key TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    torrent_hash TEXT NOT NULL DEFAULT '',
+                    torrent_name TEXT NOT NULL DEFAULT '',
+                    source_title TEXT NOT NULL DEFAULT '',
+                    group_name TEXT NOT NULL DEFAULT '',
+                    resolution TEXT NOT NULL DEFAULT '',
+                    codec TEXT NOT NULL DEFAULT '',
+                    progress REAL NOT NULL DEFAULT 0,
+                    save_path TEXT NOT NULL DEFAULT '',
+                    error TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS local_media_anime
+                    ON local_media(anime_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS local_media_hash
+                    ON local_media(torrent_hash) WHERE torrent_hash <> '';
+                CREATE TABLE IF NOT EXISTS local_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_id INTEGER NOT NULL DEFAULT 0,
+                    anime_id INTEGER NOT NULL DEFAULT 0,
+                    episode_key TEXT NOT NULL DEFAULT '',
+                    file_path TEXT NOT NULL DEFAULT '',
+                    file_size INTEGER NOT NULL DEFAULT 0,
+                    duration_ms INTEGER NOT NULL DEFAULT 0,
+                    resume_ms INTEGER NOT NULL DEFAULT 0,
+                    subtitle_path TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                -- 一集只保留一个成品文件；换源时替换而不是叠加。
+                CREATE UNIQUE INDEX IF NOT EXISTS local_files_episode
+                    ON local_files(anime_id, episode_key);
                 CREATE TABLE IF NOT EXISTS anime (
                     id INTEGER PRIMARY KEY,
                     name TEXT NOT NULL DEFAULT '',

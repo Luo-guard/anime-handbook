@@ -3,9 +3,66 @@ from __future__ import annotations
 from .http_context import (HTTPStatus, Path, ScheduleService, VideoLinks, attach_collection, find_background_asset, json, mimetypes, parse_qs, re, safe_asset_id, season_key, send_asset, urlparse)
 from .common import MAX_DETAIL_LINKS
 from .link_rules import cache_path, load_cache, payload as rules_payload
+from . import offline_config
+from .offline import OfflineStore
+from .offline_service import OfflineError, OfflineService
 
 
 class ReadRoutes:
+    def _serve_local_file(self, target: Path, content_type: str) -> None:
+        """带 Range 的本地文件流。
+
+        ``<video>`` 能拖进度条全靠 Range；整文件一次性吐出去的话，跳到第 12 分钟
+        等于从头再下一遍。
+        """
+        if not target.is_file():
+            self.send_error_json(404, "本地文件不在了，可能被移动或删除")
+            return
+        total = target.stat().st_size
+        start, end, partial = 0, total - 1, False
+        header = str(self.headers.get("Range") or "").strip()
+        if header.startswith("bytes="):
+            spec = header[6:].split(",")[0].strip()
+            left, _, right = spec.partition("-")
+            try:
+                if left:
+                    start = int(left)
+                    if right:
+                        end = min(int(right), total - 1)
+                elif right:
+                    start = max(0, total - int(right))
+            except ValueError:
+                start, end = 0, total - 1
+            else:
+                partial = True
+            if start >= total or start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{total}")
+                self.end_headers()
+                return
+        length = max(0, end - start + 1)
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        if partial:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        try:
+            with target.open("rb") as handle:
+                handle.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = handle.read(min(256 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            # 用户拖动进度条会主动断开旧请求，属于正常现象。
+            pass
+
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
@@ -106,6 +163,50 @@ class ReadRoutes:
             elif path == "/api/link-rules":
                 # 只读本机缓存；用户点「刷新规则」才会联网，见 POST 同名接口。
                 self.send_json(rules_payload(load_cache(cache_path(self.database.asset_root)), MAX_DETAIL_LINKS))
+            elif path == "/api/offline/search":
+                # 关键词由前端手填，不做番名匹配；蜜柑单次最多返回 100 条。
+                keyword = query.get("q", [""])[0]
+                limit = int(query.get("limit", ["40"])[0] or 40)
+                anime_id = int(query.get("anime_id", ["0"])[0] or 0)
+                self.send_json(OfflineService(self.database).search(keyword, limit=limit, anime_id=anime_id))
+            elif path == "/api/offline/state":
+                anime_id = int(query.get("anime_id", ["0"])[0] or 0)
+                if anime_id <= 0:
+                    raise ValueError("番剧 ID 无效")
+                self.send_json(OfflineService(self.database).state(anime_id))
+            elif path == "/api/offline/summary":
+                self.send_json(OfflineService(self.database).summary())
+            elif path == "/api/offline/settings":
+                config = offline_config.load(self.database.asset_root)
+                self.send_json({
+                    "ok": True,
+                    "config": config,
+                    "paths": offline_config.resolved(config),
+                    "default_media_root": offline_config.default_media_root(),
+                    "writable": offline_config.ensure_dirs(config),
+                })
+            elif path.startswith("/api/offline/stream/"):
+                file_id = int(path.rsplit("/", 1)[-1])
+                row = OfflineStore(self.database).file(file_id)
+                if not row:
+                    raise ValueError("这一集还没有本地文件")
+                self._serve_local_file(Path(str(row.get("file_path") or "")), "video/mp4")
+            elif path.startswith("/api/offline/subtitle/"):
+                file_id = int(path.rsplit("/", 1)[-1])
+                row = OfflineStore(self.database).file(file_id)
+                if not row:
+                    raise ValueError("这一集没有字幕")
+                subtitle = Path(str(row.get("subtitle_path") or ""))
+                if not subtitle.is_file():
+                    self.send_error_json(404, "字幕文件不存在")
+                    return
+                body = subtitle.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
             elif path == "/api/jump-history":
                 limit = int(query.get("limit", ["80"])[0] or 80)
                 self.send_json({"items": self.database.list_jumps(limit)})
@@ -324,6 +425,9 @@ class ReadRoutes:
                 self.send_error_json(404, "接口不存在")
             else:
                 self.serve_static(path)
+        except OfflineError as error:
+            # 蜜柑或 qB 那边的故障，用 502 表达「上游不可用」，前端文案照抄消息即可。
+            self.send_error_json(502, str(error))
         except (ValueError, KeyError) as error:
             self.send_error_json(getattr(error, "status", 400), str(error))
         except Exception as error:

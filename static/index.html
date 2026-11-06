@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261106-rules-menu" />
+  <link rel="stylesheet" href="/styles.css?v=20261106-offline" />
   </head>
   <body>
     <div class="app-shell">
@@ -295,6 +295,39 @@
         <div class="rules-list" id="rulesMenuList"></div>
       </div>
     </dialog>
+    <dialog class="modal offline-modal" id="offlineModal">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="offlineClose" aria-label="关闭">×</button>
+        <p class="eyebrow">OFFLINE</p>
+        <h2 id="offlineHeading">离线下载</h2>
+        <p class="page-subtitle">在蜜柑里搜关键词，挑一条种子交给本机的 qBittorrent。</p>
+        <div class="offline-tabs" role="tablist">
+          <button type="button" class="offline-tab active" data-offline-tab="search" role="tab" aria-selected="true">找资源</button>
+          <button type="button" class="offline-tab" data-offline-tab="local" role="tab" aria-selected="false">本地文件 <span id="offlineLocalCount"></span></button>
+        </div>
+        <section class="offline-panel" id="offlineSearchPanel">
+          <div class="offline-toolbar">
+            <input type="search" id="offlineQuery" placeholder="输入番名关键词，例如：孤独摇滚" aria-label="搜索关键词" autocomplete="off" />
+            <button type="button" class="primary-button" id="offlineSearchButton">搜索</button>
+          </div>
+          <div class="offline-filter" id="offlineGroups"></div>
+          <p class="offline-status" id="offlineStatus" role="status"></p>
+          <div class="offline-list" id="offlineList"></div>
+        </section>
+        <section class="offline-panel hidden" id="offlineLocalPanel">
+          <p class="offline-status" id="offlineLocalStatus" role="status"></p>
+          <div class="offline-list" id="offlineLocalList"></div>
+        </section>
+      </div>
+    </dialog>
+    <dialog class="modal offline-player" id="offlinePlayer">
+      <div class="modal-frame offline-player-frame">
+        <button type="button" class="modal-close" id="offlinePlayerClose" aria-label="关闭">×</button>
+        <h2 id="offlinePlayerTitle">播放</h2>
+        <video id="offlineVideo" controls playsinline preload="metadata"></video>
+        <p class="offline-player-meta" id="offlinePlayerMeta"></p>
+      </div>
+    </dialog>
     <dialog class="modal progress-modal" id="progressModal">
       <form method="dialog" class="modal-frame" id="progressForm">
         <button class="modal-close" value="cancel" aria-label="关闭">×</button>
@@ -302,7 +335,7 @@
           <img id="progressCover" alt="" />
           <div>
             <h2 id="progressTitle"></h2>
-            <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><span id="detailLinks" class="detail-links"></span><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
+            <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><span id="detailLinks" class="detail-links"></span><button type="button" class="related-trigger inline-related offline-trigger" id="openOffline">找资源</button><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
             <div class="anime-rating hidden" id="animeRating"></div>
             <div class="personal-rating hidden" id="personalRating"></div>
             <div class="collect-detail-row" id="collectionDetailStatus"></div>
@@ -1130,6 +1163,7 @@
     <script src="/modules/collection-edit.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
+    <script src="/modules/offline.js?v=20261106-offline" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

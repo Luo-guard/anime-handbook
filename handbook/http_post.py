@@ -5,6 +5,8 @@ from .http_support import validate_command_body
 from .assets import replace_background_bytes
 from .common import MAX_DETAIL_LINKS
 from .link_rules import RuleFetchError, cache_path, payload as rules_payload, refresh as refresh_rules
+from . import offline_config
+from .offline_service import OfflineError, OfflineService
 
 
 class PostRoutes:
@@ -28,6 +30,8 @@ class PostRoutes:
                 "/api/webdav/sync",
                 # 规则仓库缓存是全局文件，与当前账号能否写入收藏无关。
                 "/api/link-rules/refresh",
+                # 离线设置是本机配置（盘符、下载器端口），不写收藏数据。
+                "/api/offline/settings",
             }
             if path not in write_exempt_paths:
                 self.require_write_access()
@@ -38,6 +42,49 @@ class PostRoutes:
                     self.send_json({"ok": False, "error": str(error), "items": [], "limit": MAX_DETAIL_LINKS}, 502)
                     return
                 self.send_json(rules_payload(document, MAX_DETAIL_LINKS))
+            elif path == "/api/offline/settings":
+                config = offline_config.save(self.database.asset_root, body)
+                self.send_json({
+                    "ok": True,
+                    "config": config,
+                    "paths": offline_config.resolved(config),
+                    "writable": offline_config.ensure_dirs(config),
+                })
+            elif path == "/api/offline/download":
+                service = OfflineService(self.database)
+                self.send_json(service.download(
+                    anime_id=int(body.get("anime_id") or 0),
+                    torrent_url=str(body.get("torrent_url") or ""),
+                    title=str(body.get("title") or ""),
+                    episode_key=str(body.get("episode_key") or ""),
+                    group_name=str(body.get("group_name") or ""),
+                    resolution=str(body.get("resolution") or ""),
+                    codec=str(body.get("codec") or ""),
+                ))
+            elif path == "/api/offline/resume":
+                anime_id = int(body.get("anime_id") or 0)
+                episode_key = str(body.get("episode_key") or "")
+                if anime_id <= 0 or not episode_key:
+                    raise ValueError("缺少番剧或集数")
+                OfflineService(self.database).store.set_resume(
+                    anime_id, episode_key, int(body.get("resume_ms") or 0)
+                )
+                self.send_json({"ok": True})
+            elif path == "/api/offline/delete":
+                service = OfflineService(self.database)
+                mode = str(body.get("mode") or "task")
+                if mode == "file":
+                    self.send_json(service.delete_episode_file(
+                        int(body.get("anime_id") or 0), str(body.get("episode_key") or "")
+                    ))
+                elif mode in ("task", "task_files"):
+                    self.send_json(service.delete_job(
+                        int(body.get("media_id") or 0),
+                        delete_files=(mode == "task_files"),
+                        keep_files=(mode == "task"),
+                    ))
+                else:
+                    raise ValueError("删除方式无效")
             elif path == "/api/jump-history":
                 if str(body.get("action") or "") == "clear":
                     self.database.clear_jumps()
@@ -300,6 +347,8 @@ class PostRoutes:
             self.send_error_json(400, "JSON 格式错误")
         except PermissionError as error:
             self.send_error_json(403, str(error))
+        except OfflineError as error:
+            self.send_error_json(502, str(error))
         except (ValueError, KeyError) as error:
             self.send_error_json(getattr(error, "status", 400), str(error))
         except Exception as error:
