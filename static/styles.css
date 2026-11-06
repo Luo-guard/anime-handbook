@@ -3878,3 +3878,12 @@ dialog::backdrop {
 /* 播放器弹窗也别让内容框比 dialog 宽：否则左边会被裁掉、还出现横向滚动。 */
 .offline-player { width: min(960px, calc(100vw - 28px)); max-width: calc(100vw - 28px); padding: 0; }
 .offline-player .modal-frame { width: 100%; max-width: 100%; box-sizing: border-box; }
+
+/* 窗口偏矮时，弹窗有 max-height 且是 flex 纵向布局；固定块默认会被 flex-shrink 压扁，
+   文字再被 overflow:hidden 裁掉（番名、页签、字幕组筛选只剩半行）。这里明确分工：
+   头部/页签/工具栏/筛选/状态不许收缩，只有结果列表和设置区可伸缩。 */
+.offline-modal .modal-frame > :not(.offline-panel) { flex-shrink: 0; }
+.offline-modal .offline-panel { flex: 1 1 auto; min-height: 0; }
+.offline-modal .offline-panel > :not(.offline-list):not(.offline-settings) { flex-shrink: 0; }
+.offline-modal .offline-list { flex: 1 1 auto; min-height: 0; }
+.offline-modal .offline-settings { flex: 1 1 auto; min-height: 0; }
