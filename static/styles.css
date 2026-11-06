@@ -1015,6 +1015,7 @@ h1 {
 }
 
 .switch-row {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -1024,8 +1025,18 @@ h1 {
   user-select: none;
 }
 
-.switch-row input {
+/* 这个 checkbox 只用来驱动 :checked + .switch 和键盘焦点，本身不可见。
+   必须自己声明尺寸：行内其它规则（如 .detail-link-row input{width:100%}）
+   会把它撑成整个弹窗宽，absolute 定位再叠加静态位置就会撑出横向滚动条。 */
+.switch-row > input[type="checkbox"] {
   position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
   opacity: 0;
   pointer-events: none;
 }
@@ -2150,6 +2161,9 @@ dialog::backdrop {
 
 .modal-frame {
   position: relative;
+  /* 各弹窗的内容框会自己写 width（min(Npx, 94vw) 之类）。窄视口下算出来的值
+     可能比 dialog 去掉滚动条后的 clientWidth 还宽，于是多出一截横向滚动条。 */
+  max-width: 100%;
   padding: clamp(22px, 4vw, 36px);
   background: #fbfcf9;
 }
@@ -3410,8 +3424,10 @@ dialog::backdrop {
 .progress-meta > .related-trigger { margin-left: 10px; }
 .detail-link { color: var(--green-800); }
 .detail-link-row { display: grid; grid-template-columns: minmax(84px,132px) minmax(0,1fr) auto 44px auto; gap: 10px; align-items: center; margin-top: 8px; }
-.detail-link-row input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; }
-.detail-link-row input:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
+/* 只给「名称 / 网址」这两个文本框定宽；同一行里的开关 checkbox 是隐形的，
+   命中 width:100% 会把弹窗撑出几百像素的空白横向滚动区。 */
+.detail-link-row input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; }
+.detail-link-row input:not([type="checkbox"]):focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
 .detail-link-auto { display: flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
 
 /* 从 Kazumi 规则仓库挑选跳转链接 */
@@ -3910,3 +3926,8 @@ dialog::backdrop {
 .eg-row > span { color: var(--ink); white-space: nowrap; }
 .eg-row select { flex: 1 1 auto; min-width: 0; max-width: 175px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 12px; }
 .eg-warning { margin: 10px 0 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--green-50); color: var(--ink); font-size: 12px; line-height: 1.65; }
+
+/* 所有弹窗统一兜底：弹窗内容一律纵向滚动，不允许出现无意义的横向滚动条。
+   帮助气泡是 position:fixed，不受这里影响；内部真正需要横向滚动的列表
+   （规则列表等）自带 overflow:auto，也不受影响。 */
+dialog.modal { overflow-x: hidden; }
