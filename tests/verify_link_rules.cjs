@@ -98,7 +98,7 @@ window.__rules = {
     });
     assert.match(await page.locator('#linkRulesAdd').textContent(), /添加选中的 3 个/);
 
-    // 4) 添加：写入草稿、默认启用、模板带 {title}。
+    // 4) 添加：写入草稿、默认不启用（详情页只默认开 bgm/b站/更多站点）、模板带 {title}。
     await page.evaluate(() => window.__rules.add());
     const committed = await page.evaluate(() => window.__committed.at(-1));
     assert.equal(committed.kind, 'detail');
@@ -106,7 +106,7 @@ window.__rules = {
     const added = committed.rows.slice(2);
     assert.deepEqual(added.map((row) => row.name), ['Alpha', 'Beta', 'Gamma']);
     assert.deepEqual(added.map((row) => row.url), ['https://alpha.test/s?wd={title}', 'https://beta.test/s?wd={title}', 'https://gamma.test/s?wd={title}']);
-    assert.deepEqual(added.map((row) => row.enabled), [true, true, true]);
+    assert.deepEqual(added.map((row) => row.enabled), [false, false, false]);
     assert.deepEqual(added.map((row) => row.kind), ['custom', 'custom', 'custom']);
 
     // 5) 已经加过的站点标记为已添加，不可重复勾选。

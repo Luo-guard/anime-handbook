@@ -1230,7 +1230,7 @@ function addSelectedLinkRules() {
   let added = 0;
   chosen.forEach((item) => {
     if (added >= remaining || existing.has(item.template)) return;
-    rows.push({ id: detailLinkId(), kind: "custom", name: item.name, url: item.template, enabled: true });
+    rows.push({ id: detailLinkId(), kind: "custom", name: item.name, url: item.template, enabled: false });
     existing.add(item.template);
     added += 1;
   });

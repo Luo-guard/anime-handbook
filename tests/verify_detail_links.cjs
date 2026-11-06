@@ -24,7 +24,7 @@ const openSettings=()=>page.evaluate(()=>{
 await openSettings();
 assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),4);
 assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.kind)),['bgm','bilibili','saved_video','rules_menu']);
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','已存视频','更多站点']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','已存视频','更多站点 ▾']);
 // New rows can be added and edited.
 await page.locator('#addDetailLink').click();
 assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),5);
@@ -34,16 +34,16 @@ assert.equal((await page.evaluate(()=>readDetailLinks()))[4].name,'次元城');
 // Order buttons move a row and keep the edited values.
 // 新增的行在末尾（已存视频之后），上移一格只是换到它前面。
 await page.locator('#detailLinkList .detail-link-row').nth(4).locator('.detail-link-order-button').first().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','已存视频','次元城','更多站点']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','已存视频','次元城','更多站点 ▾']);
 await page.locator('#detailLinkList .detail-link-row').nth(1).locator('.detail-link-order-button').last().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','已存视频','B站搜索','次元城','更多站点']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','已存视频','B站搜索','次元城','更多站点 ▾']);
 // 两个内置入口也能参与排序：更多站点可以挪到普通链接前面。
 await page.locator('#detailLinkList .detail-link-row').nth(4).locator('.detail-link-order-button').first().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','已存视频','B站搜索','更多站点','次元城']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','已存视频','B站搜索','更多站点 ▾','次元城']);
 assert.equal(await page.locator('#detailLinkList .detail-link-row').first().locator('.detail-link-order-button').first().isDisabled(),true);
 // Presets can be deleted, and restoring brings them back.
 await page.locator('#detailLinkList .detail-link-row').first().getByText('删除').click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['已存视频','B站搜索','更多站点','次元城']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['已存视频','B站搜索','更多站点 ▾','次元城']);
 // 两个内置入口都不能删除，按钮固定禁用。
 assert.equal(await page.locator('#detailLinkList .detail-link-row').nth(0).getByText('固定').isDisabled(),true);
 assert.equal(await page.locator('#detailLinkList .detail-link-row').nth(2).getByText('固定').isDisabled(),true);

@@ -66,7 +66,7 @@ async function loadLinkRules() { return linkRulesState.items; }
     await page.evaluate(() => renderDetailLinks({ id: 1, name_cn: '测试番剧' }));
     assert.equal(await page.locator('#detailLinks .detail-link-menu').count(), 1);
     assert.match(await page.locator('#detailLinks .detail-link-menu').textContent(), /更多站点/);
-    assert.equal(await page.locator('#detailLinks a').count(), 3, 'bangumi + bilibili + saved video stay links');
+    assert.equal(await page.locator('#detailLinks a').count(), 2, '默认只渲染 bangumi + bilibili，已存视频默认关闭');
 
     // 2) 点开弹窗，列出本地缓存的站点。
     await page.locator('#detailLinks .detail-link-menu').click();
@@ -106,7 +106,7 @@ async function loadLinkRules() { return linkRulesState.items; }
     assert.equal(saved.at(-1).name, 'Alpha');
     assert.equal(saved.at(-1).url, 'https://alpha.test/s?wd={title}');
     assert.equal(saved.at(-1).enabled, true);
-    assert.equal(await page.locator('#detailLinks a').count(), 4, 'detail row redraws with the pinned link');
+    assert.equal(await page.locator('#detailLinks a').count(), 3, 'bgm + bilibili + 新固定的 Alpha（已存视频默认关闭）');
     assert.match(await page.locator('#detailLinks').textContent(), /Alpha/);
     assert.equal(await page.locator('#rulesMenuList .rules-menu-pin:disabled').count(), 1);
     assert.equal(await page.locator('#rulesMenuList .rules-menu-row').first().locator('.rules-menu-pin').textContent(), '✓');

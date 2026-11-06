@@ -18,7 +18,7 @@ function normalizeDetailLink(item) {
   }
   // 总链接：点开弹出规则仓库里的站点列表，本身没有网址。
   if (item.kind === "rules_menu") {
-    return { id: String(item.id || "") || "rules-menu", kind: "rules_menu", name: name || "更多站点", url: "", enabled: item.enabled !== false };
+    return { id: String(item.id || "") || "rules-menu", kind: "rules_menu", name: name || "更多站点 \u25be", url: "", enabled: item.enabled !== false };
   }
   if (!name || !url) return null;
   return {
@@ -32,13 +32,14 @@ function normalizeDetailLink(item) {
 
 // 详情页那一行链接：预设的 BGM / B站 也是列表里的普通条目，可以改名、改网址、排序或删除。
 // 「已存视频」和「更多站点」是两条内置入口：可以排序、改名、隐藏，但没有自己的网址。
+// 默认只开 Bangumi、B站、更多站点三条；「已存视频」默认关闭，需要时自己勾。
 function withBuiltinDetailLinks(links) {
   const list = (links || []).filter(Boolean);
   const result = list.some((link) => link.kind === "saved_video")
     ? list
-    : [...list, { id: "saved-video", kind: "saved_video", name: "已存视频", url: "", enabled: true }];
+    : [...list, { id: "saved-video", kind: "saved_video", name: "已存视频", url: "", enabled: false }];
   if (result.some((link) => link.kind === "rules_menu")) return result;
-  return [...result, { id: "rules-menu", kind: "rules_menu", name: "更多站点", url: "", enabled: true }];
+  return [...result, { id: "rules-menu", kind: "rules_menu", name: "更多站点 \u25be", url: "", enabled: true }];
 }
 
 function detailLinks() {
@@ -103,7 +104,8 @@ function renderDetailLinks(anime, preferred = null) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "detail-link-menu";
-      button.textContent = `${detailLinkLabel(link.name, values) || "更多站点"} ▾`;
+      // 箭头不再硬编码：它属于名字的一部分，想留想删都改名字即可。
+      button.textContent = detailLinkLabel(link.name, values) || "更多站点";
       button.setAttribute("aria-haspopup", "dialog");
       button.onclick = () => {
         if (typeof openRulesMenu === "function") openRulesMenu(anime, preferred, values);
