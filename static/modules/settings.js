@@ -8,13 +8,13 @@ function applyKazumiReadOnlyControls() {
 function detailLinksFromDom() {
   return [...document.querySelectorAll("#detailLinkList .detail-link-row")].map((row) => ({
     kind: row.dataset.detailLinkKind || "custom",
-    name: String(row.querySelector("[data-detail-link-name]").value || "").trim(),
-    url: String(row.querySelector("[data-detail-link-url]").value || "").trim(),
+    name: String(row.querySelector("[data-detail-link-name]")?.value || "").trim(),
+    url: String(row.querySelector("[data-detail-link-url]")?.value || "").trim(),
     enabled: Boolean(row.querySelector("[data-detail-link-enabled]").checked),
   }));
 }
 function readDetailLinks() {
-  return detailLinksFromDom().filter((link) => link.name && link.url);
+  return detailLinksFromDom().filter((link) => link.kind === "saved_video" || (link.name && link.url));
 }
 function commitDetailLinks(links) {
   state.settings.detail_links = links;
@@ -31,13 +31,13 @@ function linkRowsFromDom(kind) {
   return [...document.querySelectorAll(`${config.list} .detail-link-row`)].map((row) => ({
     id: row.dataset.detailLinkId || "",
     kind: row.dataset.detailLinkKind || "custom",
-    name: String(row.querySelector("[data-detail-link-name]").value || "").trim(),
-    url: String(row.querySelector("[data-detail-link-url]").value || "").trim(),
+    name: String(row.querySelector("[data-detail-link-name]")?.value || "").trim(),
+    url: String(row.querySelector("[data-detail-link-url]")?.value || "").trim(),
     enabled: Boolean(row.querySelector("[data-detail-link-enabled]").checked),
   }));
 }
 function readLinkList(kind) {
-  return linkRowsFromDom(kind).filter((link) => link.name && link.url);
+  return linkRowsFromDom(kind).filter((link) => link.kind === "saved_video" || (link.name && link.url));
 }
 function commitLinkList(kind, links) {
   state.settings[LINK_EDITORS[kind].setting] = links;
@@ -48,13 +48,14 @@ function editableLinks(kind) {
   const config = LINK_EDITORS[kind];
   const saved = state.settings[config.setting];
   if (!Array.isArray(saved)) return config.source();
-  return saved.map((item) => ({
+  const rows = saved.map((item) => ({
     id: String(item?.id || "") || detailLinkId(),
-    kind: ["bgm", "bilibili"].includes(item?.kind) ? item.kind : "custom",
+    kind: ["bgm", "bilibili", "saved_video"].includes(item?.kind) ? item.kind : "custom",
     name: String(item?.name ?? ""),
     url: String(item?.url ?? ""),
     enabled: item?.enabled !== false,
   }));
+  return kind === "detail" ? withSavedVideoLink(rows) : rows;
 }
 function renderLinkList(kind) {
   const config = LINK_EDITORS[kind];
@@ -72,11 +73,19 @@ function renderLinkList(kind) {
     name.value = String(link.name || "");
     name.placeholder = "名称，例如 次元城";
     name.dataset.detailLinkName = "";
-    const url = document.createElement("input");
-    url.type = "text";
-    url.value = String(link.url || "");
-    url.placeholder = "https://example.com/search?q={title}";
-    url.dataset.detailLinkUrl = "";
+    let url;
+    if (link.kind === "saved_video") {
+      // 地址来自收藏里的默认视频，这里只读，避免误以为能手填。
+      url = document.createElement("span");
+      url.className = "detail-link-auto";
+      url.textContent = "自动使用默认已存视频";
+    } else {
+      url = document.createElement("input");
+      url.type = "text";
+      url.value = String(link.url || "");
+      url.placeholder = "https://example.com/search?q={title}";
+      url.dataset.detailLinkUrl = "";
+    }
     const order = document.createElement("div");
     order.className = "detail-link-order";
     [["↑", -1, "上移"], ["↓", 1, "下移"]].forEach(([glyph, delta, label]) => {
@@ -107,9 +116,16 @@ function renderLinkList(kind) {
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "secondary-button compact-button";
-    remove.textContent = "删除";
-    remove.setAttribute("aria-label", `删除链接 ${String(link.name || "").trim()}`);
-    remove.addEventListener("click", () => commitLinkList(kind, linkRowsFromDom(kind).filter((_, item) => item !== index)));
+    if (link.kind === "saved_video") {
+      remove.textContent = "固定";
+      remove.disabled = true;
+      remove.title = "已存视频入口固定存在，可用左侧开关隐藏";
+      remove.setAttribute("aria-label", "已存视频入口固定，不能删除");
+    } else {
+      remove.textContent = "删除";
+      remove.setAttribute("aria-label", `删除链接 ${String(link.name || "").trim()}`);
+      remove.addEventListener("click", () => commitLinkList(kind, linkRowsFromDom(kind).filter((_, item) => item !== index)));
+    }
     row.append(name, url, order, toggle, remove);
     list.append(row);
   });

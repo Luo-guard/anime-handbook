@@ -22,26 +22,32 @@ const openSettings=()=>page.evaluate(()=>{
 });
 // Presets ship as ordinary, editable rows.
 await openSettings();
-assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),2);
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.kind)),['bgm','bilibili']);
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索']);
+assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),3);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.kind)),['bgm','bilibili','saved_video']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','已存视频']);
 // New rows can be added and edited.
 await page.locator('#addDetailLink').click();
-assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),3);
-await page.locator('#detailLinkList .detail-link-row').nth(2).locator('[data-detail-link-name]').fill('次元城');
-await page.locator('#detailLinkList .detail-link-row').nth(2).locator('[data-detail-link-url]').fill('https://www.cycani.org/category?q={title}');
-assert.equal((await page.evaluate(()=>readDetailLinks()))[2].name,'次元城');
+assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),4);
+await page.locator('#detailLinkList .detail-link-row').nth(3).locator('[data-detail-link-name]').fill('次元城');
+await page.locator('#detailLinkList .detail-link-row').nth(3).locator('[data-detail-link-url]').fill('https://www.cycani.org/category?q={title}');
+assert.equal((await page.evaluate(()=>readDetailLinks()))[3].name,'次元城');
 // Order buttons move a row and keep the edited values.
-await page.locator('#detailLinkList .detail-link-row').nth(2).locator('.detail-link-order-button').first().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','次元城','B站搜索']);
+// 新增的行在末尾（已存视频之后），上移一格只是换到它前面。
+await page.locator('#detailLinkList .detail-link-row').nth(3).locator('.detail-link-order-button').first().click();
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','次元城','已存视频']);
 await page.locator('#detailLinkList .detail-link-row').nth(1).locator('.detail-link-order-button').last().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','次元城']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','次元城','B站搜索','已存视频']);
+// 已存视频也能参与排序，可以排到 B站搜索前面。
+await page.locator('#detailLinkList .detail-link-row').nth(3).locator('.detail-link-order-button').first().click();
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','次元城','已存视频','B站搜索']);
 assert.equal(await page.locator('#detailLinkList .detail-link-row').first().locator('.detail-link-order-button').first().isDisabled(),true);
 // Presets can be deleted, and restoring brings them back.
 await page.locator('#detailLinkList .detail-link-row').first().getByText('删除').click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['B站搜索','次元城']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['次元城','已存视频','B站搜索']);
+// 已存视频不能删除，按钮固定禁用。
+assert.equal(await page.locator('#detailLinkList .detail-link-row').nth(1).getByText('固定').isDisabled(),true);
 await page.locator('#resetDetailLinks').click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.kind)),['bgm','bilibili']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.kind)),['bgm','bilibili','saved_video']);
 // Detail row follows the configured order and placeholders.
 await page.evaluate(()=>{
   document.querySelector('#settingsModal').close();

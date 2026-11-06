@@ -3402,6 +3402,7 @@ dialog::backdrop {
 .detail-link-row { display: grid; grid-template-columns: minmax(84px,132px) minmax(0,1fr) auto 44px auto; gap: 10px; align-items: center; margin-top: 8px; }
 .detail-link-row input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; }
 .detail-link-row input:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
+.detail-link-auto { display: flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
 .detail-link-order { display: inline-flex; gap: 2px; }
 .detail-link-order-button { width: 24px; height: 26px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; line-height: 1; cursor: pointer; }
 .detail-link-order-button:hover:not(:disabled) { border-color: var(--active-inset); color: var(--green-800); background: var(--green-50); }

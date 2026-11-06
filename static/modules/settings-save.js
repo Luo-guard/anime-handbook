@@ -146,7 +146,10 @@ const HandbookSettings = (() => {
       if (state.activeView === "schedule") renderSchedule();
       await refreshAiringProgress();
     } catch (error) {
-      toast(error.message, "error");
+      const message = /详情页链接类型无效/.test(String(error.message || ""))
+        ? "当前后台还不支持调整已存视频的位置，请重启手账后台并刷新后再试。"
+        : error.message;
+      toast(message, "error");
     } finally {
       saving = false;
       button.disabled = false;

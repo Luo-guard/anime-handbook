@@ -13,6 +13,9 @@ function normalizeDetailLink(item) {
   if (!item || typeof item !== "object") return null;
   const name = String(item.name || "").trim();
   const url = String(item.url || "").trim();
+  if (item.kind === "saved_video") {
+    return { id: String(item.id || "") || "saved-video", kind: "saved_video", name: name || "已存视频", url: "", enabled: item.enabled !== false };
+  }
   if (!name || !url) return null;
   return {
     id: String(item.id || "") || detailLinkId(),
@@ -24,15 +27,22 @@ function normalizeDetailLink(item) {
 }
 
 // 详情页那一行链接：预设的 BGM / B站 也是列表里的普通条目，可以改名、改网址、排序或删除。
+// 已存视频入口也是列表里的一项：可以排序、改名、隐藏，但地址由默认已存视频决定。
+function withSavedVideoLink(links) {
+  const list = (links || []).filter(Boolean);
+  if (list.some((link) => link.kind === "saved_video")) return list;
+  return [...list, { id: "saved-video", kind: "saved_video", name: "已存视频", url: "", enabled: true }];
+}
+
 function detailLinks() {
   const saved = state.settings.detail_links;
-  if (Array.isArray(saved)) return saved.map(normalizeDetailLink).filter(Boolean);
+  if (Array.isArray(saved)) return withSavedVideoLink(saved.map(normalizeDetailLink).filter(Boolean));
   const legacy = Array.isArray(state.settings.custom_search_links) ? state.settings.custom_search_links : [];
-  return [
+  return withSavedVideoLink([
     { ...DETAIL_LINK_PRESETS[0] },
     { ...DETAIL_LINK_PRESETS[1], enabled: enabledSetting("show_bilibili_search_button") },
     ...legacy.map((item) => normalizeDetailLink({ ...item, kind: "custom" })).filter(Boolean),
-  ];
+  ]);
 }
 
 // 周表卡片详情用同一套条目结构，只是独立保存、独立开关。
@@ -79,18 +89,44 @@ function renderDetailLinks(anime, preferred = null) {
   const title = String(anime.name_cn || anime.name || anime.display_name || "").trim();
   const site = String(state.settings.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
   const merged = state.settings.merge_bilibili_links === true;
-  buildDetailLinkItems(detailLinks(), { id: anime.id, title, site })
-    .filter((item) => !(merged && preferred && item.kind === "bilibili"))
-    .forEach((item) => {
+  const values = { id: anime.id, title, site };
+  detailLinks().forEach((link) => {
+    if (!link.enabled) return;
+    if (link.kind === "saved_video") {
       const anchor = document.createElement("a");
-      anchor.className = "detail-link";
-      anchor.dataset.detailLinkKind = item.kind;
+      anchor.id = "savedVideoDefaultLink";
       anchor.target = "_blank";
       anchor.rel = "noreferrer";
-      anchor.textContent = item.label;
-      anchor.href = item.href;
+      anchor.textContent = `${detailLinkLabel(link.name, values)} ↗`;
+      if (preferred) {
+        anchor.href = bilibiliResumeUrl(preferred, anime);
+        anchor.savedVideoItem = preferred;
+        anchor.dataset.videoResumeUrl = preferred.url;
+        anchor.onclick = () => typeof recordJump === "function" && recordJump({
+          anime_id: anime?.id || null,
+          anime_name: anime?.display_name || anime?.name_cn || "",
+          title: preferred.title,
+          url: anchor.href,
+          kind: preferred.kind || "video",
+        });
+      } else {
+        anchor.classList.add("hidden");
+      }
       box.append(anchor);
-    });
+      return;
+    }
+    if (link.url.includes("{id}") && !values.id) return;
+    if ((link.url.includes("{title}") || link.name.includes("{title}")) && !values.title) return;
+    if (merged && preferred && link.kind === "bilibili") return;
+    const anchor = document.createElement("a");
+    anchor.className = "detail-link";
+    anchor.dataset.detailLinkKind = link.kind;
+    anchor.target = "_blank";
+    anchor.rel = "noreferrer";
+    anchor.textContent = `${detailLinkLabel(link.name, values)} ↗`;
+    anchor.href = detailLinkHref(link.url, values);
+    box.append(anchor);
+  });
 }
 
 function bilibiliResumeUrl(item, anime) {
@@ -133,26 +169,8 @@ function refreshSavedVideoTargets() {
 }
 
 function renderBilibiliEntrypoints(anime, preferred = null) {
-  const saved=$("#savedVideoDefaultLink");
-  saved.textContent="已存视频 ↗";
-  saved.classList.toggle("hidden",!preferred);
-  if(preferred) {
-    saved.dataset.videoResumeUrl = preferred.url;
-    saved.savedVideoItem = preferred;
-    saved.href = bilibiliResumeUrl(preferred, anime);
-  } else {
-    saved.removeAttribute("href");
-    delete saved.dataset.videoResumeUrl;
-    delete saved.savedVideoItem;
-  }
-  saved.onclick = preferred ? () => typeof recordJump === "function" && recordJump({
-    anime_id: anime?.id || null,
-    anime_name: anime?.display_name || anime?.name_cn || "",
-    title: preferred.title,
-    url: saved.href,
-    kind: preferred.kind || "video",
-  }) : null;
-  renderDetailLinks(anime,preferred);
+  // 已存视频的入口由 renderDetailLinks 按设置里的顺序插入，不再固定追加在末尾。
+  renderDetailLinks(anime, preferred);
 }
 
 let videoLinksLoadVersion = 0;

@@ -75,7 +75,8 @@ class RandomThemeOnOpenTest(unittest.TestCase):
             payload_of(common.with_initial_appearance(HTML, base_settings(), "local"))["random_theme_profile"]
             for _ in range(12)
         ]
-        self.assertEqual(set(picks), {"a", "b", "c"}, "all profiles should appear")
+        # 避开上一次只保证“不连续重复”，不保证有限次内覆盖全部方案。
+        self.assertGreaterEqual(len(set(picks)), 2, "random pick should vary across opens")
         for previous, current in zip(picks, picks[1:]):
             self.assertNotEqual(previous, current, f"consecutive repeat: {picks}")
 

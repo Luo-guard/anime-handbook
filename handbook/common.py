@@ -583,7 +583,7 @@ def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str
 
 
 MAX_DETAIL_LINKS = 12
-DETAIL_LINK_KINDS = {"bgm", "bilibili", "custom"}
+DETAIL_LINK_KINDS = {"bgm", "bilibili", "custom", "saved_video"}
 
 
 def normalize_detail_links(value: Any) -> list[dict[str, Any]]:
@@ -608,6 +608,13 @@ def normalize_detail_links(value: Any) -> list[dict[str, Any]]:
         enabled = item.get("enabled", True)
         if type(enabled) is not bool:
             raise ValueError("详情页链接开关无效")
+        if kind == "saved_video":
+            # 已存视频入口指向“默认视频”，网址由收藏里的视频决定，不单独保存。
+            name = name or "已存视频"
+            if len(name) > 30:
+                raise ValueError("详情页链接的名称或网址过长")
+            links.append({"id": str(item.get("id") or "").strip()[:64] or "saved-video", "kind": kind, "name": name, "url": "", "enabled": enabled})
+            continue
         if not name or not url:
             raise ValueError("详情页链接需要名称和网址")
         if len(name) > 30 or len(url) > 500:
