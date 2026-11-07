@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261107-no-next-airing" />
+  <link rel="stylesheet" href="/styles.css?v=20261107-detail-actions" />
   </head>
   <body>
     <div class="app-shell">
@@ -364,11 +364,17 @@
           <img id="progressCover" alt="" />
           <div class="progress-hero-info">
             <h2 id="progressTitle"></h2>
-            <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><span id="detailLinks" class="detail-links"></span><button type="button" class="related-trigger inline-related offline-trigger" id="openOffline">找资源</button><button type="button" class="related-trigger inline-related" id="openAgeRelated">相关番剧</button></p>
+            <p class="progress-meta"><span id="progressAirDate"></span><span class="meta-separator" id="progressMetaSeparator">·</span><span id="detailLinks" class="detail-links"></span></p>
             <div class="progress-info-row">
               <div class="anime-rating hidden" id="animeRating"></div>
               <div class="personal-rating hidden" id="personalRating"></div>
-              <div class="collect-detail-row" id="collectionDetailStatus"></div>
+              <div class="progress-actions">
+                <div class="detail-actions">
+                  <button type="button" class="detail-action detail-action-primary" id="openOffline"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>找资源</button>
+                  <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
+                </div>
+                <div class="collect-detail-row" id="collectionDetailStatus"></div>
+              </div>
             </div>
             <input id="episodeCountInput" type="hidden" />
           </div>
@@ -1193,7 +1199,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261106-collection-order" defer></script>
-    <script src="/modules/events.js?v=20261106-collection-order" defer></script>
+    <script src="/modules/events.js?v=20261107-detail-actions" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

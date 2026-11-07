@@ -177,8 +177,10 @@ $("#openAnimeRating").addEventListener("click", async () => {
 $("#openAgeRelated").addEventListener("click", async () => {
   if (!state.progressAnime) return;
   const button = $("#openAgeRelated");
+  // 只改文字那一层：直接写 textContent 会把按钮前面的图标一起抹掉。
+  const label = $("#openAgeRelatedLabel");
   button.disabled = true;
-  button.textContent = "正在查找…";
+  if (label) label.textContent = "正在查找…";
   try {
     const result = await api(`/api/animes/${state.progressAnime.id}/age-related`, {
       method: "POST",
@@ -189,7 +191,7 @@ $("#openAgeRelated").addEventListener("click", async () => {
     toast(error.message, "error");
   } finally {
     button.disabled = false;
-    button.textContent = "查找相关番剧";
+    if (label) label.textContent = "相关番剧";
   }
 });
 $("#cancelAnimeComment").addEventListener("click", () => {
