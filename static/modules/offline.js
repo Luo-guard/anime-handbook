@@ -6,6 +6,10 @@ const offlineView = {
   items: [],
   group: "",
   local: { files: [], jobs: [] },
+  // 请求版本号：慢响应（尤其是 3 秒轮询撞上换番）不能把新番的界面覆盖成旧数据。
+  localToken: 0,
+  searchToken: 0,
+  retryLimit: 5,
   playing: null,
   resumeTimer: 0,
   subtitle: null,
@@ -83,12 +87,16 @@ async function runOfflineSearch() {
     return;
   }
   const button = $("#offlineSearchButton");
+  const animeId = Number(offlineView.animeId);
+  const token = (offlineView.searchToken += 1);
   button.disabled = true;
   offlineStatus("#offlineStatus", "正在搜索蜜柑…");
   try {
     const data = await api(
-      `/api/offline/search?q=${encodeURIComponent(query)}&anime_id=${offlineView.animeId}&limit=60`,
+      `/api/offline/search?q=${encodeURIComponent(query)}&anime_id=${animeId}&limit=60`,
     );
+    // 搜完之前换了番或又搜了一次：旧结果不能覆盖当前的列表。
+    if (token !== offlineView.searchToken || animeId !== Number(offlineView.animeId)) return;
     offlineView.items = data.items || [];
     offlineView.group = "";
     renderOfflineGroups();
@@ -99,6 +107,7 @@ async function runOfflineSearch() {
       `在 ${host} 找到 ${offlineView.items.length} 条${data.truncated ? "（蜜柑单次最多 100 条）" : ""}`,
     );
   } catch (error) {
+    if (token !== offlineView.searchToken || animeId !== Number(offlineView.animeId)) return;
     offlineView.items = [];
     renderOfflineList();
     offlineStatus("#offlineStatus", error.message || "搜索失败", true);
@@ -208,11 +217,17 @@ async function startOfflineDownload(index) {
 
 async function refreshOfflineLocal() {
   if (!offlineView.animeId) return;
+  const animeId = Number(offlineView.animeId);
+  const token = (offlineView.localToken += 1);
   try {
-    const data = await api(`/api/offline/state?anime_id=${offlineView.animeId}`);
+    const data = await api(`/api/offline/state?anime_id=${animeId}`);
+    // 期间换了番、或又发了一次新的请求：这次的结果已经过期，直接丢弃。
+    if (token !== offlineView.localToken || animeId !== Number(offlineView.animeId)) return;
     offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
+    if (data.archive_retry_limit) offlineView.retryLimit = Number(data.archive_retry_limit);
     renderOfflineLocal();
   } catch (error) {
+    if (token !== offlineView.localToken || animeId !== Number(offlineView.animeId)) return;
     offlineStatus("#offlineLocalStatus", error.message || "读取本地文件失败", true);
   }
 }
@@ -277,17 +292,29 @@ function renderOfflineLocal() {
   if (failed.length) {
     blocks.push(
       `<h3 class="offline-section-title">出问题了 · ${failed.length}</h3>`,
-      ...failed.map((job) => `
+      ...failed.map((job) => {
+        const limit = Number(offlineView.retryLimit || 5);
+        const attempts = Number(job.archive_retries || 0);
+        const stopped = attempts >= limit;
+        // 提示要能指导下一步：还在自动重试就说明会自己再试，到顶了就说要人处理什么。
+        const hint = stopped
+          ? "自动重试已用完：按上面的原因处理后点「重试归档」"
+          : attempts
+            ? `还会自动再试（已用 ${attempts}/${limit} 次）；也可以现在点「重试归档」`
+            : "点「重试归档」立即再试一次";
+        return `
         <article class="offline-row">
           <div class="offline-row-main">
             <p class="offline-row-title" title="${escapeHtml(job.source_title || job.torrent_name)}">${escapeHtml(job.torrent_name || job.source_title || "未命名任务")}</p>
             <p class="offline-row-meta"><span class="offline-error">${escapeHtml(job.error || "未知原因")}</span></p>
+            <p class="offline-row-hint">${escapeHtml(hint)}｜已入库的集会跳过，只补缺的</p>
           </div>
           <div class="offline-row-actions">
-            <button type="button" class="offline-play" data-retry="${job.id}" title="文件已经下好时，重新整理入库">重试归档</button>
+            <button type="button" class="offline-play" data-retry="${job.id}" title="${escapeHtml(hint)}">重试归档</button>
             <button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button>
           </div>
-        </article>`),
+        </article>`;
+      }),
     );
   }
   if (!blocks.length) {
@@ -298,8 +325,8 @@ function renderOfflineLocal() {
 }
 
 // 详情页的单集「播放」手势会在从没打开过离线面板时触发：缓存要么是空的、
-// 要么还挂着上一部番的身份。先按当前详情番同步身份再拉一次列表再找文件，
-// 否则会误报「还没下载」，甚至把上一部番的同集号文件播出来。
+// 要么还挂着上一部番的身份。这里自己按当前番拉一份最新的再找文件，
+// 既不吃面板缓存的亏，也不受轮询「过期响应直接丢弃」的影响。
 async function localFileForEpisode(key) {
   const anime = state.progressAnime || {};
   const animeId = Number(anime.id || 0);
@@ -310,7 +337,13 @@ async function localFileForEpisode(key) {
     offlineView.local = { files: [], jobs: [] };
   }
   if (!offlineView.animeId) return null;
-  await refreshOfflineLocal();
+  try {
+    const data = await api(`/api/offline/state?anime_id=${animeId}`);
+    if (animeId !== Number(offlineView.animeId)) return null;
+    offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
+  } catch (error) {
+    return null;
+  }
   return (
     (offlineView.local?.files || []).find(
       (item) => String(item.episode_key) === String(key)
@@ -409,18 +442,57 @@ async function removeJob(mediaId) {
   }
 }
 
-// 面板开着时每 3 秒同步一次下载进度/归档状态。后端已有全局心跳在推进任务，
-// 这里的轮询只负责把推进的结果画到开着的界面上；面板关了或页面切走就停。
+// 面板开着时同步下载进度/归档状态。后端已有全局心跳在推进任务，
+// 这里的轮询只负责把推进的结果画到开着的界面上：
+// · 有任务在动（下载/整理/还能自动重试的失败）→ 3 秒一次，进度看着是活的；
+// · 全都静止（没有任务、只剩已放弃的失败）→ 放慢到 15 秒，别白白压 qB；
+// · 面板关了或页面切到后台就停，切回来立刻补一次。
+const OFFLINE_POLL_FAST_MS = 3000;
+const OFFLINE_POLL_IDLE_MS = 15000;
 let offlinePollTimer = 0;
-function setOfflinePolling(on) {
-  window.clearInterval(offlinePollTimer);
-  offlinePollTimer = 0;
-  if (!on) return;
-  offlinePollTimer = window.setInterval(() => {
-    if (!$("#offlineModal")?.open || document.hidden) return;
-    refreshOfflineLocal();
-  }, 3000);
+let offlinePolling = false;
+
+function offlinePollDelay() {
+  const jobs = offlineView.local?.jobs || [];
+  const limit = Number(offlineView.retryLimit || 5);
+  const moving = jobs.some((job) => {
+    if (["queued", "downloading", "processing"].includes(job.status)) return true;
+    // 归档失败但自动重试还没到上限的任务仍会自己恢复，值得按快节奏盯着。
+    return (
+      job.status === "failed" &&
+      String(job.error || "").startsWith("归档失败") &&
+      Number(job.archive_retries || 0) < limit
+    );
+  });
+  return moving ? OFFLINE_POLL_FAST_MS : OFFLINE_POLL_IDLE_MS;
 }
+
+function setOfflinePolling(on) {
+  offlinePolling = Boolean(on);
+  window.clearTimeout(offlinePollTimer);
+  offlinePollTimer = 0;
+  if (!offlinePolling) return;
+  const tick = async () => {
+    if (!offlinePolling) return;
+    if ($("#offlineModal")?.open && !document.hidden) {
+      try {
+        await refreshOfflineLocal();
+      } catch (error) {
+        // 轮询失败不该弹提示打断观看，下一轮会自己重试。
+      }
+    }
+    if (offlinePolling) offlinePollTimer = window.setTimeout(tick, offlinePollDelay());
+  };
+  offlinePollTimer = window.setTimeout(tick, OFFLINE_POLL_FAST_MS);
+}
+
+// 切回这个标签页时立刻补一次，别等下一轮 3/15 秒。
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !offlinePolling) return;
+  if (!$("#offlineModal")?.open) return;
+  refreshOfflineLocal().catch(() => {});
+  setOfflinePolling(true);
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   $("#openOffline")?.addEventListener("click", openOffline);

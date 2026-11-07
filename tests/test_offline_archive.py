@@ -241,6 +241,22 @@ class ArchiveTest(unittest.TestCase):
             "crashed job must ingest the missing episode instead of early-returning ready",
         )
 
+    def test_broken_files_report_packaging_failure_not_names(self):
+        """全是坏文件时要报「封装失败」，不能把人引去改文件名。"""
+        folder = self.root / "broken"
+        folder.mkdir()
+        # 1 KB 以下的文件会被当成空壳过滤掉，这里写够 4 KB 的垃圾数据冒充视频。
+        (folder / "[LoliHouse] 测试番 - 01 [1080p].mkv").write_bytes(b"\x00junk" * 800)
+        job = self.make_job(str(folder))
+        service = OfflineService(self.db)
+        fake = FakeClient(str(folder))
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            service._archive_job(job["id"])
+        row = self.store.job(job["id"])
+        self.assertEqual(row["status"], "failed")
+        self.assertIn("封装失败", row["error"])
+        self.assertIn("换一条种子", row["error"])
+
     def test_deleted_episode_rearchives_when_torrent_redownloaded(self):
         """审计 N3：删掉某一集后重新点同一条种子，缺的那集要重新归档。
 
@@ -378,6 +394,20 @@ class ArchiveRetryTest(unittest.TestCase):
         row = self.store.job(job["id"])
         self.assertTrue(row["error"].startswith("归档失败：文件不见了"))
         self.assertIn("自动重试 2/", row["error"])
+        self.assertIn("还会自动再试", row["error"], "中途失败要说明后面会自己再试")
+
+    def test_failure_message_says_retries_are_exhausted(self):
+        """到了上限必须明说「已停止」，并告诉用户接下来该点哪里。"""
+        job = self.make_failed_job(attempts=MAX_ARCHIVE_RETRIES)
+        self.service._mark_archive_failed(job["id"], OfflineError("文件不见了"))
+        row = self.store.job(job["id"])
+        self.assertIn("自动重试已停止", row["error"])
+        self.assertIn("重试归档", row["error"])
+
+    def test_state_exposes_retry_limit(self):
+        job = self.make_failed_job(attempts=1)
+        payload = OfflineService(self.db).state(job["anime_id"], refresh=False)
+        self.assertEqual(payload["archive_retry_limit"], MAX_ARCHIVE_RETRIES)
 
 
 class BackgroundWorkerTest(unittest.TestCase):

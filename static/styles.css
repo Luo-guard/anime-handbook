@@ -3814,6 +3814,7 @@ dialog::backdrop {
 .offline-tag { border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; font-size: 11px; }
 .offline-size { font-variant-numeric: tabular-nums; }
 .offline-error { color: #9b3434; }
+.offline-row-hint { margin: 2px 0 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
 .offline-row-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .offline-download, .offline-play, .offline-remove { appearance: none; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 9px; padding: 6px 13px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .offline-download { border-color: var(--green-700); color: var(--green-700); }

@@ -36,14 +36,22 @@ window.api=async(url,options)=>{
       offlineView.animeId = 554779;
       offlineView.local = {
         files: [],
-        jobs: [{ id: 3, status: 'failed', error: '归档失败：下载目录里没有找到视频文件', torrent_name: '测试番 [05].mp4', progress: 100 }],
+        jobs: [
+          { id: 3, status: 'failed', error: '归档失败：下载目录里没有找到视频文件', torrent_name: '测试番 [05].mp4', progress: 100, archive_retries: 2 },
+          { id: 4, status: 'failed', error: '归档失败：只入库 1/12 集', torrent_name: '测试番 合集', progress: 100, archive_retries: 5 },
+        ],
       };
       renderOfflineLocal();
       switchOfflineTab("local");
       $("#offlineModal").showModal();
     });
 
-    assert.match(await page.locator('#offlineLocalList').textContent(), /出问题了 · 1/);
+    assert.match(await page.locator('#offlineLocalList').textContent(), /出问题了 · 2/);
+    // 提示分两档：还在自动重试 → 说明会自己再试；到上限 → 说明要人处理。
+    const hints = await page.locator('#offlineLocalList .offline-row-hint').allTextContents();
+    assert.match(hints[0], /还会自动再试（已用 2\/5 次）/, `retrying hint: ${hints[0]}`);
+    assert.match(hints[1], /自动重试已用完/, `exhausted hint: ${hints[1]}`);
+    assert.ok(hints.every((text) => text.includes('只补缺的')), 'hint explains that ingested episodes are skipped');
     const retry = page.locator('#offlineLocalList [data-retry="3"]');
     assert.equal(await retry.count(), 1, 'failed row has a retry button');
     assert.equal(await retry.textContent(), '重试归档');

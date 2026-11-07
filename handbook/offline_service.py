@@ -367,10 +367,22 @@ class OfflineService:
                 _ARCHIVING.discard(media_id)
 
     def _mark_archive_failed(self, media_id: int, error: Exception) -> None:
-        """记失败并把已自动重试的次数写进错误信息，界面上能看到还剩几次机会。"""
+        """记失败，并把「还剩几次自动重试 / 已经停止」写进错误信息。
+
+        提示必须能指导下一步：还在重试窗口里就说明会自动再试；到了上限就
+        明确说自动重试已停、要用户处理什么之后点「重试归档」。
+        """
         job = self.store.job(media_id)
         attempts = int((job or {}).get("archive_retries") or 0)
-        suffix = f"（自动重试 {attempts}/{MAX_ARCHIVE_RETRIES}）" if attempts else ""
+        if attempts >= MAX_ARCHIVE_RETRIES:
+            suffix = (
+                f"（已自动重试 {MAX_ARCHIVE_RETRIES} 次仍未成功，自动重试已停止："
+                "按上面的提示处理后点「重试归档」）"
+            )
+        elif attempts:
+            suffix = f"（已自动重试 {attempts}/{MAX_ARCHIVE_RETRIES}，稍后还会自动再试）"
+        else:
+            suffix = "（点「重试归档」可以立即再试一次）"
         self.store.set_status(media_id, "failed", error=f"归档失败：{error}{suffix}")
 
     def _archive(self, media_id: int) -> None:
@@ -428,7 +440,10 @@ class OfflineService:
                     break
             time.sleep(1)
         if not files:
-            raise OfflineError("下载目录里没有找到视频文件，可能还没写完或已被移走")
+            raise OfflineError(
+                "下载目录里没有找到视频文件：确认 qBittorrent 里这个任务已完成、"
+                "文件还在下载目录（被移走或改名过就放回原处），再点「重试归档」"
+            )
         anime = self.db.get_anime(anime_id) or {}
         folder = media_tools.safe_name(
             anime.get("display_name") or anime.get("name_cn") or anime.get("name") or job.get("torrent_name")
@@ -444,6 +459,7 @@ class OfflineService:
                 fallback_key = media_tools.episode_key(from_title)
         made = 0
         already = 0
+        broken = 0
         fonts_done = False
         for source in files:
             number = media_tools.episode_number(source.name)
@@ -462,7 +478,9 @@ class OfflineService:
                 result = media_tools.remux(source, target_dir / f"{label}.mp4", codec=info["codec"])
                 subtitle = media_tools.extract_subtitle(source, target_dir / f"{label}.ass")
             except media_tools.MediaError:
-                # 单个文件坏掉不该让整季任务失败，剩下的继续处理。
+                # 单个文件坏掉不该让整季任务失败，剩下的继续处理；但数量要记下来，
+                # 全是封装失败时不能报成「认不出集数」，那会把人引到错误的方向。
+                broken += 1
                 continue
             # 同一个字幕组的合集里每集附件都一样，抽一次就够，别重复读十几遍原片。
             if not fonts_done:
@@ -480,14 +498,23 @@ class OfflineService:
             made += 1
         ingested = made + already
         if not ingested:
-            raise OfflineError("这些文件名里认不出集数，请在下载器里改名后重试")
+            if broken:
+                raise OfflineError(
+                    f"{broken} 个文件封装失败，可能已损坏或编码不受支持："
+                    "换一条种子，或确认磁盘还有空间"
+                )
+            raise OfflineError(
+                "这些文件名里认不出集数：在下载器里把文件名改成「番名 - 01」这类带集数的格式，"
+                "再点「重试归档」"
+            )
         if ingested < len(files):
             # 部分入库不能算完成：差着的集数用户看不到，还以为整季都在媒体库里。
             # 抛错走统一的失败记录（计入自动重试次数），已入库的集保持原样，
             # 重试时上面按 key 跳过，不会重复封装。
+            reason = f"，其中 {broken} 个封装失败" if broken else ""
             raise OfflineError(
-                f"只入库 {ingested}/{len(files)} 集，其余文件认不出集数或封装失败；"
-                "会自动重试几次，也可以稍后手动重试"
+                f"只入库 {ingested}/{len(files)} 集{reason}：认不出集数的文件在下载器里改名成"
+                "「番名 - 01」这类格式，然后点「重试归档」，已入库的集会跳过"
             )
         self.store.set_status(media_id, "ready", progress=100, error="", archive_retries=0)
         if not config.get("seed_after_done"):
@@ -515,6 +542,8 @@ class OfflineService:
             "ready_episodes": sorted(ready),
             "counts": self.store.summary(),
             "paths": offline_config.resolved(self.config()),
+            # 前端据此判断「还在自动重试窗口里」和「已经停了」，决定轮询节奏与按钮文案。
+            "archive_retry_limit": MAX_ARCHIVE_RETRIES,
         }
 
     def maybe_auto_check(self) -> None:
