@@ -648,12 +648,120 @@ h1 {
 .collection-floating-controls { position:fixed; right:28px; bottom:28px; z-index:30; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
 .collection-floating-button { width:62px; height:62px; border:0; border-radius:18px; color:#fff; background:var(--green-800); box-shadow:0 10px 28px rgb(var(--theme-rgb) / .32); cursor:pointer; font:700 31px/1 system-ui,sans-serif; }
 .collection-floating-button:hover { background:var(--green-700); transform:translateY(-2px); }
-.collection-controls-modal { width:min(470px,calc(100vw - 32px)); margin:auto; border:0; border-radius:18px; box-shadow:var(--shadow); }
-.collection-controls-modal::backdrop { background:rgb(12 24 18 / .24); backdrop-filter:blur(3px); }
-.collection-controls-modal-frame { position:relative; display:grid; gap:14px; padding:24px; background:var(--surface); }
-.collection-controls-modal-frame h3 { margin:0; color:var(--ink); font:700 18px Georgia,"SimSun",serif; }
-.collection-control-section { display:grid; gap:8px; }
-.collection-control-section h4 { margin:0; color:var(--muted); font-size:13px; font-weight:700; }
+/* ===== 收藏页「筛选与排序」弹窗 =====
+   结构：头（标题+关闭）/ 身（季度筛选块 + 排序块）/ 脚（恢复默认 + 完成）。
+   季度是「年份标签 + 该年四季」两级，不再把所有年份一次铺开。 */
+.collection-controls-modal {
+  width: min(504px, calc(100vw - 28px));
+  max-height: min(88vh, 780px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 28px 72px rgb(var(--theme-rgb) / .22), 0 1px 0 rgb(var(--theme-rgb) / .06);
+  overflow: hidden;
+}
+.collection-controls-modal::backdrop { background: rgb(12 24 18 / .28); backdrop-filter: blur(4px); }
+.collection-controls-modal-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  background: var(--surface);
+}
+.cc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 22px 22px 14px; }
+.cc-eyebrow {
+  margin: 0 0 5px;
+  color: var(--green-600);
+  font: 700 10px/1.4 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: .18em;
+}
+.collection-controls-modal-frame h3 { margin: 0; color: var(--ink); font: 700 21px/1.25 Georgia, "SimSun", serif; letter-spacing: .01em; }
+.collection-controls-close {
+  position: static;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition: color .16s, background .16s;
+}
+.collection-controls-close:hover { color: var(--green-800); background: var(--green-50); }
+.cc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 0 16px 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.cc-body::-webkit-scrollbar { width: 8px; }
+.cc-body::-webkit-scrollbar-track { background: transparent; }
+.cc-body::-webkit-scrollbar-thumb { border-radius: 99px; background: rgb(var(--theme-rgb) / .2); }
+.cc-body::-webkit-scrollbar-thumb:hover { background: rgb(var(--theme-rgb) / .34); }
+/* 入场：轻微下移+缩放，弹窗不要生硬地「啪」一下出现 */
+.collection-controls-modal[open] { animation: cc-pop .22s cubic-bezier(.22, .8, .32, 1); }
+.collection-controls-modal[open]::backdrop { animation: cc-fade .22s ease; }
+@keyframes cc-pop { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes cc-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .collection-controls-modal[open],
+  .collection-controls-modal[open]::backdrop { animation: none; }
+}
+.collection-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgb(var(--theme-rgb) / .09);
+  border-radius: 16px;
+  background: var(--paper);
+}
+.cc-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.collection-control-section h4 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 800; letter-spacing: .02em; }
+.cc-section-note { color: var(--muted); font-size: 11.5px; }
+.cc-section-note.is-active { color: var(--green-700); font-weight: 700; }
+.cc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.cc-foot-reset {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  font: 600 12.5px/1 system-ui, sans-serif;
+  transition: color .16s, border-color .16s;
+}
+.cc-foot-reset:hover { color: var(--danger); border-color: var(--danger); }
+.cc-foot-done {
+  min-width: 108px;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 11px;
+  color: #fff;
+  background: var(--green-800);
+  box-shadow: 0 8px 20px rgb(var(--theme-rgb) / .26);
+  cursor: pointer;
+  font: 700 13.5px/1 system-ui, sans-serif;
+  transition: background .16s, transform .16s;
+}
+.cc-foot-done:hover { background: var(--green-700); transform: translateY(-1px); }
 
 .timeline-theme-filter { position:relative; }
 .timeline-theme-filter > button { min-width:112px; justify-content:space-between; }
@@ -675,112 +783,207 @@ h1 {
 .note-theme-menu [data-note-theme]:hover { background:var(--green-50); }
 .note-theme-menu i { width:9px; height:9px; border-radius:50%; background:var(--theme-dot); }
 .remove-theme { border:0; color:#9d6969; background:transparent; cursor:pointer; font-size:16px; }
-.collection-controls-modal-frame .season-filter-panel,
-.collection-controls-modal-frame .sort-picker-menu { position:static; width:auto; box-sizing:border-box; box-shadow:none; }
-.collection-controls-modal-frame .season-filter-panel { max-height:min(48vh,420px); overflow:auto; }
-.collection-controls-modal-frame .sort-picker-menu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border:0; overflow:visible; background:transparent; }
-.collection-controls-modal-frame .sort-picker-menu > div { border:1px solid var(--line); border-radius:9px; padding:3px 5px 3px 10px; }
-/* 排序方式现在是 7 项、两列：最后一行只有「自定义」，让它横跨两列补满，
-   否则会留一个空洞看着像少了一项。 */
-.collection-controls-modal-frame .sort-picker-menu > div[data-sort-mode="custom"] { grid-column: 1 / -1; }
-.collection-controls-close { position:absolute; top:10px; right:12px; width:30px; height:30px; border:0; border-radius:50%; color:var(--muted); background:transparent; cursor:pointer; font-size:22px; }
-
-.season-filter-button {
-  display: inline-flex;
-  align-items: center;
+/* —— 季度筛选：年份标签 + 该年四季 —— */
+.collection-controls-modal-frame .season-filter-panel {
+  position: static;
+  z-index: auto;
+  top: auto;
+  right: auto;
+  width: auto;
+  box-sizing: border-box;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.season-year-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
 }
-
-.season-filter-count {
-  display: inline-grid;
-  min-width: 18px;
-  height: 18px;
-  place-items: center;
-  border-radius: 999px;
-  color: #fff;
-  background: var(--green-700);
-  font-size: 11px;
-}
-
-.season-filter-panel {
-  position: absolute;
-  z-index: 10;
-  top: calc(100% + 9px);
-  right: 0;
-  width: min(540px, calc(100vw - 42px));
-  padding: 15px;
+.season-year-tab {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 4px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 11px;
+  color: var(--muted);
   background: var(--surface);
-  box-shadow: var(--shadow);
+  cursor: pointer;
+  text-align: center;
+  font: 700 13px/1.2 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  transition: color .16s, border-color .16s, background .16s, box-shadow .16s;
 }
+.season-year-tab:hover { border-color: var(--green-500); color: var(--green-800); }
+.season-year-tab.picked::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--green-600);
+}
+.season-year-tab.active {
+  border-color: var(--green-800);
+  color: #fff;
+  background: var(--green-800);
+  box-shadow: 0 6px 16px rgb(var(--theme-rgb) / .28);
+}
+/* 当前年份的选中季数在下方已写明，chip 上再点一个白点会挤到数字，这里隐藏 */
+.season-year-tab.active.picked::after { display: none; }
+.season-years-more {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-top: 2px;
+  padding: 2px 6px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 11.5px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.season-years-more::after { content: " ↓"; }
+.season-years-more[data-season-years-more="collapse"]::after { content: " ↑"; }
+.season-years-more:hover { color: var(--green-800); }
+.season-year-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgb(var(--theme-rgb) / .12);
+}
+.season-year-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.season-year-summary { color: var(--muted); font-size: 12px; }
+.season-year-summary b { color: var(--ink); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.season-year-actions { display: flex; align-items: center; gap: 10px; }
+.season-text-button {
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.season-text-button:hover { color: var(--danger); }
+.season-year-all {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--green-800);
+  background: var(--surface);
+  cursor: pointer;
+  font: 700 12px/1 system-ui, sans-serif;
+  transition: color .16s, border-color .16s, background .16s;
+}
+.season-year-all:hover { border-color: var(--green-600); background: var(--green-50); }
+.season-year-all.active { border-color: var(--green-700); color: #fff; background: var(--green-700); }
+.season-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.season-card {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .16s, background .16s, transform .16s, box-shadow .16s;
+}
+.season-card b { color: var(--ink); font-size: 14px; font-weight: 700; letter-spacing: .01em; }
+.season-card small { font-size: 11px; }
+.season-card:hover { border-color: var(--green-500); transform: translateY(-1px); }
+.season-card.active {
+  border-color: var(--green-700);
+  background: var(--green-100);
+  box-shadow: inset 0 0 0 1px var(--green-700);
+}
+.season-card.active b { color: var(--green-900); }
+.season-card.active small { color: var(--green-800); }
+.season-check {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  display: none;
+  color: var(--green-800);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+.season-card.active .season-check { display: block; }
+.season-empty { margin: 0; color: var(--muted); font-size: 12.5px; }
 
-.season-filter-heading {
+/* —— 排序方式：两列选项，右侧升降序小分段 —— */
+.collection-controls-modal-frame .sort-picker-menu {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: auto;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.collection-controls-modal-frame .sort-picker-menu > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--ink);
-}
-
-.season-filter-tip {
-  margin: 5px 0 12px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.season-filter-years {
-  display: grid;
-  gap: 10px;
-}
-
-.season-filter-year {
-  display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
   gap: 8px;
-}
-
-.season-year-button,
-.season-option {
+  padding: 6px 7px 6px 12px;
   border: 1px solid var(--line);
-  border-radius: 9px;
-  color: var(--muted);
-  background: #fff;
-  font: inherit;
+  border-radius: 12px;
+  background: var(--surface);
   cursor: pointer;
+  transition: border-color .16s, background .16s;
 }
-
-.season-year-button {
-  padding: 7px 8px;
-  font-size: 12px;
-  font-weight: 700;
+.collection-controls-modal-frame .sort-picker-menu > div > span {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
 }
-
-.season-options {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+.collection-controls-modal-frame .sort-picker-menu > div:hover { border-color: var(--green-500); }
+.collection-controls-modal-frame .sort-picker-menu > div.active {
+  border-color: var(--green-700);
+  background: var(--green-50);
+  box-shadow: inset 3px 0 0 var(--green-700);
 }
-
-.season-option {
-  display: grid;
-  gap: 2px;
-  padding: 5px 4px;
-  font-size: 12px;
-  font-weight: 700;
+.collection-controls-modal-frame .sort-picker-menu > div.active > span { color: var(--green-900); font-weight: 800; }
+.sort-row-hint { color: var(--muted); font-size: 11px; font-style: normal; }
+.sort-dir { display: flex; flex: none; gap: 2px; padding: 2px; border-radius: 9px; background: rgb(var(--theme-rgb) / .07); }
+.collection-controls-modal-frame .sort-picker-menu .sort-dir button {
+  width: 26px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font: 700 12px/1 system-ui, sans-serif;
+  transition: color .16s, background .16s;
 }
-
-.season-option small {
-  color: inherit;
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.season-year-button.active,
-.season-option.active {
-  border-color: var(--green-600);
-  color: var(--green-800);
-  background: var(--green-100);
-}
+.collection-controls-modal-frame .sort-picker-menu .sort-dir button:hover { color: var(--green-900); background: var(--green-100); }
+.collection-controls-modal-frame .sort-picker-menu .sort-dir button.active { color: #fff; background: var(--green-700); }
+/* 排序方式 7 项、两列：最后一行只有「自定义」，让它横跨两列补满，
+   否则会右下角留一个空洞看着像少了一项。 */
+.collection-controls-modal-frame .sort-picker-menu > div[data-sort-mode="custom"] { grid-column: 1 / -1; }
 
 .timeline-search-box {
   width: min(330px, 100%);
@@ -2826,7 +3029,23 @@ dialog::backdrop {
 @media (max-width: 640px) {
   .collection-floating-controls { right:16px; bottom:16px; }
   .collection-floating-button { width:54px; height:54px; border-radius:16px; }
-  .collection-controls-modal-frame { padding:20px; }
+  .collection-controls-modal { width:min(504px, calc(100vw - 20px)); max-height:min(92vh, 780px); border-radius:18px; }
+  .cc-head { padding:16px 16px 10px; }
+  .cc-head h3 { font-size:19px; }
+  .cc-body { padding:0 10px 2px; gap:10px; }
+  .collection-control-section { padding:12px; border-radius:14px; }
+  .season-year-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sort-row-hint { display: none; }
+}
+@media (max-width: 420px) {
+  .season-year-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* 极窄屏先让位给控件本身，说明文字收起来 */
+  .cc-section-note { display: none; }
+}
+@media (max-width: 380px) {
+  .collection-controls-modal-frame .sort-picker-menu { grid-template-columns: 1fr; }
+  .cc-foot { padding:12px 14px 14px; }
+  .sort-dir button { width:24px; }
   .settings-layout { grid-template-columns:1fr; }
   .settings-side-nav { grid-template-columns:repeat(4, minmax(0,1fr)); position:static; overflow:auto; }
   .settings-side-nav button { padding:8px 5px; font-size:11px; text-align:center; white-space:nowrap; }

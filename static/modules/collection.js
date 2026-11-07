@@ -137,31 +137,78 @@ function availableSeasonYears() {
     .sort((a, b) => b - a);
 }
 
+// 季度筛选面板是「先选年份、再看该年四季」的两级结构：
+// 年份做成整齐的小格子（默认只露最近 12 年，更早的折叠起来），
+// 避免十几个年份 × 四个季度同时铺开（老版要滚动好几屏）。
+// 这里记住用户正在看哪一年、要不要展开早期年份，重渲染时不要跳回去。
+let seasonFilterYear = null;
+let seasonYearsExpanded = false;
+const SEASON_YEAR_LIMIT = 12;
+
+function activeSeasonYear(years) {
+  if (seasonFilterYear && years.includes(seasonFilterYear)) return seasonFilterYear;
+  const picked = [...state.seasonFilters]
+    .map((key) => Number(String(key).split("-")[0]))
+    .filter((year) => years.includes(year))
+    .sort((a, b) => b - a);
+  return picked[0] || years[0];
+}
+
 function renderSeasonFilter() {
   const panel = $("#seasonFilterPanel");
   const years = availableSeasonYears();
-  panel.innerHTML = years.length
-    ? `<div class="season-filter-heading"><strong>按播出季度筛选</strong><button type="button" class="text-button" data-season-action="clear">清除</button></div>
-      <p class="season-filter-tip">可多选；“全年”会同时选择该年的四个季度。</p>
-      <div class="season-filter-years">${years.map((year) => {
-        const keys = SEASONS.map((season) => `${year}-${season.month}`);
-        const selectedCount = keys.filter((key) => state.seasonFilters.has(key)).length;
-        return `<div class="season-filter-year">
-          <button type="button" class="season-year-button ${selectedCount === 4 ? "active" : ""}" data-season-year="${year}">${year} 全年</button>
-          <div class="season-options">${SEASONS.map((season) => {
-            const key = `${year}-${season.month}`;
-            return `<button type="button" class="season-option ${state.seasonFilters.has(key) ? "active" : ""}" data-season-key="${key}">${season.name}<small>${season.label}</small></button>`;
-          }).join("")}</div>
-        </div>`;
-      }).join("")}</div>`
-    : `<p class="season-filter-tip">同步到带有播出日期的番剧后即可按季度筛选。</p>`;
+  if (years.length) {
+    const year = activeSeasonYear(years);
+    seasonFilterYear = year;
+    // 当前年份落在折叠区间里（或本来就没展开）时自动展开，否则看不到高亮的那一项。
+    const hasEarlier = years.length > SEASON_YEAR_LIMIT;
+    const expanded = seasonYearsExpanded || years.indexOf(year) >= SEASON_YEAR_LIMIT;
+    const shownYears = expanded ? years : years.slice(0, SEASON_YEAR_LIMIT);
+    const yearKeys = SEASONS.map((season) => `${year}-${season.month}`);
+    const pickedInYear = yearKeys.filter((key) => state.seasonFilters.has(key)).length;
+    const allPicked = pickedInYear === SEASONS.length;
+    panel.innerHTML = `<div class="season-year-tabs" role="group" aria-label="按年份筛选">${shownYears.map((item) => {
+      const picked = SEASONS.some((season) => state.seasonFilters.has(`${item}-${season.month}`));
+      return `<button type="button" class="season-year-tab${item === year ? " active" : ""}${picked ? " picked" : ""}" data-season-year-tab="${item}" aria-pressed="${item === year}">${item}</button>`;
+    }).join("")}${hasEarlier
+      ? `<button type="button" class="season-years-more" data-season-years-more="${expanded ? "collapse" : "expand"}">${expanded ? "只看最近 12 年" : `更早的 ${years.length - SEASON_YEAR_LIMIT} 个年份`}</button>`
+      : ""}</div>
+      <div class="season-year-panel">
+        <div class="season-year-head">
+          <span class="season-year-summary"><b>${year}</b> 年 · 已选 ${pickedInYear}/4</span>
+          <div class="season-year-actions">
+            ${state.seasonFilters.size ? `<button type="button" class="season-text-button" data-season-action="clear">清除全部</button>` : ""}
+            <button type="button" class="season-year-all${allPicked ? " active" : ""}" data-season-year="${year}">${allPicked ? "取消全年" : "选全年"}</button>
+          </div>
+        </div>
+        <div class="season-grid">${SEASONS.map((season) => {
+          const key = `${year}-${season.month}`;
+          const on = state.seasonFilters.has(key);
+          return `<button type="button" class="season-card${on ? " active" : ""}" data-season-key="${key}" aria-pressed="${on}">
+            <b>${season.name}</b><small>${season.label}新番</small><i class="season-check" aria-hidden="true">✓</i>
+          </button>`;
+        }).join("")}</div>
+      </div>`;
+  } else {
+    panel.innerHTML = `<p class="season-empty">同步到带有播出日期的番剧后，就能按季度筛选了。</p>`;
+  }
   panel.classList.remove("hidden");
   const count = state.seasonFilters.size;
-  const countLabel = $("#seasonFilterCount");
-  if (countLabel) {
-    countLabel.textContent = count;
-    countLabel.classList.toggle("hidden", count === 0);
+  const note = $("#ccSeasonNote");
+  if (note) {
+    note.textContent = count ? `已选 ${count} 个季度` : "可多选，跨年份也能一起选";
+    note.classList.toggle("is-active", count > 0);
   }
+  $("[data-season-years-more]", panel)?.addEventListener("click", (event) => {
+    seasonYearsExpanded = event.currentTarget.dataset.seasonYearsMore === "expand";
+    renderSeasonFilter();
+  });
+  $$("[data-season-year-tab]", panel).forEach((button) => {
+    button.addEventListener("click", () => {
+      seasonFilterYear = Number(button.dataset.seasonYearTab);
+      renderSeasonFilter();
+    });
+  });
   $$("[data-season-key]", panel).forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.seasonKey;

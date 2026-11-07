@@ -43,6 +43,31 @@ $("#collectionFloatingPanel").addEventListener("close", () => {
   $("#collectionFloatingButton").setAttribute("aria-expanded", "false");
 });
 
+$("#ccDone")?.addEventListener("click", () => {
+  $("#collectionFloatingPanel").close();
+});
+
+// 「恢复默认」= 清空季度筛选 + 当前收藏夹排序回名称升序。
+// 只动当前夹，不动别的收藏夹已经单独设好的排序。
+$("#ccResetAll")?.addEventListener("click", async () => {
+  try {
+    state.seasonFilters.clear();
+    renderSeasonFilter();
+    const key = activeVisibilityKey();
+    const modes = { ...(state.settings.collection_sort_modes || {}), [key]: "name" };
+    const directions = { ...(state.settings.collection_sort_directions || {}), [key]: "asc" };
+    const payload = await api("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ collection_sort_modes: modes, collection_sort_directions: directions }),
+    });
+    state.settings = ThemeSettingsSession.incoming(payload.settings);
+    renderCollection();
+    toast("已恢复默认筛选与排序");
+  } catch (error) {
+    toast(error.message, "error");
+  }
+});
+
 let timelineSearchTimer = null;
 $("#timelineSearchInput").addEventListener("input", (event) => {
   state.timelineSearch = event.target.value;
