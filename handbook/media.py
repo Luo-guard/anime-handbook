@@ -419,6 +419,20 @@ def label_for_key(key: str) -> str:
         return ""
 
 
+def key_sort_value(key: str) -> tuple[int, int, int, str]:
+    """本地文件列表的排序键：先按类型（本篇 / 特别篇 / OP…），再按集数数值。
+
+    ``ORDER BY episode_key`` 是字符串比较，``0:10`` 会排在 ``0:2`` 前面 ——
+    超过 9 集列表顺序就乱了。这里把两段都转成整数；``bgm:123`` 这类非数字
+    标识统一排到数字之后、按原文排序，保证结果稳定。
+    """
+    text = str(key or "")
+    kind_text, separator, number_text = text.partition(":")
+    if separator and kind_text.isdigit() and number_text.isdigit():
+        return (0, int(kind_text), int(number_text), "")
+    return (1, 0, 0, text)
+
+
 def safe_name(text: str, *, fallback: str = "未命名番剧", limit: int = 80) -> str:
     """清掉 Windows 文件名禁用字符，避免建目录时炸掉。"""
     value = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", str(text or ""))

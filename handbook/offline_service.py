@@ -559,6 +559,21 @@ class OfflineService:
             except QBError:
                 pass
 
+    @staticmethod
+    def _annotate_files(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """给每一集标上「现在还能不能播」。
+
+        只做读取层的判断，不改数据库：外接盘临时没插、文件被搬到别处，插回来
+        或搬回去就该自动恢复，直接在库里写成 missing 反而要人工修。代价是
+        每次 state 请求都 stat 一遍这个番的文件（一般几十行，可以忽略）。
+        """
+        for row in files:
+            video = str(row.get("file_path") or "")
+            row["exists"] = bool(video) and Path(video).is_file()
+            subtitle = str(row.get("subtitle_path") or "")
+            row["has_subtitle"] = bool(subtitle) and Path(subtitle).is_file()
+        return files
+
     def state(self, anime_id: int, *, refresh: bool = True) -> dict[str, Any]:
         jobs = self.store.jobs_for_anime(int(anime_id))
         live: dict[int, dict[str, Any]] = {}
@@ -568,13 +583,18 @@ class OfflineService:
         for job in jobs:
             job["live"] = live.get(int(job["id"]), {})
         self.maybe_auto_check()
-        files = self.store.files_for_anime(int(anime_id))
-        ready = {str(item.get("episode_key")) for item in files}
+        files = self._annotate_files(self.store.files_for_anime(int(anime_id)))
+        # 文件不在了不算「可以播放」：详情页的手势、面板的播放按钮都据此判断，
+        # 否则点下去只会拿到 404「本地文件不在了」。
+        ready = {str(item.get("episode_key")) for item in files if item.get("exists")}
+        missing = [item for item in files if not item.get("exists")]
         return {
             "ok": True,
             "jobs": jobs,
             "files": files,
-            "ready_episodes": sorted(ready),
+            "ready_episodes": sorted(ready, key=media_tools.key_sort_value),
+            "missing_keys": sorted((str(item.get("episode_key")) for item in missing), key=media_tools.key_sort_value),
+            "missing_count": len(missing),
             "counts": self.store.summary(),
             "paths": offline_config.resolved(self.config()),
             # 前端据此判断「还在自动重试窗口里」和「已经停了」，决定轮询节奏与按钮文案。
@@ -704,7 +724,9 @@ class OfflineService:
         sub = self.store.add_subscription(
             anime_id=int(anime_id), keyword=keyword, group_name=group_name, enabled=enabled
         )
-        return {"ok": True, "subscription": sub}
+        # 带回总开关：自动追番默认关，订阅了也永远不会自动下载，
+        # 前端要据此说清楚「还要去设置里打开」，而不是含糊地报「已订阅」。
+        return {"ok": True, "subscription": sub, "auto_follow": bool(self.config().get("auto_follow"))}
 
     def unsubscribe(self, sub_id: int) -> dict[str, Any]:
         if not self.store.delete_subscription(int(sub_id)):
@@ -712,7 +734,11 @@ class OfflineService:
         return {"ok": True}
 
     def subscriptions(self, anime_id: int | None = None) -> dict[str, Any]:
-        return {"ok": True, "items": self.store.subscriptions(anime_id)}
+        return {
+            "ok": True,
+            "items": self.store.subscriptions(anime_id),
+            "auto_follow": bool(self.config().get("auto_follow")),
+        }
 
     def check_subscriptions(self, *, force: bool = False) -> dict[str, Any]:
         """按订阅搜一遍，有更新的集就下最新一条。

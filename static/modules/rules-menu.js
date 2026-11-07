@@ -150,8 +150,12 @@ async function openRulesMenu(anime, preferred = null, values = null) {
   renderRulesMenu();
   const cache = rulesMenuCache();
   if (cache && !cache.items.length && !cache.loading) {
-    // 首次打开且本机还没有规则：顺手拉一次，用户已经主动点了按钮。
-    await loadLinkRules(true);
+    // 先读本机那份 link-rules.json；确实没有缓存时，loadLinkRules 内部才会
+    // 联网刷新一次。以前这里传 true 强制联网，刷新页面后第一次点「更多站点」
+    // 都要等一次 GitHub —— 断网时明明有几十条缓存，列表却是空的。
+    const pending = loadLinkRules(false);
+    renderRulesMenu();
+    await pending;
     renderRulesMenu();
   }
 }

@@ -154,19 +154,22 @@
 **N9 · 矮窗口下「更多站点 / 链接规则」弹窗内容溢出底框（`styles.css:3434 / 3752`）· 确定（实测）**
 - 见 B9 尾部数据；属于 B9 的同类，只是没裁字。
 
-**N10 · 「更多站点」首次打开强制联网，有缓存也打不开（`rules-menu.js:148-153`）· 确定**
+**N10 · 「更多站点」首次打开强制联网，有缓存也打不开（`rules-menu.js:148-153`）· 确定 · ✅ 已修复**
 - `linkRulesState.items` 每次刷新页面都是空的，`openRulesMenu` 看到空就 `loadLinkRules(true)` → **force 刷新**，不走本地 `link-rules.json`。断网/连不上 GitHub 时列表为空并显示错误，尽管本机有 74 条缓存。
 - 影响：每次刷新页面后的第一次点「更多站点」都要等一次 2 秒联网；离线不可用。
+- 修法：改成 `loadLinkRules(false)`（先 `GET /api/link-rules` 读本地 JSON，只有本地确实没有缓存时才 POST 刷新），并在等待期间显示「正在获取规则…」。实测：刷新页面后首次点开 74 个站点 121 ms 出列表，请求只有一条 `GET /api/link-rules`。
 
-**N11 · 文件被外部删除后界面仍显示「可以播放」（`offline.py:16 / offline_service.py:458`）· 确定**
+**N11 · 文件被外部删除后界面仍显示「可以播放」（`offline.py:16 / offline_service.py:458`）· 确定 · ✅ 已修复**
 - `STATUSES` 里定义了 `missing`，但全仓没有任何地方写入它，也没人校验 `file_path` 是否存在。
 - 点播放才会 404「本地文件不在了」（`http_read.py:21-23`）。缺一层「刷新时核对文件是否还在」。
+- 修法：`state()` 新增 `_annotate_files()`，每行带上 `exists` 与 `has_subtitle`；`ready_episodes` 只收 `exists` 的，另下发 `missing_keys / missing_count`。**刻意不落库**：外接盘临时没插、文件被挪走都会自己恢复，写成 `missing` 反而要人工修。前端把「文件不在了」单独列一段（角标只数能播的）、不给播放按钮、删除确认文案改成「只清记录」；详情页手势与 `playLocalFile` 都当「没下载」处理。顺带修好：`has_subtitle` 后端其实一直没下发，列表里的「字幕」标签从来没显示过。
 
 **N12 · 搜索/状态请求没有版本号，慢响应会覆盖新番（`offline.js:88-99 / 208-217`）· 较可信**
 - 对比 `renderVideoLinks()` 里有 `videoLinksLoadVersion` 的写法（`video-links.js:240-252`），离线这边没做。快速换番（或快速改关键词连按搜索）时旧响应后到 → 列表与「当前番」不匹配。
 
-**N13 · 「订阅」toast 承诺了不会发生的事（`offline.js:575` + `offline_config.py:28`）· 确定**
+**N13 · 「订阅」toast 承诺了不会发生的事（`offline.js:575` + `offline_config.py:28`）· 确定 · ✅ 已修复**
 - 自动追番总开关默认关；订阅后 toast 说「已订阅…的新集」，但不去设置里打开「自动追新番」就永远不会下。与 B3 同类（说明文案与实际行为不符）。建议文案改成「已订阅；到设置里打开『自动追新番』后才会自动下载」。
+- 修法：订阅 / 订阅列表接口都带回 `auto_follow`；关着时 toast 说「已订阅…；到设置里打开『自动追新番』后才会自动下载」，订阅列表顶部再加一句「『自动追新番』关着：这些订阅只在点『立即检查全部订阅』时才会查一次」，按钮 title 也改成同一口径。开着时仍然是原来的「已订阅…的新集」。
 
 **N14 · 目录可写性探测有并发竞态（`offline_config.py:130-140`）· 较可信**
 - 固定文件名 `.handbook-write-test`：两个请求同时 `ensure_dirs`（例如设置页与 `summary` 同时到达），一个刚 unlink、另一个 mkdir/write 会抛 `FileNotFoundError` → 误报「目录不可写」。
@@ -179,8 +182,9 @@
 
 ### C 档
 
-**N16 · 本地文件列表按字符串排序，10 排在 2 前面（`offline.py:239`）· 确定**
+**N16 · 本地文件列表按字符串排序，10 排在 2 前面（`offline.py:239`）· 确定 · ✅ 已修复**
 - `ORDER BY episode_key` → `0:1, 0:10, 0:11, 0:2 …`。超过 9 集就会看到顺序乱。前端没有再排序。
+- 修法：新增 `media.key_sort_value()`（先类型、再集数数值，`bgm:123` 这类非数字标识排到数字之后），`files_for_anime()` 与 `all_files()` 取回后在 Python 里排序；`ready_episodes / missing_keys` 也按同一把尺子排。
 
 **N17 · 暂停状态借 `error` 字段传达（`offline_service.py:551-556`）· 确定（影响小）**
 - `task_action` 把「已暂停」写进 `error`，下一次 `_sync` 会把它清空（`:321`）。目前前端靠 `live.state` 的 `paused` 前缀判断（`offline.js:252`），所以显示是对的；但 DB 里的 `error` 语义已经混了。
@@ -212,7 +216,7 @@
 1. **N1**（播错番）+ **N3**（删了不能再下）+ **N4**（部分入库永久缺失）—— 三个都会造成「看到的和实际不一致」，且都在归档/播放链路上。
 2. **N2**（面板轮询）—— 一并把 B11 的三个残留收掉：轮询 3 秒、重试加次数上限、归档失败给可操作提示。
 3. ~~**N7 / N8 / N15**（写错位置、迁移半途、集数识别）~~ —— ✅ 已完成。
-4. **N10 / N11 / N13 / N16**（缓存、缺文件、文案、排序）—— 小改动、用户可感知。
+4. ~~**N10 / N11 / N13 / N16**（缓存、缺文件、文案、排序）~~ —— ✅ 已完成。
 5. **B1 的箭头**（把 `↗` 并进可编辑名称）、**N9**（rules 弹窗 flex-shrink）、**N5 / N17 / N18 / N19 / N20**（清理项）。
 6. **K1**（sqlite 只读）—— 独立的加固项，建议单独一轮，用「常驻写连接 + 一次重试」的组合。
 
@@ -226,6 +230,23 @@
 - 未做：前端 52 个 verify 脚本全量重跑；真实服务下的端到端点击（会动真实库，本轮不动）。
 
 
+
+---
+
+## 修复记录（五）：N10 缓存优先 / N11 缺文件 / N13 订阅文案 / N16 排序（2026-11-07 夜间）
+
+- **N10**：`openRulesMenu` 的 `loadLinkRules(true)` → `loadLinkRules(false)`；只有本地 `link-rules.json` 确实为空时 `loadLinkRules` 内部才 POST 刷新。等待期间菜单显示「正在获取规则…」，拿到后重绘。实测本机 74 条规则：刷新页面后首次点开 121 ms 出列表，网络侧只有 `GET /api/link-rules`。
+- **N11**：`OfflineService._annotate_files()` 给每一行补 `exists` / `has_subtitle`（一次 `is_file()`，不写库）；`state()` 的 `ready_episodes` 只含 `exists` 的行，另下发 `missing_keys`、`missing_count`。前端本地文件页把缺失的单独列成「文件不在了 · N 集」，不给播放按钮、只留「删除记录」，并提示「插回去/放回原位会自动恢复」；`localFileForEpisode()` 与 `playLocalFile()` 都把缺失当「没下载」；删除确认与 toast 按有没有文件分两套文案（原来对缺失文件也说「会移到 _trash」）。顺带修好一直没生效的「字幕」标签（后端此前没下发 `has_subtitle`）。
+- **N13**：`subscribe()` / `subscriptions()` 返回 `auto_follow`；总开关关着时 toast 说「已订阅…；到设置里打开『自动追新番』后才会自动下载」，订阅列表顶部补一句「『自动追新番』关着：只在点『立即检查全部订阅』时才会查一次」，搜索结果的「订阅」按钮 title 同步改口径。
+- **N16**：新增 `media.key_sort_value()`；`files_for_anime()` / `all_files()` 改在 Python 侧按「类型 → 集数数值」排序（`0:1, 0:2, 0:10, 0:11, 1:3`，`bgm:123` 排最后）。
+- **测试**：
+  - `tests/test_offline_state.py`（新增 5 项）：在盘的能播、被删的不算能播、字幕单独判定、拔盘后记录保留且插回自动恢复、缺失列表按集数排。
+  - `tests/test_offline_store.py` +1：`files_for_anime` 按数值排序。
+  - `tests/test_offline_subs.py` +1：订阅/订阅列表回传 `auto_follow` 真假。
+  - `tests/test_media.py` +1：`key_sort_value` 数值序、非数字标识排尾且稳定。
+  - `tests/verify_offline_missing_files.cjs`（新增）：缺失分组与角标、缺失行无播放按钮、播放守卫、`localFileForEpisode` 跳过缺失、删除文案分两套、订阅 toast 两档、订阅列表提示开关状态。
+  - `tests/verify_rules_menu_cache.cjs`（新增）：首次打开传 `force=false` 并立即出列表、有缓存时一次请求都不发。
+  - 后端全量 499 项通过（不含已知并发写失败的 `test_hardening`）；前端 58 个 verify 脚本全过；真实服务下点开「更多站点」与离线面板各验一次，无 JS 报错。
 
 ---
 

@@ -65,6 +65,18 @@ class SubscriptionStoreTest(unittest.TestCase):
         self.assertEqual(row["last_checked"], "2026-11-01T00:00:00")
         self.assertEqual(row["last_torrent"], "abc")
 
+    def test_subscribe_reports_auto_follow_switch(self):
+        """审计 N13：自动追番关着时，前端要能说清「还不会自动下载」。"""
+        offline_config.save(self.root, {"media_root": str(self.root / "media"), "auto_follow": False})
+        service = OfflineService(self.db)
+        payload = service.subscribe(anime_id=1, keyword="番", group_name="A")
+        self.assertFalse(payload["auto_follow"])
+        self.assertFalse(service.subscriptions(1)["auto_follow"])
+
+        offline_config.save(self.root, {"media_root": str(self.root / "media"), "auto_follow": True})
+        self.assertTrue(service.subscribe(anime_id=1, keyword="番", group_name="B")["auto_follow"])
+        self.assertTrue(service.subscriptions(1)["auto_follow"])
+
 
 class CheckLogicTest(unittest.TestCase):
     def setUp(self):

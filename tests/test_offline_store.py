@@ -105,6 +105,15 @@ class OfflineStoreTest(unittest.TestCase):
         self.assertTrue(self.store.delete_job(job["id"]))
         self.assertIsNone(self.store.job(job["id"]))
 
+    def test_files_are_sorted_by_episode_number(self):
+        """审计 N16：0:10 不能排在 0:2 前面。"""
+        for key in ("0:10", "0:2", "0:1", "1:3", "0:11"):
+            self.store.replace_file(anime_id=6, episode_key=key, file_path=f"D:/x/{key}.mp4")
+        self.assertEqual(
+            [row["episode_key"] for row in self.store.files_for_anime(6)],
+            ["0:1", "0:2", "0:10", "0:11", "1:3"],
+        )
+
     def test_summary_counts(self):
         a = self.store.create_job(anime_id=1, torrent_hash="s1")
         b = self.store.create_job(anime_id=1, torrent_hash="s2")

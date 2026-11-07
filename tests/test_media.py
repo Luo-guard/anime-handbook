@@ -39,6 +39,19 @@ class EpisodeNumberTest(unittest.TestCase):
         self.assertEqual(media.episode_filename(7), "第 07 集")
         self.assertEqual(media.episode_filename(123), "第 123 集")
 
+    def test_key_sort_value_orders_by_number(self):
+        """审计 N16：本地文件列表按「类型:集数」的数值排，不是按字符串。"""
+        keys = ["0:10", "0:2", "1:3", "0:1", "bgm:123"]
+        self.assertEqual(
+            sorted(keys, key=media.key_sort_value),
+            ["0:1", "0:2", "0:10", "1:3", "bgm:123"],
+        )
+        # 非数字标识排在数字之后，且保持原文稳定排序。
+        self.assertEqual(
+            sorted(["bgm:9", "bgm:123"], key=media.key_sort_value),
+            ["bgm:123", "bgm:9"],
+        )
+
     def test_bit_depth_is_not_an_episode(self):
         """审计 N15①：正文里的 10-bit / 8bit 不能被当成第 10 / 8 集。
 

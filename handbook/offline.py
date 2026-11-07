@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import media as media_tools
 from .common import now_iso
 
 STATUSES = ("queued", "downloading", "processing", "ready", "failed", "missing")
@@ -258,14 +259,19 @@ class OfflineStore:
     def files_for_anime(self, anime_id: int) -> list[dict[str, Any]]:
         with self.db.connect() as db:
             rows = db.execute(
-                "SELECT * FROM local_files WHERE anime_id = ? ORDER BY episode_key", (int(anime_id),)
+                "SELECT * FROM local_files WHERE anime_id = ?", (int(anime_id),)
             ).fetchall()
-        return [dict(row) for row in rows]
+        # 不能交给 SQL 的 ORDER BY：episode_key 是「类型:集数」的字符串，
+        # 按字符串排会把 0:10 放到 0:2 前面，下到第 10 集顺序就开始乱。
+        return sorted((dict(row) for row in rows), key=lambda row: media_tools.key_sort_value(row.get("episode_key")))
 
     def all_files(self) -> list[dict[str, Any]]:
         with self.db.connect() as db:
-            rows = db.execute("SELECT * FROM local_files ORDER BY anime_id, episode_key").fetchall()
-        return [dict(row) for row in rows]
+            rows = db.execute("SELECT * FROM local_files").fetchall()
+        return sorted(
+            (dict(row) for row in rows),
+            key=lambda row: (int(row.get("anime_id") or 0), media_tools.key_sort_value(row.get("episode_key"))),
+        )
 
     def set_resume(self, anime_id: int, episode_key: str, resume_ms: int) -> None:
         with self.db.connect() as db:

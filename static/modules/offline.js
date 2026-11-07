@@ -183,7 +183,7 @@ function renderOfflineList() {
             </p>
           </div>
           <div class="offline-row-actions">
-            <button type="button" class="offline-subscribe" data-subscribe="${index}" title="以后这个字幕组有新集就自动下载">订阅</button>
+            <button type="button" class="offline-subscribe" data-subscribe="${index}" title="记下这个字幕组；到设置里打开「自动追新番」后，有新集才会自动下载">订阅</button>
             <button type="button" class="offline-download" data-index="${index}">下载</button>
           </div>
         </article>`;
@@ -242,14 +242,18 @@ async function refreshOfflineLocal() {
 
 function renderOfflineLocal() {
   const { files, jobs } = offlineView.local;
+  // 后端每次 state 都会核对 file_path 是否还在。外接盘没插、文件被手动删/挪，
+  // 记录还留着但播不了 —— 单独列出来，不混进「可以播放」。
+  const playable = files.filter((file) => file.exists !== false);
+  const gone = files.filter((file) => file.exists === false);
   const active = jobs.filter((job) => ["queued", "downloading", "processing"].includes(job.status));
   const failed = jobs.filter((job) => job.status === "failed");
-  $("#offlineLocalCount").textContent = files.length ? String(files.length) : "";
+  $("#offlineLocalCount").textContent = playable.length ? String(playable.length) : "";
   const blocks = [];
-  if (files.length) {
+  if (playable.length) {
     blocks.push(
-      `<h3 class="offline-section-title">可以播放 · ${files.length} 集</h3>`,
-      ...files.map((file) => {
+      `<h3 class="offline-section-title">可以播放 · ${playable.length} 集</h3>`,
+      ...playable.map((file) => {
         const label = episodeLabelOf(file.episode_key);
         const size = file.file_size ? `${(file.file_size / (1 << 20)).toFixed(0)} MB` : "";
         const progress = file.resume_ms ? `看到 ${Math.floor(file.resume_ms / 60000)}:${String(Math.floor((file.resume_ms % 60000) / 1000)).padStart(2, "0")}` : "没看过";
@@ -262,6 +266,25 @@ function renderOfflineLocal() {
             <div class="offline-row-actions">
               <button type="button" class="offline-play" data-file="${file.id}">播放</button>
               <button type="button" class="offline-remove" data-file="${file.id}" title="移到回收站并删除记录">删除</button>
+            </div>
+          </article>`;
+      }),
+    );
+  }
+  if (gone.length) {
+    blocks.push(
+      `<h3 class="offline-section-title">文件不在了 · ${gone.length} 集</h3>`,
+      ...gone.map((file) => {
+        const label = episodeLabelOf(file.episode_key);
+        return `
+          <article class="offline-row offline-row-missing" data-file="${file.id}">
+            <div class="offline-row-main">
+              <p class="offline-row-title">${escapeHtml(label)}</p>
+              <p class="offline-row-meta"><span class="offline-error">磁盘上找不到这个文件</span></p>
+              <p class="offline-row-hint">外接盘没插就插回去，挪过就放回原位，这条记录会自动恢复；确定不要了再删掉记录。</p>
+            </div>
+            <div class="offline-row-actions">
+              <button type="button" class="offline-remove" data-file="${file.id}" title="只删掉这条记录，磁盘上没有文件可删">删除记录</button>
             </div>
           </article>`;
       }),
@@ -354,14 +377,22 @@ async function localFileForEpisode(key) {
   }
   return (
     (offlineView.local?.files || []).find(
-      (item) => String(item.episode_key) === String(key)
+      // 文件不在了就当作没有本地文件：让详情页回到「这一集还没下载」，
+      // 而不是打开播放器再吃一个 404。
+      (item) => String(item.episode_key) === String(key) && item.exists !== false
     ) || null
   );
 }
 
 function playLocalFile(fileId) {
   const file = offlineView.local.files.find((item) => Number(item.id) === Number(fileId));
-  if (!file) return;  offlineView.playing = file;
+  if (!file) return;
+  if (file.exists === false) {
+    toast("这个文件在磁盘上找不到了，看看外接盘插好了没", "error");
+    refreshOfflineLocal();
+    return;
+  }
+  offlineView.playing = file;
   const video = $("#offlineVideo");
   $("#offlinePlayerTitle").textContent = `${offlineView.animeName || "本地文件"} · ${episodeLabelOf(file.episode_key)}`;
   clearSubtitleSession();
@@ -423,13 +454,18 @@ function closeOfflinePlayer() {
 async function removeLocalFile(fileId) {
   const file = offlineView.local.files.find((item) => Number(item.id) === Number(fileId));
   if (!file) return;
-  if (!window.confirm(`删除 ${episodeLabelOf(file.episode_key)}？文件会移到媒体库的 _trash 目录，需要时可以找回来。`)) return;
+  const gone = file.exists === false;
+  const label = episodeLabelOf(file.episode_key);
+  // 文件本来就不在了，再说「移到 _trash，可以找回来」就是假话。
+  if (!window.confirm(gone
+    ? `删掉「${label}」这条记录？磁盘上已经没有这个文件了，这一步只清记录。`
+    : `删除 ${label}？文件会移到媒体库的 _trash 目录，需要时可以找回来。`)) return;
   try {
     await api("/api/offline/delete", {
       method: "POST",
       body: JSON.stringify({ mode: "file", anime_id: offlineView.animeId, episode_key: file.episode_key }),
     });
-    toast("已移到回收站");
+    toast(gone ? "已删掉记录" : "已移到回收站");
     refreshOfflineLocal();
   } catch (error) {
     toast(error.message || "删除失败", "error");
@@ -677,8 +713,9 @@ async function subscribeFromResult(index) {
   if (!item) return;
   const keyword = $("#offlineQuery").value.trim();
   if (!keyword) return;
+  const who = item.group || "这个关键词";
   try {
-    await api("/api/offline/subscribe", {
+    const data = await api("/api/offline/subscribe", {
       method: "POST",
       body: JSON.stringify({
         anime_id: offlineView.animeId,
@@ -687,7 +724,14 @@ async function subscribeFromResult(index) {
         enabled: true,
       }),
     });
-    toast(`已订阅「${item.group || "这个关键词"}」的新集`);
+    // 自动追番默认是关的。没开的时候说「已订阅就会自动下」是空头支票，
+    // 必须把「还要去设置里打开总开关」讲出来。
+    const autoFollow = Boolean(data && data.auto_follow);
+    toast(
+      autoFollow
+        ? `已订阅「${who}」的新集`
+        : `已订阅「${who}」；到设置里打开「自动追新番」后才会自动下载`,
+    );
     refreshSubscriptions();
   } catch (error) {
     toast(error.message || "订阅失败", "error");
@@ -704,7 +748,11 @@ async function refreshSubscriptions() {
       host.innerHTML = `<p class="offline-empty">还没有订阅。到「找资源」页，在结果上点「订阅」。</p>`;
       return;
     }
-    host.innerHTML = items
+    // 订阅存着但总开关关着，列表看着像「已经在追了」，其实什么都不会自动下。
+    const hint = data.auto_follow
+      ? ""
+      : `<p class="offline-empty">「自动追新番」关着：这些订阅只在点「立即检查全部订阅」时才会查一次。</p>`;
+    host.innerHTML = hint + items
       .map((sub) => {
         const enabled = Number(sub.enabled || 0) === 1;
         const checked = sub.last_checked ? String(sub.last_checked).slice(0, 16).replace("T", " ") : "还没检查";
