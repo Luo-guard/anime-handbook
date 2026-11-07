@@ -65,6 +65,7 @@ const server=http.createServer((req,res)=>{
     bare:ps.borderTopWidth==='0px'&&ps.backgroundColor==='rgba(0, 0, 0, 0)'&&ps.paddingTop==='0px',
     dates:document.querySelector('#scheduleASWeekDates').textContent.includes('/'),
     icons:[prev,next].every(b=>b.tagName==='BUTTON'&&b.querySelector('svg')&&getComputedStyle(b).borderTopWidth==='0px'&&!b.textContent.trim()),
+    flanking:(()=>{const kids=[...nav.children];const d=kids.indexOf(document.querySelector('#scheduleASWeekDates'));return kids.indexOf(prev)===d-1&&kids.indexOf(next)===d+1;})(),
     navRow:nav.getBoundingClientRect().height<30,
    };
   });
@@ -72,6 +73,7 @@ const server=http.createServer((req,res)=>{
   assert(stepper.bare,'week stepper has no capsule chrome (no border, background, padding)');
   assert(stepper.dates,'week dates are rendered as small text');
   assert(stepper.icons,'week arrows are borderless icon buttons, not boxed glyphs');
+  assert(stepper.flanking,'prev/next arrows flank the dates on both sides');
   assert(stepper.navRow,'dates and arrows share one small text row');
   for(const width of [390,320]){
    await page.setViewportSize({width,height:844});
