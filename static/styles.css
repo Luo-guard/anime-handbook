@@ -2135,7 +2135,11 @@ dialog::backdrop {
   max-height: calc(100dvh - 28px);
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  /* 预留滚动条槽，滚动条出现时内容不横向跳。槽要两边都留，否则只有右侧
+     空出 15px，看起来像卡片右边被直尺裁掉了；dialog 自己也得有底色，
+     不然那截槽是透明的，会透出背后的收藏页。 */
+  scrollbar-gutter: stable both-edges;
+  background: #fbfcf9;
   -webkit-overflow-scrolling: touch;
 }
 
