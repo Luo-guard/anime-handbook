@@ -6,6 +6,61 @@ function applyCharacterTabVisibility() {
   }
 }
 
+const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+// 只认补不补零都行的完整日期；"2027-04" 这种只有年月的占位不能当日期用。
+function parseIsoDate(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!match) return null;
+  const day = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(day.getTime()) ? null : day;
+}
+
+// 「周几更新」全部用本地已有数据算，不发任何请求：
+//   1. 后端 airing.next_at 是下集的真实放送时刻（本地季表里有放送钟点时才有），最准；
+//   2. 否则取 episodes 里带完整日期的 airdate 的**星期众数** —— 个别集延播
+//      （比如第 2 集突然跳到三周后）不能把结果带偏，所以不取最后一条；
+//   3. 再没有就用首播日。
+// 只有确实还有没播的集时才说「更新」；已完结的番只给星期，不谎称每周还会更新。
+function animeUpdateWeekday(anime, today = new Date()) {
+  const nextAt = Number(anime?.airing?.next_at || 0);
+  if (nextAt > 0) {
+    // 时间戳按北京时间判星期：番剧凌晨档（JST 25:30）在 UTC 会落回前一天。
+    const beijing = new Date(nextAt * 1000 + 8 * 3600 * 1000);
+    return { weekday: WEEKDAY_NAMES[beijing.getUTCDay()], ongoing: true };
+  }
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const counts = new Array(7).fill(0);
+  let dated = 0;
+  let upcoming = 0;
+  (anime?.episodes || []).forEach((episode) => {
+    const day = parseIsoDate(episode?.airdate);
+    if (!day) return;
+    dated += 1;
+    counts[day.getDay()] += 1;
+    if (day > todayStart) upcoming += 1;
+  });
+  if (!dated) {
+    const premiere = parseIsoDate(anime?.air_date);
+    if (!premiere) return null;
+    return { weekday: WEEKDAY_NAMES[premiere.getDay()], ongoing: premiere > todayStart };
+  }
+  let best = 0;
+  counts.forEach((count, index) => {
+    if (count > counts[best]) best = index;
+  });
+  return { weekday: WEEKDAY_NAMES[best], ongoing: upcoming > 0 };
+}
+
+function renderProgressWeekday(anime) {
+  const info = animeUpdateWeekday(anime);
+  const label = $("#progressWeekday");
+  label.textContent = info ? `每${info.weekday}${info.ongoing ? "更新" : ""}` : "";
+  label.classList.toggle("hidden", !info);
+  label.title = info?.ongoing ? "按 Bangumi 逐集放送日期推算，通常比国内片源早半天到一天" : "";
+  $("#progressMetaSeparator").classList.toggle("hidden", !(anime?.air_date && info));
+}
+
 function openProgress(animeId) {
   const anime = state.animes.find((item) => item.id === animeId);
   if (!anime) return;
@@ -19,7 +74,7 @@ function openProgress(animeId) {
   $("#collectionDetailStatus").replaceChildren(collectionAction(anime.id,anime.collection_type));
   $("#collectionDetailStatus").classList.toggle("hidden", !collectionEditingSupported());
   $("#progressAirDate").textContent = anime.air_date || "";
-  $("#progressMetaSeparator").classList.toggle("hidden", !anime.air_date);
+  renderProgressWeekday(anime);
   $("#savedVideoSection").open = false;
   renderVideoLinks(anime.id);
   $("#openAgeRelated").classList.toggle("hidden", !showAgeRelatedButton());
