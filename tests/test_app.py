@@ -105,10 +105,11 @@ class HandbookDBTest(unittest.TestCase):
         events = merged["tables"]["events"]
         self.assertEqual(len({event["id"] for event in events}), len(events))
         self.assertEqual({event["content"] for event in events if event["event_type"] == "note"}, {"desktop note", "mobile note"})
-        watch = {(event["anime_id"], app.json_list(event["episodes"])[0]): event["created_at"] for event in events if event["event_type"] == "watch"}
-        self.assertEqual(watch[(1, "bgm:101")], "2026-09-15T10:00:00+08:00")
-        self.assertEqual(watch[(1, "bgm:102")], "2026-09-15T01:00:00Z")
-        self.assertEqual(len(watch), 3)
+        watch = {event["anime_id"]: event for event in events if event["event_type"] == "watch"}
+        self.assertEqual(set(watch), {1, 2})
+        self.assertEqual(app.json_list(watch[1]["episodes"]), ["bgm:101", "bgm:102"])
+        self.assertEqual(watch[1]["created_at"], "2026-09-15T01:00:00Z")
+        self.assertEqual(watch[2]["created_at"], "2026-09-15T04:00:00Z")
         self.db.import_cloud_state(merged)
         exported = self.db.export_cloud_state()
         again = webdav.WebDAVSyncService.merge_record_states(exported, remote)
@@ -134,6 +135,31 @@ class HandbookDBTest(unittest.TestCase):
             self.assertEqual(again["tables"]["events"], merged["tables"]["events"])
             merged = again
 
+    def test_webdav_merge_recombines_split_episodes_of_one_record(self) -> None:
+        """同一条记录在合并中按集拆分后，输出必须重新合回一条时间线记录。
+
+        回归背景：一条 54 集的观看记录经合并拆分后变成 54 张卡片，
+        共用同一个 record_uid；这里保证按身份合并回一条，且幂等。
+        """
+        local = {"format": 1, "tables": {table: [] for table in database.HandbookDB.CLOUD_TABLES}}
+        remote = deepcopy(local)
+        template = {"event_type": "watch", "anime_id": 1, "content": "", "created_at": "2026-11-07T15:34:47+08:00", "updated_at": "2026-11-07T15:34:47+08:00", "record_uid": "same-uid"}
+        local["tables"]["events"] = [dict(template, id=index, episodes=f'["ep-{index}"]') for index in (1, 2, 3)]
+        remote["tables"]["events"] = deepcopy(local["tables"]["events"])
+        merged = webdav.WebDAVSyncService.merge_record_states(local, remote)
+        watch = [event for event in merged["tables"]["events"] if event["event_type"] == "watch"]
+        self.assertEqual(len(watch), 1)
+        self.assertEqual(app.json_list(watch[0]["episodes"]), ["ep-1", "ep-2", "ep-3"])
+        self.assertEqual(watch[0]["created_at"], "2026-11-07T15:34:47+08:00")
+        again = webdav.WebDAVSyncService.merge_record_states(merged, remote)
+        self.assertEqual(again["tables"]["events"], merged["tables"]["events"])
+        # 没有记录身份的旧数据保持按集拆分的老行为。
+        legacy = deepcopy(local)
+        for event in legacy["tables"]["events"]:
+            event.pop("record_uid")
+        merged_legacy = webdav.WebDAVSyncService.merge_record_states(legacy, deepcopy(legacy))
+        self.assertEqual(len([e for e in merged_legacy["tables"]["events"] if e["event_type"] == "watch"]), 3)
+
     def test_webdav_sync_auto_merges_then_uses_lightweight_unchanged_check(self) -> None:
         self.db.import_kazumi([sample_item(1, 1, "watching")])
         self.db.update_bgm_metadata(1, episode_count=2, episodes=sample_episodes()[:2])
@@ -156,8 +182,9 @@ class HandbookDBTest(unittest.TestCase):
             self.assertEqual(result["action"], "merged")
             self.assertNotIn("conflict", result)
             watched = [event for event in self.db.export_cloud_state()["tables"]["events"] if event["event_type"] == "watch"]
-            self.assertEqual(len(watched), 2)
-            self.assertEqual(next(event for event in watched if app.json_list(event["episodes"]) == ["bgm:101"])["created_at"], "2026-09-15T10:00:00+08:00")
+            self.assertEqual(len(watched), 1)
+            self.assertEqual(app.json_list(watched[0]["episodes"]), ["bgm:101", "bgm:102"])
+            self.assertEqual(watched[0]["created_at"], "2026-09-15T10:00:00+08:00")
             self.assertEqual(service.sync(self.db)["action"], "unchanged")
             self.assertEqual(fetch.call_count, 1)
             self.assertEqual(upload.call_count, 1)

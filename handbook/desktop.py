@@ -163,12 +163,20 @@ def main(*, open_browser: bool = True) -> None:
     server = DesktopHTTPServer((HOST, PORT), busy=lambda: bool(SYNC.status.get("running")))
     from .kazumi_writeback import start_worker
     writeback_stop = threading.Event()
-    start_worker(writeback_stop)
+    # ANIME_HANDBOOK_SANDBOX=1：测试/临时实例开关。复制正式数据做验证时，
+    # 复制出来的待写回队列和坚果云凭据会把测试改动写进真实的 Kazumi 与云端，
+    # 所以沙箱里既不写回 Kazumi，也不做 WebDAV 自动同步。
+    sandbox = os.environ.get("ANIME_HANDBOOK_SANDBOX") == "1"
+    if not sandbox:
+        start_worker(writeback_stop)
     from .offline_service import start_background_worker as start_offline_worker
     offline_stop = start_offline_worker(lambda: DATABASE)
     SYNC.start_background()
     SHARING.start_resident_refresh()
-    WEBDAV.start_background(lambda: DATABASE, profile_gate=PROFILE_GATE)
+    if not sandbox:
+        WEBDAV.start_background(lambda: DATABASE, profile_gate=PROFILE_GATE)
+    else:
+        print("沙箱模式：Kazumi 写回与 WebDAV 自动同步已禁用（ANIME_HANDBOOK_SANDBOX=1）")
     # The window must come up first; repairs and asset sweeps run behind it.
     threading.Thread(
         target=_startup_repairs,

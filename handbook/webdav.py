@@ -395,7 +395,40 @@ class WebDAVSyncService:
                 target = matches[0]
                 notes[target] = cls._same_note_version(notes[target], event)
                 removed.add(index)
-        events: list[dict[str, Any]] = list(watch_events.values()) + [event for index, event in enumerate(notes) if index not in removed]
+        # The per-episode split above exists so episode-level conflicts can be
+        # resolved independently.  Rows that share one record identity are then
+        # combined again: the split is a merge device, not a request to show
+        # one timeline card per episode on every device.
+        recombined: dict[tuple[str, str], dict[str, Any]] = {}
+        untracked: list[dict[str, Any]] = []
+        for entry in watch_events.values():
+            uid = str(entry.get("record_uid") or "")
+            anime_key = "" if entry.get("anime_id") is None else str(entry["anime_id"])
+            if not uid:
+                untracked.append(entry)
+                continue
+            group_key = (anime_key, uid)
+            existing = recombined.get(group_key)
+            if existing is None:
+                recombined[group_key] = entry
+                continue
+            merged_row = dict(cls._earlier_row(existing, entry, "created_at"))
+            episodes: list[str] = []
+            seen_episodes: set[str] = set()
+            for source in (existing, entry):
+                for episode_key in json_list(source.get("episodes")):
+                    text = str(episode_key)
+                    if text not in seen_episodes:
+                        seen_episodes.add(text)
+                        episodes.append(text)
+            merged_row["episodes"] = json_dumps(episodes)
+            merged_row["updated_at"] = str(
+                cls._newer_row(existing, entry, "updated_at").get("updated_at")
+                or merged_row.get("updated_at")
+                or ""
+            )
+            recombined[group_key] = merged_row
+        events: list[dict[str, Any]] = list(recombined.values()) + untracked + [event for index, event in enumerate(notes) if index not in removed]
         # Device-local SQLite ids can collide. Retain one when unique and give
         # the other merged record a fresh id before importing it.
         used_ids: set[int] = set()
