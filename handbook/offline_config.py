@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,12 @@ def default_media_root() -> str:
 
 def config_path(asset_root: Path) -> Path:
     return Path(asset_root) / CONFIG_FILE
+
+
+# 整个进程共用一把锁：search 记主机、download 记字幕组、设置页保存都是
+# 「读-改-写」同一个 offline.json，并发时后写的会把先写的覆盖掉。用 RLock 是
+# 因为 patch / save_settings 会在持锁状态下调用 load / save。
+_LOCK = threading.RLock()
 
 
 def _clean_text(value: Any) -> str:
@@ -109,11 +116,40 @@ def load(asset_root: Path) -> dict[str, Any]:
 def save(asset_root: Path, document: Any) -> dict[str, Any]:
     config = normalize(document)
     path = config_path(asset_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(path)
+    with _LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(path)
     return config
+
+
+def patch(asset_root: Path, **fields: Any) -> dict[str, Any]:
+    """在锁里「读-改-写」一次，只动传进来的键。
+
+    记住镜像主机、记住字幕组这类副作用以前都是「整份读出、改一个键、整份写回」，
+    和设置页保存撞在一起就会互相覆盖。要整份覆盖（设置页）用
+    :func:`save_settings`，只改一个键用这里。
+    """
+    with _LOCK:
+        config = load(asset_root)
+        config.update(fields)
+        return save(asset_root, config)
+
+
+def save_settings(asset_root: Path, document: Any) -> dict[str, Any]:
+    """设置页保存：只覆盖它真的提交了的键。
+
+    设置表单里没有 ``mikan_host``（自动探测出来的镜像）和 ``last_group``
+    （搜索时记下的字幕组偏好），整份覆盖会把这两个静默清掉。
+    """
+    submitted = document if isinstance(document, dict) else {}
+    with _LOCK:
+        config = load(asset_root)
+        for key in submitted:
+            if key in DEFAULTS:
+                config[key] = submitted[key]
+        return save(asset_root, config)
 
 
 def resolved(config: dict[str, Any]) -> dict[str, str]:
@@ -150,10 +186,12 @@ def ensure_dirs(config: dict[str, Any]) -> dict[str, Any]:
 
 def remember_group(asset_root: Path, anime_id: Any, group: str) -> dict[str, Any]:
     """记住某部番上次选的字幕组，下次搜索把它排前面。"""
-    config = load(asset_root)
     key = str(int(anime_id)) if str(anime_id).isdigit() else ""
     name = str(group or "").strip()[:80]
-    if key and name:
+    if not (key and name):
+        return load(asset_root)
+    # 读和写必须在同一把锁里，否则两次搜索并发时后一次会用旧的 last_group 覆盖前一次。
+    with _LOCK:
+        config = load(asset_root)
         config["last_group"][key] = name
         return save(asset_root, config)
-    return config

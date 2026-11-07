@@ -66,6 +66,20 @@ class GestureNormalizeTests(unittest.TestCase):
                 "Alt+Click": "play", "Shift+Click": "play",
             }})
 
+    def test_partial_bindings_keep_the_defaults(self):
+        """审计 N18：只传一部分绑定时，没提到的保留默认（和 slots 一个口径）。"""
+        value = eg.normalize({"bindings": {"Ctrl+Click": "play"}})
+        self.assertEqual(value["bindings"]["Ctrl+Click"], "play")
+        self.assertEqual(value["bindings"]["RightClick"], "open_menu")
+        self.assertEqual(value["bindings"]["LongClick"], "open_menu")
+        self.assertEqual(value["bindings"]["Alt+Click"], "reveal_in_folder")
+
+    def test_empty_string_unbinds_a_default(self):
+        """真要解绑就显式传空字符串 —— 缺键不再是「解绑」的意思。"""
+        value = eg.normalize({"bindings": {"RightClick": ""}})
+        self.assertNotIn("RightClick", value["bindings"])
+        self.assertEqual(value["bindings"]["LongClick"], "open_menu")
+
     def test_double_click_flag(self):
         self.assertTrue(eg.double_click_bound(eg.normalize({"bindings": {"Ctrl+DoubleClick": "play"}})))
         self.assertFalse(eg.double_click_bound(eg.normalize({"bindings": {"RightClick": "play"}})))

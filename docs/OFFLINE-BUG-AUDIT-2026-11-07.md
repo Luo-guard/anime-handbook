@@ -22,7 +22,7 @@
 |---|---|---|
 | 规则仓库导入的链接「默认都不开」 | **已修** | `static/modules/settings.js:1234` 导入时 `enabled: false`；默认只有 bgm、bilibili、更多站点三条开着，`saved_video` 默认关（`video-links.js:36-43`） |
 | 「更多站点」格式与其他链接一致 | **部分满足** | 视觉字号/颜色/加粗一致（`.detail-link-menu`，`styles.css:3750`），但它是 `<button>` 而不是 `<a>`：**不能中键新标签打开、不能右键复制链接地址**，和旁边三条链接行为不同 |
-| 链接后的箭头可去掉 | **未满足** | 普通链接仍然在代码里硬拼 `↗`（`video-links.js:72 / 121 / 147`），并且这个字符**不在**可编辑的名称里 —— 在设置里改名也去不掉；只有「更多站点」把箭头（▾）并进了名称（`video-links.js:21/107`）。你当时的要求是「默认在名字里，能自己删掉」 |
+| 链接后的箭头可去掉 | **已修（#8446 收口）** | 上一轮先把渲染处硬拼的 `↗` 全删了；这一轮按「默认在名字里、能自己删掉」的口径把箭头写回**默认名称**：预设变成 `Bangumi #{id} ↗` / `B站搜索 ↗`，「更多站点」默认名仍带 `▾`。名称就是设置里那个输入框，删掉箭头即生效。顺带清掉历史数据里两条预设的 `id: "undefined"`（会让「新增同步」把它们当成同一条）。 |
 | 链接超一行时日期单独占一行 | **已修** | `.progress-meta` 由 flex 改回块级行内流（`styles.css:1603-1611`），注释写明原因 |
 
 **影响面**：箭头一条只影响观感；`<button>` 一条影响操作习惯（中键/右键）。
@@ -129,9 +129,10 @@
 - 后果：剩下 11 集永远不会再归档；手动「重试归档」走同一段代码，同样直接返回。属静默数据缺失。
 - 不确定点：需要一次「归档中杀进程」才能实证，但代码路径是确定的。
 
-**N5 · 「本地文件」里的「字幕」标签永远不显示（`offline.js:236`）· 确定**
+**N5 · 「本地文件」里的「字幕」标签永远不显示（`offline.js:236`）· 确定 · ✅ 已修复**
 - `file.has_subtitle` 这个字段后端从来不返回（`local_files` 表没有这一列，`database.py:226-238`；`state` 直接透传行数据）。
 - 影响：纯观感，但说明「这一集有没有字幕」在列表里看不出来。
+- 修法：随 N11 的读时核对一起解决 —— `_annotate_files()` 每行补 `has_subtitle = subtitle_path 存在且 is_file()`（不写库）。现在真有字幕才显示「字幕」标签。
 
 ### B 档
 
@@ -151,8 +152,11 @@
 - 前端提示「有 N 集失败，目录没有切换」（`offline.js`）与事实不符 —— 部分文件其实已经切过去了。
 - 修法：改成两阶段。先复制视频、字幕、`_fonts` 并逐个校验大小（只记录、不碰 DB），全部成功后才一次性写 `local_files` 与配置；任一失败则 `_rollback` 删掉这次新建的副本（目标目录原有文件不动）、清掉这次建的空目录，DB 与配置原样返回 `rolled_back: true`。`delete_source` 挪到最后一步，失败时不会删除任何源文件。返回结构新增 `attempted / rolled_back / warnings / fonts`，前端文案改成「迁移没有执行：<原因>。新目录里的副本已清掉，媒体库仍是原目录」。
 
-**N9 · 矮窗口下「更多站点 / 链接规则」弹窗内容溢出底框（`styles.css:3434 / 3752`）· 确定（实测）**
+**N9 · 矮窗口下「更多站点 / 链接规则」弹窗内容溢出底框（`styles.css:3434 / 3752`）· 确定（实测）· ✅ 已修复**
 - 见 B9 尾部数据；属于 B9 的同类，只是没裁字。
+- 根因：列表写死 `min-height: 200px`，而框是 `max-height: 86vh + flex 纵向`，窗高一压就顶出去（400px 高溢 24px、380px 高溢 110px）。
+- 修法：三层。① 列表下限改成 `min(200px, 30vh)`，窗矮了自己让位；② `.rules-dialog / .rules-menu-dialog .modal-frame > :not(.rules-list) { flex-shrink: 0 }`，标题/工具栏/状态行/底部按钮不再被压扁裁字；③ `@media (max-height: 620px)` 里先藏掉说明句、列表下限放到 40px（约一行），真到极限再让白框自己滚（`overflow-y: auto`），内容永远不落到框外。
+- 复测（1280 宽 × 900/640/520/480/420/380 高）：两个弹窗 `scrollHeight - clientHeight` 全为 0；标题 `scrollHeight == clientHeight`（没被压扁）；400px 高时底部「取消 / 添加选中的 N 个」完整可见。
 
 **N10 · 「更多站点」首次打开强制联网，有缓存也打不开（`rules-menu.js:148-153`）· 确定 · ✅ 已修复**
 - `linkRulesState.items` 每次刷新页面都是空的，`openRulesMenu` 看到空就 `loadLinkRules(true)` → **force 刷新**，不走本地 `link-rules.json`。断网/连不上 GitHub 时列表为空并显示错误，尽管本机有 74 条缓存。
@@ -186,17 +190,22 @@
 - `ORDER BY episode_key` → `0:1, 0:10, 0:11, 0:2 …`。超过 9 集就会看到顺序乱。前端没有再排序。
 - 修法：新增 `media.key_sort_value()`（先类型、再集数数值，`bgm:123` 这类非数字标识排到数字之后），`files_for_anime()` 与 `all_files()` 取回后在 Python 里排序；`ready_episodes / missing_keys` 也按同一把尺子排。
 
-**N17 · 暂停状态借 `error` 字段传达（`offline_service.py:551-556`）· 确定（影响小）**
+**N17 · 暂停状态借 `error` 字段传达（`offline_service.py:551-556`）· 确定（影响小）· ✅ 已修复**
 - `task_action` 把「已暂停」写进 `error`，下一次 `_sync` 会把它清空（`:321`）。目前前端靠 `live.state` 的 `paused` 前缀判断（`offline.js:252`），所以显示是对的；但 DB 里的 `error` 语义已经混了。
+- 修法：新增 `is_paused_state()` 与 `live.paused` 布尔值，暂停不再写 `error`（`task_action` 也不再用「已暂停」污染它）；前端优先读 `live.paused`，缺失时回落到状态字符串。顺带修好 qB 5：它把 `pausedDL` 改名成 `stoppedDL`，旧代码只看 `paused` 前缀，在 qB 5 上暂停按钮永远显示「暂停」而不是「继续」。
 
-**N18 · `episode_gestures.normalize` 不合并默认绑定（`episode_gestures.py:86-107`）· 确定（当前前端不受影响）**
+**N18 · `episode_gestures.normalize` 不合并默认绑定（`episode_gestures.py:86-107`）· 确定（当前前端不受影响）· ✅ 已修复**
 - 传部分 `bindings` 时，未传的默认绑定全部丢失。当前前端每次提交全量 11 个下拉框，所以碰不到；外部 PATCH / 旧客户端会踩。
+- 修法：`bindings` 先 `{**DEFAULT_BINDINGS, **传入}` 再校验（和 `slots` 一个口径：缺键=默认，显式 `""`=解绑）。前端 `readEpisodeGestureSettings()` 相应改成**空值也发**（以前跳过空值，用户清空下拉框后保存时默认绑定会悄悄长回来）。
 
-**N19 · `settings.js` 有 6 个重复定义的函数（`8-23` 与 `171-177`）· 确定（当前行为正确）**
+**N19 · `settings.js` 有 6 个重复定义的函数（`8-23` 与 `171-177`）· 确定（当前行为正确）· ✅ 已修复**
 - `detailLinksFromDom / readDetailLinks / commitDetailLinks` 各定义两次，靠后定义覆盖前定义。前者返回的对象**没有 id**，一旦有人删掉后面的「兼容旧调用名」段，id 就会丢、排序与固定都会串。属埋雷。
+- 修法：删掉前面那份旧实现（保留文件顶部一句注释指路），现在每个名字只定义一次，走 `linkRowsFromDom / readLinkList / commitLinkList`。`detailLinks()` / `scheduleDetailLinks()` 的预设兜底也补上了 id（以前周表存下去会得到字符串 `"undefined"`，`normalizeDetailLink` 现在把 `"undefined"` 当成没 id 重新生成）。
 
-**N20 · 离线配置并发保存会丢更新（`offline_config.py:109-116`）· 较可信**
+**N20 · 离线配置并发保存会丢更新（`offline_config.py:109-116`）· 较可信 · ✅ 已修复**
 - `search()` 记 `mikan_host`、`download()` 记 `last_group`、设置页保存，都是「读-改-写」整个 JSON。两个请求同时到，后写的覆盖前写的。影响小（丢一次字幕组偏好/主机记忆）。
+- 修法：`offline_config` 加模块级 `RLock`，`save()` 落盘在锁内；新增 `patch(**fields)`（读-改-写整段持锁，只动传入的键）与 `save_settings()`（只覆盖设置表单真的提交了的键）。`search()` 记主机、`migrate_media_root()` 改目录改走 `patch()`，设置页改走 `save_settings()`。
+- 附带修掉一个一直在丢数据的路径：设置页提交的 JSON 里没有 `mikan_host` / `last_group`，以前整份覆盖会把它们清空 —— 现在保存一次设置，实测 `mikan_host=https://mikanime.tv`、`last_group={'554779': '云光字幕组'}` 都还在。
 
 ---
 
@@ -217,7 +226,7 @@
 2. **N2**（面板轮询）—— 一并把 B11 的三个残留收掉：轮询 3 秒、重试加次数上限、归档失败给可操作提示。
 3. ~~**N7 / N8 / N15**（写错位置、迁移半途、集数识别）~~ —— ✅ 已完成。
 4. ~~**N10 / N11 / N13 / N16**（缓存、缺文件、文案、排序）~~ —— ✅ 已完成。
-5. **B1 的箭头**（把 `↗` 并进可编辑名称）、**N9**（rules 弹窗 flex-shrink）、**N5 / N17 / N18 / N19 / N20**（清理项）。
+5. ~~**B1 的箭头**（把 `↗` 并进可编辑名称）、**N9**（rules 弹窗 flex-shrink）、**N5 / N17 / N18 / N19 / N20**（清理项）~~ —— ✅ 已完成。
 6. **K1**（sqlite 只读）—— 独立的加固项，建议单独一轮，用「常驻写连接 + 一次重试」的组合。
 
 ---
@@ -230,6 +239,26 @@
 - 未做：前端 52 个 verify 脚本全量重跑；真实服务下的端到端点击（会动真实库，本轮不动）。
 
 
+
+---
+
+## 修复记录（六）：B1 箭头 / N9 弹窗高度 / N5·N17·N18·N19·N20 清理（2026-11-07 深夜）
+
+- **B1**：箭头回到「默认名称」里 —— `DETAIL_LINK_PRESETS` 改成 `Bangumi #{id} ↗` / `B站搜索 ↗`（更多站点默认名带 `▾`），删除箭头就是在设置里删字符。顺带修掉 `id: "undefined"`：`normalizeDetailLink` 把字符串 `undefined` 当作没 id 重新生成，`detailLinks()` / `scheduleDetailLinks()` 的预设兜底也补了 id。已用 API 把现有两套列表里的预设名补上箭头、清掉坏 id。
+- **N9**：`.rules-list { min-height: min(200px, 30vh) }` + 两个规则弹窗的非列表子元素 `flex-shrink: 0` + `@media (max-height: 620px)` 隐藏说明句、列表下限 40px + 白框 `overflow-y: auto` 兜底。复测 900/640/520/480/420/380 六档全部无溢出、标题不被压扁。
+- **N5**：随 N11 的 `_annotate_files()` 一起解决，`has_subtitle` 现在真的会下发。
+- **N17**：新增 `is_paused_state()`（`pausedDL / stoppedDL / pausedUP / stoppedUP`）与 `live.paused`；`task_action` 不再把「已暂停」写进 `error`，返回 `paused`；前端优先读 `live.paused`。
+- **N18**：`bindings` 先合并默认再校验（缺键=默认、`""`=解绑）；前端空值也发。
+- **N19**：删掉 `settings.js` 顶部那份重复实现，每个链接读写函数只剩一处定义。
+- **N20**：`offline_config` 加 `RLock`，新增 `patch()` / `save_settings()`；`search()`、`migrate_media_root()`、设置页保存分别改走它们；设置页保存不再清空 `mikan_host` / `last_group`。
+- **测试**：
+  - `tests/test_offline_config.py` +3：`patch` 只动指定键、两线程并发不互相覆盖、设置保存保留学习到的状态。
+  - `tests/test_episode_gestures.py` +2：部分绑定保留默认、`""` 才是解绑。
+  - `tests/test_offline_retry.py` +5（`PauseStateTests`）：qB 4/5 暂停状态识别、暂停不写 error、继续清 error、`_sync` 下发 `live.paused`。
+  - `tests/verify_rules_modal_height.cjs`（新增）：六档窗高下两个弹窗都不溢出、标题不裁、列表保底一行、高窗口仍有 200px+。
+  - `tests/verify_offline_paused.cjs`（新增）：`live.paused` 优先、`stoppedDL` 认出暂停、无 `paused` 字段时回落状态字符串、暂停不再出现在 error 里。
+  - `tests/verify_detail_links.cjs`、`tests/verify_gesture_settings.cjs` 补断言（箭头在名字里可删、解绑要显式发空串、每行带 id）。
+  - 后端 509 项通过（不含已知并发写失败的 `test_hardening`）；前端 60 个 verify 脚本全过；真实服务下确认详情页显示 `Bangumi ↗ / bilibili ↗`，设置保存一次后 `mikan_host` / `last_group` 仍在。
 
 ---
 

@@ -37,6 +37,18 @@ _DONE_STATES = {
 }
 _ERROR_STATES = {"error", "missingFiles"}
 _BUSY_STATES = {"moving", "checkingResumeData"}
+# qB 4 叫 pausedDL，qB 5 改名成 stoppedDL（做种那边同理 pausedUP/stoppedUP）。
+_PAUSED_STATES = {"pausedDL", "stoppedDL", "pausedUP", "stoppedUP"}
+
+
+def is_paused_state(state: str) -> bool:
+    """这个 qB 状态是不是「用户按了暂停」。
+
+    以前暂停这件事是写进 ``error`` 字段传出去的（前端看 ``live.state`` 兜底），
+    结果 ``error`` 语义被混用、下一次同步又被清空。现在单独判一次，走
+    ``live.paused`` 明确传出去。
+    """
+    return str(state or "").strip() in _PAUSED_STATES
 
 
 def map_qb_state(state: str, progress: float) -> str:
@@ -119,9 +131,10 @@ class OfflineService:
         except mikan.MikanError as error:
             raise OfflineError(str(error)) from error
         if result["base"] != config.get("mikan_host"):
-            # 记住这次能用的主机，下次省掉一次必然失败的尝试。
+            # 记住这次能用的主机，下次省掉一次必然失败的尝试。只写这一个键：
+            # 整份写回会把同时发生的字幕组记忆或设置页保存覆盖掉。
             config["mikan_host"] = result["base"]
-            offline_config.save(self.asset_root, config)
+            offline_config.patch(self.asset_root, mikan_host=result["base"])
         items = list(result["items"])
         preferred = str((config.get("last_group") or {}).get(str(anime_id)) or "")
         if preferred:
@@ -321,6 +334,7 @@ class OfflineService:
                 "upspeed": int(task.get("upspeed") or 0),
                 "eta": int(task.get("eta") or 0),
                 "state": str(task.get("state") or ""),
+                "paused": is_paused_state(task.get("state") or ""),
                 "seeds": int(task.get("num_seeds") or 0),
                 "size": int(task.get("size") or 0),
             }
@@ -687,15 +701,19 @@ class OfflineService:
         if not torrent_hash:
             raise OfflineError("这个任务没有对应的种子，无法操作")
         client = self.client()
+        # 「已暂停」不进 error 字段：error 只放真正的错误，态由 live.paused 表达，
+        # 否则下一次 _sync 就把它清掉，DB 里留下一个语义半真半假的字符串。
         if action == "pause":
             client.pause([torrent_hash])
-            self.store.set_status(int(media_id), "downloading", error="已暂停")
+            self.store.set_status(int(media_id), "downloading")
+            paused = True
         elif action == "resume":
             client.resume([torrent_hash])
             self.store.set_status(int(media_id), "downloading", error="")
+            paused = False
         else:
             raise ValueError("任务操作无效")
-        return {"ok": True, "action": action}
+        return {"ok": True, "action": action, "paused": paused}
 
     def delete_job(self, media_id: int, *, delete_files: bool = False, keep_files: bool = True) -> dict[str, Any]:
         """从下载器移除任务。
@@ -1008,7 +1026,8 @@ class OfflineService:
                 subtitle_path=subtitle_path,
             )
         config["media_root"] = target_text
-        offline_config.save(self.asset_root, config)
+        # 只改 media_root：迁移可能跑了几十秒，这期间记住的主机/字幕组不该被旧快照冲掉。
+        offline_config.patch(self.asset_root, media_root=target_text)
         if delete_source:
             # 删源放在最后：前面任何一步失败都不该让原文件消失。
             for row, _, _ in plan:

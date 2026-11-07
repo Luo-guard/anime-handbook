@@ -43,7 +43,7 @@ class PostRoutes:
                     return
                 self.send_json(rules_payload(document, MAX_DETAIL_LINKS))
             elif path == "/api/offline/settings":
-                config = offline_config.save(self.database.asset_root, body)
+                config = offline_config.save_settings(self.database.asset_root, body)
                 self.send_json({
                     "ok": True,
                     "config": config,

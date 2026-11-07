@@ -1,6 +1,9 @@
 const DETAIL_LINK_PRESETS = [
-  { kind: "bgm", name: "Bangumi #{id}", url: "{site}/subject/{id}", enabled: true },
-  { kind: "bilibili", name: "B站搜索", url: "https://search.bilibili.com/all?keyword={title}", enabled: true },
+  // 外链的箭头（↗）写在默认名称里，而不是渲染时硬拼上去：这样它在设置里
+  // 就是名称的一部分，不想看就删掉，改完立刻生效（#8446 的原话是「默认在名字里，
+  // 能自己删掉」）。
+  { kind: "bgm", name: "Bangumi #{id} ↗", url: "{site}/subject/{id}", enabled: true },
+  { kind: "bilibili", name: "B站搜索 ↗", url: "https://search.bilibili.com/all?keyword={title}", enabled: true },
 ];
 
 function detailLinkId() {
@@ -13,16 +16,20 @@ function normalizeDetailLink(item) {
   if (!item || typeof item !== "object") return null;
   const name = String(item.name || "").trim();
   const url = String(item.url || "").trim();
+  // 旧版本把没填 id 的预设存成了字符串 "undefined"：那会让「新增同步」和去重
+  // 把它们当成同一条。这里直接当没 id，重新生成。
+  const rawId = String(item.id || "").trim();
+  const safeId = rawId === "undefined" ? "" : rawId;
   if (item.kind === "saved_video") {
-    return { id: String(item.id || "") || "saved-video", kind: "saved_video", name: name || "已存视频", url: "", enabled: item.enabled !== false };
+    return { id: safeId || "saved-video", kind: "saved_video", name: name || "已存视频", url: "", enabled: item.enabled !== false };
   }
   // 总链接：点开弹出规则仓库里的站点列表，本身没有网址。
   if (item.kind === "rules_menu") {
-    return { id: String(item.id || "") || "rules-menu", kind: "rules_menu", name: name || "更多站点 \u25be", url: "", enabled: item.enabled !== false };
+    return { id: safeId || "rules-menu", kind: "rules_menu", name: name || "更多站点 \u25be", url: "", enabled: item.enabled !== false };
   }
   if (!name || !url) return null;
   return {
-    id: String(item.id || "") || detailLinkId(),
+    id: safeId || detailLinkId(),
     kind: ["bgm", "bilibili"].includes(item.kind) ? item.kind : "custom",
     name,
     url,
@@ -47,8 +54,8 @@ function detailLinks() {
   if (Array.isArray(saved)) return withBuiltinDetailLinks(saved.map(normalizeDetailLink).filter(Boolean));
   const legacy = Array.isArray(state.settings.custom_search_links) ? state.settings.custom_search_links : [];
   return withBuiltinDetailLinks([
-    { ...DETAIL_LINK_PRESETS[0] },
-    { ...DETAIL_LINK_PRESETS[1], enabled: enabledSetting("show_bilibili_search_button") },
+    { ...DETAIL_LINK_PRESETS[0], id: detailLinkId() },
+    { ...DETAIL_LINK_PRESETS[1], id: detailLinkId(), enabled: enabledSetting("show_bilibili_search_button") },
     ...legacy.map((item) => normalizeDetailLink({ ...item, kind: "custom" })).filter(Boolean),
   ]);
 }
@@ -57,7 +64,8 @@ function detailLinks() {
 function scheduleDetailLinks() {
   const saved = state.settings.schedule_detail_links;
   if (Array.isArray(saved)) return saved.map(normalizeDetailLink).filter(Boolean);
-  return DETAIL_LINK_PRESETS.map((preset) => ({ ...preset }));
+  // 预设本身没有 id，这里补一个：不然存下去就是字符串 "undefined"。
+  return DETAIL_LINK_PRESETS.map((preset) => ({ ...preset, id: detailLinkId() }));
 }
 
 // 统一把条目变成可点的链接；占位符取不到值时（例如没有 Bangumi 编号）跳过这一条。

@@ -86,6 +86,10 @@ def normalize(value) -> dict:
     bindings = value.get("bindings", DEFAULT_BINDINGS)
     if not isinstance(bindings, dict):
         raise ValueError("手势绑定格式错误")
+    # 只传了一部分绑定（外部 PATCH、旧客户端）时，没提到的键保留默认 —— 和上面
+    # slots 的处理一致；真要解绑某个手势就显式传 ""。以前这里直接整表替换，
+    # 传一个 {"Ctrl+Click": "play"} 会把右键/长按等默认绑定一起抹掉。
+    bindings = {**DEFAULT_BINDINGS, **bindings}
     cleaned: dict[str, str] = {}
     counts: dict[str, int] = {}
     for gesture, action in bindings.items():

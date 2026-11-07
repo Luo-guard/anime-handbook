@@ -296,7 +296,11 @@ function renderOfflineLocal() {
       ...active.map((job) => {
         const live = job.live || {};
         const percent = Math.max(0, Math.min(100, Number(job.progress || 0)));
-        const paused = String(live.state || "").toLowerCase().startsWith("paused");
+        // 后端 live.paused 是准的（qB 4 的 pausedDL / qB 5 的 stoppedDL 都认）；
+        // 老数据没有这个字段时退回看状态字符串。
+        const paused = typeof live.paused === "boolean"
+          ? live.paused
+          : /^(paused|stopped)/.test(String(live.state || "").toLowerCase());
         const label = job.status === "processing" ? "正在整理" : paused ? "已暂停" : job.status === "queued" ? "排队中" : `${percent.toFixed(1)}%`;
         const detail = [
           live.dlspeed ? `${formatSpeed(live.dlspeed)}/s` : "",

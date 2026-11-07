@@ -1,6 +1,7 @@
 """离线配置：默认值、类型收敛、落盘往返。"""
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -94,6 +95,45 @@ class PersistenceTest(unittest.TestCase):
         groups = cfg.load(self.root)["last_group"]
         self.assertEqual(groups["12"], "VCB-Studio")
         self.assertEqual(groups["13"], "LoliHouse")
+
+    def test_patch_only_touches_the_given_keys(self):
+        """审计 N20：记住镜像主机不能把字幕组偏好一起写掉。"""
+        cfg.save(self.root, {"media_root": "D:/media", "auto_follow": True})
+        cfg.remember_group(self.root, 12, "VCB-Studio")
+        cfg.patch(self.root, mikan_host="https://mikanime.tv")
+        loaded = cfg.load(self.root)
+        self.assertEqual(loaded["mikan_host"], "https://mikanime.tv")
+        self.assertEqual(loaded["last_group"]["12"], "VCB-Studio")
+        self.assertEqual(loaded["media_root"], "D:/media")
+        self.assertTrue(loaded["auto_follow"])
+
+    def test_concurrent_patches_do_not_lose_each_other(self):
+        """两个线程同时「读-改-写」不同的键，两条都要留下。"""
+        cfg.save(self.root, {"media_root": "D:/media"})
+        threads = [
+            threading.Thread(target=cfg.remember_group, args=(self.root, 21, "LoliHouse")),
+            threading.Thread(target=cfg.patch, args=(self.root,), kwargs={"mikan_host": "https://mikanime.tv"}),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        loaded = cfg.load(self.root)
+        self.assertEqual(loaded["last_group"]["21"], "LoliHouse")
+        self.assertEqual(loaded["mikan_host"], "https://mikanime.tv")
+
+    def test_settings_save_keeps_learned_state(self):
+        """设置页只提交表单里的键，mikan_host / last_group 不该被清空。"""
+        cfg.save(self.root, {"media_root": "D:/old", "auto_follow": False})
+        cfg.remember_group(self.root, 12, "VCB-Studio")
+        cfg.patch(self.root, mikan_host="https://mikanime.tv")
+        cfg.save_settings(self.root, {"media_root": "D:/new", "auto_follow": True, "qb_port": 9091})
+        loaded = cfg.load(self.root)
+        self.assertEqual(loaded["media_root"], "D:/new")
+        self.assertTrue(loaded["auto_follow"])
+        self.assertEqual(loaded["qb_port"], 9091)
+        self.assertEqual(loaded["mikan_host"], "https://mikanime.tv")
+        self.assertEqual(loaded["last_group"]["12"], "VCB-Studio")
 
     def test_ensure_dirs_creates_and_writes(self):
         status = cfg.ensure_dirs({"media_root": str(self.root / "media"), "download_root": ""})

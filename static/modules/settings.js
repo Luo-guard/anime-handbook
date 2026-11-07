@@ -5,22 +5,9 @@ function applyKazumiReadOnlyControls() {
   $("#kazumiWritebackInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
   $("#kazumiConflictInput").closest(".setting-row")?.classList.toggle("is-disabled", readOnly);
 }
-function detailLinksFromDom() {
-  return [...document.querySelectorAll("#detailLinkList .detail-link-row")].map((row) => ({
-    kind: row.dataset.detailLinkKind || "custom",
-    name: String(row.querySelector("[data-detail-link-name]")?.value || "").trim(),
-    url: String(row.querySelector("[data-detail-link-url]")?.value || "").trim(),
-    enabled: Boolean(row.querySelector("[data-detail-link-enabled]").checked),
-  }));
-}
-function readDetailLinks() {
-  return detailLinksFromDom().filter((link) => ["saved_video", "rules_menu"].includes(link.kind) || (link.name && link.url));
-}
-function commitDetailLinks(links) {
-  state.settings.detail_links = links;
-  renderDetailLinkSettings();
-  renderScheduleDetailLinkSettings();
-}
+// 详情页 / 周表链接的两套读写函数都在下面「兼容旧调用名」那一段里定义，
+// 走的是 linkRowsFromDom / readLinkList / commitLinkList —— 这里以前还有一份
+// 同名实现（不带 id、过滤规则也不同），靠后面的定义覆盖它，属于埋在头上的雷。
 const LINK_EDITORS = {
   detail: { list: "#detailLinkList", setting: "detail_links", source: () => detailLinks() },
   schedule: { list: "#scheduleDetailLinkList", setting: "schedule_detail_links", source: () => scheduleDetailLinks() },

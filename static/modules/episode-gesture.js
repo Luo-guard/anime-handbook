@@ -303,10 +303,13 @@ function readEpisodeGestureSettings() {
   $$("[data-eg-slot]").forEach((select) => { slots[select.dataset.egSlot] = select.value; });
   const bindings = {};
   $$("[data-eg-gesture]").forEach((select) => {
-    if (select.value) bindings[select.dataset.egGesture] = select.value;
+    // 空值也要发出去：后端把「没提到的手势」当默认值保留，只有显式 "" 才是解绑。
+    // 以前这里跳过空值，用户清空某个下拉框后默认绑定会在保存时悄悄长回来。
+    bindings[select.dataset.egGesture] = select.value;
   });
   const counts = {};
   for (const [gesture, action] of Object.entries(bindings)) {
+    if (!action) continue;
     counts[action] = (counts[action] || 0) + 1;
     if (counts[action] > 4) {
       throw new Error(`「${EG_ACTION_LABELS[action] || action}」最多绑定 4 个手势，请精简「${egGestureLabel(gesture)}」等绑定`);

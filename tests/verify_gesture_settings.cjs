@@ -41,6 +41,14 @@ const state={settings:{},pendingEpisodes:new Set()};
     assert.equal(value.bindings.MiddleClick, 'play', 'gesture can be bound');
     assert.equal(value.keep_menu_on_release, true);
 
+    // 清空某个手势要显式传 ""：后端把「没提到的键」当默认值保留（审计 N18），
+    // 前端以前跳过空值，等于用户解绑后默认绑定会在保存时悄悄长回来。
+    await page.locator('[data-eg-gesture="RightClick"]').selectOption('');
+    value = await read();
+    assert.ok('RightClick' in value.bindings, 'unbound gesture must be sent explicitly');
+    assert.equal(value.bindings.RightClick, '', 'empty string means unbind');
+    await page.locator('[data-eg-gesture="RightClick"]').selectOption('open_menu');
+
     // 绑定双击会给出延迟代价提示
     await page.locator('[data-eg-gesture="DoubleClick"]').selectOption('download');
     assert.equal(await page.locator('#episodeGestureDoubleWarning').isVisible(), true, 'double click shows the warning');

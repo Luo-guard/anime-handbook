@@ -24,7 +24,14 @@ const openSettings=()=>page.evaluate(()=>{
 await openSettings();
 assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),4);
 assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.kind)),['bgm','bilibili','saved_video','rules_menu']);
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','已存视频','更多站点 ▾']);
+// 每行都要带 id：设置里以前有一份同名实现不带 id，靠后一份定义覆盖它（审计 N19），
+// 一旦有人删掉后一份，排序与「新增同步」就会串。
+assert.equal((await page.evaluate(()=>readDetailLinks())).every(link=>Boolean(link.id)),true);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id} ↗','B站搜索 ↗','已存视频','更多站点 ▾']);
+// 箭头是名称的一部分（#8446）：默认在名字里，想删就在设置里删掉。
+await page.locator('#detailLinkList .detail-link-row').first().locator('[data-detail-link-name]').fill('Bangumi #{id}');
+assert.equal((await page.evaluate(()=>readDetailLinks()))[0].name,'Bangumi #{id}');
+await page.locator('#detailLinkList .detail-link-row').first().locator('[data-detail-link-name]').fill('Bangumi #{id} ↗');
 // New rows can be added and edited.
 await page.locator('#addDetailLink').click();
 assert.equal(await page.locator('#detailLinkList .detail-link-row').count(),5);
@@ -34,16 +41,16 @@ assert.equal((await page.evaluate(()=>readDetailLinks()))[4].name,'次元城');
 // Order buttons move a row and keep the edited values.
 // 新增的行在末尾（已存视频之后），上移一格只是换到它前面。
 await page.locator('#detailLinkList .detail-link-row').nth(4).locator('.detail-link-order-button').first().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索','已存视频','次元城','更多站点 ▾']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id} ↗','B站搜索 ↗','已存视频','次元城','更多站点 ▾']);
 await page.locator('#detailLinkList .detail-link-row').nth(1).locator('.detail-link-order-button').last().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','已存视频','B站搜索','次元城','更多站点 ▾']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id} ↗','已存视频','B站搜索 ↗','次元城','更多站点 ▾']);
 // 两个内置入口也能参与排序：更多站点可以挪到普通链接前面。
 await page.locator('#detailLinkList .detail-link-row').nth(4).locator('.detail-link-order-button').first().click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id}','已存视频','B站搜索','更多站点 ▾','次元城']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['Bangumi #{id} ↗','已存视频','B站搜索 ↗','更多站点 ▾','次元城']);
 assert.equal(await page.locator('#detailLinkList .detail-link-row').first().locator('.detail-link-order-button').first().isDisabled(),true);
 // Presets can be deleted, and restoring brings them back.
 await page.locator('#detailLinkList .detail-link-row').first().getByText('删除').click();
-assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['已存视频','B站搜索','更多站点 ▾','次元城']);
+assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.name)),['已存视频','B站搜索 ↗','更多站点 ▾','次元城']);
 // 两个内置入口都不能删除，按钮固定禁用。
 assert.equal(await page.locator('#detailLinkList .detail-link-row').nth(0).getByText('固定').isDisabled(),true);
 assert.equal(await page.locator('#detailLinkList .detail-link-row').nth(2).getByText('固定').isDisabled(),true);
@@ -53,15 +60,22 @@ assert.deepEqual(await page.evaluate(()=>readDetailLinks().map(link=>link.kind))
 await page.evaluate(()=>{
   document.querySelector('#settingsModal').close();
   state.settings.detail_links=[
-    {kind:'bgm',name:'Bangumi #{id}',url:'{site}/subject/{id}',enabled:true},
+    {kind:'bgm',name:'Bangumi #{id} ↗',url:'{site}/subject/{id}',enabled:true},
     {kind:'custom',name:'次元城',url:'https://www.cycani.org/category?q={title}',enabled:true},
-    {kind:'bilibili',name:'B站搜索',url:'https://search.bilibili.com/all?keyword={title}',enabled:true},
+    {kind:'bilibili',name:'B站搜索 ↗',url:'https://search.bilibili.com/all?keyword={title}',enabled:true},
     {kind:'custom',name:'关闭的',url:'https://example.com/?q=',enabled:false},
   ];
   return renderVideoLinks(1);
 });
 const links=page.locator('#detailLinks .detail-link');
-assert.deepEqual(await links.allTextContents(),['Bangumi #1','次元城','B站搜索']);
+assert.deepEqual(await links.allTextContents(),['Bangumi #1 ↗','次元城','B站搜索 ↗']);
+// 把名称里的 ↗ 删掉，详情页立刻不带箭头——这正是「默认在名字里、可以自己删」。
+await page.evaluate(()=>{
+  state.settings.detail_links=state.settings.detail_links.map((link)=>link.name.endsWith('↗')
+    ?{...link,name:link.name.replace(' ↗','')}:link);
+  return renderVideoLinks(1);
+});
+assert.deepEqual(await page.locator('#detailLinks .detail-link').allTextContents(),['Bangumi #1','次元城','B站搜索']);
 assert.equal(await links.nth(0).getAttribute('href'),'https://bgm.tv/subject/1');
 assert.equal(await links.nth(1).getAttribute('href'),'https://www.cycani.org/category?q='+encodeURIComponent('测试番剧'));
 await page.evaluate(()=>{state.settings.bgm_site_base='https://bgm.example/';return renderVideoLinks(1)});
@@ -80,9 +94,9 @@ await page.evaluate(()=>{
   return renderVideoLinks(1);
 });
 const migrated=await page.locator('#detailLinks .detail-link').allTextContents();
-assert.deepEqual(migrated,['Bangumi #1','旧链接']);
+assert.deepEqual(migrated,['Bangumi #1 ↗','旧链接']);
 // 周表卡片详情有自己的一份列表，默认同样是两个预设。
-assert.deepEqual(await page.evaluate(()=>scheduleDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索']);
+assert.deepEqual(await page.evaluate(()=>scheduleDetailLinks().map(link=>link.name)),['Bangumi #{id} ↗','B站搜索 ↗']);
 await page.evaluate(()=>{const modal=document.querySelector('#settingsModal');if(!modal.open)modal.showModal();});
 await page.evaluate(()=>{
   state.settings.schedule_detail_links=undefined;
@@ -93,7 +107,7 @@ await page.evaluate(()=>{
 assert.equal(await page.locator('#scheduleDetailLinkList .detail-link-row').count(),2);
 await page.locator('#addScheduleDetailLink').click();
 assert.equal(await page.locator('#scheduleDetailLinkList .detail-link-row').count(),3);
-assert.deepEqual(await page.evaluate(()=>readScheduleDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索']);
+assert.deepEqual(await page.evaluate(()=>readScheduleDetailLinks().map(link=>link.name)),['Bangumi #{id} ↗','B站搜索 ↗']);
 await page.locator('#resetScheduleDetailLinks').click();
 assert.equal(await page.locator('#scheduleDetailLinkList .detail-link-row').count(),2);
 // 新增链接会同步到另一边（默认关闭），开关和删除不同步。

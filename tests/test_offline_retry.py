@@ -84,5 +84,101 @@ class AutoRetryTests(unittest.TestCase):
         self.assertEqual(self.service.scheduled, [7])
 
 
+
+class _PauseClient:
+    def __init__(self, state: str = "pausedDL"):
+        self.state = state
+        self.calls: list[tuple[str, tuple[str, ...]]] = []
+
+    def pause(self, hashes):
+        self.calls.append(("pause", tuple(hashes)))
+
+    def resume(self, hashes):
+        self.calls.append(("resume", tuple(hashes)))
+
+    def torrent(self, _hash):
+        return {"state": self.state, "progress": 0.4, "dlspeed": 0, "upspeed": 0, "eta": 0, "num_seeds": 2, "size": 100}
+
+
+class _JobStore:
+    def __init__(self, job):
+        self.row = dict(job)
+        self.statuses: list[tuple[int, str, dict]] = []
+
+    def job(self, _media_id):
+        return dict(self.row)
+
+    def set_status(self, media_id, status, **fields):
+        self.statuses.append((int(media_id), status, dict(fields)))
+        self.row["status"] = status
+        if "error" in fields:
+            self.row["error"] = fields["error"]
+        return dict(self.row)
+
+
+class _PauseService(OfflineService):
+    def __init__(self, client, job):
+        self._client = client
+        self.store = _JobStore(job)
+        self.scheduled: list[int] = []
+
+    def client(self, config=None):
+        return self._client
+
+    def _schedule_archive(self, media_id):
+        self.scheduled.append(int(media_id))
+
+
+class PauseStateTests(unittest.TestCase):
+    """审计 N17：「已暂停」不再借 error 字段传，态由 live.paused 表达。"""
+
+    @staticmethod
+    def job(**overrides):
+        base = {"id": 3, "status": "downloading", "error": "", "torrent_hash": "abc",
+                "created_at": "2026-11-06T10:00:00+08:00", "archive_retries": 0}
+        base.update(overrides)
+        return base
+
+    def test_qb_paused_states_are_recognised(self):
+        from handbook.offline_service import is_paused_state
+
+        # qB 4 用 pausedDL，qB 5 改名 stoppedDL；做种那边同理。
+        for state in ("pausedDL", "stoppedDL", "pausedUP", "stoppedUP"):
+            with self.subTest(state=state):
+                self.assertTrue(is_paused_state(state))
+        for state in ("downloading", "stalledDL", "uploading", "checkingDL", "error", ""):
+            with self.subTest(state=state):
+                self.assertFalse(is_paused_state(state))
+
+    def test_pause_does_not_write_a_fake_error(self):
+        client = _PauseClient()
+        service = _PauseService(client, self.job())
+        result = service.task_action(3, "pause")
+        self.assertEqual(client.calls, [("pause", ("abc",))])
+        self.assertTrue(result["paused"])
+        for record in service.store.statuses:
+            self.assertNotIn("error", record[2], "暂停不是错误，不能写进 error")
+        self.assertEqual(service.store.row["status"], "downloading")
+
+    def test_resume_clears_the_error(self):
+        service = _PauseService(_PauseClient(), self.job(error="旧提示"))
+        result = service.task_action(3, "resume")
+        self.assertFalse(result["paused"])
+        self.assertEqual(service.store.row["error"], "")
+
+    def test_sync_reports_paused_flag(self):
+        client = _PauseClient("stoppedDL")
+        service = _PauseService(client, self.job(error="已暂停"))
+        live = service._sync([self.job(error="已暂停")])
+        self.assertTrue(live[3]["paused"])
+        # 同时把之前混进 error 的「已暂停」清掉，error 只留真错误。
+        self.assertEqual(service.store.row["error"], "")
+
+    def test_sync_reports_not_paused_while_downloading(self):
+        service = _PauseService(_PauseClient("downloading"), self.job())
+        live = service._sync([self.job()])
+        self.assertFalse(live[3]["paused"])
+
+
 if __name__ == "__main__":
     unittest.main()
