@@ -24,21 +24,6 @@ function rulesMenuSetStatus(message, isError = false) {
   status.classList.toggle("is-error", Boolean(isError));
 }
 
-function rulesMenuOpenUrl(item) {
-  const href = detailLinkHref(item.template, rulesMenuValues || { title: "" });
-  window.open(href, "_blank", "noreferrer");
-  if (typeof recordJump === "function") {
-    recordJump({
-      anime_id: rulesMenuAnime?.id || null,
-      anime_name: rulesMenuAnime?.display_name || rulesMenuAnime?.name_cn || rulesMenuAnime?.name || "",
-      title: `${item.name}搜索`,
-      url: href,
-      kind: "link",
-    });
-  }
-  $("#rulesMenuModal")?.close();
-}
-
 // 把某个站点固定到详情页：写库后立刻重绘，不需要再进设置。
 async function rulesMenuPin(item) {
   const links = detailLinks();
@@ -102,10 +87,14 @@ function renderRulesMenu() {
     row.className = "rules-menu-row";
     row.dataset.ruleId = item.id;
 
-    const open = document.createElement("button");
-    open.type = "button";
+    // 站点入口用真 <a>：中键新标签、右键复制地址、Ctrl/Shift 点击都是浏览器原生行为，
+    // 不再用 window.open 模拟。
+    const open = document.createElement("a");
     open.className = "rules-menu-open";
     open.title = item.template;
+    open.href = detailLinkHref(item.template, rulesMenuValues || { title: "" });
+    open.target = "_blank";
+    open.rel = "noreferrer";
     const name = document.createElement("span");
     name.className = "rules-menu-name";
     name.textContent = item.name;
@@ -113,7 +102,21 @@ function renderRulesMenu() {
     host.className = "rules-menu-host";
     host.textContent = item.host;
     open.append(name, host);
-    open.addEventListener("click", () => rulesMenuOpenUrl(item));
+    open.addEventListener("click", (event) => {
+      // 普通左键：浏览器自己开新标签（target=_blank），这里只负责记一笔并关掉弹窗；
+      // 中键与带修饰键的点击不触发 click，跳转记录一并交给浏览器默认行为。
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      if (typeof recordJump === "function") {
+        recordJump({
+          anime_id: rulesMenuAnime?.id || null,
+          anime_name: rulesMenuAnime?.display_name || rulesMenuAnime?.name_cn || rulesMenuAnime?.name || "",
+          title: `${item.name}搜索`,
+          url: open.href,
+          kind: "link",
+        });
+      }
+      $("#rulesMenuModal")?.close();
+    });
 
     const pinned = fixed.has(item.template);
     const pin = document.createElement("button");
@@ -157,3 +160,34 @@ if ($("#rulesMenuModal")) {
   $("#rulesMenuClose").addEventListener("click", () => $("#rulesMenuModal").close());
   $("#rulesMenuSearch").addEventListener("input", () => renderRulesMenu());
 }
+
+// 详情页「更多站点」入口是一条指向 #rules-menu=… 的真链接：中键/新标签打开时，
+// 走到这里把哈希还原成菜单参数，再弹出同一个站点菜单。左键不会走到这里——
+// video-links.js 在 click 里 preventDefault 并直接调 openRulesMenu。
+function openRulesMenuFromLocation() {
+  if (!location.hash.startsWith("#rules-menu=")) return;
+  let payload = null;
+  try {
+    payload = JSON.parse(decodeURIComponent(location.hash.slice("#rules-menu=".length)));
+  } catch (error) {
+    payload = null;
+  }
+  try {
+    history.replaceState(null, "", location.pathname + location.search);
+  } catch (error) {
+    // 某些嵌入环境（about:blank 等）不允许改历史记录；留着哈希不影响菜单弹出。
+  }
+  const anime = {
+    id: payload?.id ?? null,
+    name_cn: String(payload?.title || "").trim(),
+  };
+  if (payload?.site) {
+    openRulesMenu(anime, null, { id: anime.id ?? "", title: anime.name_cn, site: String(payload.site) });
+  } else {
+    openRulesMenu(anime);
+  }
+}
+window.addEventListener("hashchange", openRulesMenuFromLocation);
+// defer 脚本执行完才触发 DOMContentLoaded，所以此时全部模块都已就绪；
+// 新标签直接带着哈希打开页面时，靠这一步自动弹出菜单。
+document.addEventListener("DOMContentLoaded", openRulesMenuFromLocation);

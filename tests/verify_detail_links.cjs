@@ -61,7 +61,7 @@ await page.evaluate(()=>{
   return renderVideoLinks(1);
 });
 const links=page.locator('#detailLinks .detail-link');
-assert.deepEqual(await links.allTextContents(),['Bangumi #1 ↗','次元城 ↗','B站搜索 ↗']);
+assert.deepEqual(await links.allTextContents(),['Bangumi #1','次元城','B站搜索']);
 assert.equal(await links.nth(0).getAttribute('href'),'https://bgm.tv/subject/1');
 assert.equal(await links.nth(1).getAttribute('href'),'https://www.cycani.org/category?q='+encodeURIComponent('测试番剧'));
 await page.evaluate(()=>{state.settings.bgm_site_base='https://bgm.example/';return renderVideoLinks(1)});
@@ -73,14 +73,14 @@ await page.evaluate(()=>{
   window.testItems=[{id:1,is_default:1,title:'video',url:'https://www.bilibili.com/video/BV1AgHK6jE64/'}];
   return renderVideoLinks(1);
 });
-assert.deepEqual(await page.locator('#detailLinks .detail-link').allTextContents(),['Bangumi #1 ↗','次元城 ↗']);
+assert.deepEqual(await page.locator('#detailLinks .detail-link').allTextContents(),['Bangumi #1','次元城']);
 // Legacy settings migrate: old custom links join the list, old B站 toggle turns the entry off.
 await page.evaluate(()=>{
   state.settings={custom_search_links:[{name:'旧链接',url:'https://old.example/?q=',enabled:true}],show_bilibili_search_button:false};
   return renderVideoLinks(1);
 });
 const migrated=await page.locator('#detailLinks .detail-link').allTextContents();
-assert.deepEqual(migrated,['Bangumi #1 ↗','旧链接 ↗']);
+assert.deepEqual(migrated,['Bangumi #1','旧链接']);
 // 周表卡片详情有自己的一份列表，默认同样是两个预设。
 assert.deepEqual(await page.evaluate(()=>scheduleDetailLinks().map(link=>link.name)),['Bangumi #{id}','B站搜索']);
 await page.evaluate(()=>{const modal=document.querySelector('#settingsModal');if(!modal.open)modal.showModal();});

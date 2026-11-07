@@ -441,7 +441,7 @@ function showScheduleDetail(key) {
   let scheduleLinks = buildDetailLinkItems(scheduleDetailLinks(), { id: item.id || null, title: keyword, site: siteBase })
     .map((entry) => `<a href="${escapeHtml(entry.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.label)}</a>`)
     .join("");
-  if (item.as_url && /^https:\/\/animeschedule\.net\/anime\/[a-z0-9-]+$/.test(item.as_url)) scheduleLinks += ` <a href="${escapeHtml(item.as_url)}" target="_blank" rel="noopener noreferrer">AnimeSchedule ↗</a>`;
+  if (item.as_url && /^https:\/\/animeschedule\.net\/anime\/[a-z0-9-]+$/.test(item.as_url)) scheduleLinks += ` <a href="${escapeHtml(item.as_url)}" target="_blank" rel="noopener noreferrer">AnimeSchedule</a>`;
   const progress = scheduleProgress(item);
   const progressHtml = progress
     ? `<div class="schedule-detail-progress${progress.estimated ? " is-estimated" : ""}" title="${escapeHtml(progress.title)}"><strong>${escapeHtml(progress.text)}</strong>${progress.detail ? `<span>${escapeHtml(progress.detail)}</span>` : ""}</div>`

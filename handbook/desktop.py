@@ -164,6 +164,8 @@ def main(*, open_browser: bool = True) -> None:
     from .kazumi_writeback import start_worker
     writeback_stop = threading.Event()
     start_worker(writeback_stop)
+    from .offline_service import start_background_worker as start_offline_worker
+    offline_stop = start_offline_worker(lambda: DATABASE)
     SYNC.start_background()
     SHARING.start_resident_refresh()
     WEBDAV.start_background(lambda: DATABASE, profile_gate=PROFILE_GATE)
@@ -183,6 +185,7 @@ def main(*, open_browser: bool = True) -> None:
         pass
     finally:
         writeback_stop.set()
+        offline_stop.set()
         # Stop periodic writers before waiting for outstanding requests/tasks.
         WEBDAV._stop.set()
         WEBDAV._wake.set()

@@ -58,6 +58,7 @@ function openOffline() {
   if (!dialog.open) dialog.showModal();
   switchOfflineTab("search");
   refreshOfflineLocal();
+  setOfflinePolling(true);
   warmSubtitleRenderer();
   // 换番必搜；同一部番里用户手动改过的关键词保留，只在结果为空时补搜一次。
   if (name && (switched || !offlineView.items.length)) runOfflineSearch();
@@ -388,9 +389,23 @@ async function removeJob(mediaId) {
   }
 }
 
+// 面板开着时每 3 秒同步一次下载进度/归档状态。后端已有全局心跳在推进任务，
+// 这里的轮询只负责把推进的结果画到开着的界面上；面板关了或页面切走就停。
+let offlinePollTimer = 0;
+function setOfflinePolling(on) {
+  window.clearInterval(offlinePollTimer);
+  offlinePollTimer = 0;
+  if (!on) return;
+  offlinePollTimer = window.setInterval(() => {
+    if (!$("#offlineModal")?.open || document.hidden) return;
+    refreshOfflineLocal();
+  }, 3000);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   $("#openOffline")?.addEventListener("click", openOffline);
   $("#offlineClose")?.addEventListener("click", () => $("#offlineModal").close());
+  $("#offlineModal")?.addEventListener("close", () => setOfflinePolling(false));
   $("#offlineSearchButton")?.addEventListener("click", runOfflineSearch);
   $("#offlineQuery")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {

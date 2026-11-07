@@ -216,6 +216,8 @@ class HandbookDB:
                     progress REAL NOT NULL DEFAULT 0,
                     save_path TEXT NOT NULL DEFAULT '',
                     error TEXT NOT NULL DEFAULT '',
+                    -- 归档自动重试已进行的次数；手动重试会清零。
+                    archive_retries INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -435,6 +437,13 @@ class HandbookDB:
                 db.execute("ALTER TABLE video_links ADD COLUMN kind TEXT NOT NULL DEFAULT 'video'")
             if "episode_urls" not in video_link_columns:
                 db.execute("ALTER TABLE video_links ADD COLUMN episode_urls TEXT NOT NULL DEFAULT '{}'")
+            local_media_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(local_media)").fetchall()
+            }
+            if "archive_retries" not in local_media_columns:
+                db.execute(
+                    "ALTER TABLE local_media ADD COLUMN archive_retries INTEGER NOT NULL DEFAULT 0"
+                )
             # 自定义收藏夹 → Kazumi 收藏夹的映射（NULL 表示不映射）。
             custom_columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(custom_collections)").fetchall()

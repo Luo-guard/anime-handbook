@@ -29,6 +29,7 @@ _JOB_FIELDS = {
     "progress",
     "save_path",
     "error",
+    "archive_retries",
 }
 _FILE_FIELDS = {
     "media_id",
@@ -137,12 +138,15 @@ class OfflineStore:
         *,
         error: str | None = None,
         progress: float | None = None,
+        archive_retries: int | None = None,
     ) -> dict[str, Any] | None:
         fields: dict[str, Any] = {"status": _check_status(status)}
         if error is not None:
             fields["error"] = str(error)
         if progress is not None:
             fields["progress"] = max(0.0, min(100.0, float(progress)))
+        if archive_retries is not None:
+            fields["archive_retries"] = max(0, int(archive_retries))
         return self.update_job(media_id, **fields)
 
     def job(self, media_id: int) -> dict[str, Any] | None:
@@ -172,6 +176,17 @@ class OfflineStore:
         with self.db.connect() as db:
             rows = db.execute(
                 f"SELECT * FROM local_media WHERE status IN ({marks}) ORDER BY id", (*ACTIVE_STATUSES,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def jobs_for_sync(self) -> list[dict[str, Any]]:
+        """后台心跳要推进的全部任务：活动中的 + 还在自动重试窗口里的归档失败。"""
+        marks = ",".join("?" for _ in ACTIVE_STATUSES)
+        with self.db.connect() as db:
+            rows = db.execute(
+                f"SELECT * FROM local_media WHERE status IN ({marks})"
+                " OR (status = 'failed' AND error LIKE '归档失败%') ORDER BY id",
+                (*ACTIVE_STATUSES,),
             ).fetchall()
         return [dict(row) for row in rows]
 

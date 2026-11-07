@@ -69,7 +69,7 @@ function buildDetailLinkItems(links, values) {
     if ((link.url.includes("{title}") || link.name.includes("{title}")) && !values.title) return;
     items.push({
       kind: link.kind,
-      label: `${detailLinkLabel(link.name, values)} ↗`,
+      label: detailLinkLabel(link.name, values),
       href: detailLinkHref(link.url, values),
     });
   });
@@ -101,16 +101,24 @@ function renderDetailLinks(anime, preferred = null) {
   detailLinks().forEach((link) => {
     if (!link.enabled) return;
     if (link.kind === "rules_menu") {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "detail-link-menu";
-      // 箭头不再硬编码：它属于名字的一部分，想留想删都改名字即可。
-      button.textContent = detailLinkLabel(link.name, values) || "更多站点";
-      button.setAttribute("aria-haspopup", "dialog");
-      button.onclick = () => {
+      // 用真 <a> 而不是 <button>：中键新标签、右键复制地址都是浏览器原生行为。
+      // href 指向本页的 #rules-menu 哈希——在新标签里打开时，rules-menu.js
+      // 会在启动后读这个哈希并自动弹出同一个站点菜单。
+      const anchor = document.createElement("a");
+      anchor.className = "detail-link-menu";
+      anchor.textContent = detailLinkLabel(link.name, values) || "更多站点";
+      anchor.setAttribute("aria-haspopup", "dialog");
+      anchor.href = `#rules-menu=${encodeURIComponent(JSON.stringify({
+        id: anime?.id ?? null,
+        title,
+        site: values.site,
+      }))}`;
+      // 左键仍然走应用内的站点菜单（弹窗比新开一页快）；中键/右键不拦，交给浏览器。
+      anchor.onclick = (event) => {
+        event.preventDefault();
         if (typeof openRulesMenu === "function") openRulesMenu(anime, preferred, values);
       };
-      box.append(button);
+      box.append(anchor);
       return;
     }
     if (link.kind === "saved_video") {
@@ -118,7 +126,7 @@ function renderDetailLinks(anime, preferred = null) {
       anchor.id = "savedVideoDefaultLink";
       anchor.target = "_blank";
       anchor.rel = "noreferrer";
-      anchor.textContent = `${detailLinkLabel(link.name, values)} ↗`;
+      anchor.textContent = detailLinkLabel(link.name, values);
       if (preferred) {
         anchor.href = bilibiliResumeUrl(preferred, anime);
         anchor.savedVideoItem = preferred;
@@ -144,7 +152,7 @@ function renderDetailLinks(anime, preferred = null) {
     anchor.dataset.detailLinkKind = link.kind;
     anchor.target = "_blank";
     anchor.rel = "noreferrer";
-    anchor.textContent = `${detailLinkLabel(link.name, values)} ↗`;
+    anchor.textContent = detailLinkLabel(link.name, values);
     anchor.href = detailLinkHref(link.url, values);
     box.append(anchor);
   });

@@ -55,7 +55,7 @@ async function loadLinkRules() { return linkRulesState.items; }
       content: harness + '\n' + read('static/modules/video-links.js') + '\n' + read('static/modules/rules-menu.js'),
     });
 
-    // 1) 默认链接列表里自动补上「更多站点」，渲染成按钮而不是链接。
+    // 1) 默认链接列表里自动补上「更多站点」，渲染成真链接（中键/右键可用）。
     const links = await page.evaluate(() => detailLinks().map((link) => link.kind));
     assert.deepEqual(links, ['bgm', 'bilibili', 'saved_video', 'rules_menu'], 'built-in entries are added');
     // 详情链接在详情弹窗里，先打开它才可见。
@@ -64,9 +64,12 @@ async function loadLinkRules() { return linkRulesState.items; }
       if (dialog && !dialog.open) dialog.showModal();
     });
     await page.evaluate(() => renderDetailLinks({ id: 1, name_cn: '测试番剧' }));
-    assert.equal(await page.locator('#detailLinks .detail-link-menu').count(), 1);
-    assert.match(await page.locator('#detailLinks .detail-link-menu').textContent(), /更多站点/);
-    assert.equal(await page.locator('#detailLinks a').count(), 2, '默认只渲染 bangumi + bilibili，已存视频默认关闭');
+    const trigger = page.locator('#detailLinks .detail-link-menu');
+    assert.equal(await trigger.count(), 1);
+    assert.match(await trigger.textContent(), /更多站点/);
+    assert.equal(await trigger.evaluate((node) => node.tagName), 'A', 'trigger is a real anchor');
+    assert.match(await trigger.getAttribute('href'), /^#rules-menu=/, 'anchor carries a shareable hash');
+    assert.equal(await page.locator('#detailLinks a.detail-link').count(), 2, '默认只渲染 bangumi + bilibili，已存视频默认关闭');
 
     // 2) 点开弹窗，列出本地缓存的站点。
     await page.locator('#detailLinks .detail-link-menu').click();
@@ -86,11 +89,17 @@ async function loadLinkRules() { return linkRulesState.items; }
     await page.fill('#rulesMenuSearch', '');
     await page.evaluate(() => renderRulesMenu());
 
-    // 4) 点站点跳转：新标签地址带 {title} 编码，并记一次跳转。
-    await page.locator('#rulesMenuList .rules-menu-row').first().locator('.rules-menu-open').click();
-    const opened = await page.evaluate(() => window.__opened);
-    assert.equal(opened.length, 1);
-    assert.equal(opened[0], `https://alpha.test/s?wd=${encodeURIComponent('测试番剧')}`);
+    // 4) 点站点跳转：站点行是真链接（target=_blank），地址带 {title} 编码，并记一次跳转。
+    const firstRow = page.locator('#rulesMenuList .rules-menu-row').first();
+    const openAnchor = firstRow.locator('.rules-menu-open');
+    assert.equal(await openAnchor.evaluate((node) => node.tagName), 'A', 'station row is a real anchor');
+    assert.equal(await openAnchor.getAttribute('target'), '_blank');
+    assert.equal(await openAnchor.getAttribute('href'), `https://alpha.test/s?wd=${encodeURIComponent('测试番剧')}`);
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      openAnchor.click(),
+    ]);
+    await popup.close();
     assert.equal(await page.locator('#rulesMenuModal').evaluate((node) => node.open), false, 'jump closes the dialog');
     assert.equal((await page.evaluate(() => window.__jumps.length)), 1);
 
@@ -107,7 +116,7 @@ async function loadLinkRules() { return linkRulesState.items; }
     assert.equal(saved.at(-1).name, 'Alpha');
     assert.equal(saved.at(-1).url, 'https://alpha.test/s?wd={title}');
     assert.equal(saved.at(-1).enabled, true);
-    assert.equal(await page.locator('#detailLinks a').count(), 3, 'bgm + bilibili + 新固定的 Alpha（已存视频默认关闭）');
+    assert.equal(await page.locator('#detailLinks a.detail-link').count(), 3, 'bgm + bilibili + 新固定的 Alpha（已存视频默认关闭）');
     assert.match(await page.locator('#detailLinks').textContent(), /Alpha/);
     assert.equal(await page.locator('#rulesMenuList .rules-menu-pin:disabled').count(), 1);
     assert.equal(await page.locator('#rulesMenuList .rules-menu-row').first().locator('.rules-menu-pin').textContent(), '✓');
@@ -134,8 +143,18 @@ async function loadLinkRules() { return linkRulesState.items; }
     });
     assert.match(await page.locator('#rulesMenuList').textContent(), /检查规则更新/);
 
+    // 8) 中键在新标签打开触发链接时，带着 #rules-menu= 哈希启动的页面会自动弹出菜单。
+    await page.evaluate(() => {
+      linkRulesState.items = window.__rules;
+      location.hash = '#rules-menu=' + encodeURIComponent(JSON.stringify({ id: 7, title: '哈希番剧', site: 'https://bgm.tv' }));
+    });
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator('#rulesMenuModal').evaluate((node) => node.open), true, 'hash opens the menu in a fresh tab');
+    assert.match(await page.locator('#rulesMenuStatus').textContent(), /共 3 个站点/);
+    // 真实页面上哈希会在弹出后被清掉；about:blank 的测试环境不允许改历史记录，跳过校验。
+
     assert.deepEqual(errors, [], 'no page errors');
-    console.log('Rules menu: built-in entry renders as a button, lists cached stations, filters by name/host, opens the site with the encoded title, pins a station into the detail row, and refuses to exceed the link limit.');
+    console.log('Rules menu: built-in entry renders as a real anchor with a shareable hash, lists cached stations, filters by name/host, opens stations through native links, opens the menu from the #rules-menu hash, pins a station into the detail row, and refuses to exceed the link limit.');
   } finally {
     await browser.close();
   }

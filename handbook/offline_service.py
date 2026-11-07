@@ -66,6 +66,13 @@ def _seconds_stale(iso_text: str) -> float:
 # 归档（remux）放在后台线程做：一季 12 集串行封装要几十秒，不能卡住 GET。
 CHECK_INTERVAL_SECONDS = 6 * 3600
 
+# 归档失败的自动重试上限：文件晚就绪、qB 慢半拍这类临时问题几次内就能恢复；
+# 真正坏掉的（文件缺失、名字认不出）重试再多次也没用，到顶后停下来等手动重试。
+MAX_ARCHIVE_RETRIES = 5
+
+# 后台心跳的间隔：下载进度 5 秒刷新一次足够顺滑，qB 的压力也可忽略。
+WORKER_INTERVAL_SECONDS = 5.0
+
 _ARCHIVING: set[int] = set()
 _ARCHIVE_LOCK = threading.Lock()
 _AUTO_CHECK_LOCK = threading.Lock()
@@ -269,13 +276,20 @@ class OfflineService:
         active = [job for job in jobs if job.get("status") in ("queued", "downloading", "processing")]
         live: dict[int, dict[str, Any]] = {}
         # 归档失败以前会让任务永远停在 failed，刷新也不再处理。给一个限频的自动重试，
-        # 文件晚一点就绪、或 qB 当时还没写好 content_path 都能自己恢复。
+        # 文件晚一点就绪、或 qB 当时还没写好 content_path 都能自己恢复；
+        # 重试到上限就停，免得一个真坏掉的任务每 30 秒空转一次，按钮始终可用。
         for job in jobs:
             if (
                 job.get("status") == "failed"
                 and str(job.get("error") or "").startswith("归档失败")
                 and _seconds_stale(job.get("updated_at") or "") > 30
             ):
+                attempts = int(job.get("archive_retries") or 0)
+                if attempts >= MAX_ARCHIVE_RETRIES:
+                    continue
+                self.store.set_status(
+                    job["id"], "processing", error="", archive_retries=attempts + 1
+                )
                 self._schedule_archive(int(job["id"]))
         if not active:
             return live
@@ -323,6 +337,15 @@ class OfflineService:
                 self._schedule_archive(int(job["id"]))
         return live
 
+    def sync_all(self) -> None:
+        """推进当前库里所有需要动的任务，不依赖前端正好停在哪一页。
+
+        以前进度和归档只在有人打开/切换页签触发 ``state()`` 时才前进：
+        页面不开着，下载下完了也没人去归档，失败的也不重试。
+        后台心跳周期性调用这里， ``_sync`` 会顺带处理归档重试的调度。
+        """
+        self._sync(self.store.jobs_for_sync())
+
     # ---- 归档（remux + 抽字幕）-----------------------------------------
 
     def _schedule_archive(self, media_id: int) -> None:
@@ -336,20 +359,34 @@ class OfflineService:
         try:
             self._archive(media_id)
         except (OfflineError, media_tools.MediaError, QBError) as error:
-            self.store.set_status(media_id, "failed", error=f"归档失败：{error}")
+            self._mark_archive_failed(media_id, error)
         except Exception as error:  # noqa: BLE001 - 后台线程必须兜住一切，否则任务永远卡在 processing
-            self.store.set_status(media_id, "failed", error=f"归档失败：{error}")
+            self._mark_archive_failed(media_id, error)
         finally:
             with _ARCHIVE_LOCK:
                 _ARCHIVING.discard(media_id)
+
+    def _mark_archive_failed(self, media_id: int, error: Exception) -> None:
+        """记失败并把已自动重试的次数写进错误信息，界面上能看到还剩几次机会。"""
+        job = self.store.job(media_id)
+        attempts = int((job or {}).get("archive_retries") or 0)
+        suffix = f"（自动重试 {attempts}/{MAX_ARCHIVE_RETRIES}）" if attempts else ""
+        self.store.set_status(media_id, "failed", error=f"归档失败：{error}{suffix}")
 
     def _archive(self, media_id: int) -> None:
         job = self.store.job(media_id)
         if not job:
             return
         anime_id = int(job["anime_id"])
-        # 已经录过成品就不要再跑一遍，避免每次刷新都重新封装。
-        if any(int(row.get("media_id") or 0) == media_id for row in self.store.files_for_anime(anime_id)):
+        done_rows = [
+            row
+            for row in self.store.files_for_anime(anime_id)
+            if int(row.get("media_id") or 0) == media_id
+        ]
+        done_keys = {str(row["episode_key"]) for row in done_rows}
+        # 只有已经整体标记为 ready 的任务才直接跳过，避免每次刷新都重新封装；
+        # 部分入库的失败任务要继续跑，已入库的集数在下面的循环里按 key 跳过。
+        if done_keys and job.get("status") == "ready":
             self.store.set_status(media_id, "ready", progress=100, error="")
             return
         config = self.config()
@@ -406,6 +443,7 @@ class OfflineService:
             if from_title > 0:
                 fallback_key = media_tools.episode_key(from_title)
         made = 0
+        already = 0
         fonts_done = False
         for source in files:
             number = media_tools.episode_number(source.name)
@@ -413,6 +451,10 @@ class OfflineService:
             # 否则硬塞给某一集只会把别的集覆盖掉。
             key = media_tools.episode_key(number) if number > 0 else (fallback_key if len(files) == 1 else "")
             if not key:
+                continue
+            if key in done_keys:
+                # 重试时跳过已入库的集，不重复封装，也不把重试跑成全量返工。
+                already += 1
                 continue
             label = media_tools.episode_filename(number) if number > 0 else media_tools.safe_name(source.stem)
             try:
@@ -436,9 +478,18 @@ class OfflineService:
                 subtitle_path=subtitle,
             )
             made += 1
-        if not made:
+        ingested = made + already
+        if not ingested:
             raise OfflineError("这些文件名里认不出集数，请在下载器里改名后重试")
-        self.store.set_status(media_id, "ready", progress=100, error="")
+        if ingested < len(files):
+            # 部分入库不能算完成：差着的集数用户看不到，还以为整季都在媒体库里。
+            # 抛错走统一的失败记录（计入自动重试次数），已入库的集保持原样，
+            # 重试时上面按 key 跳过，不会重复封装。
+            raise OfflineError(
+                f"只入库 {ingested}/{len(files)} 集，其余文件认不出集数或封装失败；"
+                "会自动重试几次，也可以稍后手动重试"
+            )
+        self.store.set_status(media_id, "ready", progress=100, error="", archive_retries=0)
         if not config.get("seed_after_done"):
             # 不保留做种时，归档完就清掉原始文件，免得同一集占两份空间。
             try:
@@ -531,11 +582,15 @@ class OfflineService:
         return {"ok": True, "moved_to": moved}
 
     def retry_archive(self, media_id: int) -> dict[str, Any]:
-        """手动重试一次归档，让已经卡在 failed 的任务立刻重新整理。"""
+        """手动重试一次归档，让已经卡在 failed 的任务立刻重新整理。
+
+        手动介入说明用户动过什么（比如改了文件名），自动重试的计数清零，
+        之后失败还能再享受一整轮自动重试。
+        """
         job = self.store.job(int(media_id))
         if not job:
             raise OfflineError("下载记录不存在")
-        self.store.set_status(int(media_id), "processing", error="")
+        self.store.set_status(int(media_id), "processing", error="", archive_retries=0)
         self._schedule_archive(int(media_id))
         return {"ok": True, "media_id": int(media_id)}
 
@@ -798,3 +853,39 @@ class OfflineService:
             "qb_version": version,
             "config": {key: config[key] for key in ("qb_host", "qb_port", "qb_category", "seed_after_done", "auto_follow")},
         }
+
+
+# ---- 后台心跳 ---------------------------------------------------------
+
+_WORKER_LOCK = threading.Lock()
+_WORKER_STOP: threading.Event | None = None
+
+
+def start_background_worker(
+    database_provider: Any,
+    stop: threading.Event | None = None,
+    *,
+    interval: float = WORKER_INTERVAL_SECONDS,
+) -> threading.Event:
+    """启动全局下载心跳：不打开页面也持续推进下载进度、归档与自动重试。
+
+    ``database_provider`` 在每次心跳时现取当前库——切换本地账号后，
+    心跳自动跟着新账号走，不用重启。重复调用只启动一次；返回停止信号，
+    进程退出时 set 它即可让线程收尾。
+    """
+    global _WORKER_STOP
+    with _WORKER_LOCK:
+        if _WORKER_STOP is not None:
+            return _WORKER_STOP
+        stop_event = stop or threading.Event()
+        _WORKER_STOP = stop_event
+
+    def loop() -> None:
+        while not stop_event.wait(interval):
+            try:
+                OfflineService(database_provider()).sync_all()
+            except Exception:  # noqa: BLE001 - 心跳线程不允许带异常退出
+                pass
+
+    threading.Thread(target=loop, name="handbook-offline-worker", daemon=True).start()
+    return stop_event
