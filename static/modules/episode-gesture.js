@@ -81,7 +81,8 @@ function egCloseMenu() {
   if (!menu) return;
   menu.classList.remove("visible");
   menu.classList.add("closing");
-  window.setTimeout(() => menu.remove(), 150);
+  // 收起动画 180ms（transform），移除得等它跑完，否则最后一帧被截掉、看着像闪没。
+  window.setTimeout(() => menu.remove(), 200);
   if (egRuntime) {
     egRuntime.menu = null;
     egRuntime.dragged = false;
@@ -99,6 +100,9 @@ function egRenderMenu(button, config, onAction) {
   menu.dataset.originX = String(originX);
   menu.dataset.originY = String(originY);
   menu.dataset.episodeKey = button.dataset.episodeKey;
+  const scale = egScaleFor(originX, originY);
+  menu.dataset.scale = String(scale);
+  menu.style.setProperty("--quick-scale", String(scale));
   menu.style.setProperty("--quick-x", `${originX}px`);
   menu.style.setProperty("--quick-y", `${originY}px`);
   const items = EG_SLOTS.filter((slot) => config.slots[slot]).map((slot) => {
@@ -126,6 +130,19 @@ function egRenderMenu(button, config, onAction) {
   return menu;
 }
 
+const EG_RADIUS_X = 82;
+const EG_RADIUS_Y = 94;
+const EG_KNOB_PAD = 26;   // 圆钮半径 24 + 2px 余量
+const EG_SCALE_MIN = 0.55;
+
+// 窄屏上集数格子贴边时，固定半径会把左上/左下圆钮顶出视口（390px 实测 left=-23）。
+// 按圆心到视口四边的余量把扇区等比缩小，最小到 0.55，宁可挤一点也不裁。
+function egScaleFor(originX, originY) {
+  const roomX = Math.min(originX, window.innerWidth - originX) - EG_KNOB_PAD;
+  const roomY = Math.min(originY, window.innerHeight - originY) - EG_KNOB_PAD;
+  return Math.max(EG_SCALE_MIN, Math.min(1, roomX / EG_RADIUS_X, roomY / EG_RADIUS_Y));
+}
+
 function egUpdateTarget(event) {
   const menu = egRuntime?.menu;
   if (!menu) return;
@@ -141,13 +158,15 @@ function egUpdateTarget(event) {
   menu.classList.toggle("dragging", distance > 10);
   let target = "";
   let closest = Infinity;
+  const scale = Number(menu.dataset.scale || 1);
   menu.querySelectorAll("[data-slot]").forEach((item) => {
-    const [x, y] = EG_COORDS[item.dataset.slot] || [0, 0];
+    const [x, y] = (EG_COORDS[item.dataset.slot] || [0, 0]).map((value) => value * scale);
     const next = Math.hypot(event.clientX - (originX + x), event.clientY - (originY + y));
     if (next < closest) { closest = next; target = item.dataset.slot; }
   });
   menu.querySelectorAll("[data-episode-action]").forEach((item) => {
-    item.classList.toggle("active", item.dataset.slot === target && closest < EG_HIT_RADIUS);
+    // 命中圈跟着扇区一起缩，否则缩到 0.55 时六个圆钮都在 62px 内，点哪都算命中。
+    item.classList.toggle("active", item.dataset.slot === target && closest < EG_HIT_RADIUS * scale);
   });
 }
 
@@ -198,14 +217,18 @@ function installEpisodeGestures(root, options) {
     }, EG_LONG_PRESS_MS);
   });
 
-  root.addEventListener("pointermove", (event) => {
+  // 监听挂在 document 上，不能挂集数区：六个圆钮离格子中心最远 98px，
+  // 而一行格子只有 45px 高，指针滑向任意扇区都会先离开 .episode-grid。
+  // 挂在 root 上时指针一出界就不再更新，高亮停在上一步、甚至被清空，
+  // 于是正上方「播放」、正下方「下载」看起来"点了没反应"。
+  document.addEventListener("pointermove", (event) => {
     if (!egRuntime.menu) return;
     const distance = Math.hypot(event.clientX - egRuntime.startX, event.clientY - egRuntime.startY);
     if (distance > 10) egRuntime.dragged = true;
     egUpdateTarget(event);
   });
 
-  root.addEventListener("pointerup", (event) => {
+  document.addEventListener("pointerup", (event) => {
     const button = egRuntime.button;
     if (!button) return;
     window.clearTimeout(egRuntime.pressTimer);

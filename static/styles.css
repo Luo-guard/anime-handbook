@@ -21,6 +21,14 @@
   --danger: #a24d4d;
   --shadow: 0 18px 50px rgb(var(--theme-rgb) / 0.14);
   --radius: 20px;
+  /* 强调色别名。整套样式里有二十多处引用 --accent / --accent-soft / --accent-deep，
+     但主题改成 --green-* 之后这三个变量一直没定义，于是
+     `color-mix(in srgb, var(--surface) 88%, var(--accent))` 这种声明整条失效，
+     快捷菜单的圆钮只剩文字、页签下划线消失、人物卡片底色变透明。
+     这里指回 --green-*，各主题覆盖 --green-* 时它们会自动跟着变。 */
+  --accent: var(--green-700);
+  --accent-soft: var(--green-50);
+  --accent-deep: var(--green-900);
 }
 
 html[data-theme="ocean"] {
@@ -2211,26 +2219,21 @@ input[type="number"] {
 .episode-quick-action {
   width: 48px;
   height: 48px;
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, white);
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, white);
   border-radius: 50%;
-  /* 长按快捷菜单的圆钮保持浅底深字，避免浅色主题下白字看不清。 */
+  /* 长按快捷菜单的圆钮保持浅底深字，避免浅色主题下白字看不清。
+     底色不能太淡：88% surface 混出来几乎和弹窗白底同色，圆钮看着像一段浮着的字。 */
   color: var(--green-900);
-  background: color-mix(in srgb, var(--surface) 88%, var(--accent));
+  background: color-mix(in srgb, var(--surface) 76%, var(--accent));
   box-shadow: 0 9px 24px color-mix(in srgb, var(--accent) 30%, transparent);
   font-size: 12px;
   font-weight: 800;
 }
 
-.episode-quick-action.score { left: 0; top: -94px; }
-.episode-quick-action.op { left: 82px; top: -54px; }
-.episode-quick-action.ed { left: 82px; top: 54px; }
-.episode-quick-action.review { left: 0; top: 98px; }
+/* 位置与出场延迟按槽位名给（top/bottom/top_right…），下面 4262 附近是唯一一份。
+   早期按动作名（score/op/ed/review）写的规则已经不匹配任何元素，别再写回来。 */
 
 .episode-quick-menu.visible .episode-quick-action { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-.episode-quick-menu.visible .episode-quick-action.score { transition-delay: 15ms; }
-.episode-quick-menu.visible .episode-quick-action.op { transition-delay: 45ms; }
-.episode-quick-menu.visible .episode-quick-action.ed { transition-delay: 75ms; }
-.episode-quick-menu.visible .episode-quick-action.review { transition-delay: 105ms; }
 .episode-quick-action.active {
   transform: translate(-50%, -50%) scale(1.18) !important;
   color: white;
@@ -4258,13 +4261,15 @@ dialog::backdrop {
 .offline-modal .offline-settings { flex: 1 1 auto; min-height: 0; }
 
 /* 六格扇区：方位由设置里的 slots 决定，坐标固定在这里。
-   菜单本体 pointer-events:none，只有可见的扇区圆钮能接收点击（B 版点选要用）。 */
-.episode-quick-action.top { left: 0; top: -94px; }
-.episode-quick-action.bottom { left: 0; top: 94px; }
-.episode-quick-action.top_right { left: 82px; top: -54px; }
-.episode-quick-action.bottom_right { left: 82px; top: 54px; }
-.episode-quick-action.top_left { left: -82px; top: -54px; }
-.episode-quick-action.bottom_left { left: -82px; top: 54px; }
+   菜单本体 pointer-events:none，只有可见的扇区圆钮能接收点击（B 版点选要用）。
+   半径乘 --quick-scale：窄屏上格子贴着边，不缩的话左上/左下圆钮会被视口裁掉
+   半个（390px 实测 left=-23），缩多少由 episode-gesture.js 按到四边的余量算。 */
+.episode-quick-action.top { left: 0; top: calc(-94px * var(--quick-scale, 1)); }
+.episode-quick-action.bottom { left: 0; top: calc(94px * var(--quick-scale, 1)); }
+.episode-quick-action.top_right { left: calc(82px * var(--quick-scale, 1)); top: calc(-54px * var(--quick-scale, 1)); }
+.episode-quick-action.bottom_right { left: calc(82px * var(--quick-scale, 1)); top: calc(54px * var(--quick-scale, 1)); }
+.episode-quick-action.top_left { left: calc(-82px * var(--quick-scale, 1)); top: calc(-54px * var(--quick-scale, 1)); }
+.episode-quick-action.bottom_left { left: calc(-82px * var(--quick-scale, 1)); top: calc(54px * var(--quick-scale, 1)); }
 .episode-quick-menu.visible .episode-quick-action { pointer-events: auto; cursor: pointer; }
 .episode-quick-menu.visible .episode-quick-action.top { transition-delay: 0ms; }
 .episode-quick-menu.visible .episode-quick-action.top_right { transition-delay: 20ms; }

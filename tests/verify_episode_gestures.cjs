@@ -53,8 +53,30 @@ window.calls=[];
     // 3) B 版：弹出后再点某一格
     await page.locator('#episodeQuickMenu [data-slot="top"]').click();
     assert.deepEqual(await calls(), [['action', 'play', '0:1']], 'clicking a slot runs its action');
-    await page.waitForTimeout(200); // closing 动画 150ms 后才从 DOM 移除
+    await page.waitForTimeout(260); // 收起动画 180ms、DOM 在 200ms 后移除，留余量
     assert.equal(await page.locator('#episodeQuickMenu').count(), 0, 'menu closes after choosing');
+
+    // 3b) 六个方位的悬停高亮都要跟手：指针一定会离开集数区（一行格子才 45px 高，
+    //     最远扇区离中心 98px），所以 pointermove 必须挂在 document 上。
+    //     以前挂在集数区，正上「播放」/ 正下「下载」滑出去就不再更新，看着像没反应。
+    //     目标位置按圆钮实际 rect 取：扇区半径会被 --quick-scale 按视口余量缩，
+    //     硬编码 ±94 在贴边的格子上会落到圆钮外面。
+    await cell.click({ button: 'right' });
+    await page.waitForTimeout(60);
+    const probe = await page.locator('.episode-cell[data-episode-key="0:1"]').boundingBox();
+    const px = probe.x + probe.width / 2, py = probe.y + probe.height / 2;
+    for (const slot of ['top', 'bottom', 'top_right', 'bottom_right', 'top_left', 'bottom_left']) {
+      const knob = await page.locator(`#episodeQuickMenu [data-slot="${slot}"]`).boundingBox();
+      await page.mouse.move(px, py);
+      await page.mouse.move(knob.x + knob.width / 2, knob.y + knob.height / 2, { steps: 4 });
+      await page.waitForTimeout(60);
+      const active = await page.evaluate(() =>
+        document.querySelector('#episodeQuickMenu [data-episode-action].active')?.dataset.slot || null);
+      assert.equal(active, slot, `hovering ${slot} highlights that slot`);
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(240);
+    assert.equal(await page.locator('#episodeQuickMenu').count(), 0, 'escape closes the hovered menu');
 
     // 4) A 版：长按后滑到扇区松手即执行
     const box = await cell.boundingBox();
@@ -63,7 +85,9 @@ window.calls=[];
     await page.mouse.down();
     await page.waitForTimeout(480);
     assert.equal(await page.locator('#episodeQuickMenu').count(), 1, 'long press opens the menu');
-    await page.mouse.move(cx, cy - 94);
+    // 圆钮位置按实际 rect 取，扇区半径会随视口余量缩（--quick-scale）。
+    const topKnob = await page.locator('#episodeQuickMenu [data-slot="top"]').boundingBox();
+    await page.mouse.move(topKnob.x + topKnob.width / 2, topKnob.y + topKnob.height / 2, { steps: 4 });
     await page.mouse.up();
     assert.deepEqual(await calls(), [['action', 'play', '0:1']], 'drag to slot and release runs the action');
 
@@ -74,14 +98,14 @@ window.calls=[];
     await page.mouse.up();
     assert.equal(await page.locator('#episodeQuickMenu').count(), 1, 'menu stays by default');
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(180);
+    await page.waitForTimeout(240); // 收起动画 180ms + 200ms 后移除 DOM，留出余量
     assert.equal(await page.locator('#episodeQuickMenu').count(), 0, 'Escape closes the menu');
     await setConfig({ keep_menu_on_release: false });
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.waitForTimeout(480);
     await page.mouse.up();
-    await page.waitForTimeout(180);
+    await page.waitForTimeout(240); // 收起动画 180ms + 200ms 后移除 DOM，留出余量
     assert.equal(await page.locator('#episodeQuickMenu').count(), 0, 'menu closes when keep switch is off');
     await setConfig({});
 
@@ -102,7 +126,7 @@ window.calls=[];
     assert.equal(await page.locator('#episodeQuickMenu [data-slot]').count(), 5, 'one slot removed');
     assert.equal(await page.locator('#episodeQuickMenu [data-slot="top"]').count(), 0);
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(180);
+    await page.waitForTimeout(240); // 收起动画 180ms + 200ms 后移除 DOM，留出余量
     await setConfig({});
 
     // 8) 绑定双击后，单击延迟 250ms；双击只执行绑定动作，不切换已看
