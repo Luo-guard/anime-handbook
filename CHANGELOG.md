@@ -5,6 +5,10 @@
 
 ## 2026-11-07
 
+### 工具：新增 `tools/restart_handbook.ps1`（重启后台不再绑窗口）
+- 以后重启后台不用再「前台命令跑 `app.py`」：脚本先 `GET /api/health` 拿 `shutdown_token`，带 `Host` / `Origin` / `X-Handbook-Shutdown` 三个头 POST `/api/desktop/shutdown`（409=正在同步，2 秒重试、最多 20 秒），等 43127 端口真正释放后再调 `launch_handbook.ps1`，由 `Start-Process` 起独立进程，最后用 `/api/profiles` 返回 200 校验。
+- 实测限制（写进脚本注释了）：**从 WorkBuddy 的自动化会话里调用无效** —— 工具会话结束会把子进程一起回收，服务随后就停；要在自己的终端或双击 `.cmd` 里起才稳。脚本保持纯 ASCII，因为 PowerShell 5.1 按 ANSI 读 `.ps1`，中文注释会直接解析报错。
+
 ### 定调：完结番不显示进度药丸，不标「已播完」
 - 审计清单里 B8 这条一直挂着「待你确认」。定了：**保持现状** —— `aired >= total` 时整个药丸 `return ""`，完结番看不到任何进度标记，也不加「已播完」。
 - 行为没动，只在 `presentation.js` 那行 `return ""` 上方留了注释写明这是刻意口径，防止下次被当成 bug 改回去；版本号升到 `?v=20261107-b8-finished-quiet`。`tests/verify_airing_progress.cjs:26` 本来就有「完结隐藏」的断言。
