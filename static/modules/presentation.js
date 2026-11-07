@@ -38,15 +38,6 @@ function episodeReleaseStatus(anime, group) {
   return `<span class="episode-release-status" title="${escapeHtml(hint)}"><i></i>已播 ${aired}</span>`;
 }
 
-// 下集时间不再做成点击展开的浮层（它会压在集数格子上），改到集数网格下方当脚注。
-function episodeNextAiringNote(anime, group) {
-  if (Number(group.type) !== 0) return "";
-  const useAS = state.settings.collection_airing_source === "as";
-  const airing = useAS ? anime?.as_airing : anime?.airing;
-  if (!airing || !airing.next_label) return "";
-  return `<p class="episode-next-airing-note">下集 ${escapeHtml(airing.next_label)}<span>北京时间 · 放送计划</span></p>`;
-}
-
 function showCustomMoveButton() {
   return (
     state.custom_collections.length > 0 ||

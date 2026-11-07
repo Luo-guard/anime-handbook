@@ -15,14 +15,12 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
   await page.setViewportSize({width,height:800});
   const result=await page.locator('.episode-group').first().evaluate(section=>{
    const head=section.querySelector('.episode-group-head'),info=section.querySelector('.episode-airing-info'),grid=section.querySelector('.episode-group-grid');
-   const note=section.querySelector('.episode-next-airing-note');
-   return {head:head.textContent,info:info.textContent,separate:head.contains(info),clear:grid.getBoundingClientRect().top>=info.getBoundingClientRect().bottom,overflow:section.scrollWidth>section.clientWidth,note:note?note.textContent:'',noteBelow:note?note.getBoundingClientRect().top>=grid.getBoundingClientRect().bottom:false};
+   return {head:head.textContent,info:info.textContent,separate:head.contains(info),clear:grid.getBoundingClientRect().top>=info.getBoundingClientRect().bottom,overflow:section.scrollWidth>section.clientWidth};
   });
   assert(result.head.includes('已看 1 / 12')); assert(result.head.includes('已播 4'));
   assert(result.info.includes('已播 4')); assert(!result.info.includes('已播 4 / 14'));
-  assert.equal(await page.locator('.episode-next-airing').count(),0,'no overlay covering the episode cells');
-  assert(result.note.includes('下集 11/04 20:00')&&result.note.includes('北京时间'),JSON.stringify(result));
-  assert(result.noteBelow,'next time sits below the episode grid');
+  assert.equal(await page.locator('.episode-next-airing-note').count(),0,'next-episode footnote removed from detail');
+  assert.equal(await page.locator('[data-episode-next-airing]').count(),0,'no next-episode slot in the grid');
   assert(result.separate&&result.clear&&!result.overflow,JSON.stringify(result));
  }
  assert.equal(await page.locator('[data-episode-airing-type]').count(),1);
@@ -34,5 +32,5 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  await page.setViewportSize({width:920,height:620});await page.screenshot({path:path.join(os.tmpdir(),'handbook-detail-airing-layout.png')});
  await page.evaluate(()=>{state.progressAnime.airing=undefined;refreshEpisodeAiringStatus()});
  assert.equal(await page.locator('.episode-airing-info').isVisible(),false);
- console.log('Detail airing layout: early-style pill + next-episode footnote below grid at 920/390/320px, no overlay, no overflow, watch selection preserved, live text refresh and empty-row collapse passed.');
+ console.log('Detail airing layout: early-style pill only (no next-episode footnote) at 920/390/320px, no overlay, no overflow, watch selection preserved, live text refresh and empty-row collapse passed.');
 }finally{await browser.close()}})().catch(error=>{console.error(error);process.exit(1)});

@@ -450,9 +450,6 @@ function refreshEpisodeAiringStatus() {
   $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
     element.innerHTML = episodeReleaseStatus(state.progressAnime, {type: Number(element.dataset.episodeAiringType)});
   });
-  $$("[data-episode-next-airing]", $("#episodeGrid")).forEach((element) => {
-    element.innerHTML = episodeNextAiringNote(state.progressAnime, {type: 0});
-  });
 }
 
 function renderEpisodeGrid() {
@@ -521,7 +518,6 @@ function renderEpisodeGrid() {
               `;
             }).join("")}
           </div>
-          ${Number(group.type) === 0 ? `<div class="episode-next-airing-slot" data-episode-next-airing>${episodeNextAiringNote(anime, group)}</div>` : ""}
         </section>
       `).join("")
     : `<div class="empty-state"><p>暂未取得章节。</p></div>`;
