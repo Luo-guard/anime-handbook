@@ -2141,14 +2141,17 @@ input[type="number"] {
   pointer-events: none;
 }
 
+/* 轻量版：--accent 补齐后这里的实心装饰全部生效过一次，六个圆钮变成
+   实心带重阴影的按钮，比原来的「文字浮空」重太多。只留一圈极淡光晕当
+   「菜单已展开」的暗示。 */
 .episode-quick-halo {
   position: absolute;
   width: 64px;
   height: 64px;
-  border: 2px solid color-mix(in srgb, var(--accent) 55%, white);
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
   border-radius: 50%;
   transform: translate(-50%, -50%) scale(.65);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
   opacity: 0;
   transition: opacity 160ms ease, transform 220ms cubic-bezier(.2,.9,.2,1);
 }
@@ -2163,10 +2166,10 @@ input[type="number"] {
   left: 0;
   top: 0;
   width: var(--drag-distance, 0px);
-  height: 3px;
+  height: 2px;
   border-radius: 999px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 20%, transparent), var(--accent));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 38%, transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 42%, transparent));
+  box-shadow: none;
   opacity: 0;
   transform: translateY(-50%) rotate(var(--drag-angle, 0rad));
   transform-origin: left center;
@@ -2177,12 +2180,12 @@ input[type="number"] {
   position: absolute;
   left: var(--drag-x, 0px);
   top: var(--drag-y, 0px);
-  width: 15px;
-  height: 15px;
-  border: 2px solid #fff;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 42%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
   opacity: 0;
   transform: translate(-50%, -50%) scale(.55);
   transition: left 70ms ease-out, top 70ms ease-out, opacity 120ms ease, transform 120ms ease;
@@ -2210,13 +2213,14 @@ input[type="number"] {
 .episode-quick-action {
   width: 48px;
   height: 48px;
-  border: 1px solid color-mix(in srgb, var(--accent) 52%, white);
+  /* 轻盈但不散：底淡到几乎和弹窗同色，只留一圈极细的主题色边把文字收住。
+     完全透明会让六个动作字直接压在集数/评论文字上，反而更乱；
+     早先的 76% surface + 重阴影又太像一排实心按钮。 */
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: 50%;
-  /* 长按快捷菜单的圆钮保持浅底深字，避免浅色主题下白字看不清。
-     底色不能太淡：88% surface 混出来几乎和弹窗白底同色，圆钮看着像一段浮着的字。 */
   color: var(--green-900);
-  background: color-mix(in srgb, var(--surface) 76%, var(--accent));
-  box-shadow: 0 9px 24px color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 12%, transparent);
   font-size: 12px;
   font-weight: 800;
 }
@@ -2227,11 +2231,11 @@ input[type="number"] {
 .episode-quick-menu.visible .episode-quick-action { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .episode-quick-action.active {
   transform: translate(-50%, -50%) scale(1.18) !important;
-  color: white;
-  /* 选中态用中性灰圆圈承接白字，和主题色无关，任何背景都清楚。 */
-  border-color: #65706b;
-  background: #65706b;
-  box-shadow: 0 10px 26px rgba(25, 34, 30, .34);
+  color: #fff;
+  /* 选中态用主题色实心，跟整站一致；固定中性灰在换主题时会显得脏。 */
+  border-color: var(--green-700);
+  background: var(--green-700);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--green-700) 34%, transparent);
 }
 
 .episode-quick-menu.closing .episode-quick-action,
