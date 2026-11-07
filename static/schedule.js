@@ -174,9 +174,19 @@ function renderScheduleSorting(selector, draft = null) {
   };
 }
 
+// 地区来自 Bangumi 的 meta 标签（条目页顶部 TV / 日本 / 2026年10月 那一行）。
+// 数据里韩国是独立值，筛选界面按你选的五档把它并进「其他」。
+const scheduleOriginOptions = [["jp", "日漫"], ["cn", "国漫"], ["us", "美漫"], ["other", "其他"], ["unknown", "未标注"]];
+const scheduleOriginGroup = {jp: "jp", cn: "cn", us: "us", kr: "other", other: "other", "": "unknown"};
+
+function scheduleOriginOf(item) {
+  return scheduleOriginGroup[item.origin || ""] || "unknown";
+}
+
 function schedulePreferences() {
   return {sort: state.settings.schedule_sort || "time",
     statuses: state.settings.schedule_statuses || [1, 2, 3, 4, 5],
+    origins: state.settings.schedule_origins || scheduleOriginOptions.map(([id]) => id),
     uncollected: state.settings.schedule_uncollected !== false};
 }
 
@@ -184,7 +194,7 @@ function scheduleFilteredItems() {
   const prefs = schedulePreferences(), keyword = scheduleState.search.trim().toLocaleLowerCase();
   return (scheduleState.data?.items || []).filter((item) => {
     const visible = item.collection_type ? prefs.statuses.includes(Number(item.collection_type)) : prefs.uncollected;
-    return visible && (!keyword || [item.title, ...(item.aliases || [])].some((name) => name.toLocaleLowerCase().includes(keyword)));
+    return visible && prefs.origins.includes(scheduleOriginOf(item)) && (!keyword || [item.title, ...(item.aliases || [])].some((name) => name.toLocaleLowerCase().includes(keyword)));
   });
 }
 
@@ -410,6 +420,10 @@ function scheduleStatusMarkup(statuses, name) {
   return CATEGORIES.map((category) => `<label><input type="checkbox" name="${name}" value="${category.id}" ${statuses.includes(category.id) ? "checked" : ""} /><span>${category.name}</span></label>`).join("");
 }
 
+function scheduleOriginMarkup(origins, name) {
+  return scheduleOriginOptions.map(([id, label]) => `<label><input type="checkbox" name="${name}" value="${id}" ${origins.includes(id) ? "checked" : ""} /><span>${label}</span></label>`).join("");
+}
+
 function renderScheduleSettings() {
   $("#scheduleSourceInput").value = scheduleSource();
   $("#scheduleAiringSourceInput").value = state.settings.schedule_airing_source || "bgm";
@@ -417,6 +431,7 @@ function renderScheduleSettings() {
   const prefs = schedulePreferences();
   renderScheduleSorting("#scheduleSortingSettings");
   $("#scheduleStatusInputs").innerHTML = scheduleStatusMarkup(prefs.statuses, "scheduleSettingsStatus");
+  $("#scheduleOriginInputs").innerHTML = scheduleOriginMarkup(prefs.origins, "scheduleSettingsOrigin");
   $("#scheduleUncollectedInput").checked = prefs.uncollected;
   const visibility = scheduleCardVisibility();
   $("#scheduleCardFieldInputs").innerHTML = scheduleCardFieldOptions.map(([key, label, description]) =>
@@ -429,6 +444,7 @@ function openScheduleFilters() {
   const prefs = schedulePreferences();
   renderScheduleSorting("#scheduleSortOptions");
   $("#scheduleFilterStatuses").innerHTML = scheduleStatusMarkup(prefs.statuses, "scheduleFilterStatus");
+  $("#scheduleFilterOrigins").innerHTML = scheduleOriginMarkup(prefs.origins, "scheduleFilterOrigin");
   $("#scheduleFilterUncollected").checked = prefs.uncollected;
   $("#scheduleFilterModal").showModal();
 }
@@ -504,6 +520,7 @@ function initializeSchedule() {
       const result = await api("/api/settings", {method: "PATCH", body: JSON.stringify({
         ...sorting,
         schedule_statuses: $$("#scheduleFilterStatuses input:checked").map((input) => Number(input.value)),
+        schedule_origins: $$("#scheduleFilterOrigins input:checked").map((input) => input.value),
         schedule_uncollected: $("#scheduleFilterUncollected").checked,
       })});
       verifyScheduleSortingSaved(result.settings, sorting);

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import ssl
 import threading
@@ -26,6 +27,41 @@ def season_key(value: str) -> str:
     if not re.fullmatch(r"(?:19|20|21)\d{2}(?:01|04|07|10)", value):
         raise ValueError("季度格式无效")
     return value
+
+# Bangumi 把「国家/地区」写在 meta tags 里（条目页顶部 TV / 日本 / 2026年10月 那一行）。
+# 用户标签里偶尔也有，但顺序按热度浮动，只能当兜底。
+ORIGIN_TAGS = {
+    "日本": "jp", "日本动画": "jp",
+    "中国": "cn", "中国大陆": "cn", "中国香港": "cn", "中国澳门": "cn", "中国台湾": "cn",
+    "美国": "us", "韩国": "kr",
+}
+ORIGIN_OTHER_TAGS = {
+    "法国", "英国", "德国", "意大利", "西班牙", "俄罗斯", "加拿大", "澳大利亚",
+    "泰国", "印度", "比利时", "荷兰", "瑞士", "瑞典", "挪威", "丹麦", "芬兰",
+    "波兰", "捷克", "巴西", "墨西哥", "土耳其", "以色列", "爱尔兰", "新西兰",
+}
+ORIGIN_KEYS = ("jp", "cn", "us", "kr", "other")
+ORIGIN_LABELS = {"jp": "日漫", "cn": "国漫", "us": "美漫", "kr": "韩漫", "other": "其他"}
+# 周表里可能出现的全部取值；空字符串保留给「来源没标」。前端用 unknown 表示它。
+ORIGIN_VALUES = {*ORIGIN_KEYS, ""}
+
+
+def tag_name(tag) -> str:
+    if isinstance(tag, dict):
+        return str(tag.get("name") or "").strip()
+    return str(tag or "").strip()
+
+
+def origin_from_tags(tags) -> str:
+    """Producing region from Bangumi meta tags; empty when the source omits it."""
+    names = [tag_name(tag) for tag in tags or []]
+    for name in names:
+        if name in ORIGIN_TAGS:
+            return ORIGIN_TAGS[name]
+    for name in names:
+        if name in ORIGIN_OTHER_TAGS:
+            return "other"
+    return ""
 
 
 def broadcast_slot(weekday: int, text: str) -> dict:
@@ -148,7 +184,7 @@ def parse_yuc(html: str) -> list[dict]:
             host = urlparse(link).hostname or ""
             label = next((label for part, label in [("netflix", "Netflix"), ("primevideo", "Prime Video"), ("gamer.com.tw", "巴哈姆特"), ("bilibili", "哔哩哔哩"), ("crunchyroll", "Crunchyroll"), ("iq.com", "爱奇艺"), ("qq.com", "腾讯视频")] if part in host), host)
             platforms.append({"name": label, "url": link})
-        rows.append({"title": title, "kind": "network" if network else "weekly",
+        rows.append({"title": title, "kind": "network" if network else "weekly", "origin": "",
                      **broadcast_slot(weekday, raw_time), "source_time": raw_time,
                      "release": release, "release_note": release_note,
                      "image_url": (poster.attrs.get("data-src") or poster.attrs.get("src", "")) if poster else "",
@@ -253,7 +289,10 @@ def parse_bangumi(document) -> list[dict]:
             title = item.get("name_cn") or item.get("nameCN") or item.get("name") or ""
             if not item.get("id") or not title:
                 continue
-            tags = item.get("tags") or item.get("metaTags") or []
+            # metaTags 是 Bangumi 的官方分类标签（TV / 日本 / 漫画改…），
+            # 国家就在里面；用户标签里也常有国家，但顺序随热度浮动，只作兜底。
+            meta_tags = item.get("metaTags") or item.get("meta_tags") or []
+            tags = item.get("tags") or meta_tags or []
             air_date = item.get("date") or item.get("air_date", "")
             if not air_date:
                 date_match = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", item.get("info") or "")
@@ -272,7 +311,8 @@ def parse_bangumi(document) -> list[dict]:
                          "image_url": (item.get("images") or {}).get("large", ""),
                          "air_date": air_date,
                          "summary": str(item.get("summary") or "")[:1800],
-                         "tags": [(t.get("name", "") if isinstance(t, dict) else str(t)) for t in tags[:5]],
+                         "tags": [tag_name(t) for t in tags[:5]],
+                         "origin": origin_from_tags(meta_tags) or origin_from_tags(tags),
                          "release": "", "release_note": "", "platforms": []})
     return [decode_metadata_text(row) for row in {r["id"]: r for r in rows}.values()]
 
@@ -288,7 +328,7 @@ def metadata_catalog(*sources):
             incoming = item
             item = {**item, **previous, "aliases": list(dict.fromkeys(previous.get("aliases", []) + item.get("aliases", [])))}
             # An empty field in one API is not authoritative missing data.
-            for field in ["summary", "tags", "air_date", "image_url", "score", "votes"]:
+            for field in ["summary", "tags", "air_date", "image_url", "score", "votes", "origin"]:
                 if not item.get(field):
                     item[field] = incoming.get(field)
             item["votes_known"] = previous.get("votes_known", False) or incoming.get("votes_known", False)
@@ -304,6 +344,8 @@ def merge_sources(yuc, bangumi, supplemental=()):
         match = best_match(item["aliases"], candidates)
         if match and match["id"] not in used:
             row = {**match, **item, "id": match["id"], "aliases": list(dict.fromkeys(item["aliases"] + match["aliases"]))}
+            # item 是番表抓下来的行（无地区），match 才是 Bangumi 元数据，别让空值盖掉。
+            row["origin"] = item.get("origin") or match.get("origin") or ""
             used.add(match["id"])
         else:
             row = dict(item)
@@ -324,9 +366,120 @@ def merge_sources(yuc, bangumi, supplemental=()):
     return rows
 
 
+class OriginCache:
+    """Bangumi 条目 id → 制作地区。
+
+    季表接口本身没有地区，只有逐条详情里有；一次请求换一次判定，结果写进
+    origins.json 长期复用，所以只有新出现的条目会产生网络请求。
+    """
+
+    def __init__(self, root, fetch=None):
+        self.path = Path(root) / "origins.json"
+        self.fetch = fetch
+        self.lock = threading.RLock()
+        self.rows = self._read()
+
+    def _read(self):
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def save(self):
+        with self.lock:
+            snapshot = dict(self.rows)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.path.with_name(f"origins-{threading.get_ident()}.tmp")
+            temporary.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(self.path)
+        except OSError:
+            pass
+
+    def get(self, anime_id):
+        """None = 还没查过；空字符串 = 查过但来源没标地区。"""
+        with self.lock:
+            return self.rows.get(str(int(anime_id)))
+
+    def snapshot(self):
+        with self.lock:
+            return dict(self.rows)
+
+    def warm(self):
+        """一次请求把当季所有条目的地区灌进缓存。
+
+        Bangumi 的新版日历（next.bgm.tv）每条都带 metaTags，比逐条查详情便宜得多。
+        失败就算了，fill() 会按需逐条补。
+        """
+        with self.lock:
+            if getattr(self, "_warmed", False):
+                return
+            self._warmed = True
+        fetcher = self.fetch or ScheduleService.fetch
+        try:
+            document = json.loads(fetcher("https://next.bgm.tv/p1/calendar", timeout=12))
+        except Exception:
+            return
+        added = 0
+        for entries in (document.values() if isinstance(document, dict) else []):
+            for entry in entries if isinstance(entries, list) else []:
+                subject = entry.get("subject") if isinstance(entry, dict) else None
+                if not isinstance(subject, dict) or not subject.get("id"):
+                    continue
+                key = str(int(subject["id"]))
+                if key in self.rows:
+                    continue
+                self.rows[key] = origin_from_tags(subject.get("metaTags") or subject.get("meta_tags") or [])
+                added += 1
+        if added:
+            self.save()
+
+    def fetch_one(self, anime_id):
+        key = str(int(anime_id))
+        cached = self.get(anime_id)
+        if cached is not None:
+            return cached
+        fetcher = self.fetch or ScheduleService.fetch
+        try:
+            payload = json.loads(fetcher(f"https://api.bgm.tv/v0/subjects/{key}", timeout=8))
+        except Exception:
+            return ""
+        origin = origin_from_tags(payload.get("meta_tags") or payload.get("metaTags") or [])
+        with self.lock:
+            self.rows[key] = origin
+        return origin
+
+    def fill(self, items, budget=60):
+        """给还没有地区的条目补一次；预算内查不到的留给下次刷新。"""
+        if not any(isinstance(row, dict) and not row.get("origin") and row.get("id") for row in items):
+            return
+        self.warm()
+        pending = []
+        for row in items:
+            if not isinstance(row, dict) or row.get("origin"):
+                continue
+            anime_id = row.get("id")
+            if not anime_id:
+                continue
+            cached = self.get(anime_id)
+            if cached is not None:
+                row["origin"] = cached
+            else:
+                pending.append(row)
+        pending = pending[:budget]
+        if not pending:
+            return
+        def work(row):
+            row["origin"] = self.fetch_one(row["id"])
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(work, pending))
+        self.save()
+
+
 class ScheduleService:
     TTL = 6 * 60 * 60
-    SCHEMA_VERSION = 7
+    SCHEMA_VERSION = 8
 
     def __init__(self, root: Path):
         self.root = root
@@ -334,17 +487,63 @@ class ScheduleService:
         self.jobs = set()
         self.errors = {}
         self.attempts = {}
+        self.origins = OriginCache(root)
+
+    # 环境里的代理（例如桌面端注入的那种）往往只放行部分域名；
+    # 系统代理通常才是真正出网的那一个。记住哪种方式成功，后续优先用它。
+    _prefer_system_proxy = False
 
     @staticmethod
-    def fetch(url, *, body=None):
+    def _system_proxy():
+        """Windows 系统代理；读不到就不兜底，保持原来的直连/环境代理行为。"""
+        if os.name != "nt":
+            return ""
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                r"Software\Microsoft\Windows\CurrentVersion\Internet Settings") as key:
+                enabled, _ = winreg.QueryValueEx(key, "ProxyEnable")
+                server, _ = winreg.QueryValueEx(key, "ProxyServer")
+        except OSError:
+            return ""
+        server = str(server or "").strip()
+        # 只认单一地址；"http=..;https=.." 这种分协议写法不猜。
+        if not enabled or not server or "=" in server:
+            return ""
+        return server if "://" in server else "http://" + server
+
+    @staticmethod
+    def _read(request, timeout, proxy=""):
+        if proxy:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
+            source = opener.open
+        else:
+            source = urllib.request.urlopen
+        with source(request, timeout=timeout) as response:
+            data = response.read(3 * 1024 * 1024 + 1)
+            if len(data) > 3 * 1024 * 1024:
+                raise ValueError("周表来源响应过大")
+            return data
+
+    @staticmethod
+    def fetch(url, *, body=None, timeout=15):
         headers = {"User-Agent": "AnimeHandbook/1.0 (personal airing calendar)", "Accept": "application/json,text/html"}
         if body is not None:
             headers["Content-Type"] = "application/json"
         request = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers=headers)
-        with urllib.request.urlopen(request, timeout=15) as response:
-            data = response.read(3 * 1024 * 1024 + 1)
-            if len(data) > 3 * 1024 * 1024:
-                raise ValueError("周表来源响应过大")
+        proxy = ScheduleService._system_proxy()
+        if proxy and ScheduleService._prefer_system_proxy:
+            try:
+                return ScheduleService._read(request, timeout, proxy)
+            except OSError:
+                pass
+        try:
+            return ScheduleService._read(request, timeout)
+        except OSError:
+            if not proxy:
+                raise
+            data = ScheduleService._read(request, timeout, proxy)
+            ScheduleService._prefer_system_proxy = True
             return data
 
     def for_source(self, source):
@@ -550,6 +749,7 @@ class ScheduleService:
             if failures:
                 errors.append("部分 Bangumi 条目暂时无法补全，将在下次更新时重试")
             items = merge_sources(*values, supplemental=supplemental)
+            self.origins.fill(items, budget=40)
             if not items:
                 raise ValueError("该季度暂未取得周表数据，请稍后刷新或选择其他季度")
             data = {"season": season, "items": items, "fetched_at": time.time(), "schema_version": self.SCHEMA_VERSION,
@@ -648,12 +848,20 @@ class KazumiScheduleService(ScheduleService):
             current = f"{now.year}{((now.month - 1) // 3) * 3 + 1:02d}"
             year, month = int(season[:4]), int(season[4:])
             end = f"{year + (month == 10)}-{(month + 2) % 12 + 1:02d}-01"
-            url = ("https://api.bgm.tv/calendar" if season == current else
+            url = ("https://next.bgm.tv/p1/calendar" if season == current else
                    f"https://api.kazumi.fyi/kazumi/v1/calendar/season?start={year}-{month:02d}-01&end={end}")
-            document = json.loads(self.fetch(url))
+            try:
+                document = json.loads(self.fetch(url))
+            except Exception:
+                if season != current:
+                    raise
+                # 新版日历偶发不可用时退回旧接口：只有星期，没有地区。
+                url = "https://api.bgm.tv/calendar"
+                document = json.loads(self.fetch(url))
             if isinstance(document, list):
                 document = {str(day["weekday"]["id"]): day["items"] for day in document}
             items = merge_sources([], parse_bangumi(document))
+            self.origins.fill(items, budget=40)
             if not items:
                 raise ValueError("Kazumi 周表暂未取得数据")
             data = {"season": season, "items": items, "fetched_at": time.time(),

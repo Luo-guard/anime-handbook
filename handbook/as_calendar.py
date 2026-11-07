@@ -8,6 +8,7 @@ import threading
 import time
 import urllib.request
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 
 from .animeschedule import BEIJING, ID_FIELDS, choose_match, compute_progress, external_ids, parse_time
@@ -37,8 +38,8 @@ def image_path(value):
     return text
 
 
-def build_calendar(key, rows, identities=None, catalogue=None):
-    identities, catalogue = identities or {}, catalogue or {}
+def build_calendar(key, rows, identities=None, catalogue=None, origins=None):
+    identities, catalogue, origins = identities or {}, catalogue or {}, origins or {}
     year, week = int(key[:4]), int(key[-2:])
     monday = date.fromisocalendar(year, week, 1)
     events = {}
@@ -75,6 +76,7 @@ def build_calendar(key, rows, identities=None, catalogue=None):
         items.append({
             "key": hashlib.sha256(f"{key}:{route}:{day}".encode()).hexdigest()[:20],
             "id": int(identity["bgm_id"]) if identity.get("bgm_id") else None,
+            "origin": origins.get(str(identity["bgm_id"]), "") if identity.get("bgm_id") else "",
             "title": title, "aliases": aliases, "kind": "weekly", "weekday": day.isoweekday(),
             "bj_weekday": local.isoweekday(), "bj_time": "" if delayed else local.strftime("%H:%M"), "delayed": delayed,
             "time_order": None if delayed else (local.hour * 60 + local.minute - 240) % 1440,
@@ -93,7 +95,9 @@ def build_calendar(key, rows, identities=None, catalogue=None):
 
 class ASCalendar:
     def __init__(self, service):
+        from schedule import OriginCache
         self.service, self.root = service, service.root / "calendar"
+        self.origins = OriginCache(service.root)
         self.lock = threading.RLock()
         self.jobs, self.errors, self.attempts = set(), {}, {}
         self.catalogue = self._read("catalogue.json", {})
@@ -183,8 +187,18 @@ class ASCalendar:
             def save():
                 identities = self.identities()
                 self._cache_bindings(identities)
-                self._write(key + ".json", build_calendar(key, rows, identities, self.catalogue))
+                self._write(key + ".json", build_calendar(key, rows, identities, self.catalogue, self.origins.snapshot()))
             save()  # First paint does not wait for every metadata request.
+            # 地区只能逐条问 Bangumi（AS 自身没有地区字段）。先让卡片出来，
+            # 再补一次并重写本周缓存；查过的 id 会留在 origins.json 里。
+            self.origins.warm()
+            document = self._read(key + ".json", {})
+            pending = [item["id"] for item in document.get("items", []) if item.get("id") and not item.get("origin")]
+            if pending:
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    list(pool.map(self.origins.fetch_one, pending[:80]))
+                self.origins.save()
+                save()
             routes = {item["route"] for item in build_calendar(key, rows)["items"]}
             def stale_routes():
                 return {route for route in routes if time.time() - self.catalogue.get(route, {}).get("_fetched_at", 0) >= 86400}

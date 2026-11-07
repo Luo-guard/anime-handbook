@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261107-weekday" />
+  <link rel="stylesheet" href="/styles.css?v=20261107-origin-filter" />
   </head>
   <body>
     <div class="app-shell">
@@ -767,6 +767,7 @@
           <h3 class="settings-subsection-title">排序与显示范围</h3>
           <div class="setting-row stacked"><span><strong>排列方式</strong><small>先调整分组顺序，再选择各组内的排列方式；与周表筛选窗口同步。</small></span><div id="scheduleSortingSettings" class="schedule-sorting-editor"></div></div>
           <div class="setting-row stacked"><span><strong>显示收藏状态</strong><small>支持多选，也可以全部取消。</small></span><div class="schedule-status-options" id="scheduleStatusInputs"></div></div>
+          <div class="setting-row stacked"><span><strong>显示地区</strong><small>按 Bangumi 条目分类筛选日漫、国漫、美漫；「其他」含韩漫等，另有来源未标注国家的条目。</small></span><div class="schedule-status-options" id="scheduleOriginInputs"></div></div>
           <label class="setting-row"><span><strong>显示未收藏的番剧</strong><small data-page-text="开启后可以在{schedule}发现尚未加入收藏的作品。">开启后可以在周表发现尚未加入收藏的作品。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleUncollectedInput" /><span class="switch"></span></span></label>
           <h3 class="settings-subsection-title">卡片内容</h3>
           <div class="setting-row stacked"><span><strong>卡片信息显示</strong><small>各项独立开关；关闭后不会影响排序、筛选或详细信息。</small></span></div>
@@ -1085,7 +1086,7 @@
     </dialog>
 
     <dialog class="modal schedule-dialog" id="scheduleSeasonModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">SEASON ARCHIVE</p><h2>选择放送季度</h2><p class="page-subtitle">按年份回看，按季节寻找。</p><div class="schedule-years" id="scheduleYears"></div></form></dialog>
-    <dialog class="modal schedule-dialog" id="scheduleFilterModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">MAKE IT YOURS</p><h2>排序与筛选</h2><p class="schedule-field-title">排列方式</p><div class="schedule-sorting-editor" id="scheduleSortOptions"></div><p class="schedule-field-title">显示收藏状态 · 可多选</p><div class="schedule-status-options" id="scheduleFilterStatuses"></div><label class="schedule-uncollected"><input type="checkbox" id="scheduleFilterUncollected" />也显示未收藏的番剧</label><p class="schedule-filter-note" data-page-text="这些选项会记住，并与“设置 → {schedule}”保持一致。">这些选项会记住，并与“设置 → 周表”保持一致。</p><div class="modal-actions"><button type="button" class="primary-button" id="scheduleApplyFilter">应用筛选</button></div></form></dialog>
+    <dialog class="modal schedule-dialog" id="scheduleFilterModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><div class="sd-scroll"><p class="eyebrow">MAKE IT YOURS</p><h2>排序与筛选</h2><p class="schedule-field-title">排列方式</p><div class="schedule-sorting-editor" id="scheduleSortOptions"></div><p class="schedule-field-title">显示收藏状态 · 可多选</p><div class="schedule-status-options" id="scheduleFilterStatuses"></div><label class="schedule-uncollected"><input type="checkbox" id="scheduleFilterUncollected" />也显示未收藏的番剧</label><p class="schedule-field-title">显示地区 · 可多选</p><div class="schedule-status-options" id="scheduleFilterOrigins"></div><p class="schedule-filter-note">地区取自 Bangumi 条目分类（日本／中国／美国…）。「未标注」是来源没有写国家或地区的条目，默认保留。</p><p class="schedule-filter-note" data-page-text="这些选项会记住，并与“设置 → {schedule}”保持一致。">这些选项会记住，并与“设置 → 周表”保持一致。</p></div><div class="modal-actions"><button type="button" class="primary-button" id="scheduleApplyFilter">应用筛选</button></div></form></dialog>
     <dialog class="modal rules-dialog" id="linkRulesModal">
       <div class="modal-frame">
         <button type="button" class="modal-close" id="linkRulesClose" aria-label="关闭">×</button>
@@ -1202,7 +1203,7 @@
     </dialog>
     <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261107-week-season-style" defer></script>
+    <script src="/schedule.js?v=20261107-origin-filter" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
     <script src="/modules/collection.js?v=20261107-filter-panel" defer></script>
@@ -1220,7 +1221,7 @@
     <script src="/modules/settings.js?v=20261107-no-dup-links" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
-    <script src="/modules/settings-save.js?v=20261106-collection-order" defer></script>
+    <script src="/modules/settings-save.js?v=20261107-origin-filter" defer></script>
     <script src="/modules/events.js?v=20261107-filter-panel" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

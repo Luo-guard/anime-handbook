@@ -3574,7 +3574,51 @@ dialog::backdrop {
 .schedule-card-votes{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
 .schedule-card-footer .schedule-progress{margin-left:auto;flex:0 0 auto}
 .schedule-source{display:grid;gap:6px;margin:34px 0 12px;padding-top:18px;border-top:1px solid rgb(var(--theme-rgb)/.16);font-size:11px;line-height:1.9;color:var(--muted)}.schedule-source a{color:inherit;text-underline-offset:3px}.schedule-empty{grid-column:1/-1;text-align:center;padding:65px 25px;border:1px dashed rgb(var(--theme-rgb)/.22);border-radius:20px;background:rgba(255,255,255,.83);color:var(--muted)}.schedule-empty strong{font-family:serif;font-size:22px;color:var(--green-950)}.schedule-empty p{font-size:13px;line-height:1.8}.schedule-more{grid-column:1/-1}
-.schedule-dialog{width:min(660px,94vw)}.schedule-dialog .modal-frame{padding:32px}.schedule-years{max-height:58vh;overflow:auto;padding:0 5px 10px}.schedule-years section h3{margin:22px 0 12px;color:var(--green-700);font-size:15px}.schedule-years section>div{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.schedule-years button{padding:13px;border:1px solid var(--line);background:var(--green-50);border-radius:12px;cursor:pointer;font:inherit;color:var(--green-950)}.schedule-years button.active{background:var(--green-700);color:white;border-color:transparent}.schedule-field-title{font-size:13px;font-weight:700;color:var(--green-700);margin:27px 0 13px}.schedule-sort-options,.schedule-status-options{display:flex;flex-wrap:wrap;gap:9px}.schedule-sort-options label,.schedule-status-options label{position:relative;cursor:pointer}.schedule-sort-options input,.schedule-status-options input{position:absolute;opacity:0;width:1px;height:1px}.schedule-sort-options span,.schedule-status-options span{display:block;padding:10px 15px;border:1px solid var(--line);border-radius:11px;color:var(--muted);background:var(--green-50);font-size:13px}.schedule-sort-options input:checked+span,.schedule-status-options input:checked+span{background:var(--green-700);color:white;border-color:transparent}.schedule-status-options input:focus-visible+span,.schedule-sort-options input:focus-visible+span{outline:2px solid var(--green-700);outline-offset:3px}.schedule-uncollected{display:flex;gap:10px;align-items:center;margin-top:22px;font-size:13px}.schedule-filter-note,.schedule-settings-note{font-size:12px;line-height:1.8;color:var(--muted);margin-top:18px}.schedule-settings-note{padding:15px;border-radius:12px;background:var(--green-50)}
+.schedule-dialog{width:min(660px,94vw)}
+/* 多了「显示地区」一排后，矮屏（小笔记本、横放手机）要滚才能看到「应用筛选」。
+   这些说明文字在窄高窗口里收益最低，先让位给控件本身。 */
+@media (max-height: 720px) {
+  .schedule-dialog .schedule-field-title { margin: 16px 0 9px; }
+  .schedule-dialog .schedule-uncollected { margin-top: 12px; }
+}
+/* 窄屏同样藏掉说明文字：不藏的话「显示地区」那一排会被底部按钮栏切掉，
+   用户得先滚一下才知道还有这个筛选。 */
+@media (max-height: 720px), (max-width: 650px) {
+  .schedule-dialog .schedule-filter-note,
+  .schedule-dialog .schedule-sort-hint { display: none; }
+}
+/* 内容区自己滚、按钮常驻底部：加到第六个筛选组之后，靠滚动找按钮太费事。
+   只作用于筛选弹窗，季度选择弹窗仍是原来的整块滚动。 */
+#scheduleFilterModal { overflow: hidden; }
+#scheduleFilterModal .modal-frame {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 28px);
+  padding: 0;
+}
+#scheduleFilterModal .sd-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 32px 32px 6px;
+  scrollbar-width: thin;
+}
+#scheduleFilterModal .sd-scroll::-webkit-scrollbar { width: 8px; }
+#scheduleFilterModal .sd-scroll::-webkit-scrollbar-thumb { border-radius: 99px; background: rgb(20 40 30 / .16); }
+#scheduleFilterModal .modal-actions {
+  flex: none;
+  margin: 0;
+  padding: 14px 32px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+@media (max-width: 650px) {
+  #scheduleFilterModal .sd-scroll { padding: 24px 22px 4px; }
+  #scheduleFilterModal .modal-actions { padding: 12px 22px 20px; }
+  /* 五个两字按钮在 360px 下刚好能排一行，少一行就少滚动一次。 */
+  #scheduleFilterModal .schedule-status-options { gap: 6px; }
+  #scheduleFilterModal .schedule-status-options span { padding: 9px 10px; }
+}.schedule-dialog .modal-frame{padding:32px}.schedule-years{max-height:58vh;overflow:auto;padding:0 5px 10px}.schedule-years section h3{margin:22px 0 12px;color:var(--green-700);font-size:15px}.schedule-years section>div{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.schedule-years button{padding:13px;border:1px solid var(--line);background:var(--green-50);border-radius:12px;cursor:pointer;font:inherit;color:var(--green-950)}.schedule-years button.active{background:var(--green-700);color:white;border-color:transparent}.schedule-field-title{font-size:13px;font-weight:700;color:var(--green-700);margin:27px 0 13px}.schedule-sort-options,.schedule-status-options{display:flex;flex-wrap:wrap;gap:9px}.schedule-sort-options label,.schedule-status-options label{position:relative;cursor:pointer}.schedule-sort-options input,.schedule-status-options input{position:absolute;opacity:0;width:1px;height:1px}.schedule-sort-options span,.schedule-status-options span{display:block;padding:10px 15px;border:1px solid var(--line);border-radius:11px;color:var(--muted);background:var(--green-50);font-size:13px}.schedule-sort-options input:checked+span,.schedule-status-options input:checked+span{background:var(--green-700);color:white;border-color:transparent}.schedule-status-options input:focus-visible+span,.schedule-sort-options input:focus-visible+span{outline:2px solid var(--green-700);outline-offset:3px}.schedule-uncollected{display:flex;gap:10px;align-items:center;margin-top:22px;font-size:13px}.schedule-filter-note,.schedule-settings-note{font-size:12px;line-height:1.8;color:var(--muted);margin-top:18px}.schedule-settings-note{padding:15px;border-radius:12px;background:var(--green-50)}
 .schedule-detail-time{display:inline-block;margin:5px 0 12px;padding:9px 14px;background:var(--green-50);border-radius:9px;color:var(--green-700);font-weight:700}.schedule-detail-facts{display:flex;gap:15px;flex-wrap:wrap;color:var(--muted);font-size:12px}.schedule-detail-links{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0;font-size:13px}.schedule-detail-links a{color:var(--green-700)}#scheduleDetail>p:not(.eyebrow){max-height:35vh;overflow:auto;white-space:pre-wrap;font-size:14px;line-height:1.9;color:var(--muted)}
 @media(max-width:1050px){.schedule-week{grid-template-columns:repeat(4,minmax(0,1fr))}.schedule-grid{gap:14px;grid-template-columns:repeat(auto-fill,minmax(172px,1fr))}}
 @media(max-width:650px){.schedule-toolbar{align-items:start;flex-direction:column}.schedule-toolbar-right{width:100%;gap:8px}.schedule-toolbar-right input{min-width:0;width:100%}.schedule-toolbar-right button{white-space:nowrap;font-size:12px}.schedule-season strong{font-size:23px}.schedule-week{padding:5px;gap:3px}.schedule-week button{min-height:68px}.schedule-week button span{font-size:10px}.schedule-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.schedule-card .card-body{padding:11px 11px 12px}.schedule-card .card-title{font-size:13px;min-height:2.9em}.schedule-airtime{font-size:12px;padding:24px 11px 10px}.schedule-card-footer{font-size:10px;padding-top:8px;min-height:20px}.schedule-meta-row{gap:6px}.schedule-card-meta{font-size:10.5px}.schedule-card-release{font-size:10px}.schedule-card-votes{font-size:10px}.schedule-collection-badge{font-size:10px;left:10px;top:9px}.schedule-card .poster-score{font-size:15px;top:9px;right:10px}.schedule-dialog .modal-frame{padding:24px}}

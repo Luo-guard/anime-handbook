@@ -61,6 +61,7 @@ const HandbookSettings = (() => {
           ...progressSources,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
           schedule_statuses: $$("#scheduleStatusInputs input:checked").map((input) => Number(input.value)),
+          schedule_origins: $$("#scheduleOriginInputs input:checked").map((input) => input.value),
           schedule_uncollected: $("#scheduleUncollectedInput").checked,
           schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
           top_sync_action: $("#topSyncActionInput").value,

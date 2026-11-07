@@ -98,6 +98,7 @@ def _normalize_settings(body, settings):
         "schedule_sort",
         "schedule_grouping",
         "schedule_statuses",
+        "schedule_origins",
         "schedule_uncollected",
         "schedule_card_fields",
     }
@@ -159,6 +160,11 @@ def _normalize_settings(body, settings):
             elif key == "schedule_statuses":
                 if not isinstance(value, list) or any(type(item) is not int or item not in {1, 2, 3, 4, 5} for item in value):
                     raise ValueError("周表收藏状态无效")
+                value = list(dict.fromkeys(value))
+            elif key == "schedule_origins":
+                # unknown 是「Bangumi 没标国家」的那一档，和空 origin 一一对应。
+                if not isinstance(value, list) or any(item not in {"jp", "cn", "us", "kr", "other", "unknown"} for item in value):
+                    raise ValueError("周表地区筛选无效")
                 value = list(dict.fromkeys(value))
             elif key == "schedule_uncollected":
                 value = bool(value)
