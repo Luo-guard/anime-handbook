@@ -262,7 +262,7 @@ def _normalize_settings(body, settings):
                     raise ValueError("收藏排序格式错误")
                 valid_modes = {
                     "name", "rank", "popularity", "airdate",
-                    "kazumi", "custom",
+                    "latest", "kazumi", "custom",
                 }
                 value = {
                     str(k): str(v)

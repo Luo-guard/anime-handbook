@@ -196,7 +196,7 @@ function collectionSortDirection() {
 }
 
 function updateSortPicker() {
-  const modeNames = { name: "名称", rank: "评分", popularity: "热度", airdate: "时间", kazumi: "加入时间", custom: "自定义" };
+  const modeNames = { name: "名称", rank: "评分", popularity: "热度", airdate: "首播", latest: "最新一集", kazumi: "加入时间", custom: "自定义" };
   const mode = collectionSortMode();
   const direction = collectionSortDirection();
   const sortLabel = $("#collectionSortPickerLabel");
@@ -225,6 +225,41 @@ function collectionAddedAt(anime) {
   return kazumi || added;
 }
 
+// 「最新一集」= 已经播出的剧集里 airdate 最大的那一天（不是首播日期，也不是
+// 下一集时间）。数据全在 bootstrap 下发的 anime.episodes 里，每条都带 airdate，
+// 所以排序完全在本地算，不多发任何请求，也不写库。
+// Bangumi 会把未播出的排期集也列出来（甚至出现 '2099' 这种占位），必须按
+// 「今天」过滤，否则排期很远的番会顶到最前面。
+function localDayIso() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+// '2026-07-04' / '2026-07' / '2026' 三种写法都归一到可比的大小；其它形状当没有。
+function normalizeAirdate(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}(?:-\d{2}){0,2}$/.test(text)) return "";
+  if (text.length === 4) return `${text}-01-01`;
+  if (text.length === 7) return `${text}-01`;
+  return text;
+}
+
+function latestAiredAt(anime, todayIso) {
+  const episodes = Array.isArray(anime?.episodes) ? anime.episodes : [];
+  let latest = "";
+  for (const episode of episodes) {
+    const date = normalizeAirdate(episode && episode.airdate);
+    if (!date || date > todayIso) continue;
+    if (date > latest) latest = date;
+  }
+  if (latest) return latest;
+  // 没有逐集日期（老数据 / episode_count 生成的占位集）时退回首播日期：
+  // 至少让它在时间轴上有个位置，而不是全部沉到最底部。
+  const premiere = normalizeAirdate(anime?.air_date);
+  return premiere && premiere <= todayIso ? premiere : "";
+}
+
 function collectionComparator() {
   const mode = collectionSortMode();
   // 刚新建的条目可能暂时没有 display_name；不能让一次排序抛错把整次渲染中断，
@@ -235,6 +270,34 @@ function collectionComparator() {
   if (mode === "rank") comparator = (a, b) => (Number(a.bgm_rank) || 999999999) - (Number(b.bgm_rank) || 999999999) || name(a, b);
   if (mode === "popularity") comparator = (a, b) => (Number(b.bgm_rating_total) || 0) - (Number(a.bgm_rating_total) || 0) || name(a, b);
   if (mode === "airdate") comparator = (a, b) => String(a.air_date || "9999-99-99").localeCompare(String(b.air_date || "9999-99-99")) || name(a, b);
+  // 最新一集：和「加入时间」同一口径（asc = 最新在前），因为两者都是
+  // 「最近有什么动静」类的时间键；方向箭头仍然可以翻过来。
+  // 算出来的日期按每部番缓存一次，避免比较器被调用 O(n log n) 次就重扫一遍剧集。
+  if (mode === "latest") {
+    const todayIso = localDayIso();
+    const newestFirst = collectionSortDirection() !== "desc";
+    const cache = new Map();
+    const value = (anime) => {
+      const key = String(anime?.id ?? "");
+      if (!cache.has(key)) cache.set(key, latestAiredAt(anime, todayIso));
+      return cache.get(key);
+    };
+    // 方向在这里就地处理（而不是走末尾那层翻转）：空值（一集都没播过的）
+    // 无论怎么翻都要留在最后，否则未开播的番会把整屏有更新的番挤下去。
+    return (a, b) => {
+      const left = value(a);
+      const right = value(b);
+      if (!left || !right) {
+        if (left === right) return name(a, b);
+        return left ? -1 : 1;
+      }
+      if (left !== right) {
+        const earliest = left < right ? -1 : 1;
+        return newestFirst ? -earliest : earliest;
+      }
+      return name(a, b);
+    };
+  }
   // 加入时间：按条目进入「当前这个」收藏夹的先后，最新的在最前。
   // 排序键随当前收藏夹切换，所以同一个番在 A 夹和 B 夹的位置可以不同；
   // asc/desc 沿用历史语义（asc = 最新在前）。

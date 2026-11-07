@@ -680,6 +680,9 @@ h1 {
 .collection-controls-modal-frame .season-filter-panel { max-height:min(48vh,420px); overflow:auto; }
 .collection-controls-modal-frame .sort-picker-menu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border:0; overflow:visible; background:transparent; }
 .collection-controls-modal-frame .sort-picker-menu > div { border:1px solid var(--line); border-radius:9px; padding:3px 5px 3px 10px; }
+/* 排序方式现在是 7 项、两列：最后一行只有「自定义」，让它横跨两列补满，
+   否则会留一个空洞看着像少了一项。 */
+.collection-controls-modal-frame .sort-picker-menu > div[data-sort-mode="custom"] { grid-column: 1 / -1; }
 .collection-controls-close { position:absolute; top:10px; right:12px; width:30px; height:30px; border:0; border-radius:50%; color:var(--muted); background:transparent; cursor:pointer; font-size:22px; }
 
 .season-filter-button {
