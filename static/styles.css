@@ -3715,9 +3715,19 @@ dialog::backdrop {
 .saved-video-meta { color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .saved-video-actions { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
 /* 链接之间不能是一整串不可断行的内联文本：JS 拼出来的 <a> 之间没有
-   空白字符，窄屏下会整串顶出弹窗。改成可换行的 flex 容器。 */
-.detail-links { display: flex; flex-wrap: wrap; gap: 2px 10px; }
-.detail-links > * { white-space: nowrap; }
+   空白字符，窄屏下会整串顶出弹窗。改成可换行的 flex 容器。
+   这些 <a> 已经不在 .progress-meta 里，吃不到 .progress-meta a 的兜底样式，
+   要在这里补回「主题绿 / 12px / 粗体 / 无下划线」，否则会退回浏览器默认
+   的细体带下划线样式；hover 才给下划线。 */
+.detail-links { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.detail-links > * {
+  white-space: nowrap;
+  color: var(--green-800);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.detail-links > a:hover { color: var(--green-700); text-decoration: underline; }
 .detail-link { color: var(--green-800); }
 .detail-link-row { display: grid; grid-template-columns: minmax(84px,132px) minmax(0,1fr) auto 44px auto; gap: 10px; align-items: center; margin-top: 8px; }
 /* 只给「名称 / 网址」这两个文本框定宽；同一行里的开关 checkbox 是隐形的，

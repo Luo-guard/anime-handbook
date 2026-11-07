@@ -5,6 +5,11 @@
 
 ## 2026-11-07
 
+### 修复：详情外链恢复「无下划线 / 粗体」，并把样式锁进回归
+- 你发现详情页外链行突然带下划线、字重变细、排版和之前不同。查实：这些 `<a>` 早已挪到独立的 `.progress-links` 一行，吃不到 `.progress-meta a` 的「主题绿 / 12px / 粗体 / 无下划线」兜底，一直退回浏览器默认的细体带下划线；本轮为修 320px 溢出把 `.detail-links` 改成 flex 后，链接被 blockify、基线对齐也变了，问题才变得显眼。**不是有意设计，是回归。**
+- 修法：`.detail-links > *` 补回 `color / font-size / font-weight / text-decoration`，hover 才给下划线；保留 `flex-wrap: wrap` 的换行能力，320px 不再顶出弹窗。1100/390/320 三档实测零溢出。
+- `tests/verify_detail_weekday.cjs` 新增 4 条断言（下划线、字重、字号、可换行），防止下次重排头部时又丢。
+
 ### 修复：N6 字幕抽取按编码分流 + N14 目录可写探测并发竞态（后端，已重启）
 - **N6**：`extract_subtitle` 原来固定 `-map 0:s:0 -c copy` 到 `.ass`，第一条字幕轨若是 SRT 或 PGS，文件内容根本不是 ASS，`subtitle_path` 却非空 → 播放器一直显示「字幕 · 开」并报「页面内字幕没起来」。新增 `subtitle_tracks()`（只查字幕流，顺序对齐 ffmpeg 的 `0:s:N`）、`subtitle_plan()` 与三组编码白名单：**ASS/SSA 直接 copy** → **SRT / WebVTT / mov_text 等文本字幕 `-c:s ass` 转码** → **PGS / DVB / DVD 等图形字幕整条跳过**（没有 OCR 转不成文本，宁可没有字幕，也不留打不开的假 `.ass`）。
 - **N14**：`ensure_dirs()` 固定探测名 `.handbook-write-test` 会被并发请求互相 unlink，误报「目录不可写」。改用 `tempfile.mkstemp()` 每次生成唯一名 + `finally` 关 fd 并清理，16 线程并发实测零误报、零残留。

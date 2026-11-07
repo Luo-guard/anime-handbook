@@ -97,6 +97,12 @@ function api(){return Promise.resolve({});}
 
       const meta = $('.progress-meta');
       const links = $('.progress-links');
+      // 外链挪出 .progress-meta 之后吃不到 .progress-meta a 的兜底样式，
+      // 曾退回浏览器默认的「细体 + 下划线」。这里把样式锁住。
+      const linkBox = $('#detailLinks');
+      linkBox.innerHTML = '<a class="detail-link" href="#">Bangumi ↗</a>';
+      const linkStyle = getComputedStyle(linkBox.querySelector('.detail-link'));
+      const boxStyle = getComputedStyle(linkBox);
       return {
         ongoing, finished, skewed, dirty, withNextAt, noData,
         ongoingDom, noClockDom, nextAtDom, finishedDom, upcomingDom, farUpcomingDom, emptyDom, danglingDom,
@@ -106,6 +112,10 @@ function api(){return Promise.resolve({});}
           badgeInMeta: Boolean(meta && meta.querySelector('#progressBadge')),
           hasSeparator: Boolean(document.querySelector('.meta-separator')),
           hasDot: Boolean(document.querySelector('#progressBadge .update-badge-dot')),
+          linkDeco: linkStyle.textDecorationLine,
+          linkWeight: linkStyle.fontWeight,
+          linkSize: linkStyle.fontSize,
+          linkWrap: boxStyle.flexWrap,
         },
       };
     });
@@ -147,6 +157,10 @@ function api(){return Promise.resolve({});}
     assert.ok(result.structure.badgeInMeta, '徽标跟着日期走，留在 .progress-meta 里');
     assert.ok(!result.structure.hasSeparator, '「·」分隔符已由徽标取代');
     assert.ok(result.structure.hasDot, '徽标要有状态色小圆点');
+    assert.equal(result.structure.linkDeco, 'none', '详情外链不能退回浏览器默认下划线');
+    assert.equal(result.structure.linkWeight, '700', '详情外链要保持粗体');
+    assert.equal(result.structure.linkSize, '12px', '详情外链字号要跟头部一致');
+    assert.equal(result.structure.linkWrap, 'wrap', '详情外链要能换行，窄屏才不顶出弹窗');
 
     console.log('verify_detail_weekday: ok');
   } finally {
