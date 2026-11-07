@@ -2622,6 +2622,24 @@ dialog::backdrop {
   box-shadow: 0 4px 10px rgba(95, 143, 186, 0.2);
 }
 
+/* 已下载的集留一个右下角小点：以前格子上完全没有标记，只能靠点扇区
+   「播放」试出来。蓝底（已看）上换成白点，保证对比度。 */
+.episode-cell.downloaded::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green-600);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.episode-cell.watched.downloaded::after {
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .14);
+}
+
 .episode-note-mark {
   position: absolute;
   top: -4px;

@@ -234,6 +234,8 @@ async function refreshOfflineLocal() {
     offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
     if (data.archive_retry_limit) offlineView.retryLimit = Number(data.archive_retry_limit);
     renderOfflineLocal();
+    // 下载/归档完成后立刻把「已下载」角标刷到集数格子上，不用等重开详情。
+    if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(data.files || []);
   } catch (error) {
     if (token !== offlineView.localToken || animeId !== Number(offlineView.animeId)) return;
     offlineStatus("#offlineLocalStatus", error.message || "读取本地文件失败", true);
@@ -376,16 +378,18 @@ async function localFileForEpisode(key) {
     const data = await api(`/api/offline/state?anime_id=${animeId}`);
     if (animeId !== Number(offlineView.animeId)) return null;
     offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
+    if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(data.files || []);
   } catch (error) {
     return null;
   }
-  return (
-    (offlineView.local?.files || []).find(
-      // 文件不在了就当作没有本地文件：让详情页回到「这一集还没下载」，
-      // 而不是打开播放器再吃一个 404。
-      (item) => String(item.episode_key) === String(key) && item.exists !== false
-    ) || null
-  );
+  // 两套 key 先归一化再比：有 Bangumi 逐集资料的番，格子是 bgm:xxx，
+  // 入库写的是 0:N，直接字符串比会永远找不到，扇区「播放」一直报没下载。
+  const files = offlineView.local?.files || [];
+  if (typeof findLocalEpisodeFile === "function") return findLocalEpisodeFile(files, key, anime);
+  // 极简环境（只加载本模块的回归脚本）没有 presentation.js 时不能整条失效。
+  return files.find(
+    (item) => item && String(item.episode_key) === String(key) && item.exists !== false
+  ) || null;
 }
 
 function playLocalFile(fileId) {

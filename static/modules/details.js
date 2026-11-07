@@ -192,6 +192,9 @@ function openProgress(animeId) {
   $("#progressModal").showModal();
   ensureEpisodeTitles(anime);
   refreshEpisodeRecordAnnotations(anime.id);
+  // 打开详情就刷一次「已下载」角标：以前从没做过这个标记，下载完的集在
+  // 格子上和没下载的完全一样，只能靠点扇区「播放」试出来。
+  if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks();
 }
 
 function switchDetailTab(tab) {
@@ -585,6 +588,42 @@ function refreshEpisodeAiringStatus() {
   });
 }
 
+// 已下载的集数在格子上留一个角标。key 先归一化到「类型:集数」再比较，
+// 兼容 Bangumi 的 bgm:xxx 与归档写入的 0:N 两套标识。
+let episodeDownloadKeys = new Set();
+let episodeMarkToken = 0;
+
+async function syncEpisodeDownloadMarks(files = null) {
+  const anime = state.progressAnime;
+  const animeId = Number(anime?.id || 0);
+  if (!animeId || typeof episodeStorageKey !== "function") return;
+  const token = ++episodeMarkToken;
+  let list = Array.isArray(files) ? files : null;
+  if (!list) {
+    try {
+      const data = await api(`/api/offline/state?anime_id=${animeId}`);
+      // 慢响应或已经切到别的番：别把旧数据涂到当前格子上。
+      if (token !== episodeMarkToken) return;
+      list = data.files || [];
+    } catch (_) {
+      return; // 离线服务没开就保持无标记
+    }
+  }
+  if (Number(state.progressAnime?.id || 0) !== animeId) return;
+  episodeDownloadKeys = new Set(
+    list.filter((item) => item && item.exists !== false)
+      .map((item) => episodeStorageKey(item.episode_key, anime))
+  );
+  $$(".episode-cell").forEach((cell) => {
+    const on = episodeDownloadKeys.has(episodeStorageKey(cell.dataset.episodeKey, anime));
+    cell.classList.toggle("downloaded", on);
+    // 首次打开详情时格子已经渲染完、角标是异步补的，title 也要一起补；
+    // 重渲染时 title 里已经带过这句话，先去掉再加，避免越积越长。
+    const base = String(cell.title || "").replace(/ · 已下载 · 扇区可播放$/, "");
+    cell.title = on ? [base, "已下载 · 扇区可播放"].filter(Boolean).join(" · ") : base;
+  });
+}
+
 function renderEpisodeGrid() {
   const anime = state.progressAnime;
   if (!anime) return;
@@ -639,12 +678,14 @@ function renderEpisodeGrid() {
             ${group.episodes.map((episode) => {
               const key = String(episode.key);
               const watched = state.pendingEpisodes.has(key);
+              const downloaded = typeof episodeStorageKey === "function"
+                && episodeDownloadKeys.has(episodeStorageKey(key, anime));
               const annotations = state.episodeRecordAnnotations?.[key] || [];
               return `
-                <button type="button" class="episode-cell ${watched ? "watched" : ""}"
+                <button type="button" class="episode-cell ${watched ? "watched" : ""}${downloaded ? " downloaded" : ""}"
                   data-episode-key="${escapeHtml(key)}"
                   aria-pressed="${watched}"
-                  ${showEpisodeTitlesOnHover() ? `title="${escapeHtml(episodeTitle(episode))}"` : ""}>
+                  title="${escapeHtml([showEpisodeTitlesOnHover() ? episodeTitle(episode) : "", downloaded ? "已下载 · 扇区可播放" : ""].filter(Boolean).join(" · "))}">
                   ${escapeHtml(episode.label)}
                   ${annotations.length ? `<span class="episode-note-mark" aria-label="本集有 ${annotations.length} 条记录">✎</span>` : ""}
                 </button>

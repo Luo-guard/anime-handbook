@@ -13,6 +13,30 @@ function episodeTitle(episode) {
   return name ? `${episode.display_label} · ${name}` : episode.display_label;
 }
 
+// 集数标识有两套坐标系：Bangumi 同步来的 `bgm:123`，以及归档入库用的
+// `类型:集数`（本篇 0:N、特别篇 1:N）。详情页格子用前者，local_files 里存
+// 的是后者，直接字符串比较永远不相等 —— 有逐集资料的番会一直显示
+// 「这一集还没下载」，扇区的「播放」也点不动。所有跨这两套 key 的比较
+// 都先归一化到「类型:集数」，新老数据（库里可能是任一种）都能对上。
+function episodeStorageKey(key, anime) {
+  const text = String(key ?? "").trim();
+  if (/^\d+:\d+$/.test(text)) return text;
+  const episodes = Array.isArray(anime?.episodes) ? anime.episodes : [];
+  const episode = episodes.find((item) => String(item?.key) === text);
+  if (!episode) return text;
+  const type = Number(episode.type ?? 0);
+  const number = Number(episode.sort ?? episode.ep ?? episode.label);
+  if (!Number.isInteger(type) || type < 0 || !Number.isInteger(number) || number <= 0) return text;
+  return `${type}:${number}`;
+}
+
+function findLocalEpisodeFile(files, key, anime) {
+  const wanted = episodeStorageKey(key, anime);
+  return (Array.isArray(files) ? files : []).find(
+    (item) => item && episodeStorageKey(item.episode_key, anime) === wanted && item.exists !== false
+  ) || null;
+}
+
 function episodeGroupSummary(group, watchedSet) {
   const watched = group.episodes.filter((episode) => watchedSet.has(String(episode.key))).length;
   return `已看 ${watched} / ${group.count}`;
