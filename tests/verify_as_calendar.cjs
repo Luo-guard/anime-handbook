@@ -54,11 +54,27 @@ const server=http.createServer((req,res)=>{
   await page.click('#scheduleNextWeek');await page.waitForFunction(key=>scheduleState.data?.week===key,first);
   await page.locator('.schedule-card').click();assert(await page.locator('#scheduleDetail a[href="https://animeschedule.net/anime/fixture"]').isVisible());
   await page.click('#scheduleCloseDetail');
+  // 周切换是一整条胶囊：箭头是图标按钮、左右对称、高度和右侧来源下拉框对齐。
+  const stepper=await page.evaluate(()=>{
+   const pill=document.querySelector('#scheduleASWeek'),label=document.querySelector('#scheduleASWeekTitle').parentElement;
+   const prev=document.querySelector('#schedulePreviousWeek'),next=document.querySelector('#scheduleNextWeek');
+   const pr=pill.getBoundingClientRect(),lr=label.getBoundingClientRect();
+   return {pill:pr.height,select:document.querySelector('#scheduleSourceSwitch').getBoundingClientRect().height,
+    icons:[prev,next].every(b=>b.tagName==='BUTTON'&&b.querySelector('svg')&&getComputedStyle(b).borderTopWidth==='0px'&&!b.textContent.trim()),
+    gapLeft:prev.getBoundingClientRect().left-pr.left,gapRight:pr.right-next.getBoundingClientRect().right,
+    singleLine:lr.height<30};
+  });
+  assert(Math.abs(stepper.pill-stepper.select)<=2,`week stepper matches the source control height ${JSON.stringify(stepper)}`);
+  assert(stepper.icons,'week arrows are borderless icon buttons, not boxed glyphs');
+  assert(Math.abs(stepper.gapLeft-stepper.gapRight)<=1,'week arrows sit symmetrically inside the stepper');
+  assert(stepper.singleLine,'week label stays on one line on desktop');
   for(const width of [390,320]){
    await page.setViewportSize({width,height:844});
    for(const selector of ['#scheduleSourceSwitch','#scheduleASWeek']){
     const bounds=await page.locator(selector).boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=width,JSON.stringify({selector,bounds,width}));
    }
+   const h=await page.evaluate(()=>document.querySelector('#scheduleASWeek').getBoundingClientRect().height);
+   assert(h<=46,`week stepper keeps its height at ${width}px, got ${h}`);
   }
   await page.selectOption('#scheduleSourceSwitch','kazumi');
   await page.waitForFunction(()=>scheduleState.dataSource==='kazumi');
