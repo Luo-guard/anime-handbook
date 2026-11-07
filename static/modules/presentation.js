@@ -30,6 +30,8 @@ function episodeReleaseStatus(anime, group) {
   const knownTotal = Number(airing.total) || (useAS ? Number(anime.episode_count) : 0);
   const total = useAS && aired > knownTotal ? 0 : knownTotal;
   if (!useAS && !total) return "";
+  // 口径（2026-11-07 定）：完结番不显示进度药丸，也不标「已播完」。
+  // 集数格子本来就是齐的，多一个「已播完」只是噪音；别把这行当成 bug 改回去。
   if (total && aired >= total) return "";
   const detail = useAS ? `${airing.stale ? "AS 缓存暂未更新；" : ""}已播集数来自 AnimeSchedule 原声／字幕放送计划；总集数缺失时沿用条目资料` : "按 Bangumi 逐集播出日期与放送时刻（北京时间）计算";
   // 恢复早期版本的药丸格子：绿点 + 只显示已播集数，不再带「/ 总集数」。
