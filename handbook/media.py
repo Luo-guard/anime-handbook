@@ -41,6 +41,33 @@ _BRACKET_EPISODE_RE = re.compile(r"(?:第\s*(\d{1,4})\s*[话話集])|(?:[Ee][Pp]
 # 纯数字方括号里，这些是画质/年份而不是集数。
 _NON_EPISODE_NUMBERS = {480, 576, 720, 1080, 1440, 2160, 4320}
 
+# 画质/编码标记里的数字不是集数。以前只在方括号里躲得掉，正文里写
+# 「某番 - 10-bit」会被当成第 10 集（剧场版/合集种子最容易踩）——
+# 这里先整体抹掉，再去找集数。
+_NOISE_TOKEN_RE = re.compile(
+    r"(?i)(?:"
+    r"\d{1,4}\s*[-_]?\s*bit"           # 10bit / 8-bit / 10 bit
+    r"|\d{3,4}\s*[pi](?![a-z])"        # 1080p / 720i
+    r"|\d{1,3}(?:\.\d+)?\s*fps"        # 23.976fps
+    r"|\d{1,4}\s*[km]bps"              # 128kbps
+    r"|\d{2,3}\s*k(?![a-z0-9])"        # 128k 音轨
+    r"|[xh]\s*\.?\s*26[45]"            # x264 / h.264 / h265
+    r"|\d{1,3}(?:\.\d+)?\s*hz"         # 48khz
+    r"|\d{1,2}(?:\.\d)?\s*ch(?![a-z])"  # 2ch / 5.1ch
+    r"|(?:aac|flac|opus|eac3|dts|ac3)\s*\d(?:\.\d)?"  # AAC2.0
+    r")"
+)
+
+# 特别篇/OVA 的标记。注意 `SPx1` 这种合集标记要放过：SP 后面紧跟字母不认，
+# 否则「[01-12+SPx1]」会被整体判成特别篇。
+_SP_WORD_RE = re.compile(r"(?i)(?<![a-z0-9])(?:sps?|ovas?|oads?|specials?)(?![a-z])")
+_SP_CJK_RE = re.compile(r"特别篇|特別篇|番外篇|番外|映像特典|特典影像")
+# 方括号里的「[SP01]」「[OVA 2]」是明确的特别篇编号。
+_SP_BRACKET_RE = re.compile(r"(?i)^\s*(?:sps?|ovas?|oads?|specials?)\s*0*(\d{1,4})\s*$")
+
+# 本篇之外的集数落在收藏里的类型编号（见 common.EPISODE_TYPE_NAMES）。
+_EPISODE_TYPE_SP = 1
+
 PROBE_TIMEOUT = 40
 REMUX_TIMEOUT = 900
 SUBTITLE_TIMEOUT = 120
@@ -282,10 +309,52 @@ def extract_font_attachments(
     return made
 
 
-def episode_number(name: str) -> int:
-    """从文件名认集数；认不出返回 0，由调用方决定跳过还是让用户手填。"""
+def _stem_of(name: str) -> str:
     text = str(name or "")
-    stem = Path(text).stem if Path(text).suffix.lower() in VIDEO_SUFFIXES | SUBTITLE_SUFFIXES else text
+    if Path(text).suffix.lower() in VIDEO_SUFFIXES | SUBTITLE_SUFFIXES:
+        return Path(text).stem
+    return text
+
+
+def _plausible_episode(value: int) -> bool:
+    """排除分辨率、年份这类「长得像集数」的数字。"""
+    return (
+        0 < value <= 1000
+        and value not in _NON_EPISODE_NUMBERS
+        and not (1900 <= value <= 2100)
+    )
+
+
+def _episode_kind(stem: str) -> int:
+    """判断这个文件名属于本篇还是特别篇/OVA。"""
+    if _SP_CJK_RE.search(stem):
+        return _EPISODE_TYPE_SP
+    cleaned = _BRACKET_RE.sub(" ", stem)
+    if _SP_WORD_RE.search(cleaned):
+        return _EPISODE_TYPE_SP
+    for content in _BRACKET_CONTENT_RE.findall(stem):
+        candidate = content.strip()
+        if _SP_CJK_RE.search(candidate) or _SP_BRACKET_RE.match(candidate):
+            return _EPISODE_TYPE_SP
+    return 0
+
+
+def _clean_text(stem: str) -> str:
+    """去掉方括号、SP 标记与画质标记后再找集数。"""
+    # SP 标记只抹掉字母部分，留着紧跟的数字：「番名 SP01」→「番名  01」。
+    cleaned = _SP_WORD_RE.sub(" ", _BRACKET_RE.sub(" ", stem))
+    return _NOISE_TOKEN_RE.sub(" ", cleaned)
+
+
+def episode_identity(name: str) -> tuple[int, int]:
+    """从文件名认出「(类型, 集数)」。类型 0 本篇、1 特别篇/OVA。
+
+    认不出集数时数字为 0；调用方据此决定跳过还是让用户手填。
+    以前所有归档一律写成 ``0:N``，特别篇会被记成本篇第 N 集 —— 详情页
+    「特别篇 02」格子空着，本篇 02 反而多出一个文件。
+    """
+    stem = _stem_of(name)
+    kind = _episode_kind(stem)
     # 字幕组最常用的命名把集数放在方括号里：「[字幕组] 番名 [05][1080p]」。
     # 旧逻辑先把所有方括号删掉，[05] 就一起丢了，单集种子会认不出集数。
     for content in _BRACKET_CONTENT_RE.findall(stem):
@@ -293,37 +362,61 @@ def episode_number(name: str) -> int:
         pure = re.fullmatch(r"(\d{1,4})", candidate)
         if pure:
             value = int(pure.group(1))
-            if 0 < value <= 1000 and value not in _NON_EPISODE_NUMBERS and not (1900 <= value <= 2100):
-                return value
+            if _plausible_episode(value):
+                return kind, value
+        special = _SP_BRACKET_RE.match(candidate)
+        if special:
+            return _EPISODE_TYPE_SP, int(special.group(1))
         labelled = _BRACKET_EPISODE_RE.search(candidate)
         if labelled:
             value = int(labelled.group(1) or labelled.group(2))
             if 0 < value <= 1000:
-                return value
-    cleaned = _BRACKET_RE.sub(" ", stem).strip()
+                return kind, value
+    cleaned = _clean_text(stem).strip()
     for pattern in _PATTERNS:
         matched = pattern.search(cleaned)
         if not matched:
             continue
         if pattern.groups == 2:  # SxxExx 取集数那一组
-            return int(matched.group(2))
-        return int(matched.group(1))
-    # 兜底：取最后一个不像分辨率的数字。
+            return kind, int(matched.group(2))
+        return kind, int(matched.group(1))
+    # 兜底：取最后一个不像分辨率/年份的数字。
     candidates = [
         int(value)
         for value in _TRAILING_NUMBER_RE.findall(cleaned)
-        if 0 < int(value) <= 1000
+        if _plausible_episode(int(value))
     ]
-    return candidates[-1] if candidates else 0
+    return kind, (candidates[-1] if candidates else 0)
 
 
-def episode_key(number: int) -> str:
-    """与收藏里保持一致：本篇第 N 集的 key 是 ``0:N``。"""
-    return f"0:{int(number)}"
+def episode_number(name: str) -> int:
+    """只取集数，兼容旧调用；需要区分特别篇时用 :func:`episode_identity`。"""
+    return episode_identity(name)[1]
 
 
-def episode_filename(number: int) -> str:
-    return f"第 {int(number):02d} 集"
+def episode_key(number: int, type_value: int = 0) -> str:
+    """与收藏里保持一致：本篇第 N 集是 ``0:N``，特别篇第 N 集是 ``1:N``。"""
+    return f"{int(type_value)}:{int(number)}"
+
+
+def episode_filename(number: int, type_value: int = 0) -> str:
+    if int(type_value) == 0:
+        return f"第 {int(number):02d} 集"
+    prefix = {1: "特别篇", 2: "OP", 3: "ED", 4: "预告", 5: "MAD"}.get(
+        int(type_value), "其它"
+    )
+    return f"{prefix} {int(number):02d}"
+
+
+def label_for_key(key: str) -> str:
+    """把 ``0:7`` / ``1:2`` 这类集数标识翻成文件名用的中文标签。"""
+    parts = str(key or "").split(":")
+    if len(parts) != 2:
+        return ""
+    try:
+        return episode_filename(int(parts[1]), int(parts[0]))
+    except (TypeError, ValueError):
+        return ""
 
 
 def safe_name(text: str, *, fallback: str = "未命名番剧", limit: int = 80) -> str:
@@ -346,7 +439,7 @@ def video_files(root: Path | str, *, min_bytes: int = 0) -> list[Path]:
         return [base] if base.suffix.lower() in VIDEO_SUFFIXES else []
     if not base.is_dir():
         return []
-    found: list[tuple[int, str, Path]] = []
+    found: list[tuple[tuple[int, int], str, Path]] = []
     for path in base.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in VIDEO_SUFFIXES:
             continue
@@ -358,6 +451,8 @@ def video_files(root: Path | str, *, min_bytes: int = 0) -> list[Path]:
                 continue
         except OSError:
             continue
-        found.append((episode_number(path.name), str(path).lower(), path))
-    found.sort(key=lambda item: (item[0] or 10**6, item[1]))
+        # 本篇在前、特别篇在后，同类按集数；认不出集数的排最后。
+        kind, number = episode_identity(path.name)
+        found.append(((kind, number or 10**6), str(path).lower(), path))
+    found.sort(key=lambda item: (item[0], item[1]))
     return [item[2] for item in found]

@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 import shutil
 import threading
 import time
@@ -61,6 +62,13 @@ def _seconds_stale(iso_text: str) -> float:
         return max(0.0, time.time() - datetime.fromisoformat(str(iso_text)).timestamp())
     except (TypeError, ValueError):
         return 0.0
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    """路径是否在 root 之下；Windows 下按不区分大小写比较。"""
+    child = os.path.normcase(os.path.normpath(str(path)))
+    parent = os.path.normcase(os.path.normpath(str(root)))
+    return child == parent or child.startswith(parent + os.sep)
 
 
 # 归档（remux）放在后台线程做：一季 12 集串行封装要几十秒，不能卡住 GET。
@@ -385,6 +393,34 @@ class OfflineService:
             suffix = "（点「重试归档」可以立即再试一次）"
         self.store.set_status(media_id, "failed", error=f"归档失败：{error}{suffix}")
 
+    def _resolve_files(
+        self, task: dict[str, Any] | None, job: dict[str, Any], download_root: str
+    ) -> list[Path]:
+        """定位这个任务落地的视频文件。
+
+        ``content_path`` 没就绪时，**只**按种子名去下载目录里找同名文件/文件夹。
+        旧逻辑是「取下载目录里 mtime 最新的那个视频」，同时下两部番时会抓到
+        另一部番的成品，然后被 remux 进当前番的目录、按当前番的集数命名 ——
+        宁可报错让人处理，也不能把内容写到错误的位置。
+        """
+        exact = Path(str((task or {}).get("content_path") or ""))
+        if exact.is_file():
+            return [exact] if exact.suffix.lower() in media_tools.VIDEO_SUFFIXES else []
+        if exact.is_dir():
+            return media_tools.video_files(exact)
+        folder = Path(
+            str((task or {}).get("save_path") or job.get("save_path") or download_root)
+        )
+        name = str((task or {}).get("name") or job.get("torrent_name") or "").strip()
+        if not name:
+            return []
+        target = folder / name
+        if target.is_file():
+            return [target] if target.suffix.lower() in media_tools.VIDEO_SUFFIXES else []
+        if target.is_dir():
+            return media_tools.video_files(target)
+        return []
+
     def _archive(self, media_id: int) -> None:
         job = self.store.job(media_id)
         if not job:
@@ -415,22 +451,7 @@ class OfflineService:
                 task = client.torrent(torrent_hash) if torrent_hash else None
             except QBError:
                 task = None
-            exact = Path(str((task or {}).get("content_path") or ""))
-            if exact.is_file():
-                candidates = [exact] if exact.suffix.lower() in media_tools.VIDEO_SUFFIXES else []
-            elif exact.is_dir():
-                candidates = media_tools.video_files(exact)
-            else:
-                # 只能退回下载目录时，只取最近修改的一个，别把别的任务的文件一起归档。
-                folder = str(
-                    (task or {}).get("save_path")
-                    or job.get("save_path")
-                    or paths["download_root"]
-                )
-                found = media_tools.video_files(folder)
-                candidates = sorted(
-                    found, key=lambda item: item.stat().st_mtime, reverse=True
-                )[:1] if found else []
+            candidates = self._resolve_files(task, job, paths["download_root"])
             if candidates:
                 before = [item.stat().st_size for item in candidates]
                 time.sleep(1)
@@ -441,7 +462,7 @@ class OfflineService:
             time.sleep(1)
         if not files:
             raise OfflineError(
-                "下载目录里没有找到视频文件：确认 qBittorrent 里这个任务已完成、"
+                "下载目录里没有找到这个任务的视频文件：确认 qBittorrent 里这个任务已完成、"
                 "文件还在下载目录（被移走或改名过就放回原处），再点「重试归档」"
             )
         anime = self.db.get_anime(anime_id) or {}
@@ -450,29 +471,43 @@ class OfflineService:
         )
         target_dir = Path(paths["media_root"]) / folder
         target_dir.mkdir(parents=True, exist_ok=True)
-        fallback_key = str(job.get("episode_key") or "")
-        if not fallback_key:
+        # 用户明确指定的集数是权威信息，只对单文件任务生效（多文件任务一个 key
+        # 会把整季都写到同一集上）。
+        explicit_key = str(job.get("episode_key") or "").strip()
+        title_key = ""
+        if not explicit_key:
             from_title = media_tools.episode_number(
                 str(job.get("source_title") or job.get("torrent_name") or "")
             )
             if from_title > 0:
-                fallback_key = media_tools.episode_key(from_title)
+                title_key = media_tools.episode_key(from_title)
         made = 0
         already = 0
         broken = 0
         fonts_done = False
         for source in files:
-            number = media_tools.episode_number(source.name)
-            # 单文件任务认不出集数时退回用户指定的集数；多文件任务必须能认出，
-            # 否则硬塞给某一集只会把别的集覆盖掉。
-            key = media_tools.episode_key(number) if number > 0 else (fallback_key if len(files) == 1 else "")
+            kind, number = media_tools.episode_identity(source.name)
+            if explicit_key and len(files) == 1:
+                # 文件名里的数字可能是「10-bit」这类噪声；用户点的是哪一集就存哪一集。
+                key = explicit_key
+                label = media_tools.label_for_key(key) or media_tools.safe_name(source.stem)
+            elif number > 0:
+                # 特别篇写 1:N，和收藏里「特别篇 02」那一格对得上，不再占本篇的位置。
+                key = media_tools.episode_key(number, kind)
+                label = media_tools.episode_filename(number, kind)
+            elif len(files) == 1 and title_key:
+                key = title_key
+                label = media_tools.label_for_key(key) or media_tools.safe_name(source.stem)
+            else:
+                # 多文件任务认不出集数就跳过，硬塞给某一集只会把别的集覆盖掉。
+                key = ""
+                label = ""
             if not key:
                 continue
             if key in done_keys:
                 # 重试时跳过已入库的集，不重复封装，也不把重试跑成全量返工。
                 already += 1
                 continue
-            label = media_tools.episode_filename(number) if number > 0 else media_tools.safe_name(source.stem)
             try:
                 info = media_tools.probe(source)
                 result = media_tools.remux(source, target_dir / f"{label}.mp4", codec=info["codec"])
@@ -775,12 +810,94 @@ class OfflineService:
 
     # ---- 迁移媒体库 ---------------------------------------------------
 
+    @staticmethod
+    def _copy_file(source: Path, destination: Path) -> tuple[bool, bool]:
+        """复制一个文件并校验大小；返回 ``(成功, 是否新建)``。
+
+        「是否新建」用来做精确回滚：只删这次真的写下去的文件，不动目标目录里
+        本来就有的东西。
+        """
+        existed = destination.exists()
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+            if destination.stat().st_size != source.stat().st_size:
+                raise OSError("复制后大小不一致")
+        except OSError:
+            if not existed:
+                destination.unlink(missing_ok=True)
+            return False, False
+        return True, not existed
+
+    @staticmethod
+    def _rollback(paths: list[Path]) -> None:
+        for path in reversed(paths):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        # 顺手清掉这次新建的空目录（rmdir 只删空目录，不会误伤别人的文件）。
+        parents = sorted(
+            {path.parent for path in paths}, key=lambda item: len(item.parts), reverse=True
+        )
+        for parent in parents:
+            try:
+                parent.rmdir()
+            except OSError:
+                pass
+
+    def _migrate_fonts(
+        self,
+        current_path: Path,
+        target_path: Path,
+        created: list[Path],
+        warnings: list[dict[str, str]],
+    ) -> int:
+        """把各番目录下的 ``_fonts`` 一起搬过去。
+
+        字体只影响字幕观感，所以复制失败只记 warning、不阻塞整批迁移；
+        但不迁的话迁移后特效字幕会回退到默认字体。
+        """
+        count = 0
+        try:
+            roots = [
+                path
+                for path in current_path.rglob("_fonts")
+                if path.is_dir() and not _is_within(path, target_path)
+            ]
+        except OSError:
+            return 0
+        for fonts_dir in roots:
+            try:
+                relative = fonts_dir.relative_to(current_path)
+            except ValueError:
+                relative = Path(fonts_dir.name)
+            try:
+                items = [item for item in fonts_dir.iterdir() if item.is_file()]
+            except OSError:
+                continue
+            for item in items:
+                destination = target_path / relative / item.name
+                ok, fresh = self._copy_file(item, destination)
+                if not ok:
+                    warnings.append(
+                        {"file": str(item), "reason": "字体没复制过去，字幕可能回退默认字体"}
+                    )
+                    continue
+                count += 1
+                if fresh:
+                    created.append(destination)
+        return count
+
     def migrate_media_root(self, target_root: str, *, delete_source: bool = False) -> dict[str, Any]:
         """把已入库的文件搬到新目录。
 
-        刻意做成「先复制、校验大小、再切换指向」，全部成功才改配置；只要有一条
-        失败就原地不动，避免数据库指向一堆没搬过去的路径。默认不删源文件——
-        真要删是另一个明确的开关，不藏在默认行为里。
+        分两个阶段：先把视频、字幕、字体全部复制并校验，**全部成功**才一次性
+        改数据库与配置。任何一条失败就回滚（删掉这次复制到新目录的副本），
+        数据库与配置保持原样。旧逻辑是边复制边改数据库，中途失败会留下
+        「数据库指向新副本、配置仍指旧目录」两个媒体库并存的状态。
+
+        默认不删源文件——真要删是另一个明确的开关，且放在最后一步。
         """
         target_text = str(target_root or "").strip().replace("\\", "/").rstrip("/")
         if not target_text:
@@ -795,8 +912,12 @@ class OfflineService:
             target_path.mkdir(parents=True, exist_ok=True)
         except OSError as error:
             raise OfflineError(f"无法创建目标目录：{error}") from error
-        copied = 0
+
         failed: list[dict[str, str]] = []
+        warnings: list[dict[str, str]] = []
+        # 只记「复制成功、准备改指向」的条目；真正写数据库留到全部成功之后。
+        plan: list[tuple[dict[str, Any], str, str]] = []
+        created: list[Path] = []
         for row in self.store.all_files():
             source = Path(str(row.get("file_path") or ""))
             if not source.is_file():
@@ -808,54 +929,81 @@ class OfflineService:
                 # 文件本来就不在媒体库里（手动挪过），平铺到目标根目录。
                 relative = Path(source.name)
             destination = target_path / relative
-            try:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
-                if destination.stat().st_size != source.stat().st_size:
-                    raise OfflineError("复制后大小不一致")
-            except (OSError, OfflineError) as error:
-                failed.append({"file": str(source), "reason": str(error)})
+            ok, fresh = self._copy_file(source, destination)
+            if not ok:
+                failed.append({"file": str(source), "reason": "复制失败或复制后大小不一致"})
                 continue
-            subtitle_path = ""
-            subtitle = Path(str(row.get("subtitle_path") or ""))
-            if subtitle.is_file():
+            if fresh:
+                created.append(destination)
+            subtitle_path = str(row.get("subtitle_path") or "")
+            subtitle = Path(subtitle_path)
+            if subtitle_path and subtitle.is_file():
                 try:
                     subtitle_relative = subtitle.relative_to(current_path)
                 except ValueError:
                     subtitle_relative = Path(subtitle.name)
                 subtitle_target = target_path / subtitle_relative
-                try:
-                    subtitle_target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(subtitle, subtitle_target)
-                    subtitle_path = str(subtitle_target)
-                except OSError:
-                    subtitle_path = str(subtitle)
+                subtitle_ok, subtitle_fresh = self._copy_file(subtitle, subtitle_target)
+                if not subtitle_ok:
+                    # 只搬视频不搬字幕，删源之后字幕就成了孤儿；整条算失败更安全。
+                    failed.append({"file": str(subtitle), "reason": "字幕没复制过去"})
+                    continue
+                if subtitle_fresh:
+                    created.append(subtitle_target)
+                subtitle_path = str(subtitle_target)
+            plan.append((row, str(destination), subtitle_path))
+
+        if failed:
+            self._rollback(created)
+            return {
+                "ok": True,
+                "copied": 0,
+                "attempted": len(plan),
+                "failed": failed,
+                "warnings": warnings,
+                "target": target_text,
+                "switched": False,
+                "rolled_back": True,
+                "deleted_source": False,
+                "fonts": 0,
+            }
+
+        # 视频/字幕都齐了再搬字体；字体失败只记 warning，不影响整批成功。
+        fonts_copied = self._migrate_fonts(current_path, target_path, created, warnings)
+        # 全部复制完成：一次性把数据库指向新路径，再写配置。
+        for row, destination, subtitle_path in plan:
             self.store.replace_file(
                 anime_id=int(row["anime_id"]),
                 episode_key=str(row["episode_key"]),
-                file_path=str(destination),
+                file_path=destination,
                 file_size=int(row.get("file_size") or 0),
                 duration_ms=int(row.get("duration_ms") or 0),
                 media_id=int(row.get("media_id") or 0),
-                subtitle_path=subtitle_path or str(row.get("subtitle_path") or ""),
+                subtitle_path=subtitle_path,
             )
-            copied += 1
-            if delete_source:
-                try:
-                    source.unlink()
-                except OSError:
-                    pass
-        switched = not failed
-        if switched:
-            config["media_root"] = target_text
-            offline_config.save(self.asset_root, config)
+        config["media_root"] = target_text
+        offline_config.save(self.asset_root, config)
+        if delete_source:
+            # 删源放在最后：前面任何一步失败都不该让原文件消失。
+            for row, _, _ in plan:
+                for key in ("file_path", "subtitle_path"):
+                    path = Path(str(row.get(key) or ""))
+                    if path.is_file() and _is_within(path, current_path):
+                        try:
+                            path.unlink()
+                        except OSError:
+                            pass
         return {
             "ok": True,
-            "copied": copied,
+            "copied": len(plan),
+            "attempted": len(plan),
             "failed": failed,
+            "warnings": warnings,
             "target": target_text,
-            "switched": switched,
+            "switched": True,
+            "rolled_back": False,
             "deleted_source": delete_source,
+            "fonts": fonts_copied,
         }
 
     # ---- 汇总 ---------------------------------------------------------

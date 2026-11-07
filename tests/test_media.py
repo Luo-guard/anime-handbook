@@ -39,6 +39,49 @@ class EpisodeNumberTest(unittest.TestCase):
         self.assertEqual(media.episode_filename(7), "第 07 集")
         self.assertEqual(media.episode_filename(123), "第 123 集")
 
+    def test_bit_depth_is_not_an_episode(self):
+        """审计 N15①：正文里的 10-bit / 8bit 不能被当成第 10 / 8 集。
+
+        剧场版、合集种子的名字里没有其它数字时最容易踩，会把成品写到
+        「第 10 集」上。
+        """
+        self.assertEqual(media.episode_number("[Group] 某番 剧场版 10-bit.mkv"), 0)
+        self.assertEqual(media.episode_number("[Group] 某番 剧场版 8bit.mkv"), 0)
+        self.assertEqual(media.episode_number("[Group] 某番 Movie [BDRip].mkv"), 0)
+        # 有正经集数时仍然优先认集数。
+        self.assertEqual(media.episode_number("[Group] 某番 - 07 10bit.mkv"), 7)
+        self.assertEqual(media.episode_number("[Group] 某番 [05][1080p 10bit].mkv"), 5)
+
+    def test_codec_numbers_are_not_episodes(self):
+        self.assertEqual(media.episode_number("[Group] 某番 x264.mkv"), 0)
+        self.assertEqual(media.episode_number("[Group] 某番 h.265.mkv"), 0)
+        self.assertEqual(media.episode_number("[Group] 某番 128kbps.mkv"), 0)
+        self.assertEqual(media.episode_number("[Group] 某番 23.976fps.mkv"), 0)
+
+    def test_special_episode_identity(self):
+        """审计 N15②：特别篇/OVA 要认出类型，不能占本篇的集数。"""
+        self.assertEqual(media.episode_identity("[Group] 某番 - 05 [1080p].mkv"), (0, 5))
+        self.assertEqual(media.episode_identity("[Group] 某番 SP01 [1080p].mkv"), (1, 1))
+        self.assertEqual(media.episode_identity("[Group] 某番 OVA 2 [1080p].mkv"), (1, 2))
+        self.assertEqual(media.episode_identity("[Group] 某番 [SP03][1080p].mkv"), (1, 3))
+        self.assertEqual(media.episode_identity("[Group] 某番 特别篇 04 [1080p].mkv"), (1, 4))
+        self.assertEqual(media.episode_identity("[Group] 某番 番外 01.mkv"), (1, 1))
+
+    def test_batch_range_with_sp_is_not_a_special(self):
+        # 「[01-12+SPx1]」是合集包含 1 个 SP，不是这一集本身是 SP。
+        self.assertEqual(media.episode_identity("[7³ACG] 番 [01-12+SPx1][1080p].mkv"), (0, 0))
+
+    def test_sp_title_in_anime_name_is_not_mistaken(self):
+        # SPY×FAMILY 里的 SP 不是特别篇标记。
+        self.assertEqual(media.episode_identity("[Group] SPY×FAMILY - 03 [1080p].mkv"), (0, 3))
+
+    def test_key_and_filename_for_specials(self):
+        self.assertEqual(media.episode_key(2, 1), "1:2")
+        self.assertEqual(media.episode_filename(2, 1), "特别篇 02")
+        self.assertEqual(media.label_for_key("1:2"), "特别篇 02")
+        self.assertEqual(media.label_for_key("0:7"), "第 07 集")
+        self.assertEqual(media.label_for_key("坏掉的"), "")
+
 
 class SafeNameTest(unittest.TestCase):
     def test_strips_windows_forbidden_characters(self):

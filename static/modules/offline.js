@@ -25,10 +25,18 @@ function offlineStatus(target, text, isError = false) {
   node.classList.toggle("is-error", Boolean(isError));
 }
 
+// 集数标识的第一段是收藏里的类型：0 本篇、1 特别篇、2 OP、3 ED…
+const OFFLINE_TYPE_LABELS = { 1: "特别篇", 2: "OP", 3: "ED", 4: "预告", 5: "MAD", 6: "其它" };
+
 function episodeLabelOf(key) {
   const parts = String(key || "").split(":");
+  // 只认「类型:集数」两段纯数字；收藏里还有 bgm:123 这类标识，原样显示。
+  if (parts.length !== 2 || !/^\d+$/.test(parts[0])) return String(key || "");
   const number = Number(parts[1]);
-  return Number.isFinite(number) && number > 0 ? `第 ${String(number).padStart(2, "0")} 集` : String(key || "");
+  if (!Number.isFinite(number) || number <= 0) return String(key || "");
+  const prefix = OFFLINE_TYPE_LABELS[Number(parts[0])];
+  const padded = String(number).padStart(2, "0");
+  return prefix ? `${prefix} ${padded}` : `第 ${padded} 集`;
 }
 
 function formatOfflineSize(text) {
@@ -777,10 +785,17 @@ async function migrateMediaRoot() {
     });
     const failed = data.failed || [];
     if (failed.length) {
-      offlineStatus(status, `${data.copied} 集已复制，但有 ${failed.length} 集失败，目录没有切换`, true);
-      toast("有文件没复制成功，已保持原目录", "error");
+      // 后端是「全做完才切换」：失败时数据库和配置都没动，副本也已经清掉。
+      const reason = failed.length === 1 ? failed[0].reason : `${failed.length} 个文件没复制成功`;
+      offlineStatus(status, `迁移没有执行：${reason}。新目录里的副本已清掉，媒体库仍是原目录`, true);
+      toast("迁移没有执行，媒体库仍是原目录", "error");
     } else {
-      offlineStatus(status, `已迁移 ${data.copied} 集，目录已切换`);
+      const warnings = (data.warnings || []).length;
+      const extra = data.fonts ? `，字体 ${data.fonts} 个` : "";
+      offlineStatus(
+        status,
+        `已迁移 ${data.copied} 集${extra}，目录已切换${warnings ? `（${warnings} 个字体没复制过去）` : ""}`,
+      );
       toast(`迁移完成：${data.copied} 集`);
       refreshOfflineLocal();
     }

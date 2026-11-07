@@ -90,6 +90,60 @@ class MigrateTest(unittest.TestCase):
         self.service.migrate_media_root(str(self.root / "new-media"))
         self.assertEqual(self.store.file_for(1, "0:1")["resume_ms"], 12345)
 
+    def test_failure_rolls_back_and_keeps_database(self):
+        """审计 N8：中途失败不能留下「DB 指新目录、配置指旧目录」两套库。
+
+        旧逻辑边复制边改 DB，第 2 集失败时第 1、3 集已经切到新目录，配置却
+        还指旧目录 —— 盘上两套、回收站和后续下载都走旧目录。
+        """
+        self.make_episode(1)
+        broken = self.make_episode(2)
+        self.make_episode(3)
+        Path(broken["file_path"]).unlink()
+        destination = self.root / "new-media"
+        result = self.service.migrate_media_root(str(destination))
+        self.assertFalse(result["switched"])
+        self.assertTrue(result["rolled_back"])
+        self.assertEqual(result["copied"], 0)
+        self.assertEqual(result["attempted"], 2)
+        self.assertEqual(len(result["failed"]), 1)
+        # 数据库一条都没改，仍全部指向原目录。
+        for number in (1, 3):
+            row = self.store.file_for(1, f"0:{number}")
+            self.assertTrue(
+                str(row["file_path"]).replace("\\", "/").startswith(
+                    str(self.media).replace("\\", "/")
+                ),
+                row["file_path"],
+            )
+        # 复制到新目录的副本已清掉，不留下半套媒体库。
+        self.assertFalse((destination / "测试番" / "第 01 集.mp4").exists())
+        self.assertFalse((destination / "测试番" / "第 03 集.mp4").exists())
+        self.assertEqual(
+            offline_config.resolved(offline_config.load(self.root))["media_root"],
+            str(self.media).replace("\\", "/"),
+        )
+
+    def test_failed_migration_keeps_source_files(self):
+        """失败时即使点开「删除源文件」也不能把原件删掉。"""
+        self.make_episode(1)
+        broken = self.make_episode(2)
+        Path(broken["file_path"]).unlink()
+        self.service.migrate_media_root(str(self.root / "new-media"), delete_source=True)
+        self.assertTrue((self.media / "测试番" / "第 01 集.mp4").is_file())
+
+    def test_migrates_fonts_directory(self):
+        """审计 N8：_fonts 不迁的话，迁移后特效字幕会回退默认字体。"""
+        self.make_episode(1)
+        fonts = self.media / "测试番" / "_fonts"
+        fonts.mkdir()
+        (fonts / "方正准圆.ttf").write_bytes(b"font-bytes")
+        destination = self.root / "new-media"
+        result = self.service.migrate_media_root(str(destination))
+        self.assertTrue(result["switched"])
+        self.assertEqual(result["fonts"], 1)
+        self.assertTrue((destination / "测试番" / "_fonts" / "方正准圆.ttf").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

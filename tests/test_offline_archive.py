@@ -32,6 +32,30 @@ class FakeClient:
         self.deleted = (hashes, delete_files)
 
 
+class PathClient:
+    """content_path / save_path / name 可以分别指定的替身，用来模拟 qB 半就绪。"""
+
+    def __init__(self, *, content_path: str, save_path: str, name: str):
+        self.content_path = content_path
+        self.save_path = save_path
+        self.name = name
+        self.deleted: tuple | None = None
+
+    def torrent(self, _hash):
+        return {
+            "content_path": self.content_path,
+            "save_path": self.save_path,
+            "name": self.name,
+            "state": "uploading",
+        }
+
+    def version(self):
+        return "v5.1.0"
+
+    def delete(self, hashes, delete_files=False):
+        self.deleted = (hashes, delete_files)
+
+
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "需要本机 ffmpeg")
 class ArchiveTest(unittest.TestCase):
     @classmethod
@@ -135,7 +159,7 @@ class ArchiveTest(unittest.TestCase):
         with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
             with self.assertRaises(OfflineError) as caught:
                 service._archive(job["id"])
-        self.assertIn("没有找到视频文件", str(caught.exception))
+        self.assertIn("没有找到这个任务的视频文件", str(caught.exception))
 
     def test_unparsable_names_fail_with_actionable_message(self):
         folder = self.root / "weird"
@@ -165,6 +189,107 @@ class ArchiveTest(unittest.TestCase):
             service._archive(job["id"])
         rows = self.store.files_for_anime(99)
         self.assertEqual([row["episode_key"] for row in rows], ["0:7"])
+
+    def test_content_path_fallback_never_grabs_another_anime(self):
+        """审计 N7：content_path 没就绪时不能抓下载目录里 mtime 最新那个文件。
+
+        同时下两部番时，最新的可能是另一部番的成品；旧逻辑会把它 remux 进
+        当前番的目录、按当前番的集数命名 —— 内容跑到错误的位置。
+        """
+        download_root = self.root / "downloads"
+        download_root.mkdir()
+        other = download_root / "[Other] 别的番 - 01 [1080p].mkv"
+        shutil.copy(next(self.source_dir.glob("*.mkv")), other)
+        job = self.store.create_job(
+            anime_id=99,
+            torrent_hash="nofile",
+            torrent_name="目标番",
+            source_title="[LoliHouse] 目标番 [1080p]",
+            save_path=str(download_root),
+        )
+        service = OfflineService(self.db)
+        fake = PathClient(
+            content_path=str(download_root / "还没落盘" / "目标番 01.mkv"),
+            save_path=str(download_root),
+            name="目标番",
+        )
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            with patch("handbook.offline_service.time.sleep", new=lambda *_: None):
+                with self.assertRaises(OfflineError) as caught:
+                    service._archive(job["id"])
+        self.assertIn("没有找到这个任务的视频文件", str(caught.exception))
+        self.assertEqual(self.store.files_for_anime(99), [])
+        self.assertFalse((self.media_root / "目标番" / "第 01 集.mp4").exists())
+
+    def test_content_path_fallback_finds_folder_by_torrent_name(self):
+        """content_path 还没就绪时，按种子名找到对应目录仍然能归档。"""
+        download_root = self.root / "downloads2"
+        folder = download_root / "目标番"
+        folder.mkdir(parents=True)
+        shutil.copy(
+            next(self.source_dir.glob("*.mkv")),
+            folder / "[LoliHouse] 目标番 - 01 [1080p].mkv",
+        )
+        job = self.store.create_job(
+            anime_id=99,
+            torrent_hash="pending",
+            torrent_name="目标番",
+            source_title="[LoliHouse] 目标番 [1080p]",
+            save_path=str(download_root),
+        )
+        service = OfflineService(self.db)
+        fake = PathClient(
+            content_path=str(download_root / "未就绪.mp4"),
+            save_path=str(download_root),
+            name="目标番",
+        )
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            with patch("handbook.offline_service.time.sleep", new=lambda *_: None):
+                service._archive(job["id"])
+        self.assertEqual(self.store.job(job["id"])["status"], "ready")
+        self.assertEqual(
+            [row["episode_key"] for row in self.store.files_for_anime(99)], ["0:1"]
+        )
+
+    def test_special_episode_is_stored_as_sp(self):
+        """审计 N15②：特别篇存成 1:N，别占本篇第 N 集的位置。"""
+        folder = self.root / "sp"
+        folder.mkdir()
+        shutil.copy(
+            next(self.source_dir.glob("*.mkv")),
+            folder / "[LoliHouse] 测试番 SP01 [1080p].mkv",
+        )
+        job = self.make_job(str(folder))
+        service = OfflineService(self.db)
+        fake = FakeClient(str(folder))
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            service._archive(job["id"])
+        rows = self.store.files_for_anime(99)
+        self.assertEqual([row["episode_key"] for row in rows], ["1:1"])
+        self.assertTrue((Path(rows[0]["file_path"]).parent / "特别篇 01.mp4").is_file())
+
+    def test_declared_episode_wins_over_bit_depth_noise(self):
+        """审计 N15①：文件名只剩「10-bit」这种噪声时，用用户指定的集数。"""
+        folder = self.root / "movie"
+        folder.mkdir()
+        shutil.copy(
+            next(self.source_dir.glob("*.mkv")),
+            folder / "[LoliHouse] 测试番 剧场版 10-bit.mkv",
+        )
+        job = self.store.create_job(
+            anime_id=99,
+            torrent_hash="movie",
+            torrent_name="测试番",
+            source_title="[LoliHouse] 测试番 剧场版 [1080p]",
+            episode_key="0:5",
+        )
+        service = OfflineService(self.db)
+        fake = FakeClient(str(folder))
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            service._archive(job["id"])
+        rows = self.store.files_for_anime(99)
+        self.assertEqual([row["episode_key"] for row in rows], ["0:5"])
+        self.assertTrue((Path(rows[0]["file_path"]).parent / "第 05 集.mp4").is_file())
 
     def test_partial_ingestion_is_not_ready(self):
         """合集里混进一个认不出集数的文件：已入库的保留，任务不能标记完成。"""
