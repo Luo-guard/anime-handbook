@@ -148,6 +148,31 @@ class PersistenceTest(unittest.TestCase):
         self.assertFalse(status["ok"])
         self.assertIn("不可写", status["error"])
 
+    def test_ensure_dirs_is_safe_under_concurrency(self):
+        """审计 N14：固定探测名会让并发请求互相删文件，误报目录不可写。"""
+        config = {"media_root": str(self.root / "concurrent"), "download_root": ""}
+        errors = []
+        barrier = threading.Barrier(16)
+
+        def worker():
+            try:
+                barrier.wait(timeout=5)
+                status = cfg.ensure_dirs(config)
+                if not status["ok"]:
+                    errors.append(status["error"])
+            except Exception as error:  # noqa: BLE001 - 测试里要把所有失败都收上来
+                errors.append(repr(error))
+
+        threads = [threading.Thread(target=worker) for _ in range(16)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        self.assertEqual(errors, [], "并发探测不应误报不可写")
+        root = self.root / "concurrent"
+        self.assertEqual(list(root.glob(".handbook-write-test*")), [], "临时探测文件不能残留")
+        self.assertFalse((root / ".handbook-write-test").exists(), "不再使用固定文件名")
+
 
 if __name__ == "__main__":
     unittest.main()

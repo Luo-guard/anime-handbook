@@ -191,14 +191,77 @@ def remux(
     return {"path": str(dst), "size": dst.stat().st_size}
 
 
+def subtitle_tracks(path: Path | str, *, ffprobe: str = "", timeout: float = PROBE_TIMEOUT) -> list[dict[str, Any]]:
+    """按 ffmpeg ``0:s:N`` 的顺序列出字幕轨；查不到返回空列表。
+
+    只查字幕流，比 :func:`probe` 便宜很多；顺序必须和 ffmpeg 的相对流序号
+    一致，否则 ``-map 0:s:N`` 会选错轨。
+    """
+    binary = ffprobe or tool_path("ffprobe")
+    target = Path(path)
+    if not binary or not target.is_file():
+        return []
+    command = [
+        binary, "-v", "error", "-print_format", "json",
+        "-show_streams", "-select_streams", "s", str(target),
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if completed.returncode != 0:
+        return []
+    try:
+        document = json.loads(completed.stdout.decode("utf-8", "replace"))
+    except ValueError:
+        return []
+    return [item for item in (document.get("streams") or []) if item.get("codec_type") == "subtitle"]
+
+
+# 审计 N6：只有 ASS/SSA 能原样 copy 成 .ass；其它文本字幕要转成 ass；
+# 图形字幕是位图，没有 OCR 就转不成文本，硬抽只会得到一份打不开的假 .ass。
+ASS_SUBTITLE_CODECS = {"ass", "ssa"}
+TEXT_SUBTITLE_CODECS = {
+    "subrip", "srt", "mov_text", "webvtt", "text", "subviewer", "subviewer1",
+    "microdvd", "mpl2", "vplayer", "sami", "stl", "jacosub", "pjs", "realtext",
+}
+BITMAP_SUBTITLE_CODECS = {
+    "hdmv_pgs_subtitle", "pgssub", "dvb_subtitle", "dvbsub", "dvd_subtitle",
+    "dvdsub", "xsub", "dvb_teletext", "hdmv_text_subtitle",
+}
+
+
+def subtitle_plan(tracks: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """挑一条能用的字幕轨：优先 ASS/SSA，其次可转码的文本字幕。
+
+    返回 ``{"index", "convert", "codec"}``；全是图形字幕或没有字幕轨时返回
+    ``None``，调用方应放弃抽取而不是产出假 .ass。纯函数，方便单测。
+    """
+    for index, track in enumerate(tracks):
+        codec = str(track.get("codec_name") or "").lower()
+        if codec in ASS_SUBTITLE_CODECS:
+            return {"index": index, "convert": False, "codec": codec}
+    for index, track in enumerate(tracks):
+        codec = str(track.get("codec_name") or "").lower()
+        if codec in TEXT_SUBTITLE_CODECS:
+            return {"index": index, "convert": True, "codec": codec}
+    return None
+
+
 def extract_subtitle(
     source: Path | str,
     destination: Path | str,
     *,
     ffmpeg: str = "",
+    ffprobe: str = "",
     timeout: float = SUBTITLE_TIMEOUT,
 ) -> str:
-    """抽第一条字幕轨。没有字幕轨或抽取失败都返回空串，不影响视频入库。"""
+    """挑一条能用的字幕轨存成 ``.ass``；没有可用的就返回空串。
+
+    以前固定 ``-map 0:s:0 -c copy``：第一条若是 SRT 或 PGS，文件内容根本
+    不是 ASS，但 ``subtitle_path`` 非空，播放器会一直显示「字幕 · 开」却解析
+    失败。现在按编码分流，图形字幕直接跳过（宁可没有字幕，也不要假字幕）。
+    """
     binary = ffmpeg or tool_path("ffmpeg")
     if not binary:
         return ""
@@ -206,19 +269,22 @@ def extract_subtitle(
     dst = Path(destination)
     if not src.is_file():
         return ""
+    plan = subtitle_plan(subtitle_tracks(src, ffprobe=ffprobe))
+    if plan is None:
+        return ""
     dst.parent.mkdir(parents=True, exist_ok=True)
     command = [
         binary, "-y", "-loglevel", "error",
         "-i", str(src),
-        "-map", "0:s:0",
-        "-c", "copy",
+        "-map", f"0:s:{plan['index']}",
+        "-c:s", "ass" if plan["convert"] else "copy",
         str(dst),
     ]
     try:
         completed = subprocess.run(command, capture_output=True, timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
-        return ""
-    if completed.returncode != 0 or not dst.is_file() or dst.stat().st_size == 0:
+        completed = None
+    if completed is None or completed.returncode != 0 or not dst.is_file() or dst.stat().st_size == 0:
         dst.unlink(missing_ok=True)
         return ""
     return str(dst)

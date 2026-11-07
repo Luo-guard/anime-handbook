@@ -148,6 +148,25 @@ class ToolPathTest(unittest.TestCase):
         self.assertEqual(media.tool_path("definitely-not-a-real-binary-xyz"), "")
 
 
+class SubtitlePlanTest(unittest.TestCase):
+    """审计 N6：按编码挑轨，而不是无脑抽第一条。"""
+
+    def test_prefers_ass_even_when_it_is_not_first(self):
+        tracks = [{"codec_name": "subrip"}, {"codec_name": "ass"}]
+        self.assertEqual(media.subtitle_plan(tracks), {"index": 1, "convert": False, "codec": "ass"})
+
+    def test_text_subtitle_is_marked_for_conversion(self):
+        tracks = [{"codec_name": "mov_text"}]
+        self.assertEqual(media.subtitle_plan(tracks), {"index": 0, "convert": True, "codec": "mov_text"})
+
+    def test_bitmap_only_returns_none(self):
+        tracks = [{"codec_name": "hdmv_pgs_subtitle"}, {"codec_name": "dvd_subtitle"}]
+        self.assertIsNone(media.subtitle_plan(tracks))
+
+    def test_no_tracks_returns_none(self):
+        self.assertIsNone(media.subtitle_plan([]))
+
+
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "需要本机 ffmpeg")
 class RealRemuxTest(unittest.TestCase):
     """真跑一遍 ffmpeg，确认 hvc1 标记和字幕抽取都对。"""
@@ -205,6 +224,31 @@ class RealRemuxTest(unittest.TestCase):
 
     def test_extract_subtitle_returns_empty_when_absent(self):
         self.assertEqual(media.extract_subtitle(self.source, self.root / "none.ass"), "")
+
+    def test_extract_subtitle_converts_srt_into_real_ass(self):
+        """SRT 不能 copy 成 .ass；转码后必须是 libass 认得的 ASS 文本。"""
+        from unittest.mock import patch
+
+        srt = self.root / "clip.srt"
+        srt.write_text("1\n00:00:00,000 --> 00:00:01,000\n测试字幕\n", encoding="utf-8")
+        muxed = self.root / "with-srt.mkv"
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(self.source), "-i", str(srt),
+             "-map", "0:v:0", "-map", "0:a?", "-map", "1:s:0",
+             "-c:v", "copy", "-c:a", "copy", "-c:s", "srt", str(muxed)],
+            capture_output=True, timeout=120, check=True,
+        )
+        out = self.root / "srt-out.ass"
+        self.assertNotEqual(media.extract_subtitle(muxed, out), "")
+        text = out.read_text(encoding="utf-8", errors="replace")
+        self.assertIn("[Script Info]", text)
+        self.assertIn("Dialogue:", text)
+
+        # 图形字幕（PGS）没有文本可转，必须整条跳过，且不留假 .ass。
+        bitmap = self.root / "pgs-out.ass"
+        with patch.object(media, "subtitle_tracks", return_value=[{"codec_type": "subtitle", "codec_name": "hdmv_pgs_subtitle"}]):
+            self.assertEqual(media.extract_subtitle(muxed, bitmap), "")
+        self.assertFalse(bitmap.exists())
 
 
 if __name__ == "__main__":

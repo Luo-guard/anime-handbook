@@ -137,101 +137,199 @@ function availableSeasonYears() {
     .sort((a, b) => b - a);
 }
 
-// 季度筛选面板是「先选年份、再看该年四季」的两级结构：
-// 年份做成整齐的小格子（默认只露最近 12 年，更早的折叠起来），
-// 避免十几个年份 × 四个季度同时铺开（老版要滚动好几屏）。
-// 这里记住用户正在看哪一年、要不要展开早期年份，重渲染时不要跳回去。
-let seasonFilterYear = null;
+// 季度筛选：一年一行 × 四季列的紧凑矩阵。
+// 老版（全部年份平铺）胜在跨年份能连着点、一眼看全；两级年份卡好看，
+// 但批量选要点「年份 → 季度 → 年份 → 季度」。这里把两者合并：矩阵平铺 +
+// 行首点年份选全年 + 列头批量选同一季度 + 按住拖过一片格子批量刷选，
+// 视觉沿用圆角/勾选/主题色。年份多时仍默认只露 12 行，更早的折叠。
 let seasonYearsExpanded = false;
+let seasonPanelBound = false;
+let seasonPaint = null;
+let seasonVisibleYearCache = [];
 const SEASON_YEAR_LIMIT = 12;
 
-function activeSeasonYear(years) {
-  if (seasonFilterYear && years.includes(seasonFilterYear)) return seasonFilterYear;
-  const picked = [...state.seasonFilters]
-    .map((key) => Number(String(key).split("-")[0]))
-    .filter((year) => years.includes(year))
-    .sort((a, b) => b - a);
-  return picked[0] || years[0];
-}
-
-function renderSeasonFilter() {
-  const panel = $("#seasonFilterPanel");
-  const years = availableSeasonYears();
-  if (years.length) {
-    const year = activeSeasonYear(years);
-    seasonFilterYear = year;
-    // 当前年份落在折叠区间里（或本来就没展开）时自动展开，否则看不到高亮的那一项。
-    const hasEarlier = years.length > SEASON_YEAR_LIMIT;
-    const expanded = seasonYearsExpanded || years.indexOf(year) >= SEASON_YEAR_LIMIT;
-    const shownYears = expanded ? years : years.slice(0, SEASON_YEAR_LIMIT);
-    const yearKeys = SEASONS.map((season) => `${year}-${season.month}`);
-    const pickedInYear = yearKeys.filter((key) => state.seasonFilters.has(key)).length;
-    const allPicked = pickedInYear === SEASONS.length;
-    panel.innerHTML = `<div class="season-year-tabs" role="group" aria-label="按年份筛选">${shownYears.map((item) => {
-      const picked = SEASONS.some((season) => state.seasonFilters.has(`${item}-${season.month}`));
-      return `<button type="button" class="season-year-tab${item === year ? " active" : ""}${picked ? " picked" : ""}" data-season-year-tab="${item}" aria-pressed="${item === year}">${item}</button>`;
-    }).join("")}${hasEarlier
-      ? `<button type="button" class="season-years-more" data-season-years-more="${expanded ? "collapse" : "expand"}">${expanded ? "只看最近 12 年" : `更早的 ${years.length - SEASON_YEAR_LIMIT} 个年份`}</button>`
-      : ""}</div>
-      <div class="season-year-panel">
-        <div class="season-year-head">
-          <span class="season-year-summary"><b>${year}</b> 年 · 已选 ${pickedInYear}/4</span>
-          <div class="season-year-actions">
-            ${state.seasonFilters.size ? `<button type="button" class="season-text-button" data-season-action="clear">清除全部</button>` : ""}
-            <button type="button" class="season-year-all${allPicked ? " active" : ""}" data-season-year="${year}">${allPicked ? "取消全年" : "选全年"}</button>
-          </div>
-        </div>
-        <div class="season-grid">${SEASONS.map((season) => {
-          const key = `${year}-${season.month}`;
-          const on = state.seasonFilters.has(key);
-          return `<button type="button" class="season-card${on ? " active" : ""}" data-season-key="${key}" aria-pressed="${on}">
-            <b>${season.name}</b><small>${season.label}新番</small><i class="season-check" aria-hidden="true">✓</i>
-          </button>`;
-        }).join("")}</div>
-      </div>`;
-  } else {
-    panel.innerHTML = `<p class="season-empty">同步到带有播出日期的番剧后，就能按季度筛选了。</p>`;
-  }
-  panel.classList.remove("hidden");
+function updateSeasonNote() {
   const count = state.seasonFilters.size;
   const note = $("#ccSeasonNote");
   if (note) {
     note.textContent = count ? `已选 ${count} 个季度` : "可多选，跨年份也能一起选";
     note.classList.toggle("is-active", count > 0);
   }
-  $("[data-season-years-more]", panel)?.addEventListener("click", (event) => {
-    seasonYearsExpanded = event.currentTarget.dataset.seasonYearsMore === "expand";
-    renderSeasonFilter();
+}
+
+function setSeasonKey(key, on) {
+  if (on) state.seasonFilters.add(key);
+  else state.seasonFilters.delete(key);
+}
+
+// 拖拽过程中不重建 DOM（重建会打断 pointer 序列）；只改这一格的样式、
+// 行首年份状态、列头状态和顶部计数，松手后再整体重渲染一次。
+function paintSeasonCell(cell, on) {
+  const key = cell.dataset.seasonKey;
+  if (!key || (seasonPaint && seasonPaint.touched.has(key))) return;
+  setSeasonKey(key, on);
+  cell.classList.toggle("active", on);
+  cell.setAttribute("aria-pressed", String(on));
+  if (seasonPaint) seasonPaint.touched.add(key);
+  const row = cell.closest(".season-matrix-row");
+  if (row) {
+    const cells = [...row.querySelectorAll("[data-season-key]")];
+    const picked = cells.filter((item) => state.seasonFilters.has(item.dataset.seasonKey)).length;
+    const yearButton = row.querySelector("[data-season-year]");
+    if (yearButton) {
+      yearButton.classList.toggle("active", picked === SEASONS.length);
+      yearButton.classList.toggle("partial", picked > 0 && picked < SEASONS.length);
+      yearButton.setAttribute("aria-pressed", String(picked === SEASONS.length));
+    }
+  }
+  syncSeasonColumnStates();
+  updateSeasonNote();
+}
+
+function syncSeasonColumnStates() {
+  const matrix = $("#seasonFilterPanel .season-matrix");
+  if (!matrix) return;
+  const rows = [...matrix.querySelectorAll(".season-matrix-row")];
+  matrix.querySelectorAll("[data-season-column]").forEach((head) => {
+    const month = head.dataset.seasonColumn;
+    const keys = rows.map((row) => `${row.dataset.year}-${month}`);
+    const picked = keys.filter((key) => state.seasonFilters.has(key)).length;
+    head.classList.toggle("active", picked > 0 && picked === keys.length);
+    head.classList.toggle("partial", picked > 0 && picked < keys.length);
   });
-  $$("[data-season-year-tab]", panel).forEach((button) => {
-    button.addEventListener("click", () => {
-      seasonFilterYear = Number(button.dataset.seasonYearTab);
-      renderSeasonFilter();
-    });
+}
+
+function toggleSeasonColumn(month) {
+  const keys = seasonVisibleYearCache.map((year) => `${year}-${month}`);
+  const all = keys.length > 0 && keys.every((key) => state.seasonFilters.has(key));
+  keys.forEach((key) => setSeasonKey(key, !all));
+  renderSeasonFilter();
+  renderCollection();
+}
+
+function toggleSeasonYear(year) {
+  const keys = SEASONS.map((season) => `${year}-${season.month}`);
+  const all = keys.every((key) => state.seasonFilters.has(key));
+  keys.forEach((key) => setSeasonKey(key, !all));
+  renderSeasonFilter();
+  renderCollection();
+}
+
+function finishSeasonPaint(panel) {
+  if (!seasonPaint) return;
+  seasonPaint = null;
+  panel.classList.remove("painting");
+  renderSeasonFilter();
+  renderCollection();
+}
+
+function bindSeasonPanel(panel) {
+  if (seasonPanelBound) return;
+  seasonPanelBound = true;
+  // 单元格用 pointer 事件：pointerdown 定下这次要「全选」还是「全取消」，
+  // 拖过的格子统一刷成同一状态，比逐格 click 快得多。preventDefault 会
+  // 抑制后续 click，避免同一次操作被切换两回。
+  panel.addEventListener("pointerdown", (event) => {
+    const cell = event.target.closest?.("[data-season-key]");
+    if (!cell || event.button !== 0) return;
+    seasonPaint = { on: !state.seasonFilters.has(cell.dataset.seasonKey), touched: new Set() };
+    panel.classList.add("painting");
+    paintSeasonCell(cell, seasonPaint.on);
+    event.preventDefault();
   });
-  $$("[data-season-key]", panel).forEach((button) => {
-    button.addEventListener("click", () => {
-      const key = button.dataset.seasonKey;
-      if (state.seasonFilters.has(key)) state.seasonFilters.delete(key);
-      else state.seasonFilters.add(key);
-      renderSeasonFilter();
-      renderCollection();
-    });
+  panel.addEventListener("pointermove", (event) => {
+    if (!seasonPaint) return;
+    const node = document.elementFromPoint(event.clientX, event.clientY);
+    const cell = node?.closest?.("[data-season-key]");
+    if (cell && panel.contains(cell)) paintSeasonCell(cell, seasonPaint.on);
   });
-  $$("[data-season-year]", panel).forEach((button) => {
-    button.addEventListener("click", () => {
-      const keys = SEASONS.map((season) => `${button.dataset.seasonYear}-${season.month}`);
-      const allSelected = keys.every((key) => state.seasonFilters.has(key));
-      keys.forEach((key) => allSelected ? state.seasonFilters.delete(key) : state.seasonFilters.add(key));
-      renderSeasonFilter();
-      renderCollection();
-    });
-  });
-  $("[data-season-action='clear']", panel)?.addEventListener("click", () => {
-    state.seasonFilters.clear();
+  // 键盘操作没有 pointer 序列，单独兜底（Enter / 空格）。
+  panel.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const cell = event.target.closest?.("[data-season-key]");
+    if (!cell) return;
+    event.preventDefault();
+    setSeasonKey(cell.dataset.seasonKey, !state.seasonFilters.has(cell.dataset.seasonKey));
     renderSeasonFilter();
     renderCollection();
   });
+  panel.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target.closest?.("[data-season-key]")) return;
+    const more = target.closest?.("[data-season-years-more]");
+    if (more) {
+      seasonYearsExpanded = more.dataset.seasonYearsMore === "expand";
+      renderSeasonFilter();
+      return;
+    }
+    const column = target.closest?.("[data-season-column]");
+    if (column) { toggleSeasonColumn(column.dataset.seasonColumn); return; }
+    const year = target.closest?.("[data-season-year]");
+    if (year) { toggleSeasonYear(Number(year.dataset.seasonYear)); return; }
+    const action = target.closest?.("[data-season-action]");
+    if (action) {
+      const mode = action.dataset.seasonAction;
+      if (mode === "clear") state.seasonFilters.clear();
+      else if (mode === "all") {
+        seasonVisibleYearCache.forEach((item) => SEASONS.forEach((season) => state.seasonFilters.add(`${item}-${season.month}`)));
+      }
+      renderSeasonFilter();
+      renderCollection();
+    }
+  });
+  document.addEventListener("pointerup", () => finishSeasonPaint(panel));
+  document.addEventListener("pointercancel", () => finishSeasonPaint(panel));
+}
+
+function renderSeasonFilter() {
+  const panel = $("#seasonFilterPanel");
+  const years = availableSeasonYears();
+  if (!years.length) {
+    seasonVisibleYearCache = [];
+    panel.innerHTML = `<p class="season-empty">同步到带有播出日期的番剧后，就能按季度筛选了。</p>`;
+    panel.classList.remove("hidden");
+    updateSeasonNote();
+    return;
+  }
+  // 筛到折叠区间里的年份时自动展开，否则用户看不到自己已经选中的那些格子。
+  const hiddenPicked = [...state.seasonFilters].some(
+    (key) => years.indexOf(Number(String(key).split("-")[0])) >= SEASON_YEAR_LIMIT,
+  );
+  const hasEarlier = years.length > SEASON_YEAR_LIMIT;
+  const expanded = seasonYearsExpanded || hiddenPicked;
+  const shownYears = expanded ? years : years.slice(0, SEASON_YEAR_LIMIT);
+  seasonVisibleYearCache = shownYears;
+  const count = state.seasonFilters.size;
+  panel.innerHTML = `<div class="season-toolbar">
+      <span class="season-toolbar-hint">点格子切换 · 按住拖选 · 点列头批量选同一季度</span>
+      <div class="season-toolbar-actions">
+        <button type="button" class="season-text-button" data-season-action="all">全选</button>
+        ${count ? `<button type="button" class="season-text-button" data-season-action="clear">清空</button>` : ""}
+      </div>
+    </div>
+    <div class="season-matrix" role="group" aria-label="按年份与季度筛选">
+      <div class="season-matrix-head">
+        <span class="season-matrix-corner">年份</span>
+        ${SEASONS.map((season) => `<button type="button" class="season-column" data-season-column="${season.month}" title="批量选/取消所有可见年份的${season.name}">${season.name}</button>`).join("")}
+      </div>
+      <div class="season-matrix-rows">${shownYears.map((year) => {
+        const keys = SEASONS.map((season) => `${year}-${season.month}`);
+        const picked = keys.filter((key) => state.seasonFilters.has(key)).length;
+        return `<div class="season-matrix-row" data-year="${year}">
+          <button type="button" class="season-row-year${picked === SEASONS.length ? " active" : picked ? " partial" : ""}" data-season-year="${year}" aria-pressed="${picked === SEASONS.length}" title="${picked === SEASONS.length ? "取消全年" : "选全年"}">${year}</button>
+          ${SEASONS.map((season) => {
+            const key = `${year}-${season.month}`;
+            const on = state.seasonFilters.has(key);
+            return `<button type="button" class="season-cell${on ? " active" : ""}" data-season-key="${key}" aria-pressed="${on}" title="${year} 年${season.name}"><span>${season.name.replace("季", "")}</span><i class="season-check" aria-hidden="true">✓</i></button>`;
+          }).join("")}
+        </div>`;
+      }).join("")}</div>
+      ${hasEarlier ? `<button type="button" class="season-years-more" data-season-years-more="${expanded ? "collapse" : "expand"}">${expanded ? "只看最近 12 年" : `更早的 ${years.length - SEASON_YEAR_LIMIT} 个年份`}</button>` : ""}
+    </div>`;
+  panel.classList.remove("hidden");
+  syncSeasonColumnStates();
+  updateSeasonNote();
+  bindSeasonPanel(panel);
 }
 
 function collectionSortMode() {

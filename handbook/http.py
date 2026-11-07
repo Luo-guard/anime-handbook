@@ -61,6 +61,16 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
                 if premiere < cutoff:
                     continue
                 slot = {}
+            # 季表里的放送钟点（bj_time 已换算成北京时间）直接带给前端，
+            # 详情头部的更新徽标要显示「每周五 11:20 更新」。以前只有
+            # compute_airing 在星期匹配时才会产出 next_at，遇到 Bangumi 日期
+            # 与季表星期不一致就降级成「只有日期」，钟点白白丢掉。
+            clock = str(slot.get("bj_time") or "").strip()
+            if clock:
+                anime["air_time"] = {
+                    "time": clock,
+                    "source_time": str(slot.get("source_time") or ""),
+                }
             result = compute_airing(anime, slot, now)
             if result:
                 anime["airing"] = result

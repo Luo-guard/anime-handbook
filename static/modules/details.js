@@ -52,13 +52,91 @@ function animeUpdateWeekday(anime, today = new Date()) {
   return { weekday: WEEKDAY_NAMES[best], ongoing: upcoming > 0 };
 }
 
-function renderProgressWeekday(anime) {
-  const info = animeUpdateWeekday(anime);
-  const label = $("#progressWeekday");
-  label.textContent = info ? `每${info.weekday}${info.ongoing ? "更新" : ""}` : "";
-  label.classList.toggle("hidden", !info);
-  label.title = info?.ongoing ? "按 Bangumi 逐集放送日期推算，通常比国内片源早半天到一天" : "";
-  $("#progressMetaSeparator").classList.toggle("hidden", !(anime?.air_date && info));
+// 钟点只从已有的放送时刻取：air_time.time 来自当季周表（已换算成北京时间），
+// airing.next_at 是下集的真实放送时刻，两者同源。拿不到就不写钟点，绝不编造。
+function animeAirClock(anime) {
+  const clock = String(anime?.air_time?.time || "").trim();
+  const match = clock.match(/^(\d{1,2}):(\d{2})$/);
+  if (match && Number(match[1]) < 24 && Number(match[2]) < 60) {
+    return `${match[1].padStart(2, "0")}:${match[2]}`;
+  }
+  const nextAt = Number(anime?.airing?.next_at || 0);
+  if (nextAt > 0) {
+    // 按北京时间取钟点：番剧凌晨档（JST 25:30）在 UTC 会落回前一天。
+    const beijing = new Date(nextAt * 1000 + 8 * 3600 * 1000);
+    return `${String(beijing.getUTCHours()).padStart(2, "0")}:${String(beijing.getUTCMinutes()).padStart(2, "0")}`;
+  }
+  return "";
+}
+
+// 已播集数优先用后端算好的 airing（与集数区的药丸同源），没有就按逐集日期数。
+function animeAiringCounts(anime, today = new Date()) {
+  const useAS = state.settings?.collection_airing_source === "as";
+  const source = useAS ? anime?.as_airing : anime?.airing;
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let dated = 0;
+  let upcoming = 0;
+  let past = 0;
+  (anime?.episodes || []).forEach((episode) => {
+    if (Number(episode?.type || 0) !== 0) return;
+    const day = parseIsoDate(episode?.airdate);
+    if (!day) return;
+    dated += 1;
+    if (day > todayStart) upcoming += 1;
+    else past += 1;
+  });
+  const aired = Math.max(0, Number(source?.aired) || 0) || past;
+  const total = Number(source?.total) || Number(anime?.episode_count) || (anime?.episodes || []).length || 0;
+  return { aired, total, upcoming, dated };
+}
+
+// 四态徽标：连载中（绿）/ 已完结（灰）/ 未开播（暖黄）/ 日期未知（灰）。
+// 完结态按你定的口径只写「已完结」，不写「已播完」；集数区的「已播 N」
+// 药丸仍按 B8 的口径隐藏，两处不重复。
+function animeBadgeModel(anime, today = new Date()) {
+  const info = animeUpdateWeekday(anime, today);
+  const counts = animeAiringCounts(anime, today);
+  const premiere = parseIsoDate(anime?.air_date);
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const weekday = info ? `每${info.weekday}` : "";
+
+  if (!premiere && !counts.dated && !info) {
+    return { kind: "unknown", text: "日期未知", title: "条目和逐集资料里都没有播出日期" };
+  }
+  if (premiere && premiere > todayStart && counts.aired === 0) {
+    const days = Math.round((premiere - todayStart) / 86400000);
+    const when = days <= 7 ? "下周开播" : `${premiere.getMonth() + 1}月${premiere.getDate()}日开播`;
+    return {
+      kind: "upcoming",
+      text: weekday ? `${when} · ${weekday}` : when,
+      title: "按 Bangumi 首播日期推算；还没开播，不显示已播集数",
+    };
+  }
+  if (info?.ongoing || counts.upcoming > 0) {
+    const clock = animeAirClock(anime);
+    const parts = [`${weekday}${clock ? ` ${clock} ` : ""}更新`];
+    if (counts.aired > 0) parts.push(`已播 ${counts.aired}${counts.total ? `/${counts.total}` : ""}`);
+    return {
+      kind: "ongoing",
+      text: parts.join(" · "),
+      title: clock
+        ? "星期按逐集放送日期推算，钟点来自当季周表的北京时间放送时刻"
+        : "星期按逐集放送日期推算；这份资料没有放送钟点",
+    };
+  }
+  return {
+    kind: "finished",
+    text: counts.total ? `已完结 · 全 ${counts.total} 集` : "已完结",
+    title: "已经播完；完结番不谎报更新星期",
+  };
+}
+
+function renderProgressBadge(anime) {
+  const model = animeBadgeModel(anime);
+  const badge = $("#progressBadge");
+  badge.className = `update-badge ${model.kind}`;
+  badge.title = model.title;
+  $("#progressBadgeText").textContent = model.text;
 }
 
 function openProgress(animeId) {
@@ -74,7 +152,7 @@ function openProgress(animeId) {
   $("#collectionDetailStatus").replaceChildren(collectionAction(anime.id,anime.collection_type));
   $("#collectionDetailStatus").classList.toggle("hidden", !collectionEditingSupported());
   $("#progressAirDate").textContent = anime.air_date || "";
-  renderProgressWeekday(anime);
+  renderProgressBadge(anime);
   $("#savedVideoSection").open = false;
   renderVideoLinks(anime.id);
   $("#openAgeRelated").classList.toggle("hidden", !showAgeRelatedButton());

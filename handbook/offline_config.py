@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any
@@ -167,9 +168,16 @@ def ensure_dirs(config: dict[str, Any]) -> dict[str, Any]:
         target = Path(paths[key])
         try:
             target.mkdir(parents=True, exist_ok=True)
-            probe = target / ".handbook-write-test"
-            probe.write_text("ok", encoding="utf-8")
-            probe.unlink()
+            # 审计 N14：以前用固定名 .handbook-write-test，两个请求并发时
+            # 一个刚 unlink、另一个正好在写，后者抛 FileNotFoundError，
+            # 于是明明可写的目录被报成「不可写」。改成每次独立的临时名，
+            # 进程内和跨进程都不会互相删文件；finally 保证异常时也清理。
+            fd, name = tempfile.mkstemp(prefix=".handbook-write-test-", dir=str(target))
+            try:
+                os.write(fd, b"ok")
+            finally:
+                os.close(fd)
+                Path(name).unlink(missing_ok=True)
         except OSError as error:
             result["ok"] = False
             result["error"] = f"{target} 不可写：{error}"
