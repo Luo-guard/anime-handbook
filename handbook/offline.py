@@ -90,6 +90,12 @@ class OfflineStore:
                 save_path=save_path or existing["save_path"],
                 episode_key=episode_key or existing["episode_key"],
             )
+            # 用户重新点同一条种子 = 想再要一次这个任务。任务已 ready（比如
+            # 某集的本地文件被删过）或 failed 时把它排回队列，下载完成后
+            # 归档会按已入库的集跳过、只补缺的；ready 任务不进任务列表，
+            # 不重置的话这一步永远静默无效果。
+            if existing["status"] in ("ready", "failed"):
+                merged = self.update_job(existing["id"], status="queued", error="")
             return merged or existing
         stamp = now_iso()
         with self.db.connect() as db:

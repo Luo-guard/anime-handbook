@@ -578,9 +578,10 @@ async function runEpisodeGestureAction(action, key, button) {
   }
   if (action === "open_menu") return;
   if (action === "play") {
-    if (typeof refreshOfflineLocal === "function") refreshOfflineLocal();
-    const files = (typeof offlineView !== "undefined" && offlineView.local?.files) || [];
-    const file = files.find((item) => String(item.episode_key) === String(key));
+    // 必须先按当前番同步离线缓存再找文件：不 await 会读到上一部番的缓存，
+    // 播错内容或误报「还没下载」。
+    const file =
+      typeof localFileForEpisode === "function" ? await localFileForEpisode(key) : null;
     if (file && typeof playLocalFile === "function") return playLocalFile(file.id);
     toast("这一集还没下载，先用「找资源」下下来", "error");
     return;

@@ -105,7 +105,7 @@
 
 ### A 档
 
-**N1 · 单集「播放」手势会播上一部番的文件（`details.js:584-590`）· 确定**
+**N1 · 单集「播放」手势会播上一部番的文件（`details.js:584-590`）· 确定 · ✅ 已修复**
 - 触发：详情页 → 右键/长按格子 → 播放。只要**本次页面会话里没有为当前这部番打开过离线面板**。
 - 原因 1：`refreshOfflineLocal()` 是 async，这里没 await，紧接着同步读 `offlineView.local.files`；
 - 原因 2：`refreshOfflineLocal()` 在 `offlineView.animeId === 0` 时直接 return（`offline.js:209`），所以首次点必然读到空数组 → 误报「这一集还没下载」；
@@ -118,12 +118,12 @@
 - 影响：`#9480` 的「下载完但显示未归档」在**不开面板**的情况下仍然成立 —— 文件下完了也不会自动 remux。
 - 不确定点：是否刻意做成省资源（不轮询）需要你定；如果要做，建议 2–3 秒一次、只在面板打开时跑。
 
-**N3 · 删掉某一集后再点下载，不会重新归档（`offline_service.py:230-263` + `offline.py:80-92`）· 确定**
+**N3 · 删掉某一集后再点下载，不会重新归档（`offline_service.py:230-263` + `offline.py:80-92`）· 确定 · ✅ 已修复**
 - 触发：本地文件页 → 删除某一集（移到 `_trash`）→ 回找资源页点同一条种子下载。
 - 原因：`delete_episode_file` 只删 `local_files` 行，`local_media` 任务仍是 `ready`；`download()` 会真的把种子重新交给 qB 并下载，但 `create_job` 按 hash 合并到那条 `ready` 任务且**不改 status**；`_sync` 只处理 `queued/downloading/processing` → 永远不归档。
 - 症状：qB 里在下载、磁盘上有文件，手账里那一集仍然是「没有本地文件」，任务列表里也看不到（ready 任务不显示）。
 
-**N4 · 多文件任务「部分入库」会被判成已完成，剩余集数永久丢失（`offline_service.py:351-354`）· 较可信**
+**N4 · 多文件任务「部分入库」会被判成已完成，剩余集数永久丢失（`offline_service.py:351-354`）· 较可信 · ✅ 已修复**
 - 触发：一季 12 集的合集，归档中途进程被杀/崩溃（`replace_file` 已写了几集，status 还是 `processing`）。
 - 原因：`_archive` 开头的「已经录过成品就不要再跑」用的是 `any(media_id == 这条任务)`，只要**有一集**存在就整任务 `ready` 返回。
 - 后果：剩下 11 集永远不会再归档；手动「重试归档」走同一段代码，同样直接返回。属静默数据缺失。
@@ -222,6 +222,15 @@
 - 全仓 grep：`state.animes =`（确认唯一写入口）、`OfflineService(`（确认只有 HTTP 调用、无后台 worker）、`has_subtitle`、`low_space_gb / warn_size_gb`（声明了但没有任何读取点 —— 容量提醒目前只在设置页显示「剩余 N GB」）、`missing`（定义未使用）。
 - 实测：后端全量 2 次（478 项，1 次 1 失败）；playwright 5 个视口 × 2 个弹窗的 flex 溢出测量。
 - 未做：前端 52 个 verify 脚本全量重跑；真实服务下的端到端点击（会动真实库，本轮不动）。
+
+
+---
+
+## 修复记录（二）：N1 / N3 / N4（2026-11-07 傍晚）
+
+- **N1（播错番）**：新增 `localFileForEpisode(key)`（offline.js）——按 `state.progressAnime` 同步 `offlineView.animeId/animeName` 身份（不一致就清缓存）、`await refreshOfflineLocal()` 按当前番拉取后再找文件；`details.js` 的 play 分支改为 `await` 它。番没有 id 时不发请求、安静提示。四个场景的回归测试 `tests/verify_episode_play.cjs`：缓存挂着上一部番的同集号文件→不播错只提示；当前番有文件→播放正确 id；会话首次触发（animeId=0）→按新番拉取成功；无 id→不发请求。
+- **N3（删了不能再下）**：`OfflineStore.create_job` 合并同 hash 任务时，若已有任务状态是 `ready`（如某集被删）或 `failed`，重置为 `queued` 并清错误——重新点同一条种子即表达「再要一次」，下载完成后归档按已入库的集跳过、只补缺的。测试：删集 → 重登记 → 状态回 queued → 归档补齐 0:2。
+- **N4（部分入库永久缺失）**：主体随 #9480 修复（早退条件从「有一集入库」收紧为「status=ready 且全部入库」；`ingested < len(files)` 抛错计入重试；重试按 key 跳过已入库集）。本次补上崩溃残留的实证测试：status 卡在 processing + 已入库 1 集 → 归档继续补第 2 集并标 ready，不再被 `any()` 误判成完成。
 
 ---
 

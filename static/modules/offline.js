@@ -297,10 +297,30 @@ function renderOfflineLocal() {
   offlineStatus("#offlineLocalStatus", files.length ? "" : "");
 }
 
+// 详情页的单集「播放」手势会在从没打开过离线面板时触发：缓存要么是空的、
+// 要么还挂着上一部番的身份。先按当前详情番同步身份再拉一次列表再找文件，
+// 否则会误报「还没下载」，甚至把上一部番的同集号文件播出来。
+async function localFileForEpisode(key) {
+  const anime = state.progressAnime || {};
+  const animeId = Number(anime.id || 0);
+  const name = anime.display_name || anime.name_cn || anime.name || "";
+  if (offlineView.animeId !== animeId || offlineView.animeName !== name) {
+    offlineView.animeId = animeId;
+    offlineView.animeName = name;
+    offlineView.local = { files: [], jobs: [] };
+  }
+  if (!offlineView.animeId) return null;
+  await refreshOfflineLocal();
+  return (
+    (offlineView.local?.files || []).find(
+      (item) => String(item.episode_key) === String(key)
+    ) || null
+  );
+}
+
 function playLocalFile(fileId) {
   const file = offlineView.local.files.find((item) => Number(item.id) === Number(fileId));
-  if (!file) return;
-  offlineView.playing = file;
+  if (!file) return;  offlineView.playing = file;
   const video = $("#offlineVideo");
   $("#offlinePlayerTitle").textContent = `${offlineView.animeName || "本地文件"} · ${episodeLabelOf(file.episode_key)}`;
   clearSubtitleSession();

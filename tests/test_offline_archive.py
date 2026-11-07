@@ -203,6 +203,92 @@ class ArchiveTest(unittest.TestCase):
             ["0:1", "0:2"],
         )
 
+    def test_crash_mid_archive_is_not_judged_complete(self):
+        """归档中途崩过一次的任务（processing + 已入库几集）不能被误判成完成。
+
+        审计 N4：旧逻辑只要有一集入库就把整个任务标 ready，剩下 11 集永久丢失。
+        """
+        folder = self.root / "crash"
+        folder.mkdir()
+        for index in (1, 2):
+            shutil.copy(
+                next(self.source_dir.glob("*.mkv")),
+                folder / f"[LoliHouse] 测试番 - {index:02d} [1080p].mkv",
+            )
+        job = self.make_job(str(folder))
+        # 模拟崩溃残留：状态停在 processing，第 1 集已入库。
+        self.store.set_status(job["id"], "processing", progress=50)
+        target_dir = self.media_root / "测试番"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(next(self.source_dir.glob("* - 01 *.mkv")), target_dir / "第 01 集.mp4")
+        self.store.replace_file(
+            anime_id=99,
+            episode_key="0:1",
+            file_path=str(target_dir / "第 01 集.mp4"),
+            file_size=(target_dir / "第 01 集.mp4").stat().st_size,
+            duration_ms=1000,
+            media_id=job["id"],
+        )
+        service = OfflineService(self.db)
+        fake = FakeClient(str(folder))
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            service._archive_job(job["id"])
+        row = self.store.job(job["id"])
+        self.assertEqual(row["status"], "ready", row["error"])
+        self.assertEqual(
+            sorted(item["episode_key"] for item in self.store.files_for_anime(99)),
+            ["0:1", "0:2"],
+            "crashed job must ingest the missing episode instead of early-returning ready",
+        )
+
+    def test_deleted_episode_rearchives_when_torrent_redownloaded(self):
+        """审计 N3：删掉某一集后重新点同一条种子，缺的那集要重新归档。
+
+        旧逻辑 create_job 按 hash 合并进 ready 任务且不改状态，_sync 只处理
+        活动任务 → 磁盘在下载、手账里那一集永远「没有本地文件」。
+        """
+        folder = self.root / "redl"
+        folder.mkdir()
+        for index in (1, 2):
+            shutil.copy(
+                next(self.source_dir.glob("*.mkv")),
+                folder / f"[LoliHouse] 测试番 - {index:02d} [1080p].mkv",
+            )
+        job = self.make_job(str(folder))
+        service = OfflineService(self.db)
+        fake = FakeClient(str(folder))
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            service._archive_job(job["id"])
+        self.assertEqual(self.store.job(job["id"])["status"], "ready")
+
+        # 删掉第 2 集（走正常回收站路径）。
+        service.delete_episode_file(99, "0:2")
+        self.assertEqual(
+            [row["episode_key"] for row in self.store.files_for_anime(99)], ["0:1"]
+        )
+
+        # 用户回找资源页重新点同一条种子：qB 里种子还在，download() 走复用路径
+        # 直接 create_job 合并 —— 合并后任务必须排回队列，而不是留在 ready。
+        requeued = self.store.create_job(
+            anime_id=99,
+            torrent_hash="abc123",
+            torrent_name="测试番",
+            source_title="[LoliHouse] 测试番 [1080p]",
+            save_path=str(folder),
+        )
+        self.assertEqual(requeued["status"], "queued")
+        self.assertEqual(requeued["id"], job["id"], "same torrent keeps one job")
+
+        # 下载完成后归档：已入库的第 1 集跳过，缺的第 2 集补齐。
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            service._archive_job(job["id"])
+        row = self.store.job(job["id"])
+        self.assertEqual(row["status"], "ready", row["error"])
+        self.assertEqual(
+            sorted(item["episode_key"] for item in self.store.files_for_anime(99)),
+            ["0:1", "0:2"],
+        )
+
 
 def store_wait_ready(store: OfflineStore, media_id: int, timeout: float = 120.0) -> None:
     import time as _time
