@@ -263,6 +263,10 @@ class HandbookDB:
                     image_url TEXT NOT NULL DEFAULT '',
                     collection_type INTEGER NOT NULL,
                     kazumi_updated_at TEXT NOT NULL DEFAULT '',
+                    -- 加入「当前这个」内置分类的时间。分类一变就重置，
+                    -- 因此每个收藏夹都能按各自的加入先后排序，
+                    -- 而不是所有收藏夹共用 Kazumi 的入库时间。
+                    collection_added_at TEXT NOT NULL DEFAULT '',
                     active INTEGER NOT NULL DEFAULT 1,
                     kazumi_position INTEGER NOT NULL DEFAULT 0,
                     custom_sort_order INTEGER NOT NULL DEFAULT 0,
@@ -399,9 +403,20 @@ class HandbookDB:
             for column, definition in {
                 "kazumi_position": "INTEGER NOT NULL DEFAULT 0",
                 "custom_sort_order": "INTEGER NOT NULL DEFAULT 0",
+                "collection_added_at": "TEXT NOT NULL DEFAULT ''",
             }.items():
                 if column not in columns:
                     db.execute(f"ALTER TABLE anime ADD COLUMN {column} {definition}")
+                    if column == "collection_added_at":
+                        # 老库没有「加入当前收藏夹时间」。回填成 Kazumi 入库时间
+                        #（缺失时退回本地建库时间），升级后顺序与升级前完全一致。
+                        db.execute(
+                            """
+                            UPDATE anime SET collection_added_at =
+                                COALESCE(NULLIF(kazumi_updated_at, ''), created_at)
+                            WHERE collection_added_at = ''
+                            """
+                        )
             for column, definition in {
                 "bgm_score": "REAL",
                 "bgm_rank": "INTEGER",
@@ -1054,8 +1069,9 @@ class HandbookDB:
             },
         }
         db.execute(
-            "UPDATE anime SET collection_type = ?, active = ?, updated_at = ? WHERE id = ?",
-            (status, 1 if reactivate else row["active"], stamp, anime_id),
+            "UPDATE anime SET collection_type = ?, active = ?, "
+            "collection_added_at = ?, updated_at = ? WHERE id = ?",
+            (status, 1 if reactivate else row["active"], stamp, stamp, anime_id),
         )
         db.execute(
             """
@@ -1150,17 +1166,19 @@ class HandbookDB:
         with self.connect() as db:
             rows = db.execute(
                 f"""
-                SELECT anime_id, collection_id
+                SELECT anime_id, collection_id, created_at
                 FROM custom_collection_items
                 WHERE anime_id IN ({placeholders})
-                ORDER BY collection_id ASC
+                ORDER BY collection_id ASC, created_at ASC
                 """,
                 anime_ids,
             ).fetchall()
-        mapping: dict[int, list[int]] = {anime_id: [] for anime_id in anime_ids}
+        mapping: dict[int, list[tuple[int, str]]] = {
+            anime_id: [] for anime_id in anime_ids
+        }
         for row in rows:
             mapping.setdefault(int(row["anime_id"]), []).append(
-                int(row["collection_id"])
+                (int(row["collection_id"]), str(row["created_at"] or ""))
             )
         return mapping
 
@@ -1169,9 +1187,16 @@ class HandbookDB:
     ) -> list[dict[str, Any]]:
         mapping = self._custom_membership_map([int(item["id"]) for item in items])
         for item in items:
-            collection_ids = mapping.get(int(item["id"]), [])
-            item["custom_collection_ids"] = collection_ids
-            item["in_custom_collection"] = bool(collection_ids)
+            memberships = mapping.get(int(item["id"]), [])
+            item["custom_collection_ids"] = [collection_id for collection_id, _ in memberships]
+            item["in_custom_collection"] = bool(memberships)
+            if memberships:
+                # 每个自定义收藏夹各自的「加入时间」（custom_collection_items.created_at）。
+                # 内置分类没有这张关联表，用的是 anime.collection_added_at。
+                item["custom_collection_added_at"] = {
+                    str(collection_id): added_at
+                    for collection_id, added_at in memberships
+                }
         return items
 
     def import_kazumi(self, items: list[dict[str, Any]]) -> dict[str, int]:
@@ -1182,8 +1207,14 @@ class HandbookDB:
         completed_from_watching: set[int] = set()
         with self._write_lock, self.connect() as db:
             existing = {
-                int(row["id"]): int(row["collection_type"])
-                for row in db.execute("SELECT id, collection_type FROM anime")
+                int(row["id"]): (
+                    int(row["collection_type"]),
+                    int(row["active"]),
+                    str(row["collection_added_at"] or ""),
+                )
+                for row in db.execute(
+                    "SELECT id, collection_type, active, collection_added_at FROM anime"
+                )
             }
             pending_local_ids = {row[0] for row in db.execute("SELECT anime_id FROM kazumi_outbox")}
             existing_ids = set(existing)
@@ -1209,8 +1240,20 @@ class HandbookDB:
             for position, item in enumerate(items):
                 anime_id = int(item["id"])
                 collection_type = int(item.get("type") or 0)
-                if anime_id not in pending_local_ids and existing.get(anime_id) == 1 and collection_type == 4:
+                previous_type, was_active, previous_added = existing.get(
+                    anime_id, (0, 0, "")
+                )
+                if anime_id not in pending_local_ids and previous_type == 1 and collection_type == 4:
                     completed_from_watching.add(anime_id)
+                # 「加入当前收藏夹的时间」：新条目用 Kazumi 的入库时间；
+                # 在 Kazumi 里换了收藏夹（或本地移出后又出现）记为现在；
+                # 其余情况原样带回旧值，避免每次同步都把时间戳刷成当下。
+                if anime_id not in existing:
+                    entry_stamp = str(item.get("updated_at") or "") or stamp
+                elif previous_type != collection_type or not was_active:
+                    entry_stamp = previous_added if anime_id in pending_local_ids else stamp
+                else:
+                    entry_stamp = previous_added
                 values = (
                     anime_id,
                     str(item.get("name") or ""),
@@ -1220,6 +1263,7 @@ class HandbookDB:
                     str(item.get("image_url") or ""),
                     collection_type,
                     str(item.get("updated_at") or ""),
+                    entry_stamp,
                     position,
                     stamp,
                     stamp,
@@ -1228,9 +1272,9 @@ class HandbookDB:
                     """
                     INSERT INTO anime(
                         id, name, name_cn, summary, air_date, image_url,
-                        collection_type, kazumi_updated_at, active, kazumi_position,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                        collection_type, kazumi_updated_at, collection_added_at,
+                        active, kazumi_position, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         name_cn = excluded.name_cn,
@@ -1239,6 +1283,7 @@ class HandbookDB:
                         image_url = excluded.image_url,
                         collection_type = excluded.collection_type,
                         kazumi_updated_at = excluded.kazumi_updated_at,
+                        collection_added_at = excluded.collection_added_at,
                         active = 1,
                         kazumi_position = excluded.kazumi_position,
                         updated_at = excluded.updated_at
@@ -2134,6 +2179,15 @@ class HandbookDB:
                 # Snapshots written before edit tracking have no updated_at;
                 # fall back to the creation time so merges stay deterministic.
                 db.execute("UPDATE events SET updated_at = created_at WHERE updated_at = ''")
+                # 同一次升级里新增的「加入收藏夹时间」：老快照没有这一列，
+                # 用 Kazumi 入库时间补上，避免排序退化成空值。
+                db.execute(
+                    """
+                    UPDATE anime SET collection_added_at =
+                        COALESCE(NULLIF(kazumi_updated_at, ''), created_at)
+                    WHERE collection_added_at = ''
+                    """
+                )
                 # Character and AGE caches point at old metadata. They are
                 # intentionally local and safe to rebuild on demand.
                 db.execute("DELETE FROM anime_characters")

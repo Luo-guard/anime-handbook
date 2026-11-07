@@ -20,7 +20,7 @@ function collectionComparator(){
  if(mode==='rank')compare=(a,b)=>(Number(a.bgm_rank)||999999999)-(Number(b.bgm_rank)||999999999)||byName(a,b);
  if(mode==='popularity')compare=(a,b)=>(Number(b.bgm_rating_total)||0)-(Number(a.bgm_rating_total)||0)||byName(a,b);
  if(mode==='airdate')compare=(a,b)=>String(a.air_date||'9999-99-99').localeCompare(String(b.air_date||'9999-99-99'))||byName(a,b);
- if(mode==='kazumi')compare=(a,b)=>String(b.kazumi_updated_at||'').localeCompare(String(a.kazumi_updated_at||''))||Number(b.kazumi_position||0)-Number(a.kazumi_position||0)||byName(a,b);
+ if(mode==='kazumi')compare=(a,b)=>{const at=x=>String(x.collection_added_at||x.kazumi_updated_at||''),l=at(a),r=at(b);return l===r?(Number(b.kazumi_position||0)-Number(a.kazumi_position||0)||byName(a,b)):(r>l?1:-1)};
  if(mode==='custom')compare=(a,b)=>Number(a.custom_sort_order||0)-Number(b.custom_sort_order||0)||byName(a,b);
  return direction==='desc'?(a,b)=>compare(b,a):compare;
 }

@@ -196,7 +196,7 @@ function collectionSortDirection() {
 }
 
 function updateSortPicker() {
-  const modeNames = { name: "名称", rank: "评分", popularity: "热度", airdate: "时间", kazumi: "入库时间", custom: "自定义" };
+  const modeNames = { name: "名称", rank: "评分", popularity: "热度", airdate: "时间", kazumi: "加入时间", custom: "自定义" };
   const mode = collectionSortMode();
   const direction = collectionSortDirection();
   const sortLabel = $("#collectionSortPickerLabel");
@@ -206,6 +206,23 @@ function updateSortPicker() {
     row.classList.toggle("active", active);
     $$("[data-sort-direction]", row).forEach((button) => button.classList.toggle("active", active && button.dataset.sortDirection === direction));
   });
+}
+
+// 每个收藏夹各有一套「加入时间」，不能共用 Kazumi 的入库时间：
+//   内置分类 → anime.collection_added_at（分类一变后端就重置）
+//   自定义收藏夹 → custom_collection_added_at[夹 id]（custom_collection_items.created_at）
+//   「全部收藏夹」没有所属夹，退回 Kazumi 入库时间
+// 老数据或旧快照可能缺字段，逐级回退，最后才落到空串（同值再按位置/名称兜底）。
+function collectionAddedAt(anime) {
+  const text = (value) => String(value || "").trim();
+  const kazumi = text(anime.kazumi_updated_at);
+  const added = text(anime.collection_added_at);
+  if (state.collectionKind === "custom") {
+    const own = text((anime.custom_collection_added_at || {})[String(state.customCollectionId)]);
+    return own || added || kazumi;
+  }
+  if (state.collectionKind === "builtin") return added || kazumi;
+  return kazumi || added;
 }
 
 function collectionComparator() {
@@ -218,9 +235,14 @@ function collectionComparator() {
   if (mode === "rank") comparator = (a, b) => (Number(a.bgm_rank) || 999999999) - (Number(b.bgm_rank) || 999999999) || name(a, b);
   if (mode === "popularity") comparator = (a, b) => (Number(b.bgm_rating_total) || 0) - (Number(a.bgm_rating_total) || 0) || name(a, b);
   if (mode === "airdate") comparator = (a, b) => String(a.air_date || "9999-99-99").localeCompare(String(b.air_date || "9999-99-99")) || name(a, b);
-  // Kazumi displays each collection by its collectible timestamp (newest first).
-  // This value comes directly from the entry.time field in collectibles.hive.
-  if (mode === "kazumi") comparator = (a, b) => String(b.kazumi_updated_at || "").localeCompare(String(a.kazumi_updated_at || "")) || Number(b.kazumi_position || 0) - Number(a.kazumi_position || 0) || name(a, b);
+  // 加入时间：按条目进入「当前这个」收藏夹的先后，最新的在最前。
+  // 排序键随当前收藏夹切换，所以同一个番在 A 夹和 B 夹的位置可以不同；
+  // asc/desc 沿用历史语义（asc = 最新在前）。
+  if (mode === "kazumi") comparator = (a, b) => {
+    const left = collectionAddedAt(a), right = collectionAddedAt(b);
+    if (left !== right) return right > left ? 1 : -1;
+    return Number(b.kazumi_position || 0) - Number(a.kazumi_position || 0) || name(a, b);
+  };
   if (mode === "custom") comparator = (a, b) => Number(a.custom_sort_order || 0) - Number(b.custom_sort_order || 0) || name(a, b);
   return collectionSortDirection() === "desc" ? (a, b) => comparator(b, a) : comparator;
 }

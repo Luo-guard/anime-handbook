@@ -290,6 +290,13 @@ class WebDAVSyncService:
             return chosen
         return None
 
+    @staticmethod
+    def _with_entry_stamp(row: dict[str, Any]) -> dict[str, Any]:
+        """旧快照没有 collection_added_at：用 Kazumi 入库时间补，升级后顺序不变。"""
+        if not str(row.get("collection_added_at") or "").strip():
+            row["collection_added_at"] = str(row.get("kazumi_updated_at") or "")
+        return row
+
     @classmethod
     def _collapse_note_versions(cls, group: list[dict[str, Any]]) -> list[dict[str, Any]]:
         kept: list[dict[str, Any]] = []
@@ -329,12 +336,12 @@ class WebDAVSyncService:
             key, remote_row = str(raw["id"]), dict(raw)
             local_row = local_anime.get(key)
             if local_row is None:
-                local_anime[key] = remote_row
+                local_anime[key] = cls._with_entry_stamp(remote_row)
                 continue
             chosen = dict(cls._newer_row(local_row, remote_row, "updated_at"))
             watched = sorted({str(key) for key in json_list(local_row.get("watched_episodes")) + json_list(remote_row.get("watched_episodes"))})
             chosen["watched_episodes"] = json_dumps(watched)
-            local_anime[key] = chosen
+            local_anime[key] = cls._with_entry_stamp(chosen)
         merged["tables"]["anime"] = list(local_anime.values())
 
         # Split legacy multi-episode records before merging, so episode 1 on

@@ -1,9 +1,9 @@
 """Local-only outbox worker. Never force locks or terminate Kazumi."""
 from .observability import record_failure
+from .common import APP_ROOT, now_iso
 import json
 import subprocess
 import threading
-from .common import APP_ROOT
 
 
 def flush(database, source):
@@ -27,7 +27,14 @@ def flush(database, source):
             if row["status"] is None:
                 db.execute("UPDATE anime SET active=0 WHERE id=?", (row["id"],))
             else:
-                db.execute("UPDATE anime SET collection_type=? WHERE id=?", (row["status"], row["id"]))
+                # 写回工具可能按冲突策略改了最终分类；只有真的换了收藏夹才
+                # 重新记「加入时间」，否则保持排队时的戳。
+                db.execute(
+                    "UPDATE anime SET collection_type=?, "
+                    "collection_added_at=CASE WHEN collection_type=? "
+                    "THEN collection_added_at ELSE ? END WHERE id=?",
+                    (row["status"], row["status"], now_iso(), row["id"]),
+                )
             db.execute("DELETE FROM kazumi_outbox WHERE anime_id=?", (row["id"],))
 
 
