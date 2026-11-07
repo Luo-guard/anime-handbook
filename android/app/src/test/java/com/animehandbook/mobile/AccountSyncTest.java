@@ -19,11 +19,11 @@ public class AccountSyncTest {
     public void checkpoint(String value,String etag){checkpoint=value;version=etag;base=value;}
   }
   private static class Remote implements AccountSync.Remote {
-    int heads,gets,puts;String state,received,expected,headVersion="\"head\"",getVersion="\"get\"";boolean missing,fail;
+    int heads,gets,puts;String state,received,expected,expectedModified,headVersion="\"head\"",getVersion="\"get\"",headModified="Wed, 05 Nov 2025 04:00:00 GMT";boolean missing,fail;
     Remote(String state){this.state=state;}
-    public AccountSync.Snapshot probe(){heads++;return new AccountSync.Snapshot(missing?404:200,null,headVersion);}
-    public AccountSync.Snapshot get()throws Exception{gets++;return new AccountSync.Snapshot(200,new JSONObject().put("state",new JSONObject(state)).toString(),getVersion);}
-    public AccountSync.Snapshot put(String value,String etag,boolean absent)throws Exception{puts++;expected=etag;assertEquals(missing,absent);if(fail)throw new java.io.IOException("HTTP 412");received=value;return new AccountSync.Snapshot(204,null,"\"new\"");}
+    public AccountSync.Snapshot probe(){heads++;return new AccountSync.Snapshot(missing?404:200,null,headVersion,headModified);}
+    public AccountSync.Snapshot get()throws Exception{gets++;return new AccountSync.Snapshot(200,new JSONObject().put("state",new JSONObject(state)).toString(),getVersion,headModified);}
+    public AccountSync.Snapshot put(String value,String etag,String modified,boolean absent)throws Exception{puts++;expected=etag;expectedModified=modified;assertEquals(missing,absent);if(fail)throw new java.io.IOException("HTTP 412");received=value;return new AccountSync.Snapshot(204,null,"\"new\"");}
   }
   @Test public void cancellationWinsAndIndependentAdditionsSurvive()throws Exception{
     String base=state("[\"01\",\"02\"]"),local=state("[\"01\"]"),other=state("[\"01\",\"02\",\"03\"]");
@@ -61,9 +61,29 @@ public class AccountSyncTest {
     assertEquals(0,remote.gets);assertEquals(0,remote.puts);assertEquals(base,store.checkpoint);
   }
   @Test public void weakOrMissingVersionCannotOverwriteButCreateIsConditional()throws Exception{
-    for(String etag:new String[]{"","W/\"weak\""}){try{AccountSync.requireVersion(etag,false);fail();}catch(java.io.IOException expected){}}
+    for(String etag:new String[]{"","W/\"weak\""}){try{AccountSync.requireVersion(etag,"",false);fail();}catch(java.io.IOException expected){}}
     String local=state("[]");Store store=new Store(local,null);Remote remote=new Remote(local);remote.missing=true;
     AccountSync.run(store,remote,"","","");assertEquals(1,remote.puts);assertEquals(0,remote.gets);
+  }
+  @Test public void unquotedVersionFromNutstoreIsUsableAndSentVerbatim()throws Exception{
+    // 坚果云返回不带引号的 ETag：不能因为“没有引号”就判定云端没有版本号（1.0.12 的回归）。
+    assertTrue(AccountSync.usableVersion("5f3d9c8e15a4"));
+    assertTrue(AccountSync.usableVersion("\"quoted\""));
+    assertFalse(AccountSync.usableVersion(""));
+    assertFalse(AccountSync.usableVersion("W/\"weak\""));
+    AccountSync.requireVersion("5f3d9c8e15a4","",false);
+    String base=state("[\"01\"]");Store store=new Store(state("[\"01\",\"02\"]"),base);Remote remote=new Remote(base);
+    remote.headVersion="5f3d9c8e15a4";remote.getVersion="5f3d9c8e15a4";
+    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"5f3d9c8e15a4","");
+    assertEquals("uploaded",result.getString("action"));assertEquals("5f3d9c8e15a4",remote.expected);
+  }
+  @Test public void weakVersionFallsBackToLastModifiedInsteadOfBlockingSync()throws Exception{
+    AccountSync.requireVersion("W/\"weak\"","Wed, 05 Nov 2025 04:00:00 GMT",false);
+    String base=state("[\"01\",\"02\"]");Store store=new Store(state("[\"01\"]"),base);Remote remote=new Remote(base);
+    remote.headVersion="W/\"weak\"";remote.getVersion="W/\"weak\"";
+    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"W/\"weak\"","");
+    assertEquals("uploaded",result.getString("action"));assertEquals(1,remote.puts);
+    assertEquals(remote.headModified,remote.expectedModified);
   }
   @Test public void digestIgnoresKeyOrderingAndExportTimestamp()throws Exception{
     assertEquals(AccountSync.digest("{\"tables\":{},\"exported_at\":\"a\",\"format\":1}"),AccountSync.digest("{\"format\":1,\"tables\":{},\"exported_at\":\"b\"}"));

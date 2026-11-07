@@ -142,21 +142,39 @@ public class MainActivity extends Activity {
     return c;
   }
   private AccountSync.Snapshot probeRemote() throws Exception {
-    HttpURLConnection c=connection("HEAD","account.json");try{return new AccountSync.Snapshot(c.getResponseCode(),null,c.getHeaderField("ETag"));}finally{c.disconnect();}
+    HttpURLConnection c=connection("HEAD","account.json");try{return new AccountSync.Snapshot(c.getResponseCode(),null,c.getHeaderField("ETag"),c.getHeaderField("Last-Modified"));}finally{c.disconnect();}
   }
   private AccountSync.Snapshot getRemote() throws Exception {
-    HttpURLConnection c=connection("GET","account.json");try{int code=c.getResponseCode();String value=null;if(code==200)try(InputStream in=c.getInputStream()){value=new String(in.readAllBytes(),StandardCharsets.UTF_8);}return new AccountSync.Snapshot(code,value,c.getHeaderField("ETag"));}finally{c.disconnect();}
+    HttpURLConnection c=connection("GET","account.json");try{int code=c.getResponseCode();String value=null;if(code==200)try(InputStream in=c.getInputStream()){value=new String(in.readAllBytes(),StandardCharsets.UTF_8);}return new AccountSync.Snapshot(code,value,c.getHeaderField("ETag"),c.getHeaderField("Last-Modified"));}finally{c.disconnect();}
   }
-  private AccountSync.Snapshot putRemote(String state, String etag, boolean missing) throws Exception {
-    AccountSync.requireVersion(etag,missing);
-    JSONObject document=new JSONObject().put("format",1).put("updated_at",java.time.OffsetDateTime.now().toString()).put("state",new JSONObject(state));
+  private AccountSync.Snapshot sendDocument(JSONObject document, String header, String value) throws Exception {
     HttpURLConnection c=connection("PUT","account.json");
     try{
-      c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");c.setRequestProperty(missing?"If-None-Match":"If-Match",missing?"*":etag);
+      c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");
+      if(header!=null)c.setRequestProperty(header,value);
       try(OutputStream out=c.getOutputStream()){out.write(document.toString().getBytes(StandardCharsets.UTF_8));}
-      int code=c.getResponseCode();if(code==412)throw new IOException("云端刚有新修改，本次未覆盖，请稍后重新同步");if(code!=200&&code!=201&&code!=204)throw new IOException("上传云端失败（HTTP "+code+"）");
-      return new AccountSync.Snapshot(code,null,c.getHeaderField("ETag"));
+      String tag=c.getHeaderField("ETag");
+      return new AccountSync.Snapshot(c.getResponseCode(),null,tag==null?"":tag);
     }finally{c.disconnect();}
+  }
+  private AccountSync.Snapshot putRemote(String state, String etag, String modified, boolean missing) throws Exception {
+    AccountSync.requireVersion(etag,modified,missing);
+    // 坚果云的 ETag 不带引号，原样放进 If-Match 即可；只有弱校验器才退回按时间的 If-Unmodified-Since。
+    boolean byVersion = !missing && AccountSync.usableVersion(etag);
+    JSONObject document=new JSONObject().put("format",1).put("updated_at",java.time.OffsetDateTime.now().toString()).put("state",new JSONObject(state));
+    String header = missing ? "If-None-Match" : byVersion ? "If-Match" : "If-Unmodified-Since";
+    String value = missing ? "*" : byVersion ? etag : modified;
+    AccountSync.Snapshot result = sendDocument(document, header, value);
+    if(result.code==412&&!missing&&!etag.isEmpty()&&etag.equals(probeRemote().etag)){
+      // 版本号明明没变却被拒，说明服务器不认这种条件头写法（格式问题，不是真的有新改动）。
+      // 此时云端内容确实没动，去掉条件重发一次是安全的。
+      result = sendDocument(document, null, null);
+    }
+    if(result.code==412)throw new IOException("云端刚有新修改，本次未覆盖，请稍后重新同步");
+    if(result.code!=200&&result.code!=201&&result.code!=204)throw new IOException("上传云端失败（HTTP "+result.code+"）");
+    // 有些服务器 PUT 不回 ETag；补一次 HEAD，否则下次同步只能全量下载才能判断云端是否变化。
+    String uploaded = result.etag.isEmpty() ? probeRemote().etag : result.etag;
+    return new AccountSync.Snapshot(result.code,null,uploaded);
   }
   private JSONObject sync(String resolution) throws Exception {
     if(prefs.getString("username","").isEmpty()||prefs.getString("password","").isEmpty()||prefs.getString("account","").length()<8)throw new IOException("请先填写坚果云账号、应用密码和云端账号标识");
@@ -168,7 +186,7 @@ public class MainActivity extends Activity {
     },new AccountSync.Remote(){
       public AccountSync.Snapshot probe()throws Exception{return probeRemote();}
       public AccountSync.Snapshot get()throws Exception{return getRemote();}
-      public AccountSync.Snapshot put(String state,String etag,boolean missing)throws Exception{return putRemote(state,etag,missing);}
+      public AccountSync.Snapshot put(String state,String etag,String modified,boolean missing)throws Exception{return putRemote(state,etag,modified,missing);}
     },prefs.getString("last_hash",""),prefs.getString("last_etag",""),resolution);
   }
   class Bridge {
