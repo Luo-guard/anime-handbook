@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261107-links-native" />
+  <link rel="stylesheet" href="/styles.css?v=20261107-week-season-style" />
   </head>
   <body>
     <div class="app-shell">
@@ -205,9 +205,12 @@
           <div class="overview-panel schedule-toolbar">
             <button type="button" id="scheduleSeasonButton" class="schedule-season"><strong></strong><span>更换季度 ▾</span></button>
             <div class="schedule-as-week" id="scheduleASWeek" hidden>
-              <button type="button" class="week-step" id="schedulePreviousWeek" aria-label="上一周" title="上一周"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
-              <div class="schedule-season schedule-week-label"><strong id="scheduleASWeekTitle"></strong><span id="scheduleASWeekDates"></span></div>
-              <button type="button" class="week-step" id="scheduleNextWeek" aria-label="下一周" title="下一周"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6l6 6-6 6"/></svg></button>
+              <strong id="scheduleASWeekTitle"></strong>
+              <span class="schedule-week-nav">
+                <span id="scheduleASWeekDates"></span>
+                <button type="button" class="week-step" id="schedulePreviousWeek" aria-label="上一周" title="上一周"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
+                <button type="button" class="week-step" id="scheduleNextWeek" aria-label="下一周" title="下一周"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6l6 6-6 6"/></svg></button>
+              </span>
             </div>
             <div class="schedule-toolbar-right">
               <select class="secondary-button" id="scheduleSourceSwitch" aria-label="周表来源"><option value="yuc" title="長門番堂（有C）">長門番堂</option><option value="kazumi" title="Kazumi 读取的 Bangumi 放送列表">Bangumi</option><option value="as" title="AnimeSchedule（AS）">AnimeSchedule</option></select>
@@ -1180,7 +1183,7 @@
     </dialog>
     <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261107-links-native" defer></script>
+    <script src="/schedule.js?v=20261107-week-season-style" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
     <script src="/modules/collection.js?v=20261107-collection-added-order" defer></script>

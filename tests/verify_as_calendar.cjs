@@ -54,27 +54,33 @@ const server=http.createServer((req,res)=>{
   await page.click('#scheduleNextWeek');await page.waitForFunction(key=>scheduleState.data?.week===key,first);
   await page.locator('.schedule-card').click();assert(await page.locator('#scheduleDetail a[href="https://animeschedule.net/anime/fixture"]').isVisible());
   await page.click('#scheduleCloseDetail');
-  // 周切换是一整条胶囊：箭头是图标按钮、左右对称、高度和右侧来源下拉框对齐。
+  // 周切换与「更换季度」同格式：大号衬线标题 + 下方一行小字日期与箭头，无胶囊外壳。
   const stepper=await page.evaluate(()=>{
-   const pill=document.querySelector('#scheduleASWeek'),label=document.querySelector('#scheduleASWeekTitle').parentElement;
+   const pill=document.querySelector('#scheduleASWeek'),title=document.querySelector('#scheduleASWeekTitle');
+   const nav=document.querySelector('#scheduleASWeek .schedule-week-nav');
    const prev=document.querySelector('#schedulePreviousWeek'),next=document.querySelector('#scheduleNextWeek');
-   const pr=pill.getBoundingClientRect(),lr=label.getBoundingClientRect();
-   return {pill:pr.height,select:document.querySelector('#scheduleSourceSwitch').getBoundingClientRect().height,
+   const ts=getComputedStyle(title),ps=getComputedStyle(pill);
+   return {
+    serif:ts.fontFamily.toLowerCase().includes('georgia')&&parseInt(ts.fontSize)===27,
+    bare:ps.borderTopWidth==='0px'&&ps.backgroundColor==='rgba(0, 0, 0, 0)'&&ps.paddingTop==='0px',
+    dates:document.querySelector('#scheduleASWeekDates').textContent.includes('/'),
     icons:[prev,next].every(b=>b.tagName==='BUTTON'&&b.querySelector('svg')&&getComputedStyle(b).borderTopWidth==='0px'&&!b.textContent.trim()),
-    gapLeft:prev.getBoundingClientRect().left-pr.left,gapRight:pr.right-next.getBoundingClientRect().right,
-    singleLine:lr.height<30};
+    navRow:nav.getBoundingClientRect().height<30,
+   };
   });
-  assert(Math.abs(stepper.pill-stepper.select)<=2,`week stepper matches the source control height ${JSON.stringify(stepper)}`);
+  assert(stepper.serif,`week title uses the 27px serif season style ${JSON.stringify(stepper)}`);
+  assert(stepper.bare,'week stepper has no capsule chrome (no border, background, padding)');
+  assert(stepper.dates,'week dates are rendered as small text');
   assert(stepper.icons,'week arrows are borderless icon buttons, not boxed glyphs');
-  assert(Math.abs(stepper.gapLeft-stepper.gapRight)<=1,'week arrows sit symmetrically inside the stepper');
-  assert(stepper.singleLine,'week label stays on one line on desktop');
+  assert(stepper.navRow,'dates and arrows share one small text row');
   for(const width of [390,320]){
    await page.setViewportSize({width,height:844});
    for(const selector of ['#scheduleSourceSwitch','#scheduleASWeek']){
     const bounds=await page.locator(selector).boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=width,JSON.stringify({selector,bounds,width}));
    }
-   const h=await page.evaluate(()=>document.querySelector('#scheduleASWeek').getBoundingClientRect().height);
-   assert(h<=46,`week stepper keeps its height at ${width}px, got ${h}`);
+   const size=await page.evaluate(()=>({title:parseInt(getComputedStyle(document.querySelector('#scheduleASWeekTitle')).fontSize),h:document.querySelector('#scheduleASWeek').getBoundingClientRect().height}));
+   assert(size.title===23,`week title drops to the mobile season size at ${width}px`);
+   assert(size.h<=70,`week stepper keeps a compact height at ${width}px, got ${size.h}`);
   }
   await page.selectOption('#scheduleSourceSwitch','kazumi');
   await page.waitForFunction(()=>scheduleState.dataSource==='kazumi');

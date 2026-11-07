@@ -3267,28 +3267,25 @@ dialog::backdrop {
   }
 }
 .schedule-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 24px}
-/* 周表周切换：箭头与周次合成一条胶囊，替代原来两个空白描边方框。
-   高度与右侧下拉框对齐（44px），箭头是图标按钮而不是独立的描边方块。 */
-.schedule-as-week{display:inline-flex;align-items:center;gap:2px;padding:5px;border:1px solid var(--line);border-radius:13px;background:var(--surface);box-shadow:0 1px 2px rgb(var(--theme-rgb) / .05)}
+/* 周表周切换：与「更换季度」大号衬线标题同一格式——大字周次 + 下方一行
+   小字日期与前后周箭头（箭头是「更换季度 ▾」式的小图标按钮，无外壳）。 */
+.schedule-as-week{display:grid;gap:6px;text-align:left}
 .schedule-as-week[hidden],#scheduleSeasonButton[hidden]{display:none}
-.schedule-as-week .week-step{display:grid;place-items:center;width:32px;height:32px;flex:0 0 auto;padding:0;border:0;border-radius:10px;background:transparent;color:var(--green-800);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 150ms ease,transform 150ms ease}
-.schedule-as-week .week-step svg{display:block;width:19px;height:19px}
-.schedule-as-week .week-step:hover{background:var(--green-50)}
+.schedule-as-week strong{font-family:Georgia,"Microsoft YaHei",serif;font-size:27px;letter-spacing:1px;line-height:1.2}
+.schedule-as-week .schedule-week-nav{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
+.schedule-as-week .schedule-week-nav > span{font-variant-numeric:tabular-nums}
+.schedule-as-week .week-step{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 auto;padding:0;border:0;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 150ms ease,color 150ms ease,transform 150ms ease}
+.schedule-as-week .week-step svg{display:block;width:15px;height:15px}
+.schedule-as-week .week-step:hover{color:var(--green-800);background:var(--green-50)}
 .schedule-as-week .week-step:active{background:color-mix(in srgb,var(--green-800) 14%,transparent);transform:scale(.94)}
 .schedule-as-week .week-step:focus-visible{outline:2px solid var(--green-700);outline-offset:1px}
-.schedule-as-week .schedule-week-label{display:flex;align-items:baseline;gap:9px;padding:0 13px;cursor:default;white-space:nowrap}
-.schedule-as-week .schedule-week-label strong{font-size:17px;letter-spacing:.3px;line-height:1.2}
-.schedule-as-week .schedule-week-label span{font-size:11.5px;line-height:1.2;color:var(--muted);font-variant-numeric:tabular-nums}
-.schedule-as-week .schedule-week-label span::before{content:"·";margin-right:9px;color:color-mix(in srgb,var(--ink) 30%,transparent)}
 .schedule-toolbar-right select{font:inherit;color:var(--ink);max-width:220px}
-@media(max-width:650px){.schedule-as-week{max-width:100%}.schedule-as-week .schedule-week-label{padding:0 10px}.schedule-as-week .week-step{width:30px;height:30px}.schedule-as-week .week-step svg{width:17px;height:17px}}
-/* 极窄屏放不下一行时，日期回到标题下面，箭头随之收窄。 */
-@media(max-width:480px){
-  .schedule-as-week{gap:0}
-  .schedule-as-week .schedule-week-label{flex-direction:column;align-items:center;gap:1px;padding:0 8px;white-space:normal}
-  .schedule-as-week .schedule-week-label strong{font-size:15px;letter-spacing:0}
-  .schedule-as-week .schedule-week-label span{font-size:10.5px}
-  .schedule-as-week .schedule-week-label span::before{content:none}
+@media(max-width:650px){
+  .schedule-as-week{max-width:100%}
+  .schedule-as-week strong{font-size:23px}
+  .schedule-as-week .schedule-week-nav{white-space:normal}
+  .schedule-as-week .week-step{width:26px;height:26px}
+  .schedule-as-week .week-step svg{width:16px;height:16px}
 }
 .schedule-season{display:grid;gap:6px;text-align:left;border:0;background:none;color:var(--ink);cursor:pointer;padding:0}.schedule-season strong{font-family:Georgia,"Microsoft YaHei",serif;font-size:27px;letter-spacing:1px}.schedule-season span{font-size:12px;color:var(--muted)}
 .schedule-toolbar-right{display:flex;gap:12px;align-items:center}.schedule-toolbar-right input{width:220px;min-height:42px;padding:10px 15px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.8);font:inherit;color:var(--ink)}
