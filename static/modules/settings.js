@@ -242,6 +242,7 @@ function renderSettingsPanels() {
   $("#showEpisodeRatingRecordInput").checked = showEpisodeRatingRecord();
   $("#showCharacterTabInput").checked = state.settings.show_character_tab !== false;
   $("#showBgmRatingInput").checked = showBgmRating();
+  $("#bgmRatingLinkInput").checked = state.settings.bgm_rating_link !== false;
   $("#showCollectionBgmRatingInput").checked = showCollectionBgmRating();
   $("#collectionRatingSourceInput").value = state.settings.collection_rating_source || "bgm";
   $("#collectionAiringSourceInput").value = state.settings.collection_airing_source || "bgm";

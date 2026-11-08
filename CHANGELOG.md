@@ -5,6 +5,13 @@
 
 ## 2026-11-08
 
+### 新增：Bangumi 评分行可点击跳转（设置开关）
+- 设置 → 番剧详情 → 评分与资料 新增开关「**Bangumi 评分行可点击跳转**」，默认开启。开启时详情页「7.3 ｜ 排名 #15663 ｜ 3,327 人评分」整行变成真 `<a>`，点击在新标签打开 Bangumi 条目页；中键、右键与上方 Bangumi 链接完全一致。
+- 链接与上方外链**同源**：复用 `detail_links` 里那条 bgm 链接的 URL 模板和 `bgm_site_base`，自定义镜像域名或链接模板时两者一起变；`target=_blank` / `rel=noreferrer` 一致。实测两边都是 `https://bgm.tv/subject/535669`。
+- 关掉开关、或该番没有评分数据时，href / target / rel / title 全部移除，恢复纯文本；hover 只在主数字上给一点下划线反馈，不改原有配色（`#animeRating` 由 `div` 改成 `a`）。
+- 后端 `database.py` 默认值 + `settings_service.py` 白名单与布尔归一化（**已重启 43127** 才生效）。新增 `tests/verify_bgm_rating_link.cjs`、`tests/test_bgm_rating_link.py`。前端 66 个 verify 全过、后端 535 passed。
+- 版本号 `?v=20261108-rating-link`。
+
 ### 精简：详情头部更新徽标去掉与界面重复的信息
 - 你说这行和界面原有信息重叠太多。三态按你的要求改成只留独有信息：
 

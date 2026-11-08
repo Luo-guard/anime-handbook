@@ -128,6 +128,33 @@ function renderProgressBadge(anime) {
   $("#progressBadgeText").textContent = model.text;
 }
 
+// 评分行整行跳 Bangumi：和上面的 Bangumi 外链共用同一个链接模板与
+// bgm_site_base，target/rel 也一致，中键与右键都交给浏览器原生处理。
+function bgmRatingHref(anime) {
+  const site = String(state.settings?.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
+  const title = String(anime?.name_cn || anime?.name || anime?.display_name || "").trim();
+  const values = { id: anime?.id ?? "", title, site };
+  const preset = typeof detailLinks === "function"
+    ? detailLinks().find((link) => link && link.enabled && link.kind === "bgm")
+    : null;
+  const template = preset?.url || "{site}/subject/{id}";
+  return typeof detailLinkHref === "function"
+    ? detailLinkHref(template, values)
+    : `${site}/subject/${values.id}`;
+}
+
+function applyBgmRatingLink(rating, anime, hasRating) {
+  const on = state.settings?.bgm_rating_link !== false;
+  if (on && hasRating) {
+    rating.setAttribute("href", bgmRatingHref(anime));
+    rating.setAttribute("target", "_blank");
+    rating.setAttribute("rel", "noreferrer");
+    rating.title = "在 Bangumi 打开这个条目";
+  } else {
+    ["href", "target", "rel", "title"].forEach((attr) => rating.removeAttribute(attr));
+  }
+}
+
 function openProgress(animeId) {
   const anime = state.animes.find((item) => item.id === animeId);
   if (!anime) return;
@@ -156,6 +183,7 @@ function openProgress(animeId) {
   const votes = Number(anime.bgm_rating_total);
   const hasRating = Number.isFinite(score) && score > 0;
   rating.classList.toggle("hidden", !showBgmRating() || !hasRating);
+  applyBgmRatingLink(rating, anime, hasRating);
   if (showBgmRating() && hasRating) {
     rating.innerHTML = `
       <span class="rating-score">${score.toFixed(1)}</span>

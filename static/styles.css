@@ -1842,6 +1842,14 @@ input[type="number"] {
   background: var(--line);
 }
 
+/* 评分行作为链接时保持原来的中性配色，只在 hover 给主数字一点反馈；
+   没有 href（开关关掉）时就是普通文本，不显示手型。 */
+.anime-rating[href],
+.anime-rating[href]:visited { color: var(--muted); text-decoration: none; cursor: pointer; }
+.anime-rating[href]:hover .rating-score { color: var(--green-700); text-decoration: underline; text-underline-offset: 4px; }
+.anime-rating[href]:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 3px; border-radius: 6px; }
+.anime-rating:not([href]) { cursor: default; }
+
 .progress-meta a,
 .comment-trigger {
   padding: 0;

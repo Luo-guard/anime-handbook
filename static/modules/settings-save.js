@@ -81,6 +81,7 @@ const HandbookSettings = (() => {
           show_episode_rating_record: $("#showEpisodeRatingRecordInput").checked,
           show_character_tab: $("#showCharacterTabInput").checked,
           show_bgm_rating: $("#showBgmRatingInput").checked,
+          bgm_rating_link: $("#bgmRatingLinkInput").checked,
           show_bgm_rating_in_collection: $("#showCollectionBgmRatingInput").checked,
           collection_rating_source: $("#collectionRatingSourceInput").value,
           show_collection_rating_control: $("#showCollectionRatingControlInput").checked,

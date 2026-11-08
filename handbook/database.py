@@ -572,6 +572,7 @@ class HandbookDB:
                     {"id": "other", "name": "其他记录", "color": "#7c8790", "builtin": True},
                 ],
                 "show_bgm_rating": True,
+                "bgm_rating_link": True,
                 "show_bgm_rating_in_collection": True,
                 "show_collection_rating_control": True,
                 "collection_rating_source": "bgm",

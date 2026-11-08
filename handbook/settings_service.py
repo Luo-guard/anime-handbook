@@ -29,6 +29,7 @@ def _normalize_settings(body, settings):
         "show_comment_events",
         "record_themes",
         "show_bgm_rating",
+        "bgm_rating_link",
         "show_bgm_rating_in_collection",
         "show_collection_rating_control",
         "collection_rating_source",
@@ -215,6 +216,8 @@ def _normalize_settings(body, settings):
             elif key == "new_record_defaults_to_other":
                 value = bool(value)
             elif key == "show_bgm_rating":
+                value = bool(value)
+            elif key == "bgm_rating_link":
                 value = bool(value)
             elif key == "show_bgm_rating_in_collection":
                 value = bool(value)

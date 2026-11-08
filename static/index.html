@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-detail-actions-d" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-rating-link" />
   </head>
   <body>
     <div class="app-shell">
@@ -388,7 +388,7 @@
             <p class="progress-meta"><span id="progressAirDate"></span><span id="progressBadge" class="update-badge hidden"><i class="update-badge-dot" aria-hidden="true"></i><span id="progressBadgeText"></span></span></p>
             <p class="progress-links"><span id="detailLinks" class="detail-links"></span></p>
             <div class="progress-info-row">
-              <div class="anime-rating hidden" id="animeRating"></div>
+              <a class="anime-rating hidden" id="animeRating"></a>
               <div class="personal-rating hidden" id="personalRating"></div>
               <div class="progress-actions">
                 <div class="detail-actions">
@@ -666,6 +666,16 @@
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="showBgmRatingInput" />
+              <span class="switch"></span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <span>
+              <strong>Bangumi 评分行可点击跳转</strong>
+              <small>开启后，详情页的「评分 / 排名 / 评分人数」整行变成链接，点击在新标签打开 Bangumi 条目页；中键、右键与上方 Bangumi 链接一致。</small>
+            </span>
+            <span class="switch-row compact">
+              <input type="checkbox" id="bgmRatingLinkInput" />
               <span class="switch"></span>
             </span>
           </label>
@@ -1213,15 +1223,15 @@
     <script src="/modules/video-links.js?v=20261107-arrow-in-name" defer></script>
     <script src="/modules/rules-menu.js?v=20261107-rules-cache" defer></script>
     <script src="/modules/episode-gesture.js?v=20261107-quick-menu-scale" defer></script>
-    <script src="/modules/details.js?v=20261108-badge-text" defer></script>
+    <script src="/modules/details.js?v=20261108-rating-link" defer></script>
     <script src="/modules/records.js?v=20261106-timeline-defaults" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261106-collection-order" defer></script>
-    <script src="/modules/settings.js?v=20261107-no-dup-links" defer></script>
+    <script src="/modules/settings.js?v=20261108-rating-link" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
-    <script src="/modules/settings-save.js?v=20261107-origin-filter" defer></script>
+    <script src="/modules/settings-save.js?v=20261108-rating-link" defer></script>
     <script src="/modules/events.js?v=20261107-filter-panel" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
