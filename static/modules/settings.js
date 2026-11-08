@@ -1234,8 +1234,15 @@ function addSelectedLinkRules() {
 }
 
 // ===== 设置搜索（VS Code 式）：输入即在页内过滤——隐藏分类导航，命中的
-// 设置行连着小节标题搬进结果区按分类平铺，命中文字高亮；清空后原样放回。
-const settingsSearchState = { moved: [], panel: null };
+// 设置行连着小节标题搬进结果区按分类平铺，命中文字加粗高亮；↑/↓（或
+// Enter / Shift+Enter）逐个跳转；清空后原样放回。
+const settingsSearchState = {
+  moved: [], panel: null,
+  marks: [],       // 本次搜索创建的 <mark>，还原时拆开
+  hitInputs: [],   // 值里含关键词的输入框，加了提示底色
+  matches: [],     // 结果区里的 .setting-row，按 DOM 顺序即跳转顺序
+  current: -1,     // 当前跳到第几个匹配
+};
 
 function settingsSearchTokens(query) {
   return String(query || "").toLowerCase().split(/\s+/).filter(Boolean);
@@ -1263,36 +1270,103 @@ function restoreSearchRows() {
   settingsSearchState.moved = [];
 }
 
-function clearSearchHighlight() {
-  if (window.CSS?.highlights) CSS.highlights.delete("settings-hit");
+function escapeSearchToken(token) {
+  return token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// 命中文字高亮走 CSS Custom Highlight API：不改动 DOM（改 innerHTML 会弄断
-// 各设置项自己的事件绑定），Chromium 105+ 生效，不支持的浏览器只是没高亮。
+// 高亮不用 CSS Highlight API（用户浏览器上实测不出效果），直接把命中文本
+// 包进 <mark>：加粗 + 主题色底，全浏览器可见。mark 只包纯文本节点，不碰
+// 元素结构和各设置项自己的事件绑定；还原时按记录逐个拆开即可。
+function clearSearchHighlight() {
+  for (const mark of settingsSearchState.marks) {
+    const parent = mark.parentNode;
+    if (!parent) continue;
+    mark.replaceWith(...mark.childNodes);
+    parent.normalize();
+  }
+  settingsSearchState.marks = [];
+  for (const input of settingsSearchState.hitInputs) {
+    input.classList.remove("settings-hit-input");
+  }
+  settingsSearchState.hitInputs = [];
+  for (const row of settingsSearchState.matches) {
+    row.classList.remove("settings-search-current");
+  }
+  settingsSearchState.matches = [];
+  settingsSearchState.current = -1;
+}
+
 function applySearchHighlight(root, tokens) {
   clearSearchHighlight();
-  if (!window.CSS?.highlights || typeof Highlight === "undefined" || !tokens.length) return;
-  const ranges = [];
+  if (!tokens.length) return;
+  const pattern = new RegExp(tokens.map(escapeSearchToken).join("|"), "gi");
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) =>
       node.parentElement?.closest("input,select,textarea,script,style")
         ? NodeFilter.FILTER_REJECT
         : NodeFilter.FILTER_ACCEPT,
   });
-  for (let node = walker.nextNode(); node && ranges.length < 400; node = walker.nextNode()) {
-    const text = node.nodeValue.toLowerCase();
-    for (const token of tokens) {
-      let index = text.indexOf(token);
-      while (index >= 0 && ranges.length < 400) {
-        const range = document.createRange();
-        range.setStart(node, index);
-        range.setEnd(node, index + token.length);
-        ranges.push(range);
-        index = text.indexOf(token, index + Math.max(1, token.length));
-      }
+  // 先收集命中节点再切分：切分会改树结构，边走边切会打乱 TreeWalker。
+  const targets = [];
+  for (let node = walker.nextNode(); node && targets.length < 600; node = walker.nextNode()) {
+    pattern.lastIndex = 0;
+    if (pattern.test(node.nodeValue)) targets.push(node);
+  }
+  for (const node of targets) {
+    const text = node.nodeValue;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    pattern.lastIndex = 0;
+    for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+      if (match.index > last) frag.append(text.slice(last, match.index));
+      const mark = document.createElement("mark");
+      mark.className = "settings-hit-mark";
+      mark.textContent = match[0];
+      frag.append(mark);
+      settingsSearchState.marks.push(mark);
+      last = match.index + match[0].length;
+      if (settingsSearchState.marks.length >= 600) break;
+    }
+    if (last < text.length) frag.append(text.slice(last));
+    if (frag.childNodes.length) node.replaceWith(frag);
+  }
+  // 输入框的值不是文本节点，包不了 mark：给值里含关键词的输入框加提示底色。
+  for (const input of $$("input,textarea", root)) {
+    const value = String(input.value || "").toLowerCase();
+    if (value && tokens.some((token) => value.includes(token))) {
+      input.classList.add("settings-hit-input");
+      settingsSearchState.hitInputs.push(input);
     }
   }
-  if (ranges.length) CSS.highlights.set("settings-hit", new Highlight(...ranges));
+}
+
+function gotoSearchMatch(step) {
+  const matches = settingsSearchState.matches;
+  if (!matches.length) return;
+  const next = (settingsSearchState.current + step + matches.length) % matches.length;
+  matches[settingsSearchState.current]?.classList.remove("settings-search-current");
+  settingsSearchState.current = next;
+  const row = matches[next];
+  row.classList.add("settings-search-current");
+  row.scrollIntoView({ block: "center" });
+  const count = $("#settingsSearchCount");
+  if (count) count.textContent = `${next + 1} / ${matches.length}`;
+}
+
+// 搜索后落在第一个匹配上（VS Code 行为）：高亮 + 计数，不滚动免得打字时乱跳。
+function focusFirstSearchMatch() {
+  const matches = settingsSearchState.matches;
+  const count = $("#settingsSearchCount");
+  if (!matches.length) {
+    if (count) { count.textContent = ""; count.classList.add("hidden"); }
+    return;
+  }
+  matches[0].classList.add("settings-search-current");
+  settingsSearchState.current = 0;
+  if (count) {
+    count.textContent = `1 / ${matches.length}`;
+    count.classList.remove("hidden");
+  }
 }
 
 function resetSettingsSearch() {
@@ -1316,12 +1390,13 @@ function runSettingsSearch(query) {
     panel.hidden = true;
     panel.replaceChildren();
     if (count) { count.textContent = ""; count.classList.add("hidden"); }
+    $("#settingsSearchPrev")?.classList.add("hidden");
+    $("#settingsSearchNext")?.classList.add("hidden");
     return;
   }
 
   // 按侧栏顺序扫每个分类；行按「所属小节标题 + 行文本」匹配，多关键词全含。
   const sections = [];
-  let total = 0;
   for (const head of $$("[data-settings-tab]")) {
     const tab = head.dataset.settingsTab;
     const group = $(`.settings-group[data-settings-group="${tab}"]`);
@@ -1335,7 +1410,6 @@ function runSettingsSearch(query) {
       if (tokens.every((token) => haystack.includes(token))) matched.push({ node, sub: currentSub });
     }
     if (!matched.length) continue;
-    total += matched.length;
     const section = document.createElement("div");
     section.className = "settings-search-section";
     const title = document.createElement("p");
@@ -1361,11 +1435,11 @@ function runSettingsSearch(query) {
   panel.replaceChildren(...(sections.length ? sections : [emptyMessage]));
   panel.hidden = false;
   modal.classList.add("settings-searching");
-  if (count) {
-    count.textContent = `${total} 项`;
-    count.classList.remove("hidden");
-  }
   applySearchHighlight(panel, tokens);
+  settingsSearchState.matches = $$(".setting-row", panel);
+  $("#settingsSearchPrev")?.classList.toggle("hidden", !settingsSearchState.matches.length);
+  $("#settingsSearchNext")?.classList.toggle("hidden", !settingsSearchState.matches.length);
+  focusFirstSearchMatch();
 }
 
 function initSettingsSearch() {
@@ -1375,8 +1449,18 @@ function initSettingsSearch() {
     initSettingsSearch.bound = true;
     input.addEventListener("input", (event) => runSettingsSearch(event.target.value));
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") { event.stopPropagation(); resetSettingsSearch(); }
+      if (event.key === "Escape") { event.stopPropagation(); resetSettingsSearch(); return; }
+      // VS Code 式遍历：Enter 下一个，Shift+Enter 上一个；上下方向键同义。
+      if (event.key === "Enter" || event.key === "ArrowDown") {
+        event.preventDefault();
+        gotoSearchMatch(event.shiftKey ? -1 : 1);
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        gotoSearchMatch(-1);
+      }
     });
+    $("#settingsSearchPrev")?.addEventListener("click", () => gotoSearchMatch(-1));
+    $("#settingsSearchNext")?.addEventListener("click", () => gotoSearchMatch(1));
     $("#settingsSearchClear")?.addEventListener("click", resetSettingsSearch);
     // 搜索状态下直接关弹窗也没事：close 时把搬走的行放回原位。
     $("#settingsModal")?.addEventListener("close", () => {
@@ -1386,6 +1470,8 @@ function initSettingsSearch() {
       if (settingsSearchState.panel) settingsSearchState.panel.hidden = true;
       $("#settingsModal").classList.remove("settings-searching");
       $("#settingsSearchClear")?.classList.add("hidden");
+      $("#settingsSearchPrev")?.classList.add("hidden");
+      $("#settingsSearchNext")?.classList.add("hidden");
       const count = $("#settingsSearchCount");
       if (count) { count.textContent = ""; count.classList.add("hidden"); }
       if (input) input.value = "";

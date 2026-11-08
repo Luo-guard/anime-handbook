@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-per-source" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-search-nav" />
   </head>
   <body>
     <div class="app-shell">
@@ -602,6 +602,8 @@
             <svg class="settings-search-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             <input type="search" id="settingsSearch" placeholder="搜索设置项…" autocomplete="off" spellcheck="false" />
             <span class="settings-search-count hidden" id="settingsSearchCount"></span>
+            <button type="button" class="settings-search-nav prev hidden" id="settingsSearchPrev" aria-label="上一个匹配" title="上一个（Shift+Enter）"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
+            <button type="button" class="settings-search-nav next hidden" id="settingsSearchNext" aria-label="下一个匹配" title="下一个（Enter）"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
             <button type="button" class="settings-search-clear hidden" id="settingsSearchClear" aria-label="清空搜索">×</button>
           </div>
         </div>
@@ -1429,7 +1431,7 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261106-collection-order" defer></script>
-    <script src="/modules/settings.js?v=20261108-search-v2" defer></script>
+    <script src="/modules/settings.js?v=20261108-search-nav" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261108-search-ui" defer></script>
