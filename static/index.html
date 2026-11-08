@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-danmaku-final" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-player-layer" />
   </head>
   <body>
     <div class="app-shell">
@@ -365,6 +365,7 @@
         </section>
       </div>
     </dialog>
+    <div class="offline-player-backdrop" id="offlinePlayerBackdrop" hidden></div>
     <dialog class="modal offline-player" id="offlinePlayer">
       <div class="modal-frame offline-player-frame">
         <button type="button" class="modal-close" id="offlinePlayerClose" aria-label="关闭">×</button>
@@ -1272,8 +1273,8 @@
     <script src="/modules/collection-edit.js?v=20261106-collection-order" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/danmaku.js?v=20261108-danmaku-final" defer></script>
-    <script src="/modules/offline.js?v=20261108-danmaku-final" defer></script>
+    <script src="/modules/danmaku.js?v=20261108-player-layer" defer></script>
+    <script src="/modules/offline.js?v=20261108-player-layer" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

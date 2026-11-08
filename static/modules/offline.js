@@ -16,6 +16,8 @@ const offlineView = {
   subtitleToken: 0,
   jassubPromise: null,
   subtitleBoot: null,
+  // 打开播放器前收起的模态弹窗 id，关掉播放器后原样恢复。
+  returnDialogs: [],
 };
 
 function offlineStatus(target, text, isError = false) {
@@ -392,6 +394,41 @@ async function localFileForEpisode(key) {
   ) || null;
 }
 
+// 原生 <video> 的超分由浏览器扩展（NijiLucid 等）接管，扩展通常把开关按钮
+// 以 position:fixed 挂在 body 上。模态 dialog 会进入 top layer，z-index 再高
+// 的扩展控件也会被它整个挡住 —— B 站视频能显示超分按钮、我们播放器不能，
+// 根因就在这里。所以看片时收起其它模态弹窗，播放器改用非模态 show()，
+// 让扩展控件浮在播放器之上；关掉播放器再把原来的弹窗恢复。
+function openOfflinePlayerDialog() {
+  const player = $("#offlinePlayer");
+  if (!player || player.open) return;
+  offlineView.returnDialogs = [...document.querySelectorAll("dialog[open]")]
+    .filter((node) => node !== player && node.id)
+    .map((node) => node.id);
+  offlineView.returnDialogs.forEach((id) => {
+    const node = document.getElementById(id);
+    if (node && node.open) node.close();
+  });
+  const backdrop = $("#offlinePlayerBackdrop");
+  if (backdrop) backdrop.hidden = false;
+  player.show();
+  // 非模态 dialog 不自动拿焦点；聚焦 dialog 本体（不是关闭按钮，否则那个 ×
+  // 会多一圈焦点环），Esc 与 Tab 的顺序才和模态时一致。
+  player.focus({ preventScroll: true });
+}
+
+function restoreOfflineReturnDialogs() {
+  const ids = offlineView.returnDialogs || [];
+  offlineView.returnDialogs = [];
+  ids.forEach((id) => {
+    const node = document.getElementById(id);
+    if (!node || node.open) return;
+    try { node.showModal(); } catch (error) { /* 已被别处接管就不强求 */ }
+  });
+  // 离线面板在 close 时会停掉轮询，恢复后要重新打开。
+  if (ids.includes("offlineModal") && $("#offlineModal")?.open) setOfflinePolling(true);
+}
+
 function playLocalFile(fileId) {
   const file = offlineView.local.files.find((item) => Number(item.id) === Number(fileId));
   if (!file) return;
@@ -414,8 +451,7 @@ function playLocalFile(fileId) {
     : "这一集没有内封字幕。";
   video.src = `/api/offline/stream/${file.id}`;
   if (file.subtitle_path) setupSubtitleRenderer(file, video);
-  const dialog = $("#offlinePlayer");
-  if (!dialog.open) dialog.showModal();
+  openOfflinePlayerDialog();
   video.addEventListener(
     "loadedmetadata",
     () => {
@@ -459,6 +495,9 @@ function closeOfflinePlayer() {
   video.load();
   const dialog = $("#offlinePlayer");
   if (dialog.open) dialog.close();
+  const backdrop = $("#offlinePlayerBackdrop");
+  if (backdrop) backdrop.hidden = true;
+  restoreOfflineReturnDialogs();
   offlineView.playing = null;
   refreshOfflineLocal();
 }
@@ -607,6 +646,14 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#offlineSubtitleToggle")?.addEventListener("click", toggleSubtitleRenderer);
   $("#offlinePlayerClose")?.addEventListener("click", closeOfflinePlayer);
+  $("#offlinePlayerBackdrop")?.addEventListener("click", closeOfflinePlayer);
+  // 非模态 dialog 按 Esc 不会自动关闭，自己补上（其它弹窗此时已收起）。
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && $("#offlinePlayer")?.open) {
+      event.preventDefault();
+      closeOfflinePlayer();
+    }
+  });
   $("#offlinePlayer")?.addEventListener("close", () => {
     if (offlineView.playing) closeOfflinePlayer();
   });

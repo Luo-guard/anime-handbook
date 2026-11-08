@@ -4476,3 +4476,19 @@ dialog.modal { overflow-x: hidden; }
   .progress-meta { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
   .update-badge { white-space: nowrap; }
 }
+
+/* 播放器改用非模态 dialog：模态会进 top layer，把浏览器扩展注入的超分按钮
+   整个挡住（B 站普通页面能显示、我们播放器不能）。这里自建背板替代
+   ::backdrop，层级刻意低于扩展的 fixed 控件（通常是 2147483647），
+   这样超分开关能浮在播放器之上、也点得到。 */
+.offline-player-backdrop {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(10, 24, 17, .6); backdrop-filter: blur(5px);
+}
+.offline-player-backdrop[hidden] { display: none; }
+dialog.offline-player {
+  position: fixed; inset: 0; margin: auto; z-index: 901;
+}
+/* 非模态播放器由 JS 主动聚焦 dialog 本体来保持键盘顺序；容器不是交互控件，
+   浏览器默认的 focus ring 会在白色弹窗四周多出一圈线，这里去掉。 */
+dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none; }
