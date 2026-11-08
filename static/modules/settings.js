@@ -1233,78 +1233,162 @@ function addSelectedLinkRules() {
   toast(`已添加 ${added} 个搜索链接，点右下角「保存设置」生效`);
 }
 
-// ===== 设置搜索：输入关键词列出匹配项，点击跳到对应分组并高亮 =====
-let settingsSearchIndex = null;
+// ===== 设置搜索（VS Code 式）：输入即在页内过滤——隐藏分类导航，命中的
+// 设置行连着小节标题搬进结果区按分类平铺，命中文字高亮；清空后原样放回。
+const settingsSearchState = { moved: [], panel: null };
 
-function buildSettingsSearchIndex() {
-  const items = [];
-  $$(".settings-group").forEach((group) => {
-    const tab = group.dataset.settingsGroup || "";
-    const tabName = ($(`[data-settings-tab="${tab}"]`)?.textContent || tab).trim();
-    group.querySelectorAll(".setting-row").forEach((row) => {
-      items.push({
-        tab,
-        tabName,
-        row,
-        haystack: `${row.textContent}`.toLowerCase(),
-      });
-    });
+function settingsSearchTokens(query) {
+  return String(query || "").toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+function ensureSearchPanel() {
+  if (settingsSearchState.panel?.isConnected) return settingsSearchState.panel;
+  const list = $(".settings-list");
+  if (!list) return null;
+  const panel = document.createElement("section");
+  panel.className = "settings-search-results";
+  panel.id = "settingsSearchResults";
+  panel.hidden = true;
+  list.append(panel);
+  settingsSearchState.panel = panel;
+  return panel;
+}
+
+function restoreSearchRows() {
+  // 逆序放回：每个节点的锚点（原 nextSibling）要么没动过，要么比自己晚搬、
+  // 已经先放回去了，insertBefore 才不会踩空。
+  for (const record of [...settingsSearchState.moved].reverse()) {
+    record.parent.insertBefore(record.node, record.next);
+  }
+  settingsSearchState.moved = [];
+}
+
+function clearSearchHighlight() {
+  if (window.CSS?.highlights) CSS.highlights.delete("settings-hit");
+}
+
+// 命中文字高亮走 CSS Custom Highlight API：不改动 DOM（改 innerHTML 会弄断
+// 各设置项自己的事件绑定），Chromium 105+ 生效，不支持的浏览器只是没高亮。
+function applySearchHighlight(root, tokens) {
+  clearSearchHighlight();
+  if (!window.CSS?.highlights || typeof Highlight === "undefined" || !tokens.length) return;
+  const ranges = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      node.parentElement?.closest("input,select,textarea,script,style")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
   });
-  return items;
+  for (let node = walker.nextNode(); node && ranges.length < 400; node = walker.nextNode()) {
+    const text = node.nodeValue.toLowerCase();
+    for (const token of tokens) {
+      let index = text.indexOf(token);
+      while (index >= 0 && ranges.length < 400) {
+        const range = document.createRange();
+        range.setStart(node, index);
+        range.setEnd(node, index + token.length);
+        ranges.push(range);
+        index = text.indexOf(token, index + Math.max(1, token.length));
+      }
+    }
+  }
+  if (ranges.length) CSS.highlights.set("settings-hit", new Highlight(...ranges));
 }
 
 function resetSettingsSearch() {
   const input = $("#settingsSearch");
   if (input) input.value = "";
-  const panel = $("#settingsSearchResults");
-  if (panel) { panel.classList.add("hidden"); panel.innerHTML = ""; }
-  const count = $("#settingsSearchCount");
-  if (count) { count.textContent = ""; count.classList.add("hidden"); }
+  runSettingsSearch("");
 }
 
 function runSettingsSearch(query) {
-  const panel = $("#settingsSearchResults");
+  const modal = $("#settingsModal");
+  const panel = ensureSearchPanel();
   const count = $("#settingsSearchCount");
-  if (!panel || !count) return;
-  const q = String(query || "").trim().toLowerCase();
-  if (!q) { resetSettingsSearch(); return; }
-  // 每次搜索前重建索引：主题卡片、快捷键等动态区块会变。
-  settingsSearchIndex = buildSettingsSearchIndex();
-  const hits = settingsSearchIndex.filter((item) => item.haystack.includes(q));
-  count.textContent = `${hits.length} 项`;
-  count.classList.remove("hidden");
-  panel.innerHTML = hits.length
-    ? hits.slice(0, 40).map((hit) => {
-        const key = settingsSearchIndex.indexOf(hit);
-        const title = (hit.row.querySelector("strong")?.textContent || hit.tabName).trim().slice(0, 70);
-        return `<button type="button" data-search-key="${key}"><b>${escapeHtml(hit.tabName)}</b><span>${escapeHtml(title)}</span></button>`;
-      }).join("")
-    : `<p class="settings-search-empty">没有匹配「${escapeHtml(query.trim())}」的设置项</p>`;
-  panel.classList.remove("hidden");
+  const clearButton = $("#settingsSearchClear");
+  if (!modal || !panel) return;
+  restoreSearchRows();
+  clearSearchHighlight();
+  const tokens = settingsSearchTokens(query);
+  clearButton?.classList.toggle("hidden", !tokens.length);
+  if (!tokens.length) {
+    modal.classList.remove("settings-searching");
+    panel.hidden = true;
+    panel.replaceChildren();
+    if (count) { count.textContent = ""; count.classList.add("hidden"); }
+    return;
+  }
+
+  // 按侧栏顺序扫每个分类；行按「所属小节标题 + 行文本」匹配，多关键词全含。
+  const sections = [];
+  let total = 0;
+  for (const head of $$("[data-settings-tab]")) {
+    const tab = head.dataset.settingsTab;
+    const group = $(`.settings-group[data-settings-group="${tab}"]`);
+    if (!group) continue;
+    let currentSub = null;
+    const matched = [];
+    for (const node of group.children) {
+      if (node.classList?.contains("settings-subsection-title")) currentSub = node;
+      if (!node.classList?.contains("setting-row")) continue;
+      const haystack = `${currentSub?.textContent || ""} ${node.textContent}`.toLowerCase();
+      if (tokens.every((token) => haystack.includes(token))) matched.push({ node, sub: currentSub });
+    }
+    if (!matched.length) continue;
+    total += matched.length;
+    const section = document.createElement("div");
+    section.className = "settings-search-section";
+    const title = document.createElement("p");
+    title.className = "settings-search-section-title";
+    title.textContent = `${head.textContent.trim()} · ${matched.length} 项`;
+    section.append(title);
+    const movedSubs = new Set();
+    for (const item of matched) {
+      if (item.sub && !movedSubs.has(item.sub)) {
+        settingsSearchState.moved.push({ parent: item.sub.parentElement, node: item.sub, next: item.sub.nextSibling });
+        section.append(item.sub);
+        movedSubs.add(item.sub);
+      }
+      settingsSearchState.moved.push({ parent: item.node.parentElement, node: item.node, next: item.node.nextSibling });
+      section.append(item.node);
+    }
+    sections.push(section);
+  }
+
+  const emptyMessage = document.createElement("p");
+  emptyMessage.className = "settings-search-empty";
+  emptyMessage.textContent = `没有匹配「${String(query).trim()}」的设置项，换个词试试`;
+  panel.replaceChildren(...(sections.length ? sections : [emptyMessage]));
+  panel.hidden = false;
+  modal.classList.add("settings-searching");
+  if (count) {
+    count.textContent = `${total} 项`;
+    count.classList.remove("hidden");
+  }
+  applySearchHighlight(panel, tokens);
 }
 
 function initSettingsSearch() {
   const input = $("#settingsSearch");
   if (!input) return;
-  resetSettingsSearch();
   if (!initSettingsSearch.bound) {
     initSettingsSearch.bound = true;
     input.addEventListener("input", (event) => runSettingsSearch(event.target.value));
     input.addEventListener("keydown", (event) => {
       if (event.key === "Escape") { event.stopPropagation(); resetSettingsSearch(); }
     });
-    $("#settingsSearchResults")?.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-search-key]");
-      if (!button) return;
-      const item = settingsSearchIndex?.[Number(button.dataset.searchKey)];
-      if (!item || !item.row.isConnected) return;
-      resetSettingsSearch();
-      switchSettingsTab(item.tab);
-      item.row.scrollIntoView({ block: "center", behavior: "smooth" });
-      item.row.classList.remove("settings-search-hit");
-      void item.row.offsetWidth;
-      item.row.classList.add("settings-search-hit");
-      window.setTimeout(() => item.row.classList.remove("settings-search-hit"), 1800);
+    $("#settingsSearchClear")?.addEventListener("click", resetSettingsSearch);
+    // 搜索状态下直接关弹窗也没事：close 时把搬走的行放回原位。
+    $("#settingsModal")?.addEventListener("close", () => {
+      restoreSearchRows();
+      clearSearchHighlight();
+      settingsSearchState.panel?.replaceChildren();
+      if (settingsSearchState.panel) settingsSearchState.panel.hidden = true;
+      $("#settingsModal").classList.remove("settings-searching");
+      $("#settingsSearchClear")?.classList.add("hidden");
+      const count = $("#settingsSearchCount");
+      if (count) { count.textContent = ""; count.classList.add("hidden"); }
+      if (input) input.value = "";
     });
   }
 }

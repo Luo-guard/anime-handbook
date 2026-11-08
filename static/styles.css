@@ -4492,59 +4492,66 @@ dialog.offline-player {
 /* 非模态播放器由 JS 主动聚焦 dialog 本体来保持键盘顺序；容器不是交互控件，
    浏览器默认的 focus ring 会在白色弹窗四周多出一圈线，这里去掉。 */
 dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none; }
-/* ===== 设置搜索：长在标题行右侧的紧凑胶囊，结果从下方浮出，不挤压布局 ===== */
+/* ===== 设置搜索（VS Code 式）：标题行右侧的实感输入框；搜索时隐藏分类导航，
+   命中的设置行按分类平铺在内容区里，命中文字用 Highlight API 高亮。 ===== */
 .settings-title-row {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  position: relative; padding-right: 46px;
+  padding-right: 46px;
 }
 .settings-title-row h2 { margin: 0; }
-.settings-search { position: relative; flex: 0 1 250px; min-width: 170px; }
+.settings-search { position: relative; flex: 0 1 280px; min-width: 200px; }
 .settings-search-icon {
-  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
   width: 14px; height: 14px; color: var(--muted); pointer-events: none;
 }
 .settings-search input {
-  width: 100%; box-sizing: border-box; height: 32px; padding: 0 32px;
-  border: 1px solid rgb(var(--theme-rgb) / .12); border-radius: 999px;
-  background: rgb(var(--theme-rgb) / .04); color: var(--ink);
-  font: inherit; font-size: 12.5px;
+  width: 100%; box-sizing: border-box; height: 34px; padding: 0 58px 0 33px;
+  border: 1px solid rgb(var(--theme-rgb) / .45); border-radius: 10px;
+  background: rgb(var(--theme-rgb) / .1); color: var(--ink);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04);
+  font: inherit; font-size: 13px;
+  transition: border-color .15s, background .15s;
 }
-.settings-search input::placeholder { color: var(--muted); }
+.settings-search input::placeholder { color: color-mix(in srgb, var(--muted) 55%, var(--ink)); }
 .settings-search input:focus {
   outline: none; border-color: var(--active-inset);
   background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--active-inset) 22%, transparent);
 }
 .settings-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
 .settings-search-count {
-  position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: 32px; top: 50%; transform: translateY(-50%);
   color: var(--muted); font-size: 11px; pointer-events: none;
+  white-space: nowrap;
 }
-.settings-search-results {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
-  width: min(340px, 78vw); max-height: 300px; overflow-y: auto;
-  border: 1px solid var(--line); border-radius: 12px;
-  background: var(--surface); box-shadow: 0 16px 40px rgb(0 0 0 / .18);
-  padding: 5px;
+.settings-search-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border: 0; border-radius: 50%;
+  background: rgb(var(--theme-rgb) / .12); color: var(--muted);
+  font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
 }
-.settings-search-results[hidden] { display: none; }
-.settings-search-results button {
-  display: flex; gap: 8px; align-items: center; width: 100%; text-align: left;
-  padding: 7px 9px; border: 0; border-radius: 8px; background: transparent;
-  color: var(--ink); font: inherit; cursor: pointer;
+.settings-search-clear:hover { background: rgb(var(--theme-rgb) / .22); color: var(--ink); }
+
+/* 搜索态：整页过滤，代替分类页签 */
+.settings-modal.settings-searching .settings-side-nav { display: none; }
+.settings-modal.settings-searching .settings-layout { grid-template-columns: minmax(0, 1fr); }
+.settings-modal.settings-searching .settings-group { display: none; }
+#settingsSearchResults {
+  display: none;
+  flex-direction: column; gap: 2px;
+  padding-bottom: 10px;
 }
-.settings-search-results button:hover { background: var(--green-50); }
-.settings-search-results b {
-  flex: 0 0 auto; padding: 2px 8px; border-radius: 999px;
-  background: rgb(var(--theme-rgb) / .08); color: var(--muted);
-  font-size: 11px; font-weight: 500; white-space: nowrap;
+#settingsSearchResults[hidden] { display: none; }
+.settings-modal.settings-searching #settingsSearchResults:not([hidden]) { display: flex; }
+.settings-search-section { display: flex; flex-direction: column; gap: 2px; }
+.settings-search-section-title {
+  margin: 10px 0 4px; padding-bottom: 5px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em;
 }
-.settings-search-results span { font-size: 12.5px; }
-.settings-search-empty { margin: 8px; color: var(--muted); font-size: 12px; }
-.setting-row.settings-search-hit { animation: settingsHit 1.8s ease; border-radius: 8px; }
-@keyframes settingsHit {
-  0%, 55% { box-shadow: 0 0 0 3px var(--green-100); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
+.settings-search-section .settings-subsection-title { margin-top: 8px; }
+.settings-search-empty { margin: 18px 4px; color: var(--muted); font-size: 13px; }
+::highlight(settings-hit) { background-color: var(--green-100); }
 
 /* 播放器标题下的原视频名（种子标题，动辄很长，单行省略 + 悬停看全） */
 .offline-player-source {

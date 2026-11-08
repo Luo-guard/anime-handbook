@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-library" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-search-v2" />
   </head>
   <body>
     <div class="app-shell">
@@ -517,10 +517,10 @@
           <h2>手账设置</h2>
           <div class="settings-search">
             <svg class="settings-search-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <input type="search" id="settingsSearch" placeholder="搜索设置…" autocomplete="off" />
+            <input type="search" id="settingsSearch" placeholder="搜索设置项…" autocomplete="off" spellcheck="false" />
             <span class="settings-search-count hidden" id="settingsSearchCount"></span>
+            <button type="button" class="settings-search-clear hidden" id="settingsSearchClear" aria-label="清空搜索">×</button>
           </div>
-          <div class="settings-search-results hidden" id="settingsSearchResults"></div>
         </div>
         <div class="settings-layout">
           <aside class="settings-side-nav" id="settingsSideNav" aria-label="设置分类">
@@ -1312,7 +1312,7 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261106-collection-order" defer></script>
-    <script src="/modules/settings.js?v=20261108-search-ui" defer></script>
+    <script src="/modules/settings.js?v=20261108-search-v2" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261108-search-ui" defer></script>

@@ -61,36 +61,47 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   assert.equal(source.hidden, false);
   assert.equal(source.title, source.text, '悬停要能看到完整原名');
 
-  // T1 设置搜索：搜「弹幕」有结果、点击跳分组、清空收起
+  // T1 设置搜索（VS Code 式）：搜「评分」页内平铺命中行、计数、高亮；清空后行回到原分组
   await page.evaluate(() => document.querySelector('#settingsButton').click());
   await page.waitForTimeout(500);
   const search = await page.evaluate(() => {
+    const baselineRows = [...document.querySelectorAll('.settings-group')].map((g) => g.querySelectorAll('.setting-row').length);
     const input = document.querySelector('#settingsSearch');
     input.value = '评分';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     const panel = document.querySelector('#settingsSearchResults');
-    const hits = [...panel.querySelectorAll('[data-search-key]')];
-    const visible = !panel.classList.contains('hidden');
-    const before = document.querySelector('.settings-group:not(.hidden)')?.dataset.settingsGroup;
-    hits[0]?.click();
-    const after = document.querySelector('.settings-group:not(.hidden)')?.dataset.settingsGroup;
-    const hitRow = document.querySelector('.setting-row.settings-search-hit');
+    const modal = document.querySelector('#settingsModal');
+    const during = {
+      searching: modal.classList.contains('settings-searching'),
+      panelShown: !panel.hidden,
+      sections: [...panel.querySelectorAll('.settings-search-section-title')].map((n) => n.textContent),
+      rowTotal: [...panel.querySelectorAll('.setting-row')].length,
+      highlightCount: window.CSS?.highlights?.get('settings-hit')?.size || 0,
+      countText: document.querySelector('#settingsSearchCount').textContent,
+      clearButtonVisible: !document.querySelector('#settingsSearchClear').classList.contains('hidden'),
+    };
     input.value = '';
     input.dispatchEvent(new Event('input', { bubbles: true }));
+    const restored = [...document.querySelectorAll('.settings-group')].map((g) => g.querySelectorAll('.setting-row').length);
     return {
-      count: document.querySelector('#settingsSearchCount').textContent,
-      visible,
-      hitCount: hits.length,
-      tabSwitched: before !== after,
-      hitRowShown: Boolean(hitRow),
-      panelHiddenAfterClear: panel.classList.contains('hidden'),
+      ...during,
+      restoredMatchesBaseline: JSON.stringify(restored) === JSON.stringify(baselineRows),
+      panelHiddenAfterClear: panel.hidden,
+      stillSearchingAfterClear: modal.classList.contains('settings-searching'),
+      clearButtonHiddenAfterClear: document.querySelector('#settingsSearchClear').classList.contains('hidden'),
     };
   });
-  assert.ok(search.hitCount > 0, `搜「评分」要有结果，计数：${search.count}`);
-  assert.equal(search.visible, true);
-  assert.equal(search.tabSwitched, true, '点击结果要切到对应分组');
-  assert.equal(search.hitRowShown, true, '目标行要闪高亮');
+  assert.equal(search.searching, true, '搜索时要进入搜索态');
+  assert.equal(search.panelShown, true, '结果面板要显示');
+
+  assert.ok(search.rowTotal > 0, `搜「评分」要有结果，计数：${search.countText}`);
+  assert.ok(search.highlightCount > 0, '命中文字要有 Highlight 高亮');
+  assert.ok(search.sections.length >= 1 && search.sections.every((t) => t.includes('·')), `分组标题：${search.sections.join(' / ')}`);
+  assert.equal(search.restoredMatchesBaseline, true, '清空后所有行要回到原分组原位置');
   assert.equal(search.panelHiddenAfterClear, true, '清空后结果面板要收起');
+  assert.equal(search.stillSearchingAfterClear, false, '清空后要退出搜索态');
+  assert.equal(search.clearButtonVisible, true, '有输入时清除按钮要出现');
+  assert.equal(search.clearButtonHiddenAfterClear, true, '清空后清除按钮要隐藏');
 
   // T2 自动追新番开关在主设置里可开可关，且与离线面板同步
   const autoFollow = await page.evaluate(async () => {
