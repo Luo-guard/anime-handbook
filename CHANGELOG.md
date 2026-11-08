@@ -13,7 +13,8 @@
 - **找资源不预填番名**：`openOffline()` 只在「换了番」时填搜索框，同一番清空过搜索框再点就只剩「先输入关键词」。改为「换番或搜索框为空」都补填。
 - **加入收藏自动打开找资源**：新设置 `auto_open_offline_enabled`（默认关）与 `auto_open_offline_collections`（默认 `["1","2"]` 即在看/想看），UI 在**设置 → 收藏夹 → 离线下载**（开关 + 触发收藏夹复选，五个内置夹和自定义夹都可选）。`changeCollectionStatus` 成功后若目标夹在允许列表，自动打开离线面板并搜好番名（临时借 `state.progressAnime`，不改调用方状态）。后端白名单、布尔/列表归一化与默认值同步（**已重启 43127**）。
 - 实测冲突语义（用户问的三种场景，临时库实测）：同参数订阅两次 → **1 条**（`ON CONFLICT` 更新，不叠加）；换字幕组再订 → 各自独立；同集数两个不同种子 → 任务并存、**后归档者覆盖** `local_files`（唯一键 `anime_id+episode_key`），播放永远指向最新那份；同一种子重复点下载 → 任务不叠加，已入库的集归档时跳过。注意：**归档覆盖不删旧物理文件**（换源后旧 mp4 会留在原目录直到手动删除）。
-- 新增 `tests/verify_settings_batch.cjs`（九项断言）；前端 **69 个 verify 全过**、后端 **546 passed**。版本号 `?v=20261108-settings-batch`。档期行版式按用户定稿**维持「新文案 + 旧药丸」**，测试图已清。
+- 新增 `tests/verify_settings_batch.cjs`（九项断言）；前端 **69 个 verify 全过**、后端 **546 passed**。版本号 `?v=20261108-settings-batch`。
+- 版本号注意：本轮同时改了 settings.js / events.js / settings-save.js / collection-edit.js，这四个的 `?v=` 一并升到 `20261108-settings-batch`（首轮漏升会在强刷后仍跑旧脚本）。另记录一次偶发：`/api/offline/settings` 在旧进程里出现过响应空回（health/bootstrap 正常），重启即恢复，跑批复现失败，持续观察；`verify_theme_profiles` 存在与本轮无关的既有偶发（回退/恢复新键各 5 连跑均为通过）。档期行版式按用户定稿**维持「新文案 + 旧药丸」**，测试图已清。
 
 ### 修复：播放器模态弹窗把浏览器扩展的超分按钮挡住了
 - 现象：同一个 Edge 里，B 站视频能看到超分扩展注入的按钮，动漫手账的内置播放器看不到。
