@@ -101,6 +101,12 @@ class UpstreamSafetyTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 danmaku.safe_base(bad)
 
+    def test_allows_known_public_danmaku_sources(self):
+        for host in ("https://api.danmu.icu", "https://fc.lyz05.cn", "https://danmu.56uxi.com"):
+            self.assertEqual(danmaku.safe_base(host), host)
+        with self.assertRaises(ValueError):
+            danmaku.safe_base("https://random-public-host.example.net")
+
     def test_signature_matches_documented_formula(self):
         url = "https://api.dandanplay.net/api/v2/comment/123?format=json"
         headers = danmaku.signed_headers("my-app", "my-secret", url)

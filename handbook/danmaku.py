@@ -25,8 +25,14 @@ from pathlib import Path
 
 MAX_LOCAL_BYTES = 8 * 1024 * 1024
 MAX_UPSTREAM_BYTES = 8 * 1024 * 1024
-# 在线源只允许官方域名、本机和私有网段，避免这个接口被当成任意 URL 代理。
-ALLOWED_HOSTS = {"api.dandanplay.net", "localhost", "127.0.0.1", "::1"}
+# 在线源只允许官方域名、社区公共弹幕源、本机和私有网段，避免这个接口被当成任意 URL 代理。
+ALLOWED_HOSTS = {
+    "api.dandanplay.net", "localhost", "127.0.0.1", "::1",
+    # 社区公共弹幕源（danmu_api 生态）：随社区起落，失效的留着无害。
+    "api.danmu.icu", "fc.lyz05.cn", "dmku.hls.one", "se.678.ooo",
+    "danmu.56uxi.com", "dm.lxlad.com", "danmuapi.vercel.app",
+    "hub.saintic.com", "danmu.satic.cn",
+}
 
 
 def _color(value) -> str:

@@ -398,10 +398,19 @@
             </div>
             <details class="danmaku-online">
               <summary>在线弹幕源</summary>
-              <input type="text" id="dmBase" placeholder="https://api.dandanplay.net" />
-              <input type="text" id="dmAppId" placeholder="AppId（官方源必填）" />
-              <input type="password" id="dmAppSecret" placeholder="AppSecret（官方源必填）" />
-              <p>官方源需到 <b>dev.dandanplay.com</b> 注册开发者、创建应用审核后取得 AppId / AppSecret（个人测试免费）。也可以填本机自建的兼容服务，例如 <b>http://127.0.0.1:9321/87654321</b>，这种不需要 AppId。配置只保存在这台电脑的浏览器里，不会写进收藏数据或云同步。</p>
+              <select id="dmSourceMode">
+                <option value="public">公共弹幕源（免配置，默认）</option>
+                <option value="dandanplay">弹弹play 官方（免费申请一次）</option>
+                <option value="custom">自建 / 其他兼容服务</option>
+              </select>
+              <input type="text" id="dmBase" class="hidden" placeholder="服务地址，如 http://127.0.0.1:9321/87654321" />
+              <div id="dmOfficialFields" class="hidden">
+                <input type="text" id="dmAppId" placeholder="AppId（官方源必填）" />
+                <input type="password" id="dmAppSecret" placeholder="AppSecret（官方源必填）" />
+              </div>
+              <p class="danmaku-note" data-note="public">默认走社区公共弹幕源（聚合 B 站等多站弹幕，无需任何配置），连不上会自动换下一个。社区源由志愿者提供，可能间歇不可用；长期稳定请换官方源——到 <b>dev.dandanplay.com</b> 免费注册开发者、创建应用拿 AppId / AppSecret 填进上面即可，填一次永久生效。</p>
+              <p class="danmaku-note hidden" data-note="dandanplay">官方源最稳定。到 <b>dev.dandanplay.com</b> 注册开发者账号、创建应用并通过审核（个人测试免费），把 AppId / AppSecret 填进来；配置只保存在这台电脑的浏览器里。</p>
+              <p class="danmaku-note hidden" data-note="custom">填自建或第三方兼容服务的地址，例如本机 <b>http://127.0.0.1:9321/87654321</b>（danmu_api 一键部署）。</p>
             </details>
           </div>
         </div>
@@ -1296,7 +1305,7 @@
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/danmaku.js?v=20261108-fullscreen-fix" defer></script>
+    <script src="/modules/danmaku.js?v=20261108-danmaku-source" defer></script>
     <script src="/modules/offline.js?v=20261108-search-ui" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

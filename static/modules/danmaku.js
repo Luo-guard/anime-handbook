@@ -16,7 +16,21 @@ const DANMAKU_DEFAULTS = {
   onlineBase: "https://api.dandanplay.net",
   appId: "",
   appSecret: "",
+  sourceMode: "public",
+  publicBase: "",
 };
+
+// 社区公共弹幕源（免凭证，聚合 B 站等多站弹幕）。由志愿者提供，随起落失效；
+// 前端逐个试、通了的记住，下次优先用。全部失效时提示换官方源。
+const DANMAKU_PUBLIC_BASES = [
+  "https://api.danmu.icu",
+  "https://fc.lyz05.cn",
+  "https://dmku.hls.one",
+  "https://se.678.ooo",
+  "https://danmu.56uxi.com",
+  "https://dm.lxlad.com",
+  "https://danmuapi.vercel.app",
+];
 
 const danmakuView = {
   settings: { ...DANMAKU_DEFAULTS },
@@ -280,22 +294,46 @@ function dmStop() {
   if (danmakuView.ctx) danmakuView.ctx.clearRect(0, 0, danmakuView.W, danmakuView.H);
 }
 
-async function dmProxy(apiPath) {
+function dmBaseCandidates() {
   const s = danmakuView.settings;
-  if (!s.onlineBase) throw new Error("还没填弹幕服务地址");
-  const response = await fetch("/api/danmaku/proxy", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      base: s.onlineBase,
-      path: apiPath,
-      app_id: s.appId || "",
-      app_secret: s.appSecret || "",
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok === false) throw new Error(payload.error || "弹幕服务没有响应");
-  return payload.text || "";
+  if (s.sourceMode === "dandanplay") return [s.onlineBase || "https://api.dandanplay.net"];
+  if (s.sourceMode === "custom") return [s.onlineBase].filter(Boolean);
+  const remembered = s.publicBase && DANMAKU_PUBLIC_BASES.includes(s.publicBase) ? [s.publicBase] : [];
+  return [...remembered, ...DANMAKU_PUBLIC_BASES.filter((base) => base !== s.publicBase)];
+}
+
+async function dmProxy(apiPath, validateText) {
+  const s = danmakuView.settings;
+  const bases = dmBaseCandidates();
+  if (!bases.length) throw new Error("还没填弹幕服务地址");
+  let lastError = null;
+  for (const base of bases) {
+    try {
+      const response = await fetch("/api/danmaku/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base,
+          path: apiPath,
+          app_id: s.sourceMode === "dandanplay" ? (s.appId || "") : "",
+          app_secret: s.sourceMode === "dandanplay" ? (s.appSecret || "") : "",
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || "弹幕服务没有响应");
+      const text = payload.text || "";
+      // 公共源可能是「活着但内容不对」（维护页/空结果），换下一个前先验货。
+      if (validateText && !validateText(text)) throw new Error("这个源没返回有效数据");
+      if (s.sourceMode === "public" && base !== s.publicBase) {
+        s.publicBase = base;
+        dmSavePrefs();
+      }
+      return text;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`${lastError ? lastError.message : "连不上"}（已试过 ${bases.length} 个公共源）`);
 }
 
 function dmMappingKey() {
@@ -310,7 +348,8 @@ function dmEpisodeNumber(file) {
 }
 
 async function dmLoadOnline(episodeId) {
-  const text = await dmProxy(`/api/v2/comment/${encodeURIComponent(episodeId)}?format=json`);
+  const text = await dmProxy(`/api/v2/comment/${encodeURIComponent(episodeId)}?format=json`,
+    (text) => { try { return ((JSON.parse(text).comments) || []).length > 0; } catch (error) { return false; } });
   const items = dmParseText(text);
   if (!items.length) throw new Error("这个分集没有返回弹幕");
   dmSetItems(items, "online", `在线弹幕已加载 ${items.length} 条`);
@@ -357,10 +396,10 @@ async function dmLoadFor(file, animeName, animeId) {
 
 function dmNoSourceNote() {
   const s = danmakuView.settings;
-  if (!s.appId && s.onlineBase && s.onlineBase.includes("dandanplay.net")) {
-    return "这一集没有本地弹幕文件；填好 AppId / AppSecret 后点「搜索在线弹幕」，或导入 .xml / .json";
+  if (s.sourceMode === "public") {
+    return "这一集没有本地弹幕文件；公共弹幕源这会儿可能不可用（按钮已自动试过全部候选），可在「在线弹幕源」里换官方源，或导入 .xml / .json";
   }
-  return "这一集没有本地弹幕文件；可以点「搜索在线弹幕」或导入 .xml / .json";
+  return "这一集没有本地弹幕文件；点「搜索在线弹幕」或导入 .xml / .json";
 }
 
 function dmClear() {
@@ -396,6 +435,7 @@ function dmSyncControls() {
     dmOpacity: s.opacity, dmArea: s.area, dmDensity: s.density,
     dmBold: s.bold, dmTopBottom: s.topBottom, dmShield: s.shield,
     dmBase: s.onlineBase, dmAppId: s.appId, dmAppSecret: s.appSecret,
+    dmSourceMode: s.sourceMode,
   };
   Object.entries(values).forEach(([id, value]) => {
     const node = document.getElementById(id);
@@ -446,7 +486,8 @@ async function dmSearchOnline() {
   if (button) button.disabled = true;
   dmSetNote("正在搜索在线弹幕…");
   try {
-    const text = await dmProxy(`/api/v2/search/episodes?anime=${encodeURIComponent(danmakuView.animeName)}`);
+    const text = await dmProxy(`/api/v2/search/episodes?anime=${encodeURIComponent(danmakuView.animeName)}`,
+      (text) => { try { return ((JSON.parse(text).animes) || []).length > 0; } catch (error) { return false; } });
     let payload;
     try { payload = JSON.parse(text); } catch (error) { throw new Error("弹幕服务返回的不是 JSON"); }
     const animes = Array.isArray(payload) ? payload : (payload.animes || payload.results || []);
@@ -532,6 +573,20 @@ function initDanmaku() {
   dmBindSetting("dmBase", "onlineBase");
   dmBindSetting("dmAppId", "appId");
   dmBindSetting("dmAppSecret", "appSecret");
+  dmBindSetting("dmSourceMode", "sourceMode");
+  const applySourceMode = () => {
+    const mode = danmakuView.settings.sourceMode || "public";
+    document.getElementById("dmBase")?.classList.toggle("hidden", mode === "public");
+    document.getElementById("dmOfficialFields")?.classList.toggle("hidden", mode !== "dandanplay");
+    document.querySelectorAll(".danmaku-note").forEach((node) => {
+      node.classList.toggle("hidden", node.dataset.note !== mode);
+    });
+  };
+  applySourceMode();
+  if (!initDanmaku.sourceModeBound) {
+    initDanmaku.sourceModeBound = true;
+    document.getElementById("dmSourceMode")?.addEventListener("change", applySourceMode);
+  }
   document.getElementById("dmImport")?.addEventListener("click", () => document.getElementById("dmFile")?.click());
   document.getElementById("dmFile")?.addEventListener("change", (event) => {
     dmImportFile(event.target.files?.[0]);
