@@ -547,8 +547,20 @@ function initDanmaku() {
   // 原生 <video> 全屏时 canvas 不会跟着进去。改成让整个容器全屏，
   // 这样字幕 canvas、弹幕 canvas 和弹幕设置面板都在同一层里。
   document.addEventListener("fullscreenchange", () => {
+    // 用户点原生全屏按钮时，浏览器只会把 <video> 本身送进全屏，弹幕/字幕 canvas
+    // 留在页面里看不见。规范允许对已有全屏元素直接 requestFullscreen 来「替换」
+    // 全屏元素，所以这里把容器直接切进去。不要先 exitFullscreen 再请求——
+    // 过渡期里的第二次请求会被浏览器拒绝，结果视频退了、容器又没进去，
+    // 全屏按钮看起来就是「点了没反应」。
     if (document.fullscreenElement === danmakuView.video && danmakuView.container) {
-      document.exitFullscreen().then(() => danmakuView.container.requestFullscreen().catch(() => {})).catch(() => {});
+      danmakuView.container.requestFullscreen().catch((error) => {
+        // 个别浏览器不接受「替换全屏元素」：退避一小段避开过渡期再走两步。
+        console.warn("直接切容器全屏被拒，退避重试：", error);
+        document.exitFullscreen()
+          .then(() => new Promise((resolve) => window.setTimeout(resolve, 120)))
+          .then(() => danmakuView.container.requestFullscreen())
+          .catch((retryError) => console.warn("容器全屏没切过去，保留视频自身全屏：", retryError));
+      });
     }
     window.setTimeout(() => dmResize(true), 60);
   });

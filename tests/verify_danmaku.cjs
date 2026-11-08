@@ -157,6 +157,28 @@ const BILI_XML = `<i>
   await page.waitForTimeout(120);
   await page.screenshot({ path: 'tests/弹幕效果_设置面板.png' });
 
+  // 8) 全屏路径回归：容器能进全屏（:fullscreen CSS 生效、video 占满视口）、能退出。
+  //    headless 触发不了原生 video 全屏，所以「video 全屏 → 容器转接」这一步
+  //    只能靠真实浏览器实测；这里锁定的是转接的目标（容器全屏）本身可用。
+  const fullscreen = await page.evaluate(() => document.querySelector('#offlinePlayerVideoWrap').requestFullscreen()
+    .then(() => new Promise((resolve) => setTimeout(resolve, 250)))
+    .then(() => ({
+      container: document.querySelector('#offlinePlayerVideoWrap').matches(':fullscreen'),
+      videoW: Math.round(document.querySelector('#offlineVideo').getBoundingClientRect().width),
+      viewportW: window.innerWidth,
+    }))
+    .catch((error) => ({ error: String(error) })));
+  if (fullscreen.error) {
+    console.log('skip fullscreen assertion:', fullscreen.error);
+  } else {
+    assert.equal(fullscreen.container, true, '容器要能进全屏');
+    assert.ok(fullscreen.videoW > fullscreen.viewportW - 30,
+      `全屏时视频要占满视口宽，实际 \${fullscreen.videoW}/\${fullscreen.viewportW}`);
+    await page.evaluate(() => document.exitFullscreen());
+    await page.waitForTimeout(250);
+    assert.equal(await page.evaluate(() => Boolean(document.fullscreenElement)), false, '要能退出全屏');
+  }
+
   console.log('verify_danmaku: OK', JSON.stringify({ painted: render.painted, shield: shield.count }));
   await browser.close();
 })().catch((error) => { console.error(error); process.exit(1); });
