@@ -20,6 +20,16 @@ const escapeHtml=v=>String(v??'');
 const state={ animes:[], settings:{}, progressAnime:null };
 function toast(){}
 function api(){return Promise.resolve({});}
+// 徽标默认用 new Date() 算「已播几集」，把页面时钟固定在 2026-11-07，
+// 否则断言会随真实日期漂移（11/08 就变成「已播 6/12」）。带参数的
+// new Date(2026,10,7) 仍走原生构造，不受影响。
+const __RealDate = Date;
+const __FixedNow = new __RealDate(2026, 10, 7).getTime();
+class __FrozenDate extends __RealDate {
+  constructor(...args) { if (args.length) super(...args); else super(__FixedNow); }
+  static now() { return __FixedNow; }
+}
+window.Date = __FrozenDate;
 `;
 
 (async () => {

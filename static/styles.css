@@ -3489,24 +3489,14 @@ dialog::backdrop {
     gap: 7px;
   }
 
-  /* 详情页动作按钮：窄屏整行靠右、尺寸收一档，避免把弹窗顶出屏幕。 */
+  /* 详情页动作按钮：窄屏整行靠右，避免把弹窗顶出屏幕。
+     原先这里还有一组 .detail-action 的缩小规则，但主定义在文件后面且同权重，
+     从未生效（实测 390/320px 都还是 34px）；D 方案统一后删掉，免得误导。 */
   .progress-info-row .progress-actions {
     width: 100%;
     flex-shrink: 0;
     justify-content: flex-end;
     row-gap: 8px;
-  }
-
-  .detail-action {
-    height: 30px;
-    padding: 0 10px;
-    gap: 5px;
-    font-size: 11.5px;
-  }
-
-  .detail-action svg {
-    width: 12px;
-    height: 12px;
   }
 }
 .schedule-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 24px}
@@ -4203,31 +4193,63 @@ dialog::backdrop {
 .progress-info-row .detail-actions { display: flex; align-items: center; gap: 8px; }
 .progress-info-row .collect-detail-row { margin-top: 0; margin-left: 0; }
 
-/* 详情页的页内动作（找资源 / 相关番剧）：胶囊按钮，和外链那一行分开。 */
+/* 详情页的页内动作（找资源 / 相关番剧）：D 方案 —— 去掉边框和底色，做成
+   纯文字操作；和右侧「在看」状态选择器统一到同一套尺寸/字号/图标。
+   状态类控件保留细框表示「可展开」，一轻一重，不再互相打架。 */
 .detail-action {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--green-700) 18%, transparent);
-  border-radius: 999px;
-  background: var(--surface);
+  height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
   color: var(--green-800);
   font: inherit;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color .15s, background .15s;
+  transition: background .15s;
 }
-.detail-action svg { width: 13px; height: 13px; flex: 0 0 auto; }
-.detail-action:hover:not(:disabled) { border-color: var(--green-700); background: var(--green-50); }
-.detail-action:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
+.detail-action svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.detail-action:hover:not(:disabled) { background: rgb(var(--theme-rgb) / .06); }
+.detail-action:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; border-radius: 9px; }
 .detail-action:disabled { opacity: .6; cursor: default; }
-.detail-action-primary { border-color: color-mix(in srgb, var(--green-700) 30%, transparent); background: var(--green-50); }
-.detail-action-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--green-700) 12%, var(--surface)); }
+/* primary 不再有特殊底色：找资源和相关番剧是同一层级的文字动作。 */
+
+/* 详情弹窗内的「在看」状态选择器：保留细框，但尺寸/字号/图标与找资源一致。
+   用 .collect-detail-row 限定作用域，周表卡片、搜索结果里的收藏按钮不受影响。 */
+.collect-detail-row .collect-trigger,
+.collect-detail-row .collect-trigger.is-empty {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 11px;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--green-700) 22%, transparent);
+  border-style: solid;
+  border-radius: 9px;
+  background: var(--green-50);
+  color: var(--green-800);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  box-shadow: none;
+}
+.collect-detail-row .collect-trigger:hover,
+.collect-detail-row .collect-trigger[aria-expanded="true"] {
+  background: var(--green-100);
+  border-color: var(--green-700);
+  box-shadow: none;
+}
+.collect-detail-row .collect-glyph,
+.collect-detail-row .collect-glyph svg { width: 14px; height: 14px; }
+.collect-detail-row .collect-caret { margin-left: 0; opacity: .45; }
+.collect-detail-row .collect-caret svg { width: 12px; height: 12px; }
 
 /* 外链一个都没有时，别把日期后面那个「·」孤零零留在行尾。 */
 /* 更新徽标替代了原来的「·」分隔符，四态都一定有文案，不留空行。 */
