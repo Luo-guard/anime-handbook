@@ -90,9 +90,10 @@ function animeAiringCounts(anime, today = new Date()) {
   return { aired, total, upcoming, dated };
 }
 
-// 四态徽标：连载中（绿）/ 已完结（灰）/ 未开播（暖黄）/ 日期未知（灰）。
-// 完结态按你定的口径只写「已完结」，不写「已播完」；集数区的「已播 N」
-// 药丸仍按 B8 的口径隐藏，两处不重复。
+// 四态徽标：连载中 / 已完结 / 未开播 / 日期未知。
+// 文案只给「这一行独有的信息」：集数区已经有「已看 N/总」和「已播 N」药丸，
+// 首播日期也在同一行，所以徽标不再重复「已播 N/总」「全 N 集」或开播日期。
+// 完结态按你定的口径只写「已完结」，不写「已播完」。
 function animeBadgeModel(anime, today = new Date()) {
   const info = animeUpdateWeekday(anime, today);
   const counts = animeAiringCounts(anime, today);
@@ -104,31 +105,19 @@ function animeBadgeModel(anime, today = new Date()) {
     return { kind: "unknown", text: "日期未知", title: "条目和逐集资料里都没有播出日期" };
   }
   if (premiere && premiere > todayStart && counts.aired === 0) {
-    const days = Math.round((premiere - todayStart) / 86400000);
-    const when = days <= 7 ? "下周开播" : `${premiere.getMonth() + 1}月${premiere.getDate()}日开播`;
-    return {
-      kind: "upcoming",
-      text: weekday ? `${when} · ${weekday}` : when,
-      title: "按 Bangumi 首播日期推算；还没开播，不显示已播集数",
-    };
+    return { kind: "upcoming", text: "未开播", title: "首播日期还没到；具体日期就在旁边" };
   }
   if (info?.ongoing || counts.upcoming > 0) {
     const clock = animeAirClock(anime);
-    const parts = [`${weekday}${clock ? ` ${clock} ` : ""}更新`];
-    if (counts.aired > 0) parts.push(`已播 ${counts.aired}${counts.total ? `/${counts.total}` : ""}`);
     return {
       kind: "ongoing",
-      text: parts.join(" · "),
+      text: `${weekday}${clock ? ` ${clock} ` : ""}更新`,
       title: clock
         ? "星期按逐集放送日期推算，钟点来自当季周表的北京时间放送时刻"
         : "星期按逐集放送日期推算；这份资料没有放送钟点",
     };
   }
-  return {
-    kind: "finished",
-    text: counts.total ? `已完结 · 全 ${counts.total} 集` : "已完结",
-    title: "已经播完；完结番不谎报更新星期",
-  };
+  return { kind: "finished", text: "已完结", title: "已经播完；完结番不谎报更新星期" };
 }
 
 function renderProgressBadge(anime) {

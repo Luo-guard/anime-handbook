@@ -4,9 +4,9 @@
 //   1. 逐集日期取星期众数，个别延播集不能把结果带偏；
 //   2. "2027-04" 这种只有年月的占位不能当日期；
 //   3. 下集时刻按北京时间判星期（凌晨档在 UTC 会落回前一天）；
-//   4. 连载中：「每周X HH:MM 更新 · 已播 N/总」；周表没钟点就省略钟点，绝不编造；
-//   5. 已完结：只写「已完结 · 全 N 集」，**不写「已播完」**（2026-11-07 用户定的口径）；
-//   6. 未开播：暖色「下周开播 · 每周X」，不显示「已播 0/N」；
+//   4. 连载中只写「每周X HH:MM 更新」——「已播 N/总」在集数区已有，不重复；没钟点就省略，绝不编造；
+//   5. 已完结只写「已完结」，**不写「已播完」**（2026-11-07 口径），也不再写「全 N 集」；
+//   6. 未开播只写「未开播」，具体日期就在旁边的 #progressAirDate，不重复；
 //   7. 日期未知：不再是空行或一条孤零零的竖线；
 //   8. 外链站点仍独占 .progress-links 一行。
 const fs = require('fs');
@@ -138,27 +138,27 @@ window.Date = __FrozenDate;
     assert.equal(result.withNextAt.ongoing, true, '有下集时刻就是连载中');
     assert.equal(result.noData, null, '一个日期都没有时应返回 null');
 
-    assert.equal(result.ongoingDom.text, '每周日 20:00 更新 · 已播 5/12', `连载徽标：${result.ongoingDom.text}`);
+    assert.equal(result.ongoingDom.text, '每周日 20:00 更新', `连载徽标：${result.ongoingDom.text}`);
     assert.equal(result.ongoingDom.kind, 'ongoing', '连载态要挂 ongoing 样式');
     assert.ok(!result.ongoingDom.hidden, '徽标不能藏起来');
     assert.match(result.ongoingDom.title, /周表/, '连载态要说明钟点来源');
-    assert.equal(result.noClockDom.text, '每周日更新 · 已播 5/12', `没有钟点时：${result.noClockDom.text}`);
+    assert.equal(result.noClockDom.text, '每周日更新', `没有钟点时：${result.noClockDom.text}`);
     assert.match(result.noClockDom.title, /没有放送钟点/, '没钟点要说明，不编造');
-    assert.equal(result.nextAtDom.text, '每周日 20:00 更新 · 已播 5/12', `next_at 兜底钟点：${result.nextAtDom.text}`);
+    assert.equal(result.nextAtDom.text, '每周日 20:00 更新', `next_at 兜底钟点：${result.nextAtDom.text}`);
 
-    assert.equal(result.finishedDom.text, '已完结 · 全 12 集', `完结徽标：${result.finishedDom.text}`);
+    assert.equal(result.finishedDom.text, '已完结', `完结徽标：${result.finishedDom.text}`);
     assert.equal(result.finishedDom.kind, 'finished', '完结态要挂 finished 样式');
     assert.ok(!result.finishedDom.text.includes('已播完'), '按口径只写「已完结」，不写「已播完」');
     assert.ok(!result.finishedDom.text.includes('更新'), '完结番不能谎报更新');
 
-    assert.equal(result.upcomingDom.text, '下周开播 · 每周四', `未开播徽标：${result.upcomingDom.text}`);
+    assert.equal(result.upcomingDom.text, '未开播', `未开播徽标：${result.upcomingDom.text}`);
     assert.equal(result.upcomingDom.kind, 'upcoming', '未开播要挂暖色样式');
     assert.ok(!result.upcomingDom.text.includes('已播 0'), '未开播不显示「已播 0/N」');
-    assert.match(result.farUpcomingDom.text, /^\d+月\d+日开播 · 每周/, `较远的首播应给具体日期：${result.farUpcomingDom.text}`);
+    assert.equal(result.farUpcomingDom.text, '未开播', `较远的首播也统一写「未开播」：${result.farUpcomingDom.text}`);
 
     assert.equal(result.emptyDom.text, '日期未知', `无日期徽标：${result.emptyDom.text}`);
     assert.equal(result.emptyDom.kind, 'unknown', '无日期要挂 unknown 样式');
-    assert.equal(result.danglingDom.text, '每周日更新 · 已播 5/12', '没有首播日但集日期齐全时仍正常显示');
+    assert.equal(result.danglingDom.text, '每周日更新', '没有首播日但集日期齐全时仍正常显示');
     assert.notEqual(result.ongoingDom.bg, result.finishedDom.bg, '连载与完结的底色要不同');
     assert.notEqual(result.ongoingDom.bg, result.upcomingDom.bg, '连载与未开播的底色要不同');
 
