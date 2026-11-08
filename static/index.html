@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-settings-batch" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-search-ui" />
   </head>
   <body>
     <div class="app-shell">
@@ -486,12 +486,15 @@
       <form method="dialog" class="modal-frame">
         <button class="modal-close" value="cancel" aria-label="关闭">×</button>
         <p class="eyebrow">PREFERENCES</p>
-        <h2>手账设置</h2>
-        <div class="settings-search">
-          <input type="search" id="settingsSearch" placeholder="搜索设置项，如：主题、弹幕、快捷键" autocomplete="off" />
-          <span class="settings-search-count hidden" id="settingsSearchCount"></span>
+        <div class="settings-title-row">
+          <h2>手账设置</h2>
+          <div class="settings-search">
+            <svg class="settings-search-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="search" id="settingsSearch" placeholder="搜索设置…" autocomplete="off" />
+            <span class="settings-search-count hidden" id="settingsSearchCount"></span>
+          </div>
+          <div class="settings-search-results hidden" id="settingsSearchResults"></div>
         </div>
-        <div class="settings-search-results hidden" id="settingsSearchResults"></div>
         <div class="settings-layout">
           <aside class="settings-side-nav" id="settingsSideNav" aria-label="设置分类">
 <button type="button" class="active" data-settings-tab="main">主界面设置</button>
@@ -1282,19 +1285,19 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261106-collection-order" defer></script>
-    <script src="/modules/settings.js?v=20261108-settings-batch" defer></script>
+    <script src="/modules/settings.js?v=20261108-search-ui" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
-    <script src="/modules/settings-save.js?v=20261108-settings-batch" defer></script>
-    <script src="/modules/events.js?v=20261108-settings-batch" defer></script>
+    <script src="/modules/settings-save.js?v=20261108-search-ui" defer></script>
+    <script src="/modules/events.js?v=20261108-search-ui" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/collection-edit.js?v=20261108-settings-batch" defer></script>
+    <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/danmaku.js?v=20261108-settings-batch" defer></script>
-    <script src="/modules/offline.js?v=20261108-settings-batch" defer></script>
+    <script src="/modules/danmaku.js?v=20261108-search-ui" defer></script>
+    <script src="/modules/offline.js?v=20261108-search-ui" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

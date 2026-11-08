@@ -110,22 +110,24 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   assert.equal(autoFollow.afterOff, false, '取消要写回关闭');
 
   // T9 加入收藏自动打开找资源：只验证触发逻辑，不改库
-  const autoOpen = await page.evaluate(async () => {
-    const data = await fetch('/api/bootstrap').then((r) => r.json());
-    state.settings = data.settings || {};
+  // 取数放在测试进程侧：页内 fetch 在跑批时偶发 Failed to fetch（与后端无关），
+  // 触发逻辑本身是纯前端，不该被网络抖动连坐。
+  const bootstrap = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json();
+  const animeId = (bootstrap.animes || []).find((item) => item.collection_type !== 2)?.id;
+  assert.ok(animeId, '要能找到一部不在「想看」的番');
+  const autoOpen = await page.evaluate(({ animeId }) => {
     state.settings.auto_open_offline_enabled = true;
     state.settings.auto_open_offline_collections = ['2']; // 只允许「想看」
-    const anime = state.animes.find((item) => item.collection_type !== 2);
-    maybeAutoOpenOffline(anime.id, 1); // 在看：不在允许列表，不应打开
+    maybeAutoOpenOffline(animeId, 1); // 在看：不在允许列表，不应打开
     const blocked = !document.querySelector('#offlineModal').open;
-    maybeAutoOpenOffline(anime.id, 2); // 想看：应打开并填好番名
+    maybeAutoOpenOffline(animeId, 2); // 想看：应打开并填好番名
     const opened = document.querySelector('#offlineModal').open;
     const query = document.querySelector('#offlineQuery').value;
     const target = document.querySelector('#offlineTarget').textContent;
     document.querySelector('#offlineModal').close();
     state.settings.auto_open_offline_enabled = false;
     return { blocked, opened, query, target };
-  });
+  }, { animeId });
   assert.equal(autoOpen.blocked, true, '不在允许列表的收藏夹不能触发');
   assert.equal(autoOpen.opened, true, '允许的收藏夹要自动打开离线面板');
   assert.ok(autoOpen.query.length > 0, `要预填番名，实际：${autoOpen.query}`);
