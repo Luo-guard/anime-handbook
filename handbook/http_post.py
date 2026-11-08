@@ -6,6 +6,7 @@ from .assets import replace_background_bytes
 from .common import MAX_DETAIL_LINKS
 from .link_rules import RuleFetchError, cache_path, payload as rules_payload, refresh as refresh_rules
 from . import offline_config
+from . import danmaku as danmaku_tools
 from .offline_service import OfflineError, OfflineService
 
 
@@ -32,6 +33,8 @@ class PostRoutes:
                 "/api/link-rules/refresh",
                 # 离线设置是本机配置（盘符、下载器端口），不写收藏数据。
                 "/api/offline/settings",
+                # 弹幕代理只是转发查询，不改动任何收藏数据。
+                "/api/danmaku/proxy",
             }
             if path not in write_exempt_paths:
                 self.require_write_access()
@@ -119,6 +122,16 @@ class PostRoutes:
                     ))
                 else:
                     raise ValueError("删除方式无效")
+            elif path == "/api/danmaku/proxy":
+                # 弹弹play 兼容 API 转发。凭证由浏览器本机带过来，不写进数据库，
+                # 也就不会进整库快照或云同步；后端只负责签名与系统代理回退。
+                text = danmaku_tools.fetch_upstream(
+                    str(body.get("base") or ""),
+                    str(body.get("path") or ""),
+                    app_id=str(body.get("app_id") or ""),
+                    app_secret=str(body.get("app_secret") or ""),
+                )
+                self.send_json({"ok": True, "text": text})
             elif path == "/api/jump-history":
                 if str(body.get("action") or "") == "clear":
                     self.database.clear_jumps()

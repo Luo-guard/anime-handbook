@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-rating-link" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-danmaku-final" />
   </head>
   <body>
     <div class="app-shell">
@@ -369,11 +369,44 @@
       <div class="modal-frame offline-player-frame">
         <button type="button" class="modal-close" id="offlinePlayerClose" aria-label="关闭">×</button>
         <h2 id="offlinePlayerTitle">播放</h2>
-        <div class="offline-player-video">
+        <div class="offline-player-video" id="offlinePlayerVideoWrap">
           <video id="offlineVideo" controls playsinline preload="metadata"></video>
+          <canvas id="danmakuCanvas" class="danmaku-canvas" aria-hidden="true"></canvas>
+          <div class="danmaku-panel hidden" id="danmakuPanel">
+            <div class="danmaku-panel-head">
+              <strong>弹幕设置</strong>
+              <button type="button" id="dmPanelClose" aria-label="关闭弹幕设置">×</button>
+            </div>
+            <div class="danmaku-status"><span id="dmSource">还没有加载弹幕</span><b id="dmCount">0 条</b></div>
+            <label class="danmaku-row"><span>显示弹幕</span><input type="checkbox" id="dmEnabled" /></label>
+            <label class="danmaku-row"><span>字号 <b id="dmFontSizeValue">24</b></span><input type="range" id="dmFontSize" min="16" max="40" step="1" /></label>
+            <label class="danmaku-row"><span>滚动时长 <b id="dmDurationValue">8</b> 秒</span><input type="range" id="dmDuration" min="4" max="16" step="1" /></label>
+            <label class="danmaku-row"><span>不透明度 <b id="dmOpacityValue">0.92</b></span><input type="range" id="dmOpacity" min="0.3" max="1" step="0.02" /></label>
+            <label class="danmaku-row"><span>显示区域 <b id="dmAreaValue">0.5</b></span><input type="range" id="dmArea" min="0.25" max="1" step="0.25" /></label>
+            <label class="danmaku-row"><span>同屏上限 <b id="dmDensityValue">0</b></span><input type="range" id="dmDensity" min="0" max="60" step="5" /></label>
+            <label class="danmaku-row"><span>粗体 / 顶底弹幕</span><span class="danmaku-inline"><input type="checkbox" id="dmBold" /><input type="checkbox" id="dmTopBottom" /></span></label>
+            <label class="danmaku-row stacked"><span>屏蔽词（逗号分隔）</span><input type="text" id="dmShield" placeholder="剧透, 广告" /></label>
+            <div class="danmaku-actions">
+              <button type="button" id="dmImport">导入弹幕文件</button>
+              <button type="button" id="dmOnlineSearch">搜索在线弹幕</button>
+              <button type="button" id="dmReload">重新加载</button>
+              <input type="file" id="dmFile" accept=".xml,.json" hidden />
+              <select id="dmMatch" class="hidden" aria-label="选择在线分集"></select>
+              <button type="button" id="dmUseMatch" class="hidden">用这个分集</button>
+            </div>
+            <details class="danmaku-online">
+              <summary>在线弹幕源</summary>
+              <input type="text" id="dmBase" placeholder="https://api.dandanplay.net" />
+              <input type="text" id="dmAppId" placeholder="AppId（官方源必填）" />
+              <input type="password" id="dmAppSecret" placeholder="AppSecret（官方源必填）" />
+              <p>官方源需到 <b>dev.dandanplay.com</b> 注册开发者、创建应用审核后取得 AppId / AppSecret（个人测试免费）。也可以填本机自建的兼容服务，例如 <b>http://127.0.0.1:9321/87654321</b>，这种不需要 AppId。配置只保存在这台电脑的浏览器里，不会写进收藏数据或云同步。</p>
+            </details>
+          </div>
         </div>
         <div class="offline-player-bar">
           <p class="offline-player-meta" id="offlinePlayerMeta"></p>
+          <button type="button" class="offline-subtitle-toggle" id="offlineDanmakuToggle" aria-pressed="true">弹幕 · 开</button>
+          <button type="button" class="offline-subtitle-toggle" id="offlineDanmakuSettings" aria-label="弹幕设置">弹幕设置</button>
           <button type="button" class="offline-subtitle-toggle hidden" id="offlineSubtitleToggle" aria-pressed="true">字幕 · 开</button>
         </div>
       </div>
@@ -1239,7 +1272,8 @@
     <script src="/modules/collection-edit.js?v=20261106-collection-order" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/offline.js?v=20261107-episode-key-map" defer></script>
+    <script src="/modules/danmaku.js?v=20261108-danmaku-final" defer></script>
+    <script src="/modules/offline.js?v=20261108-danmaku-final" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

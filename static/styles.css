@@ -4382,6 +4382,88 @@ dialog::backdrop {
    （规则列表等）自带 overflow:auto，也不受影响。 */
 dialog.modal { overflow-x: hidden; }
 
+/* ===== 弹幕层 =====
+   只加一张透明 canvas 盖在 <video> 上，pointer-events:none 让原生控件照常点。
+   视频仍是原生 video + mp4，弹幕不进视频帧，抓帧超分扩展不受影响。
+   z-index 1 低于字幕 canvas（2），字幕文字永远压在弹幕之上。 */
+.danmaku-canvas {
+  /* 只钉左上角，宽高完全由 dmResize() 按 video.clientWidth/Height 设置；
+     inset:0 会和显式 width 一起变成 over-constrained，容易错位。 */
+  position: absolute; left: 0; top: 0; z-index: 1;
+  display: block; pointer-events: none;
+}
+/* 原生 video 全屏时 canvas 不会跟进去，改成让整个容器全屏。 */
+.offline-player-video:fullscreen {
+  width: 100vw; height: 100vh; background: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.offline-player-video:fullscreen video {
+  width: 100%; height: 100%; max-height: none; object-fit: contain;
+}
+
+/* 弹幕设置面板：像 Kazumi 那样直接挂在播放器里，不另开弹窗。 */
+.danmaku-panel {
+  position: absolute; top: 12px; right: 12px; z-index: 5;
+  width: min(306px, calc(100% - 24px));
+  /* 用视口而不是视频容器算高度：没有片源 / 竖屏片源时视频区可能很矮，
+     面板不该被压成只能看见两行。容器没有 overflow:hidden，允许向下溢出。 */
+  max-height: min(72vh, 560px);
+  overflow-y: auto; box-sizing: border-box;
+  padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: 0 14px 40px rgb(0 0 0 / .28);
+  backdrop-filter: blur(8px);
+  color: var(--ink); line-height: 1.5; font-size: 12px;
+  pointer-events: auto;
+}
+.danmaku-panel.hidden, .danmaku-actions .hidden { display: none !important; }
+.danmaku-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.danmaku-panel-head strong { font-size: 13px; }
+.danmaku-panel-head button {
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.danmaku-status {
+  display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
+  padding: 7px 9px; margin-bottom: 8px; border-radius: 8px;
+  background: rgb(var(--theme-rgb) / .06); color: var(--muted);
+}
+.danmaku-status b { color: var(--green-800); font-size: 11px; white-space: nowrap; }
+.danmaku-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 3px 0; min-height: 26px;
+}
+.danmaku-row > span:first-child { flex: 0 0 auto; color: var(--muted); }
+.danmaku-row b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.danmaku-row input[type="range"] { flex: 1 1 auto; min-width: 90px; accent-color: var(--green-700); }
+.danmaku-row input[type="checkbox"] { accent-color: var(--green-700); }
+.danmaku-row.stacked { flex-direction: column; align-items: stretch; gap: 4px; }
+.danmaku-row.stacked > span:first-child { text-align: left; }
+.danmaku-inline { display: flex; gap: 16px; }
+.danmaku-panel input[type="text"], .danmaku-panel input[type="password"], .danmaku-panel select {
+  width: 100%; box-sizing: border-box; padding: 5px 8px;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 11.5px;
+}
+.danmaku-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.danmaku-actions button, .danmaku-actions select {
+  flex: 1 1 auto; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--green-50); color: var(--green-800); font: inherit; font-size: 11.5px;
+  cursor: pointer; white-space: nowrap;
+}
+.danmaku-actions button:hover { background: var(--green-100); }
+.danmaku-actions button:disabled { opacity: .55; cursor: default; }
+.danmaku-actions select { flex-basis: 100%; background: var(--surface); }
+.danmaku-online { border-top: 1px solid var(--line); padding-top: 7px; }
+.danmaku-online summary { cursor: pointer; color: var(--muted); font-size: 11.5px; }
+.danmaku-online input { margin-top: 5px; }
+.danmaku-online p { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.danmaku-online b { color: var(--green-800); }
+.offline-player-bar { flex-wrap: wrap; gap: 8px; }
+@media (max-width: 480px) {
+  .danmaku-panel { top: 6px; right: 6px; width: min(270px, calc(100% - 12px)); max-height: calc(100% - 12px); }
+}
+
 /* 320px 档详情弹窗（审计遗留项）：浏览器给 <dialog> 的默认
    max-width: calc(100% - 2em - 6px) 会把弹窗压到 267px；头部又是
    82px + 1fr 两列，文字区只剩 93px，标题竖排成一个字一行、长徽标被

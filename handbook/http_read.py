@@ -7,6 +7,7 @@ from urllib.parse import quote, unquote
 
 from . import media as media_tools
 from . import offline_config
+from . import danmaku as danmaku_tools
 from .offline import OfflineStore
 from .offline_service import OfflineError, OfflineService
 
@@ -246,6 +247,15 @@ class ReadRoutes:
                     return
                 mime = media_tools.FONT_MIME.get(target.suffix.lower(), "application/octet-stream")
                 send_asset(self, target.read_bytes(), mime, cache="private, no-cache")
+            elif path == "/api/danmaku/local":
+                # 同一集配套弹幕文件（同名 .xml/.json 或目录里唯一的 xml）。
+                # 只按 file_id 取库里登记过的路径，不接受前端传任意路径。
+                file_id = int(query.get("file_id", ["0"])[0] or 0)
+                row = OfflineStore(self.database).file(file_id)
+                if not row:
+                    raise ValueError("这一集还没有本地文件")
+                items = danmaku_tools.load_local(str(row.get("file_path") or ""))
+                self.send_json({"ok": True, "items": items, "count": len(items)})
             elif path == "/api/jump-history":
                 limit = int(query.get("limit", ["80"])[0] or 80)
                 self.send_json({"items": self.database.list_jumps(limit)})

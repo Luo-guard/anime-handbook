@@ -424,6 +424,9 @@ function playLocalFile(fileId) {
     { once: true },
   );
   video.play().catch(() => {});
+  // 弹幕层：浮在 video 上的 canvas，不碰播放内核。同目录弹幕文件 / 已匹配的在线分集
+  // 由 dmLoadFor 自己找，找不到会在弹幕设置面板里提示，不打断播放。
+  if (typeof dmLoadFor === "function") dmLoadFor(file, offlineView.animeName, offlineView.animeId);
   window.clearInterval(offlineView.resumeTimer);
   offlineView.resumeTimer = window.setInterval(() => saveOfflineResume(), 8000);
 }
@@ -448,6 +451,7 @@ async function saveOfflineResume() {
 function closeOfflinePlayer() {
   saveOfflineResume();
   clearSubtitleSession();
+  if (typeof dmClear === "function") dmClear();
   window.clearInterval(offlineView.resumeTimer);
   const video = $("#offlineVideo");
   video.pause();
