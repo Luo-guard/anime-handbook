@@ -448,12 +448,16 @@ function dmRenderPanelStatus() {
   const toggle = document.getElementById("offlineDanmakuToggle");
   if (toggle) {
     const on = Boolean(danmakuView.settings.enabled);
-    // 控制栏版按钮 = 图标 + 文字，只更新文字节点，别把图标抹掉。
-    const text = document.getElementById("dmToggleText");
-    if (text) text.textContent = on ? "弹幕 · 开" : "弹幕 · 关";
-    else toggle.textContent = on ? "弹幕 · 开" : "弹幕 · 关";
+    // Kazumi 式：纯图标按钮，角标（对勾）随开关显隐，不写文字节点。
     toggle.setAttribute("aria-pressed", String(on));
     toggle.classList.toggle("is-off", !on);
+    const input = document.getElementById("dmSendInput");
+    if (input) {
+      input.placeholder = on ? "发个友善的弹幕见证当下" : "已关闭弹幕";
+      input.disabled = !on;
+    }
+    const send = document.getElementById("dmSendButton");
+    if (send) send.disabled = !on;
   }
 }
 

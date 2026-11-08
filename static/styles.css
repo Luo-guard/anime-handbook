@@ -4776,25 +4776,47 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   color: rgba(255, 255, 255, .88); font-size: 12px; margin-left: 4px;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+/* 弹幕区（Kazumi 式）：左侧两个纯图标按钮（弹+对勾=开关、弹+齿轮=设置，
+   角标随状态显隐），右侧药丸输入框内嵌主题色「发送」胶囊；弹幕关闭时
+   输入框置灰、占位符换成「已关闭弹幕」、发送按钮变灰禁用。 */
+.pc-dan-toggle, .pc-dan-settings { padding: 0 7px; }
+.pc-dm-icon { position: relative; display: inline-flex; width: 20px; height: 20px; }
+.pc-dm-icon > svg:first-child { width: 20px; height: 20px; }
+/* 徽章要用 .pc-dm-icon 前缀拉高优先级：下面的 .pc-btn svg（19px）会盖掉
+   单类名的 .pc-dm-badge 尺寸，徽章被放大到 19px 正好把「弹」字整个挡住。 */
+.pc-dm-icon .pc-dm-badge {
+  position: absolute; right: -4px; bottom: -4px;
+  width: 12px; height: 12px; padding: 1.5px; box-sizing: border-box;
+  border-radius: 50%; background: #101512;
+  color: var(--green-400, #6fbf95);
+}
+.pc-btn.pc-dan-toggle.is-off { color: rgba(255, 255, 255, .55); }
+.pc-btn.pc-dan-toggle.is-off:hover { color: #fff; }
+.pc-btn.pc-dan-toggle.is-off .pc-dm-badge { display: none; }
+.pc-dm-field {
+  flex: 0 1 300px; min-width: 120px; height: 30px;
+  display: flex; align-items: center;
+  border-radius: 999px; background: rgba(255, 255, 255, .14);
+  transition: background .15s;
+}
+.pc-dm-field:focus-within { background: rgba(255, 255, 255, .22); }
 .pc-dm-input {
-  flex: 0 1 260px; min-width: 90px; height: 30px; padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, .3); border-radius: 999px;
-  background: rgba(255, 255, 255, .14); color: #fff;
+  flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 6px 0 14px;
+  border: 0; background: transparent; color: #fff;
   font: inherit; font-size: 12px;
-  transition: border-color .15s, background .15s;
 }
 .pc-dm-input::placeholder { color: rgba(255, 255, 255, .55); }
-.pc-dm-input:focus { outline: none; border-color: var(--green-500, #4c9e7a); background: rgba(255, 255, 255, .2); }
+.pc-dm-input:focus { outline: none; }
+.pc-dm-input:disabled { color: rgba(255, 255, 255, .5); cursor: default; }
 .pc-send {
-  flex: 0 0 auto; height: 30px; padding: 0 13px;
+  flex: 0 0 auto; height: 24px; margin-right: 3px; padding: 0 13px;
   border: 0; border-radius: 999px;
   background: var(--green-600, #3f8a6b); color: #fff;
   font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: filter .15s, background .15s;
 }
-.pc-send:hover { filter: brightness(1.12); }
-.pc-btn.pc-danmaku { width: auto; padding: 0 9px; font-size: 12px; font-weight: 600; }
-.pc-btn.pc-danmaku svg { width: 17px; height: 17px; }
-.pc-btn.pc-danmaku.is-off { color: rgba(255, 255, 255, .55); }
+.pc-send:hover:not(:disabled) { filter: brightness(1.12); }
+.pc-send:disabled { background: rgba(255, 255, 255, .18); color: rgba(255, 255, 255, .5); cursor: default; }
 .pc-pop-host { position: relative; display: inline-flex; align-items: center; }
 .pc-volume {
   width: 0; opacity: 0; height: 4px; accent-color: var(--green-500, #4c9e7a);
@@ -4839,7 +4861,7 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 #danmakuPanel { z-index: 8; }
 @media (max-width: 640px) {
-  .pc-dm-input { flex-basis: 130px; }
+  .pc-dm-field { flex-basis: 150px; }
   .pc-time { font-size: 11px; }
   .pc-row { flex-wrap: wrap; }
   .pc-group.pc-center { order: 3; flex-basis: 100%; }
