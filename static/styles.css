@@ -4492,3 +4492,49 @@ dialog.offline-player {
 /* 非模态播放器由 JS 主动聚焦 dialog 本体来保持键盘顺序；容器不是交互控件，
    浏览器默认的 focus ring 会在白色弹窗四周多出一圈线，这里去掉。 */
 dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none; }
+/* ===== 设置搜索 ===== */
+.settings-search { position: relative; margin: 12px 0 0; }
+.settings-search input {
+  width: 100%; box-sizing: border-box; padding: 8px 64px 8px 12px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 13px;
+}
+.settings-search input:focus { outline: 2px solid var(--active-inset); outline-offset: -1px; }
+.settings-search-count {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); font-size: 11.5px; pointer-events: none;
+}
+.settings-search-results {
+  margin-top: 6px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); max-height: 220px; overflow-y: auto; padding: 4px;
+}
+.settings-search-results[hidden] { display: none; }
+.settings-search-results button {
+  display: flex; gap: 8px; align-items: baseline; width: 100%; text-align: left;
+  padding: 7px 9px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--ink); font: inherit; cursor: pointer;
+}
+.settings-search-results button:hover { background: var(--green-50); }
+.settings-search-results b { flex: 0 0 auto; color: var(--muted); font-size: 11px; font-weight: 600; }
+.settings-search-results span { font-size: 12.5px; }
+.settings-search-empty { margin: 6px; color: var(--muted); font-size: 12px; }
+.setting-row.settings-search-hit { animation: settingsHit 1.8s ease; border-radius: 8px; }
+@keyframes settingsHit {
+  0%, 55% { box-shadow: 0 0 0 3px var(--green-100); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* 播放器标题下的原视频名（种子标题，动辄很长，单行省略 + 悬停看全） */
+.offline-player-source {
+  margin: 3px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* 加入收藏自动打开找资源：触发的收藏夹复选 */
+.auto-open-offline-list { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.auto-open-offline-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink); }
+.auto-open-offline-item input { accent-color: var(--green-700); }
+
+/* 完结 / 未知态徽标没有圆点：只留状态文字，别留一个空占位（用户看到的「多出一块空格」） */
+.update-badge.finished .update-badge-dot,
+.update-badge.unknown .update-badge-dot { display: none; }

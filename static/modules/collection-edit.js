@@ -155,6 +155,7 @@ async function changeCollectionStatus(id, status) {
   closeCollectMenus();
   toast(window.handbookOnline ? "收藏已更新" : "收藏已更新，已加入 Kazumi 待写回队列");
   document.dispatchEvent(new CustomEvent("collection-status-changed", { detail: { animeId: Number(id), status: Number(status) } }));
+  maybeAutoOpenOffline(Number(id), Number(status));
   return result.anime;
 }
 async function applyCollectStatus(control, status) {
@@ -335,3 +336,18 @@ $("#collectionOutboxButton").onclick = async () => {
     toast(error.message, "error");
   }
 };
+// 加入特定收藏夹时自动打开「找资源」并搜好番名；开关与夹子筛选在 设置 → 收藏夹。
+function maybeAutoOpenOffline(animeId, status) {
+  const settings = state.settings || {};
+  if (settings.auto_open_offline_enabled !== true) return;
+  const allowed = Array.isArray(settings.auto_open_offline_collections)
+    ? settings.auto_open_offline_collections.map(String)
+    : [];
+  if (!allowed.includes(String(status))) return;
+  const anime = state.animes.find((item) => Number(item.id) === Number(animeId));
+  if (!anime || typeof openOffline !== "function") return;
+  // openOffline 从 state.progressAnime 拿番名；临时喂给它，不改调用方状态。
+  const previous = state.progressAnime;
+  state.progressAnime = anime;
+  try { openOffline(); } finally { state.progressAnime = previous; }
+}

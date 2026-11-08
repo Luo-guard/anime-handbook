@@ -57,7 +57,9 @@ function openOffline() {
   $("#offlineHeading").textContent = "离线下载";
   $("#offlineTarget").textContent = name || "";
   $("#offlineTarget").classList.toggle("hidden", !name);
-  if (switched) {
+  // 同一个番再次打开也要补填：搜索框可能被清空过，再点「找资源」
+  // 看到的却是「先输入关键词」，会以为是没带上番名。
+  if (switched || !$("#offlineQuery").value.trim()) {
     $("#offlineQuery").value = name;
     offlineView.items = [];
     offlineView.group = "";
@@ -185,7 +187,7 @@ function renderOfflineList() {
             </p>
           </div>
           <div class="offline-row-actions">
-            <button type="button" class="offline-subscribe" data-subscribe="${index}" title="记下这个字幕组；到设置里打开「自动追新番」后，有新集才会自动下载">订阅</button>
+            <button type="button" class="offline-subscribe" data-subscribe="${index}" title="记下这个字幕组；到 设置 → 数据来源 打开「自动追新番」后，有新集才会自动下载">订阅</button>
             <button type="button" class="offline-download" data-index="${index}">下载</button>
           </div>
         </article>`;
@@ -440,6 +442,13 @@ function playLocalFile(fileId) {
   offlineView.playing = file;
   const video = $("#offlineVideo");
   $("#offlinePlayerTitle").textContent = `${offlineView.animeName || "本地文件"} · ${episodeLabelOf(file.episode_key)}`;
+  const sourceTitle = String(file.source_title || "").trim();
+  const sourceNode = $("#offlinePlayerSource");
+  if (sourceNode) {
+    sourceNode.textContent = sourceTitle;
+    sourceNode.title = sourceTitle;
+    sourceNode.classList.toggle("hidden", !sourceTitle);
+  }
   clearSubtitleSession();
   const toggle = $("#offlineSubtitleToggle");
   toggle.classList.toggle("hidden", !file.subtitle_path);
@@ -498,6 +507,8 @@ function closeOfflinePlayer() {
   const backdrop = $("#offlinePlayerBackdrop");
   if (backdrop) backdrop.hidden = true;
   restoreOfflineReturnDialogs();
+  const sourceNode = $("#offlinePlayerSource");
+  if (sourceNode) { sourceNode.textContent = ""; sourceNode.title = ""; sourceNode.classList.add("hidden"); }
   offlineView.playing = null;
   refreshOfflineLocal();
 }
@@ -789,7 +800,7 @@ async function subscribeFromResult(index) {
     toast(
       autoFollow
         ? `已订阅「${who}」的新集`
-        : `已订阅「${who}」；到设置里打开「自动追新番」后才会自动下载`,
+        : `已订阅「${who}」；到 设置 → 数据来源 打开「自动追新番」后才会自动下载`,
     );
     refreshSubscriptions();
   } catch (error) {

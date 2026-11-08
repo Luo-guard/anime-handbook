@@ -1232,3 +1232,136 @@ function addSelectedLinkRules() {
   $("#linkRulesModal").close();
   toast(`已添加 ${added} 个搜索链接，点右下角「保存设置」生效`);
 }
+
+// ===== 设置搜索：输入关键词列出匹配项，点击跳到对应分组并高亮 =====
+let settingsSearchIndex = null;
+
+function buildSettingsSearchIndex() {
+  const items = [];
+  $$(".settings-group").forEach((group) => {
+    const tab = group.dataset.settingsGroup || "";
+    const tabName = ($(`[data-settings-tab="${tab}"]`)?.textContent || tab).trim();
+    group.querySelectorAll(".setting-row").forEach((row) => {
+      items.push({
+        tab,
+        tabName,
+        row,
+        haystack: `${row.textContent}`.toLowerCase(),
+      });
+    });
+  });
+  return items;
+}
+
+function resetSettingsSearch() {
+  const input = $("#settingsSearch");
+  if (input) input.value = "";
+  const panel = $("#settingsSearchResults");
+  if (panel) { panel.classList.add("hidden"); panel.innerHTML = ""; }
+  const count = $("#settingsSearchCount");
+  if (count) { count.textContent = ""; count.classList.add("hidden"); }
+}
+
+function runSettingsSearch(query) {
+  const panel = $("#settingsSearchResults");
+  const count = $("#settingsSearchCount");
+  if (!panel || !count) return;
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) { resetSettingsSearch(); return; }
+  // 每次搜索前重建索引：主题卡片、快捷键等动态区块会变。
+  settingsSearchIndex = buildSettingsSearchIndex();
+  const hits = settingsSearchIndex.filter((item) => item.haystack.includes(q));
+  count.textContent = `${hits.length} 项`;
+  count.classList.remove("hidden");
+  panel.innerHTML = hits.length
+    ? hits.slice(0, 40).map((hit) => {
+        const key = settingsSearchIndex.indexOf(hit);
+        const title = (hit.row.querySelector("strong")?.textContent || hit.tabName).trim().slice(0, 70);
+        return `<button type="button" data-search-key="${key}"><b>${escapeHtml(hit.tabName)}</b><span>${escapeHtml(title)}</span></button>`;
+      }).join("")
+    : `<p class="settings-search-empty">没有匹配「${escapeHtml(query.trim())}」的设置项</p>`;
+  panel.classList.remove("hidden");
+}
+
+function initSettingsSearch() {
+  const input = $("#settingsSearch");
+  if (!input) return;
+  resetSettingsSearch();
+  if (!initSettingsSearch.bound) {
+    initSettingsSearch.bound = true;
+    input.addEventListener("input", (event) => runSettingsSearch(event.target.value));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.stopPropagation(); resetSettingsSearch(); }
+    });
+    $("#settingsSearchResults")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-search-key]");
+      if (!button) return;
+      const item = settingsSearchIndex?.[Number(button.dataset.searchKey)];
+      if (!item || !item.row.isConnected) return;
+      resetSettingsSearch();
+      switchSettingsTab(item.tab);
+      item.row.scrollIntoView({ block: "center", behavior: "smooth" });
+      item.row.classList.remove("settings-search-hit");
+      void item.row.offsetWidth;
+      item.row.classList.add("settings-search-hit");
+      window.setTimeout(() => item.row.classList.remove("settings-search-hit"), 1800);
+    });
+  }
+}
+
+// ===== 主设置里的「自动追新番」开关（与离线面板是同一个配置）=====
+async function initAutoFollowSetting() {
+  const input = $("#autoFollowSetting");
+  if (!input) return;
+  try {
+    const data = await api("/api/offline/settings");
+    input.checked = (data.config || {}).auto_follow === true;
+  } catch (error) { /* 读不到就保持当前状态，保存时后端会校验 */ }
+  if (!initAutoFollowSetting.bound) {
+    initAutoFollowSetting.bound = true;
+    input.addEventListener("change", async () => {
+      const checked = input.checked;
+      try {
+        await api("/api/offline/settings", {
+          method: "POST",
+          body: JSON.stringify({ auto_follow: checked }),
+        });
+        const panel = $("#offlineAutoFollow");
+        if (panel) panel.checked = checked;
+        toast(checked ? "已开启自动追新番" : "已关闭自动追新番");
+      } catch (error) {
+        input.checked = !checked;
+        toast(`自动追新番没存上：${error.message || error}`, "error");
+      }
+    });
+  }
+}
+
+// ===== 加入收藏自动打开找资源：开关 + 触发的收藏夹复选 =====
+function renderAutoOpenOfflineCollections() {
+  const box = $("#autoOpenOfflineCollections");
+  if (!box) return;
+  const selected = new Set((state.settings.auto_open_offline_collections || []).map(String));
+  const options = [...CATEGORIES, ...(state.custom_collections || [])];
+  box.innerHTML = options.map((item) => `
+    <label class="auto-open-offline-item">
+      <input type="checkbox" value="${Number(item.id)}" ${selected.has(String(item.id)) ? "checked" : ""} />
+      <span>${escapeHtml(item.name || `收藏夹 ${item.id}`)}</span>
+    </label>`).join("") || '<p class="settings-search-empty">还没有可用收藏夹</p>';
+}
+
+function initAutoOpenOfflineSetting() {
+  const input = $("#autoOpenOfflineInput");
+  if (!input) return;
+  input.checked = state.settings.auto_open_offline_enabled === true;
+  renderAutoOpenOfflineCollections();
+  const row = $("#autoOpenOfflineCollectionsRow");
+  if (row) row.classList.toggle("hidden", !input.checked);
+  if (!initAutoOpenOfflineSetting.bound) {
+    initAutoOpenOfflineSetting.bound = true;
+    input.addEventListener("change", () => {
+      const current = $("#autoOpenOfflineCollectionsRow");
+      if (current) current.classList.toggle("hidden", !input.checked);
+    });
+  }
+}

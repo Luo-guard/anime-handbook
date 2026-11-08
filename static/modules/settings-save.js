@@ -80,6 +80,8 @@ const HandbookSettings = (() => {
           show_oped_record: $("#showOpedRecordInput").checked,
           show_episode_rating_record: $("#showEpisodeRatingRecordInput").checked,
           show_character_tab: $("#showCharacterTabInput").checked,
+          auto_open_offline_enabled: $("#autoOpenOfflineInput")?.checked === true,
+          auto_open_offline_collections: $$("#autoOpenOfflineCollections input:checked").map((input) => String(input.value)),
           show_bgm_rating: $("#showBgmRatingInput").checked,
           bgm_rating_link: $("#bgmRatingLinkInput").checked,
           show_bgm_rating_in_collection: $("#showCollectionBgmRatingInput").checked,

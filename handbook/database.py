@@ -571,6 +571,8 @@ class HandbookDB:
                     {"id": "character_record", "name": "人物记录", "color": "#a8795b", "builtin": True},
                     {"id": "other", "name": "其他记录", "color": "#7c8790", "builtin": True},
                 ],
+                "auto_open_offline_enabled": False,
+                "auto_open_offline_collections": ["1", "2"],
                 "show_bgm_rating": True,
                 "bgm_rating_link": True,
                 "show_bgm_rating_in_collection": True,

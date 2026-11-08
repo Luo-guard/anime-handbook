@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-player-layer" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-settings-batch" />
   </head>
   <body>
     <div class="app-shell">
@@ -370,6 +370,7 @@
       <div class="modal-frame offline-player-frame">
         <button type="button" class="modal-close" id="offlinePlayerClose" aria-label="关闭">×</button>
         <h2 id="offlinePlayerTitle">播放</h2>
+        <p class="offline-player-source hidden" id="offlinePlayerSource"></p>
         <div class="offline-player-video" id="offlinePlayerVideoWrap">
           <video id="offlineVideo" controls playsinline preload="metadata"></video>
           <canvas id="danmakuCanvas" class="danmaku-canvas" aria-hidden="true"></canvas>
@@ -486,6 +487,11 @@
         <button class="modal-close" value="cancel" aria-label="关闭">×</button>
         <p class="eyebrow">PREFERENCES</p>
         <h2>手账设置</h2>
+        <div class="settings-search">
+          <input type="search" id="settingsSearch" placeholder="搜索设置项，如：主题、弹幕、快捷键" autocomplete="off" />
+          <span class="settings-search-count hidden" id="settingsSearchCount"></span>
+        </div>
+        <div class="settings-search-results hidden" id="settingsSearchResults"></div>
         <div class="settings-layout">
           <aside class="settings-side-nav" id="settingsSideNav" aria-label="设置分类">
 <button type="button" class="active" data-settings-tab="main">主界面设置</button>
@@ -691,7 +697,16 @@
             <div class="settings-custom-list" id="settingsCustomCollections"></div>
           </div>
           
-<div class="settings-section-title" data-settings-section="detail">番剧详情</div>
+<h3 class="settings-subsection-title">离线下载</h3>
+          <label class="setting-row">
+            <span><strong>加入收藏时自动打开「找资源」</strong><small>把番加入下面勾选的收藏夹时，自动打开离线下载并搜好番名；未勾选的收藏夹和从前一样不触发。默认关闭。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="autoOpenOfflineInput" /><span class="switch"></span></span>
+          </label>
+          <div class="setting-row stacked" id="autoOpenOfflineCollectionsRow">
+            <span><strong>触发的收藏夹</strong><small>默认勾「在看 / 想看」；一个都不勾等于关闭这个功能。</small></span>
+            <div class="auto-open-offline-list" id="autoOpenOfflineCollections"></div>
+          </div>
+          <div class="settings-section-title" data-settings-section="detail">番剧详情</div>
 <h3 class="settings-subsection-title">评分与资料</h3>
           <label class="setting-row">
             <span>
@@ -926,6 +941,11 @@
           <div class="setting-row stacked"><span><strong>扇区六格</strong><small>每个方位放哪个动作，选「（空）」就是把这一格去掉。默认：上播放、下下载、右上评分、右下评价、左上 ED、左下 OP。</small></span><div id="episodeGestureSlots" class="eg-grid"></div></div>
           <div class="setting-row stacked"><span><strong>手势与动作</strong><small>一个手势只能绑一个动作，同一个动作最多绑 4 个手势。退格等操作习惯与上面的快捷键不同：这里直接下拉选择。</small></span><div id="episodeGestureBindings" class="eg-grid"></div><p class="eg-warning" id="episodeGestureDoubleWarning" hidden>已绑定双击：单击格子记录已看会延迟约 0.25 秒才响应（这是识别双击的必要代价），所有番剧的格子都会受影响；取消双击绑定后立即恢复。</p><p id="episodeGestureStatus" role="status"></p><button type="button" id="resetEpisodeGestures" class="secondary-button compact-button">恢复默认手势</button></div>
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
+          <h3 class="settings-subsection-title">自动追番</h3>
+          <label class="setting-row">
+            <span><strong>自动追新番</strong><small>开启后，离线下载里订阅过的「关键词 + 字幕组」会定时检查蜜柑并自动下载新集。与「离线下载 → 设置」里的开关是同一个配置。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="autoFollowSetting" /><span class="switch"></span></span>
+          </label>
           <h3 class="settings-subsection-title">Bangumi 资料来源</h3>
           <div class="setting-row stacked">
             <span>
@@ -1273,8 +1293,8 @@
     <script src="/modules/collection-edit.js?v=20261106-collection-order" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/danmaku.js?v=20261108-player-layer" defer></script>
-    <script src="/modules/offline.js?v=20261108-player-layer" defer></script>
+    <script src="/modules/danmaku.js?v=20261108-settings-batch" defer></script>
+    <script src="/modules/offline.js?v=20261108-settings-batch" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

@@ -370,6 +370,9 @@ $("#settingsButton").addEventListener("click", () => {
   renderSettingsPanels();
   refreshSharingSettings().catch(() => {});
   refreshWebdavSettings().catch(() => {});
+  initSettingsSearch();
+  initAutoFollowSetting();
+  initAutoOpenOfflineSetting();
   $("#settingsModal").showModal();
 });
 

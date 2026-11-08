@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+import re
 from typing import Any
 
 from . import media as media_tools
@@ -600,6 +601,31 @@ class OfflineService:
         files = self._annotate_files(self.store.files_for_anime(int(anime_id)))
         # 文件不在了不算「可以播放」：详情页的手势、面板的播放按钮都据此判断，
         # 否则点下去只会拿到 404「本地文件不在了」。
+        # 把下载任务的原始种子标题带给前端：播放器标题下能显示「原视频原名」，
+        # local_files 本身不存这个字段（归档后的文件名已经格式化过）。
+        # 早期任务没写 episode_key，就按番内 job 的种子标题里的 [05] 集数对回去。
+        jobs_by_key: dict[str, str] = {}
+        fallback: list[tuple[int, str]] = []
+        for job in jobs:
+            title = str(job.get("source_title") or job.get("torrent_name") or "").strip()
+            if not title:
+                continue
+            key = str(job.get("episode_key") or "")
+            if key:
+                jobs_by_key[key] = title
+            else:
+                numbers = [int(n) for n in re.findall(r"\[(\d{1,3})\]", title)]
+                if numbers:
+                    fallback.append((numbers[-1], title))
+        for item in files:
+            key = str(item.get("episode_key") or "")
+            title = jobs_by_key.get(key, "")
+            if not title and fallback:
+                match = re.search(r"(\d+)$", key.rsplit(":", 1)[-1])
+                if match:
+                    number = int(match.group(1))
+                    title = next((t for n, t in fallback if n == number), "")
+            item["source_title"] = title
         ready = {str(item.get("episode_key")) for item in files if item.get("exists")}
         missing = [item for item in files if not item.get("exists")]
         return {

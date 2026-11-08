@@ -102,6 +102,8 @@ def _normalize_settings(body, settings):
         "schedule_origins",
         "schedule_uncollected",
         "schedule_card_fields",
+        "auto_open_offline_enabled",
+        "auto_open_offline_collections",
     }
     balance_initial = (
         int(body["episode_balance_initial"])
@@ -209,6 +211,15 @@ def _normalize_settings(body, settings):
                 value = bool(value)
             elif key == "show_custom_move_button_without_collections":
                 value = bool(value)
+            elif key == "auto_open_offline_collections":
+                if not isinstance(value, list):
+                    raise ValueError("触发的收藏夹需为列表")
+                cleaned: list[str] = []
+                for item in value:
+                    text = str(item).strip()
+                    if text and text not in cleaned:
+                        cleaned.append(text)
+                value = cleaned[:20]
             elif key == "show_progress_bar":
                 value = bool(value)
             elif key in {"show_sidebar_toggle", "show_shutdown_button", "statistics_show_zero_periods"}:
