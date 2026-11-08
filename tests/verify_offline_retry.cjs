@@ -42,6 +42,11 @@ window.api=async(url,options)=>{
         ],
       };
       renderOfflineLocal();
+      // 本地文件标签现在默认是「我的库」总览。这个测试的 mock 数据不能被
+      // openAnimeLocalView 的真实请求覆盖，只做纯视图切换。
+      offlineView.libraryMode = false;
+      showLibraryChrome(false);
+      document.querySelector('#offlineLibraryBack').classList.remove('hidden');
       switchOfflineTab("local");
       $("#offlineModal").showModal();
     });

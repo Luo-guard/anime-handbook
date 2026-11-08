@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-search-ui" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-library" />
   </head>
   <body>
     <div class="app-shell">
@@ -337,7 +337,25 @@
         </section>
         <section class="offline-panel hidden" id="offlineLocalPanel">
           <p class="offline-status" id="offlineLocalStatus" role="status"></p>
-          <div class="offline-list" id="offlineLocalList"></div>
+          <div id="offlineLibraryView" class="hidden">
+            <div class="library-toolbar">
+              <select id="offlineLibraryFilter" aria-label="按收藏夹筛选">
+                <option value="all">全部收藏</option>
+                <option value="1">在看</option>
+                <option value="2">想看</option>
+                <option value="3">搁置</option>
+                <option value="4">看过</option>
+                <option value="5">抛弃</option>
+              </select>
+              <input type="search" id="offlineLibrarySearch" placeholder="搜索本地番名" autocomplete="off" />
+            </div>
+            <div class="library-grid" id="offlineLibraryGrid"></div>
+            <p class="library-disk hidden" id="offlineLibraryDisk"></p>
+          </div>
+          <div id="offlineAnimeView" class="hidden">
+            <button type="button" class="offline-library-back hidden" id="offlineLibraryBack">← 返回媒体库</button>
+            <div class="offline-list" id="offlineLocalList"></div>
+          </div>
         </section>
         <section class="offline-panel hidden" id="offlineSettingsPanel">
           <div class="offline-settings">
@@ -436,7 +454,7 @@
               <div class="personal-rating hidden" id="personalRating"></div>
               <div class="progress-actions">
                 <div class="detail-actions">
-                  <button type="button" class="detail-action detail-action-primary" id="openOffline"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>找资源</button>
+                  <button type="button" class="detail-action" id="openLibrary">我的库</button><button type="button" class="detail-action detail-action-primary" id="openOffline"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>找资源</button>
                   <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
                 </div>
                 <div class="collect-detail-row" id="collectionDetailStatus"></div>
@@ -1306,7 +1324,7 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-danmaku-source" defer></script>
-    <script src="/modules/offline.js?v=20261108-search-ui" defer></script>
+    <script src="/modules/offline.js?v=20261108-library" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

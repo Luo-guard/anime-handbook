@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import threading
 import time
@@ -588,6 +589,79 @@ class OfflineService:
             subtitle = str(row.get("subtitle_path") or "")
             row["has_subtitle"] = bool(subtitle) and Path(subtitle).is_file()
         return files
+
+    def library(self) -> dict[str, Any]:
+        """「我的库」聚合：按番分组已入库文件，纯读，供媒体库视图一次拉全。"""
+        files = self.store.all_files()
+        root = offline_config.resolved(self.config())["media_root"]
+        disk: dict[str, Any] = {"media_root": root}
+        try:
+            usage = shutil.disk_usage(root)
+            disk["free_gb"] = round(usage.free / (1 << 30), 1)
+            disk["total_gb"] = round(usage.total / (1 << 30), 1)
+        except OSError:
+            pass
+
+        grouped: dict[int, list[dict[str, Any]]] = {}
+        for row in files:
+            grouped.setdefault(int(row.get("anime_id") or 0), []).append(row)
+
+        items: list[dict[str, Any]] = []
+        with self.store.db.connect() as db:
+            for anime_id, rows in grouped.items():
+                anime = db.execute(
+                    "SELECT name, name_cn, image_url, collection_type, episode_count, watched_episodes, episodes"
+                    " FROM anime WHERE id = ?",
+                    (anime_id,),
+                ).fetchone()
+                info = dict(anime) if anime else {}
+                ordered = sorted(rows, key=lambda row: media_tools.key_sort_value(row.get("episode_key")))
+                playable = [row for row in ordered if Path(str(row.get("file_path") or "")).is_file()]
+                if not playable:
+                    continue  # 文件全不在了的番不进媒体库，去「本地文件」看记录更合适
+
+                # 已看集合：watched_episodes 里混着旧格式（bgm:123），用该番的
+                # episodes 资料把这类 key 换算成统一的「类型:集数」再比。
+                try:
+                    raw_watched = {str(key) for key in json.loads(info.get("watched_episodes") or "[]")}
+                except ValueError:
+                    raw_watched = set()
+                key_map: dict[str, str] = {}
+                try:
+                    for episode in json.loads(info.get("episodes") or "[]"):
+                        if isinstance(episode, dict) and episode.get("key"):
+                            key_map[str(episode["key"])] = f"{int(episode.get('type') or 0)}:{int(episode.get('sort') or 0)}"
+                except ValueError:
+                    pass
+                watched = {key_map.get(key, key) for key in raw_watched}
+
+                def is_watched(row: dict[str, Any]) -> bool:
+                    return str(row.get("episode_key")) in watched
+
+                # 继续观看：优先「看了一半」里进度最深的；全没看过就从第一集开始
+                started = [row for row in playable if 0 < int(row.get("resume_ms") or 0) < int(row.get("duration_ms") or 1)]
+                continue_row = (
+                    max(started, key=lambda row: int(row.get("resume_ms") or 0))
+                    if started
+                    else next((row for row in playable if not is_watched(row)), playable[0])
+                )
+                size_bytes = sum(int(row.get("file_size") or 0) for row in playable)
+                items.append({
+                    "anime_id": anime_id,
+                    "name": (info.get("name_cn") or info.get("name") or f"番剧 {anime_id}").strip(),
+                    "cover": f"/api/covers/{anime_id}",
+                    "collection_type": int(info.get("collection_type") or 0),
+                    "episode_count": int(info.get("episode_count") or 0),
+                    "file_count": len(ordered),
+                    "watched_count": sum(1 for row in playable if is_watched(row)),
+                    "size_bytes": size_bytes,
+                    "continue_file_id": int(continue_row["id"]),
+                    "continue_episode_key": str(continue_row.get("episode_key") or ""),
+                    "continue_resume_ms": int(continue_row.get("resume_ms") or 0),
+                    "last_updated": max(str(row.get("updated_at") or "") for row in rows),
+                })
+        items.sort(key=lambda item: item["last_updated"], reverse=True)
+        return {"ok": True, "items": items, "disk": disk}
 
     def state(self, anime_id: int, *, refresh: bool = True) -> dict[str, Any]:
         jobs = self.store.jobs_for_anime(int(anime_id))

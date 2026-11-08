@@ -4567,3 +4567,74 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
    就会对准真正的弹窗。 */
 .rules-dialog,
 .rules-menu-dialog { width: fit-content; max-width: calc(100vw - 28px); }
+
+/* ===== 我的库：番组卡片媒体库（本地文件标签的默认视图） ===== */
+/* 两个视图容器要接管 offline-panel 的纵向伸缩：面板把非 .offline-list 的
+   直接子元素设了 flex-shrink:0，这里用 id 特异性覆盖回来。 */
+#offlineLibraryView,
+#offlineAnimeView {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+}
+#offlineLibraryView { overflow-y: auto; }
+#offlineAnimeView .offline-list { flex: 1 1 auto; min-height: 0; }
+
+.library-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex: 0 0 auto; }
+.library-toolbar select,
+.library-toolbar input {
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px;
+}
+.library-toolbar select { flex: 0 0 auto; }
+.library-toolbar input { flex: 1 1 auto; min-width: 0; }
+
+.library-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px; align-items: start;
+}
+.library-card {
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+  cursor: pointer; transition: border-color .15s;
+}
+.library-card:hover { border-color: var(--green-700); }
+.library-cover { position: relative; aspect-ratio: 3 / 4; background: rgb(var(--theme-rgb) / .08); }
+.library-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.library-badge {
+  position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 999px;
+  background: rgba(0, 0, 0, .55); color: #fff; font-size: 10.5px; line-height: 1.4;
+}
+.library-size {
+  position: absolute; right: 8px; bottom: 8px; padding: 2px 7px; border-radius: 7px;
+  background: rgba(0, 0, 0, .55); color: #fff; font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.library-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 5px; }
+.library-name {
+  margin: 0; font-size: 12.5px; font-weight: 600; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.library-meta { margin: 0; color: var(--muted); font-size: 11px; }
+.library-bar {
+  position: relative; height: 5px; border-radius: 99px;
+  background: rgb(var(--theme-rgb) / .12); overflow: hidden;
+}
+.library-bar i {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--green-500); border-radius: inherit;
+}
+.library-bar i.watched { background: var(--green-800); }
+.library-continue {
+  margin-top: 2px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--green-50); color: var(--green-800);
+  font: inherit; font-size: 11.5px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.library-continue:hover { background: var(--green-100); }
+.library-disk { margin: 12px 0 0; color: var(--muted); font-size: 11.5px; text-align: right; }
+.offline-library-back {
+  flex: 0 0 auto; margin: 0 0 10px; padding: 6px 12px; align-self: flex-start;
+  border: 1px solid var(--line); border-radius: 9px; background: transparent;
+  color: var(--green-800); font: inherit; font-size: 12px; cursor: pointer;
+}
+.offline-library-back:hover { background: var(--green-50); }

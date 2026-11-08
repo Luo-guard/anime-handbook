@@ -18,6 +18,9 @@ const offlineView = {
   subtitleBoot: null,
   // 打开播放器前收起的模态弹窗 id，关掉播放器后原样恢复。
   returnDialogs: [],
+  // 「我的库」视图：全库聚合数据 + 筛选状态；libraryMode=false 表示正在看某个番的文件列表。
+  library: { items: [], disk: null, filter: "all", query: "", token: 0, loaded: false },
+  libraryMode: true,
 };
 
 function offlineStatus(target, text, isError = false) {
@@ -89,6 +92,11 @@ function switchOfflineTab(tab) {
   $("#offlineSearchPanel").classList.toggle("hidden", tab !== "search");
   $("#offlineLocalPanel").classList.toggle("hidden", tab !== "local");
   $("#offlineSettingsPanel").classList.toggle("hidden", tab !== "settings");
+  if (tab === "local") {
+    // 本地文件标签默认停在媒体库总览；点某张卡片才进到那个番的文件列表。
+    if (offlineView.libraryMode !== false) openLibraryView();
+    else showLibraryChrome(false);
+  }
   if (tab === "settings") loadOfflineSettings();
 }
 
@@ -244,6 +252,112 @@ async function refreshOfflineLocal() {
     if (token !== offlineView.localToken || animeId !== Number(offlineView.animeId)) return;
     offlineStatus("#offlineLocalStatus", error.message || "读取本地文件失败", true);
   }
+}
+
+// ===== 我的库：全库番组卡片（数据来自 /api/offline/library，纯读） =====
+
+function showLibraryChrome(inLibrary) {
+  $("#offlineLibraryView")?.classList.toggle("hidden", !inLibrary);
+  $("#offlineAnimeView")?.classList.toggle("hidden", inLibrary);
+}
+
+async function openLibraryView() {
+  offlineView.libraryMode = true;
+  showLibraryChrome(true);
+  $("#offlineLibraryBack")?.classList.add("hidden");
+  await loadLibrary();
+}
+
+// 从媒体库点进某个番：复用现有的单番文件列表（播放/删除/任务全都在）。
+async function openAnimeLocalView(animeId, name) {
+  offlineView.libraryMode = false;
+  showLibraryChrome(false);
+  $("#offlineLibraryBack")?.classList.remove("hidden");
+  offlineView.animeId = Number(animeId) || 0;
+  offlineView.animeName = String(name || "");
+  $("#offlineTarget").textContent = offlineView.animeName;
+  $("#offlineTarget").classList.toggle("hidden", !offlineView.animeName);
+  $("#offlineQuery").value = $("#offlineQuery").value.trim() ? $("#offlineQuery").value : offlineView.animeName;
+  await refreshOfflineLocal();
+}
+
+async function loadLibrary() {
+  const token = ++offlineView.library.token;
+  offlineStatus("#offlineLocalStatus", "媒体库加载中…");
+  try {
+    const data = await api("/api/offline/library");
+    if (token !== offlineView.library.token) return;
+    offlineView.library.items = data.items || [];
+    offlineView.library.disk = data.disk || null;
+    offlineView.library.loaded = true;
+    offlineStatus("#offlineLocalStatus", "");
+    renderLibrary();
+  } catch (error) {
+    if (token === offlineView.library.token) {
+      offlineStatus("#offlineLocalStatus", `媒体库加载失败：${error.message || error}`, true);
+    }
+  }
+}
+
+function libraryFiltered() {
+  const { items, filter, query } = offlineView.library;
+  const q = query.trim().toLowerCase();
+  return items.filter((item) =>
+    (filter === "all" || String(item.collection_type) === filter)
+    && (!q || item.name.toLowerCase().includes(q)));
+}
+
+function renderLibrary() {
+  const grid = $("#offlineLibraryGrid");
+  if (!grid) return;
+  const visible = libraryFiltered();
+  grid.innerHTML = visible.length
+    ? visible.map(libraryCard).join("")
+    : '<p class="offline-empty">没有匹配的番：换个筛选或关键词，或者先用「找资源」下载几集</p>';
+  const disk = offlineView.library.disk;
+  const diskNode = $("#offlineLibraryDisk");
+  if (diskNode) {
+    diskNode.textContent = disk && disk.total_gb
+      ? `媒体库目录 ${disk.media_root} · 剩余 ${disk.free_gb} GB / 共 ${disk.total_gb} GB`
+      : "";
+    diskNode.classList.toggle("hidden", !diskNode.textContent);
+  }
+}
+
+function libraryCard(item) {
+  const total = Math.max(item.episode_count || 0, item.file_count, 1);
+  const downloadPct = Math.min(100, Math.round((item.file_count / total) * 100));
+  const watchedPct = Math.min(100, Math.round((item.watched_count / total) * 100));
+  const size = item.size_bytes >= (1 << 30)
+    ? `${(item.size_bytes / (1 << 30)).toFixed(1)} GB`
+    : `${Math.max(1, Math.round(item.size_bytes / (1 << 20)))} MB`;
+  const category = CATEGORIES.find((entry) => entry.id === item.collection_type);
+  const resume = item.continue_resume_ms;
+  const minutes = Math.floor(resume / 60000);
+  const seconds = String(Math.floor((resume % 60000) / 1000)).padStart(2, "0");
+  const continueLabel = `${episodeLabelOf(item.continue_episode_key)}${resume > 0 ? ` · 看到 ${minutes}:${seconds}` : " · 从头看"}`;
+  return `
+    <article class="library-card" data-anime="${item.anime_id}" data-name="${escapeHtml(item.name)}">
+      <div class="library-cover">
+        <img src="/api/covers/${item.anime_id}" loading="lazy" alt="" onerror="this.style.visibility='hidden'" />
+        ${category ? `<span class="library-badge">${escapeHtml(category.name)}</span>` : ""}
+        <span class="library-size">${escapeHtml(size)}</span>
+      </div>
+      <div class="library-body">
+        <p class="library-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</p>
+        <p class="library-meta">已收 ${item.file_count}${item.episode_count ? ` / 全 ${item.episode_count}` : ""} 集 · 已看 ${item.watched_count}</p>
+        <div class="library-bar" title="绿色：已收 ${item.file_count} 集；深色：已看 ${item.watched_count} 集"><i style="width:${downloadPct}%"></i><i class="watched" style="width:${watchedPct}%"></i></div>
+        ${item.continue_file_id ? `<button type="button" class="library-continue" data-continue="${item.continue_file_id}" data-anime="${item.anime_id}">▶ ${escapeHtml(continueLabel)}</button>` : ""}
+      </div>
+    </article>`;
+}
+
+async function continueWatching(animeId, fileId) {
+  const item = offlineView.library.items.find((entry) => Number(entry.anime_id) === Number(animeId));
+  offlineView.animeId = Number(animeId) || 0;
+  offlineView.animeName = item ? item.name : "";
+  await refreshOfflineLocal();
+  playLocalFile(Number(fileId));
 }
 
 function renderOfflineLocal() {
@@ -654,6 +768,29 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#offlineResetRoot")?.addEventListener("click", () => {
     $("#offlineMediaRoot").value = "";
     $("#offlineDownloadRoot").value = "";
+  });
+  $("#offlineLibraryFilter")?.addEventListener("change", (event) => {
+    offlineView.library.filter = event.target.value;
+    renderLibrary();
+  });
+  $("#offlineLibrarySearch")?.addEventListener("input", (event) => {
+    offlineView.library.query = event.target.value;
+    renderLibrary();
+  });
+  $("#offlineLibraryGrid")?.addEventListener("click", (event) => {
+    const continueButton = event.target.closest(".library-continue");
+    if (continueButton) {
+      event.stopPropagation();
+      continueWatching(continueButton.dataset.anime, continueButton.dataset.continue);
+      return;
+    }
+    const card = event.target.closest(".library-card");
+    if (card) openAnimeLocalView(card.dataset.anime, card.dataset.name);
+  });
+  $("#offlineLibraryBack")?.addEventListener("click", openLibraryView);
+  $("#openLibrary")?.addEventListener("click", () => {
+    openOffline();
+    switchOfflineTab("local");
   });
   $("#offlineSubtitleToggle")?.addEventListener("click", toggleSubtitleRenderer);
   $("#offlinePlayerClose")?.addEventListener("click", closeOfflinePlayer);
