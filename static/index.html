@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-badge-size" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-detail-corner" />
   </head>
   <body>
     <div class="app-shell">
@@ -525,7 +525,7 @@
     </dialog>
     <dialog class="modal progress-modal" id="progressModal">
       <form method="dialog" class="modal-frame" id="progressForm">
-        <button class="modal-close" value="cancel" aria-label="关闭">×</button>
+        <button type="button" class="detail-corner-download" id="openOffline" title="我的库 · 找资源" aria-label="打开我的库与找资源"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></button>
         <div class="progress-hero">
           <img id="progressCover" alt="" />
           <div class="progress-hero-info">
@@ -537,7 +537,6 @@
               <div class="personal-rating hidden" id="personalRating"></div>
               <div class="progress-actions">
                 <div class="detail-actions">
-                  <button type="button" class="detail-action" id="openLibrary">我的库</button><button type="button" class="detail-action detail-action-primary" id="openOffline"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>找资源</button>
                   <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
                 </div>
                 <div class="collect-detail-row" id="collectionDetailStatus"></div>
@@ -1435,7 +1434,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261104-tidy-help-2" defer></script>
     <script src="/modules/settings-save.js?v=20261108-search-ui" defer></script>
-    <script src="/modules/events.js?v=20261108-search-ui" defer></script>
+    <script src="/modules/events.js?v=20261108-detail-corner" defer></script>
     <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>

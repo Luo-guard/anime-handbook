@@ -157,11 +157,15 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   assert.equal(localDefault.animeView, true, '本地文件默认要显示当前番');
   assert.ok(localDefault.rows >= 1, `要列出当前番文件：${localDefault.rows}`);
   assert.equal(await page.evaluate(() => document.querySelector('#offlineSettingsPanel') !== null), false, '设置页签要已移除');
-  await page.keyboard.press('Escape'); // 关掉离线弹窗，露出详情弹窗再点「我的库」
+  await page.keyboard.press('Escape'); // 关掉离线弹窗，露出详情弹窗再从角标重进
   await page.waitForTimeout(400);
-  await page.click('#openLibrary');
+  await page.click('#openOffline'); // 「我的库」按钮已并入右上角下载角标
   await page.waitForTimeout(800);
-  assert.equal(await page.evaluate(() => !document.querySelector('#offlineLibraryView').classList.contains('hidden')), true, '我的库按钮要强制总览');
+  await page.click('[data-offline-tab="local"]');
+  await page.waitForTimeout(600);
+  await page.click('#offlineLibraryBack'); // 进媒体库总览
+  await page.waitForTimeout(600);
+  assert.equal(await page.evaluate(() => !document.querySelector('#offlineLibraryView').classList.contains('hidden')), true, '返回后要显示媒体库总览');
   await page.keyboard.press('Escape');
 
   // 10) 设置里选「有本地内容时」→ 有内容仍显示

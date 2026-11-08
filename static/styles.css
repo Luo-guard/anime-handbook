@@ -4223,10 +4223,38 @@ dialog::backdrop {
   transition: background .15s;
 }
 .detail-action svg { width: 14px; height: 14px; flex: 0 0 auto; }
-.detail-action:hover:not(:disabled) { background: rgb(var(--theme-rgb) / .06); }
+.detail-action:hover:not(:disabled) { background: rgba(var(--theme-rgb), .06); }
 .detail-action:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; border-radius: 9px; }
 .detail-action:disabled { opacity: .6; cursor: default; }
 /* primary 不再有特殊底色：找资源和相关番剧是同一层级的文字动作。 */
+
+/* 详情弹窗右上角的「我的库 · 找资源」合并按钮：四分之一圆贴在弹窗角上，
+   只留一个下载图标。外角由 dialog 的 22px 圆角裁齐，内角 100% 圆出弧线。
+   注意 --theme-rgb 是逗号串，必须用 rgba(..., a) 旧语法，斜杠写法会失效。 */
+.detail-corner-download {
+  position: absolute;
+  top: 0;
+  right: -15px; /* 抵掉 .progress-modal 的 scrollbar-gutter，让外角贴住弹窗真实角落 */
+  z-index: 2;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-bottom-left-radius: 100%;
+  background: var(--green-700);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 13px 14px 0 0;
+  box-shadow: -2px 3px 10px rgba(5, 20, 12, .18);
+  transition: background .15s, transform .15s;
+}
+.detail-corner-download:hover { background: var(--green-600); transform: scale(1.04); }
+.detail-corner-download:active { transform: scale(.97); }
+.detail-corner-download:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
+.detail-corner-download svg { width: 20px; height: 20px; }
+@media(max-width:650px){.detail-corner-download{width:46px;height:46px;padding:10px 11px 0 0;right:0}.detail-corner-download svg{width:17px;height:17px}}
 
 /* 详情弹窗内的「在看」状态选择器：保留细框，但尺寸/字号/图标与找资源一致。
    用 .collect-detail-row 限定作用域，周表卡片、搜索结果里的收藏按钮不受影响。 */

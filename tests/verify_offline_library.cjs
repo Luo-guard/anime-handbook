@@ -8,21 +8,26 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
   await page.waitForTimeout(1400);
 
-  // 1) 详情页「我的库」按钮存在且与「找资源」并排
+  // 1) 详情页右上角是合并后的下载角标按钮，「我的库」独立按钮已移除
   const button = await page.evaluate(() => {
     openProgress(state.animes.find((a) => a.id)?.id);
+    const corner = document.querySelector('#openOffline.detail-corner-download');
     const mine = document.querySelector('#openLibrary');
-    const find = document.querySelector('#openOffline');
-    return { exists: Boolean(mine), sameRow: mine?.parentElement === find?.parentElement,
-      text: mine?.textContent.trim() };
+    return { exists: Boolean(corner), mineRemoved: !mine, cornerInModal: Boolean(corner?.closest('#progressForm')) };
   });
-  assert.equal(button.exists, true, '详情页要有「我的库」按钮');
-  assert.equal(button.sameRow, true, '与「找资源」同一行');
-  assert.equal(button.text, '我的库');
+  assert.equal(button.exists, true, '详情页要有右上角下载角标按钮');
+  assert.equal(button.cornerInModal, true, '角标按钮应在详情弹窗内');
+  assert.equal(button.mineRemoved, true, '「我的库」独立按钮应已移除');
 
-  // 2) 点按钮 → 离线面板 + 默认进媒体库视图，卡片渲染出真实番
-  await page.evaluate(() => document.querySelector('#openLibrary').click());
+  // 2) 点角标 → 离线面板默认进「找资源」（番名已填），切到本地页签看媒体库卡片
+  await page.evaluate(() => document.querySelector('#openOffline').click());
   await page.waitForTimeout(900);
+  assert.equal(await page.evaluate(() => document.querySelector('[data-offline-tab="search"]').classList.contains('active')), true, '角标默认进找资源');
+  await page.evaluate(() => document.querySelector('[data-offline-tab="local"]').click());
+  await page.waitForTimeout(500);
+  // 本地页签默认显示当前番；「返回媒体库」进总览
+  await page.evaluate(() => document.querySelector('#offlineLibraryBack')?.click());
+  await page.waitForTimeout(500);
   const library = await page.evaluate(() => ({
     tabActive: document.querySelector('[data-offline-tab="local"]').classList.contains('active'),
     libraryVisible: !document.querySelector('#offlineLibraryView').classList.contains('hidden'),
@@ -36,7 +41,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     disk: document.querySelector('#offlineLibraryDisk').textContent,
   }));
   assert.equal(library.tabActive, true);
-  assert.equal(library.libraryVisible, true, '本地文件标签默认进媒体库');
+  assert.equal(library.libraryVisible, true, '本地文件页签要进媒体库');
   assert.equal(library.animeViewHidden, true);
   assert.ok(library.cards.length >= 1, '库里要列出有本地文件的番');
   const card = library.cards[0];

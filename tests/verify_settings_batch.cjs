@@ -76,7 +76,8 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
       panelShown: !panel.hidden,
       sections: [...panel.querySelectorAll('.settings-search-section-title')].map((n) => n.textContent),
       rowTotal: [...panel.querySelectorAll('.setting-row')].length,
-      highlightCount: window.CSS?.highlights?.get('settings-hit')?.size || 0,
+      markCount: [...panel.querySelectorAll('.settings-hit-mark')].length,
+      markBold: (() => { const m = panel.querySelector('.settings-hit-mark'); return m ? getComputedStyle(m).fontWeight : ''; })(),
       countText: document.querySelector('#settingsSearchCount').textContent,
       clearButtonVisible: !document.querySelector('#settingsSearchClear').classList.contains('hidden'),
     };
@@ -95,7 +96,8 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   assert.equal(search.panelShown, true, '结果面板要显示');
 
   assert.ok(search.rowTotal > 0, `搜「评分」要有结果，计数：${search.countText}`);
-  assert.ok(search.highlightCount > 0, '命中文字要有 Highlight 高亮');
+  assert.ok(search.markCount > 0, '命中文字要有 mark 高亮');
+  assert.equal(search.markBold, '700', '命中文字要加粗');
   assert.ok(search.sections.length >= 1 && search.sections.every((t) => t.includes('·')), `分组标题：${search.sections.join(' / ')}`);
   assert.equal(search.restoredMatchesBaseline, true, '清空后所有行要回到原分组原位置');
   assert.equal(search.panelHiddenAfterClear, true, '清空后结果面板要收起');
