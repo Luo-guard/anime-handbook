@@ -123,7 +123,12 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   // T9 加入收藏自动打开找资源：只验证触发逻辑，不改库
   // 取数放在测试进程侧：页内 fetch 在跑批时偶发 Failed to fetch（与后端无关），
   // 触发逻辑本身是纯前端，不该被网络抖动连坐。
-  const bootstrap = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json();
+  // 跑批时偶发 Failed to fetch（后端 ThreadingHTTPServer 高负载下拒连）；退避重试。
+  let bootstrap = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try { bootstrap = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json(); break; }
+    catch (error) { if (attempt === 3) throw error; await new Promise((r) => setTimeout(r, 700)); }
+  }
   const animeId = (bootstrap.animes || []).find((item) => item.collection_type !== 2)?.id;
   assert.ok(animeId, '要能找到一部不在「想看」的番');
   const autoOpen = await page.evaluate(({ animeId }) => {

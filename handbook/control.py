@@ -60,6 +60,10 @@ class DesktopRequestHandler(RequestHandler):
 
 
 class DesktopHTTPServer(ThreadingHTTPServer):
+    # 默认 request_queue_size=5：浏览器多页签 + 轮询 + 跑批测试并发时，
+    # 三次握手的连接会因 backlog 溢出被直接重置（前端表现为偶发 Failed to fetch）。
+    request_queue_size = 128
+
     def __init__(self, address, busy=lambda: False):
         if address[0] not in {'127.0.0.1', 'localhost'}:
             raise ValueError('桌面后台仅允许监听本机')

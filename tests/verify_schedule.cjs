@@ -33,7 +33,7 @@ ctx.malicious={key:'evil',title:'<img src=x>',kind:'weekly',time:'',weekday:1};c
 // Preserve old sidebar settings while inserting the new page beside collection.
 const app=require('./frontend_source.cjs');const part=app.slice(app.indexOf('const SIDEBAR_ITEMS'),app.indexOf('\nfunction applySidebarLayout'));
 vm.runInContext(part,ctx);state.settings={sidebar_order:['collection','timeline','statistics','ranking','settings']};
-assert.equal(run("sidebarOrder().join(',')"),'collection,schedule,timeline,statistics,ranking,settings');
+assert.equal(run("sidebarOrder().join(',')"),'collection,library,schedule,timeline,statistics,ranking,settings');
 console.log('Schedule frontend: 04:00/quarter boundaries, filters, sorts, weekday/network views, escaping and sidebar migration passed');
 
 ctx.visibilityFixture={key:'visible',id:123,title:'测试卡片',kind:'weekly',collection_type:1,score:8.1,votes:100,time:'20:30',weekday:1,calendar_weekday:1,air_date:'2026-07-06',source_time:'20:30~',release:'10/1~',tags:['奇幻']};

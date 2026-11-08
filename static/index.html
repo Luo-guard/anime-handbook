@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-player-controls" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-library-sidebar" />
   </head>
   <body>
     <div class="app-shell">
@@ -25,6 +25,10 @@
               <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/>
             </svg>
             <span data-page-label="collection">收藏夹</span>
+          </button>
+          <button class="nav-item" data-view="library" data-nav-id="library" id="libraryNavButton">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v16H4zM14 4h6v16h-6z" opacity=".0"/><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10v16H5.5A1.5 1.5 0 0 1 4 18.5ZM14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14ZM12 4v16"/></svg>
+            <span data-page-label="library">动漫库</span>
           </button>
           <button class="nav-item" data-view="schedule" data-nav-id="schedule">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2ZM7 14h3M14 14h3M7 17h3"/></svg>
@@ -324,7 +328,6 @@
         <div class="offline-tabs" role="tablist">
           <button type="button" class="offline-tab active" data-offline-tab="search" role="tab" aria-selected="true">找资源</button>
           <button type="button" class="offline-tab" data-offline-tab="local" role="tab" aria-selected="false">本地文件 <span id="offlineLocalCount"></span></button>
-          <button type="button" class="offline-tab" data-offline-tab="settings" role="tab" aria-selected="false">设置</button>
         </div>
         <section class="offline-panel" id="offlineSearchPanel">
           <div class="offline-toolbar">
@@ -357,32 +360,61 @@
             <div class="offline-list" id="offlineLocalList"></div>
           </div>
         </section>
-        <section class="offline-panel hidden" id="offlineSettingsPanel">
-          <div class="offline-settings">
-            <label class="offline-field"><span>媒体库目录</span><input type="text" id="offlineMediaRoot" placeholder="留空使用默认目录" autocomplete="off" /><small id="offlineMediaHint"></small></label>
-            <label class="offline-field"><span>下载临时目录</span><input type="text" id="offlineDownloadRoot" placeholder="留空使用 媒体库/_incoming" autocomplete="off" /></label>
-            <div class="offline-field-row">
-              <label class="offline-field"><span>qBittorrent 地址</span><input type="text" id="offlineQbHost" autocomplete="off" /></label>
-              <label class="offline-field offline-field-small"><span>端口</span><input type="number" id="offlineQbPort" min="1" max="65535" /></label>
-            </div>
-            <label class="offline-field"><span>下载分类</span><input type="text" id="offlineQbCategory" autocomplete="off" /></label>
-            <label class="offline-switch"><input type="checkbox" id="offlineSeedAfter" /><span>下载完成后继续做种<small>关掉会在归档后删除原始文件，省一半空间</small></span></label>
-            <label class="offline-switch"><input type="checkbox" id="offlineAutoFollow" /><span>自动追新番<small>默认关闭；开启后才会定时检查你订阅过的番</small></span></label>
-            <div class="offline-subs">
-              <h3 class="offline-section-title">追番订阅 · 这部番</h3>
-              <div class="offline-sub-list" id="offlineSubList"></div>
-              <button type="button" class="text-button" id="offlineCheckSubs">立即检查全部订阅</button>
-            </div>
-            <p class="offline-status" id="offlineSettingsStatus" role="status"></p>
-            <div class="offline-settings-actions">
-              <button type="button" class="primary-button" id="offlineSaveSettings">保存</button>
-              <button type="button" class="text-button" id="offlineResetRoot">用默认目录</button>
-              <button type="button" class="text-button" id="offlineMigrate">迁移已有文件</button>
-            </div>
-          </div>
-        </section>
       </div>
     </dialog>
+    <section class="view" id="libraryView">
+      <header class="page-header">
+        <div><p class="eyebrow">MEDIA LIBRARY</p><h1 data-page-label="library">动漫库</h1><p class="page-subtitle">本地收藏、订阅与找资源，都在这里。</p></div>
+        <div class="library-tabs" role="tablist">
+          <button type="button" class="library-tab active" data-library-tab="media">媒体库</button>
+          <button type="button" class="library-tab" data-library-tab="subs">订阅管理</button>
+          <button type="button" class="library-tab" data-library-tab="search">找资源</button>
+        </div>
+      </header>
+      <div class="overview-panel library-panel " id="libraryMediaPanel">
+        <div class="library-toolbar">
+          <select id="libFilter" aria-label="按收藏夹筛选">
+            <option value="all">全部收藏</option>
+            <option value="1">在看</option>
+            <option value="2">想看</option>
+            <option value="3">搁置</option>
+            <option value="4">看过</option>
+            <option value="5">抛弃</option>
+          </select>
+          <input type="search" id="libSearch" placeholder="搜索本地番名" autocomplete="off" />
+        </div>
+        <div class="library-grid" id="libGrid"></div>
+        <p class="library-disk hidden" id="libDisk"></p>
+      </div>
+      <div class="overview-panel library-panel hidden" id="libraryDetailPanel">
+        <button type="button" class="offline-library-back" id="libDetailBack">← 返回媒体库</button>
+        <div class="lib-detail-head">
+          <img id="libDetailCover" alt="" />
+          <div>
+            <h3 id="libDetailTitle"></h3>
+            <p class="library-meta" id="libDetailMeta"></p>
+            <div class="lib-source-chips hidden" id="libSourceChips"></div>
+          </div>
+        </div>
+        <div class="lib-episodes" id="libEpisodes"></div>
+      </div>
+      <div class="overview-panel library-panel hidden" id="librarySubsPanel">
+        <div class="lib-subs-head">
+          <label class="offline-switch"><input type="checkbox" id="libAutoFollow" /><span>自动追新番<small>开启后才会定时检查订阅</small></span></label>
+          <button type="button" class="primary-button" id="libCheckSubs">立即检查全部订阅</button>
+        </div>
+        <p class="library-meta" id="libSubsStatus" role="status"></p>
+        <div class="lib-sub-list" id="libSubList"></div>
+      </div>
+      <div class="overview-panel library-panel hidden" id="librarySearchPanel">
+        <div class="library-toolbar">
+          <input type="search" id="libSearchQuery" placeholder="输入番名或关键词搜索资源" autocomplete="off" />
+          <button type="button" class="primary-button" id="libSearchGo">搜索</button>
+        </div>
+        <p class="library-meta" id="libSearchStatus" role="status"></p>
+        <div class="lib-search-results" id="libSearchResults"></div>
+      </div>
+    </section>
     <div class="offline-player-backdrop" id="offlinePlayerBackdrop" hidden></div>
     <dialog class="modal offline-player" id="offlinePlayer">
       <div class="modal-frame offline-player-frame">
@@ -585,6 +617,7 @@
 <button type="button" data-settings-tab="keyboard">快捷键</button>
 <button type="button" data-settings-tab="data">数据来源</button>
 <button type="button" data-settings-tab="sharing">账号与同步</button>
+<button type="button" data-settings-tab="offline">离线下载</button>
 </aside>
           <div class="settings-list">
           <div class="settings-section-title" data-settings-section="main">主界面设置</div>
@@ -1074,6 +1107,34 @@
             </span>
             <span class="read-only-badge green">本地</span>
           </div>
+          <div class="settings-section-title" data-settings-section="offline">离线下载</div>
+          <div class="offline-settings">
+            <label class="offline-field"><span>动漫库侧边栏</span>
+              <select id="librarySidebarMode">
+                <option value="show">始终显示</option>
+                <option value="auto">有本地内容时显示</option>
+                <option value="hide">隐藏</option>
+              </select>
+              <small>改动立即生效并保存；「有本地内容时」指媒体库里至少有一部可以播的番</small>
+            </label>
+
+            <label class="offline-field"><span>媒体库目录</span><input type="text" id="offlineMediaRoot" placeholder="留空使用默认目录" autocomplete="off" /><small id="offlineMediaHint"></small></label>
+            <label class="offline-field"><span>下载临时目录</span><input type="text" id="offlineDownloadRoot" placeholder="留空使用 媒体库/_incoming" autocomplete="off" /></label>
+            <div class="offline-field-row">
+              <label class="offline-field"><span>qBittorrent 地址</span><input type="text" id="offlineQbHost" autocomplete="off" /></label>
+              <label class="offline-field offline-field-small"><span>端口</span><input type="number" id="offlineQbPort" min="1" max="65535" /></label>
+            </div>
+            <label class="offline-field"><span>下载分类</span><input type="text" id="offlineQbCategory" autocomplete="off" /></label>
+            <label class="offline-switch"><input type="checkbox" id="offlineSeedAfter" /><span>下载完成后继续做种<small>关掉会在归档后删除原始文件，省一半空间</small></span></label>
+            <label class="offline-switch"><input type="checkbox" id="offlineAutoFollow" /><span>自动追新番<small>默认关闭；开启后才会定时检查你订阅过的番</small></span></label>
+            <button type="button" class="text-button" id="offlineCheckSubs">立即检查全部订阅</button>
+            <p class="offline-status" id="offlineSettingsStatus" role="status"></p>
+            <div class="offline-settings-actions">
+              <button type="button" class="primary-button" id="offlineSaveSettings">保存</button>
+              <button type="button" class="text-button" id="offlineResetRoot">用默认目录</button>
+              <button type="button" class="text-button" id="offlineMigrate">迁移已有文件</button>
+            </div>
+          </div>
           <div class="settings-section-title" data-settings-section="sharing">账号与同步</div>
           <label class="setting-row desktop-only"><span><strong>只读 Kazumi 数据</strong><small>开启后手账不再修改 Kazumi：搜索添加收藏、周表加入收藏、详情修改状态一并关闭，自动写回也会暂停，已有待写回任务保留。</small></span><span class="switch-row compact"><input type="checkbox" id="kazumiReadOnlyInput"><span class="switch"></span></span></label>
           <label class="setting-row desktop-only"><span><strong>自动写回 Kazumi 收藏</strong><small>Kazumi 关闭后执行；开启期间等待。手账后台须保持运行，仅同步收藏新增和状态，不写观看进度。</small></span><span class="switch-row compact"><input type="checkbox" id="kazumiWritebackInput"><span class="switch"></span></span></label>
@@ -1375,7 +1436,8 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-player-controls" defer></script>
-    <script src="/modules/offline.js?v=20261108-player-controls" defer></script>
+    <script src="/modules/offline.js?v=20261108-library-sidebar" defer></script>
+    <script src="/modules/library-view.js?v=20261108-library-sidebar" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

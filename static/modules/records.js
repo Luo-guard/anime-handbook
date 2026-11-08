@@ -388,6 +388,7 @@ function switchView(view) {
     renderStatistics();
   }
   if (view === "ranking") renderRanking();
+  if (view === "library") renderLibrarySidebarView();
   if (view === "schedule") loadSchedule();
 }
 

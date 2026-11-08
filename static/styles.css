@@ -4782,3 +4782,79 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   .pc-row { flex-wrap: wrap; }
   .pc-group.pc-center { order: 3; flex-basis: 100%; }
 }
+
+/* ===== 动漫库侧边栏视图 ===== */
+.library-view-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  flex-wrap: wrap; margin-bottom: 14px;
+}
+.library-view-head h2 { margin: 0; }
+.library-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: rgb(var(--theme-rgb) / .07); }
+.library-tab {
+  padding: 6px 14px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.library-tab.active { background: var(--surface); color: var(--green-800); box-shadow: 0 1px 4px rgb(0 0 0 / .1); }
+.library-panel { display: flex; flex-direction: column; gap: 12px; }
+.lib-detail-head { display: flex; gap: 14px; align-items: flex-start; }
+.lib-detail-head img {
+  width: 72px; aspect-ratio: 3/4; object-fit: cover;
+  border-radius: 10px; background: rgb(var(--theme-rgb) / .08); flex: 0 0 auto;
+}
+.lib-detail-head h3 { margin: 0 0 4px; }
+.lib-source-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.lib-source-chips button {
+  padding: 3px 11px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--muted);
+  font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.lib-source-chips button.active { border-color: var(--green-700); color: var(--green-800); background: var(--green-50); font-weight: 600; }
+.lib-episodes { display: flex; flex-direction: column; gap: 6px; }
+.lib-episode {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+}
+.lib-ep-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lib-ep-info b { font-size: 13px; }
+.lib-ep-info small { color: var(--muted); font-size: 11.5px; }
+.lib-ep-info .lib-source-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px;
+  color: color-mix(in srgb, var(--muted) 80%, var(--ink));
+}
+.lib-ep-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+/* 控制栏按钮类在播放器里是深底白字；库视图里换回浅色语义。 */
+.library-panel .pc-btn.pc-text {
+  width: auto; min-width: 56px; height: 28px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 8px;
+  color: var(--green-800); background: var(--surface); font-size: 12px;
+}
+.library-panel .pc-btn.pc-text:hover:not(:disabled) { background: var(--green-50); color: var(--green-900); }
+.library-panel .pc-btn.pc-text:disabled { opacity: .5; cursor: default; }
+.library-panel .pc-btn.pc-text.danger { color: #b3392f; }
+.library-panel .pc-btn.pc-text.danger:hover:not(:disabled) { background: #fdecea; color: #8f2a23; }
+.lib-subs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.lib-sub-list { display: flex; flex-direction: column; gap: 6px; }
+.lib-sub-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+}
+.lib-sub-info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.lib-sub-info b { font-size: 13px; }
+.lib-sub-info small { color: var(--muted); font-size: 11.5px; }
+.lib-search-results { display: flex; flex-direction: column; gap: 6px; }
+.lib-search-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+}
+.lib-search-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lib-search-info b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-search-info small { display: flex; gap: 5px; flex-wrap: wrap; }
+.lib-search-info small i {
+  font-style: normal; padding: 1px 7px; border-radius: 999px;
+  background: rgb(var(--theme-rgb) / .07); color: var(--muted); font-size: 10.5px;
+}
+#libraryView .library-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+/* 动漫库面板继承 overview-panel 毛玻璃底板；内部间距微调 */
+.library-panel.library-panel { padding: 18px 22px 20px; }
+.library-tabs { flex: 0 0 auto; }

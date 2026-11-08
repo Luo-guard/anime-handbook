@@ -182,6 +182,7 @@ function setSidebarCollapsed(collapsed) {
 
 const SIDEBAR_ITEMS = {
   collection: "收藏夹",
+  library: "动漫库",
   schedule: "周表",
   timeline: "看番记录",
   statistics: "记录统计",
@@ -198,7 +199,7 @@ function pageLabel(id, fallback = SIDEBAR_ITEMS[id]) {
 // Only page references use custom names; action labels and domain terms stay literal.
 function applyPageLabels() {
   $$("[data-page-text]").forEach((node) => {
-    node.textContent = node.dataset.pageText.replace(/\{(collection|schedule|timeline|statistics|ranking)\}/g, (_, id) => pageLabel(id));
+    node.textContent = node.dataset.pageText.replace(/\{(collection|library|schedule|timeline|statistics|ranking)\}/g, (_, id) => pageLabel(id));
   });
   $$("[data-page-label]").forEach((node) => {
     if (!node.dataset.pageDefault) node.dataset.pageDefault = node.textContent;
@@ -214,6 +215,11 @@ function sidebarOrder() {
   if (!saved.includes("schedule")) {
     ordered.splice(ordered.indexOf("schedule"), 1);
     ordered.splice(Math.max(0, ordered.indexOf("collection") + 1), 0, "schedule");
+  }
+  // 动漫库默认排在收藏夹后面；老用户的存量 sidebar_order 里没有它，这里兜底。
+  if (!saved.includes("library")) {
+    ordered.splice(ordered.indexOf("library"), 1);
+    ordered.splice(Math.max(0, ordered.indexOf("collection") + 1), 0, "library");
   }
   return ordered;
 }
@@ -233,10 +239,11 @@ function applySidebarLayout() {
   sidebarOrder().forEach((id) => {
     const item = $(`.nav-item[data-nav-id="${id}"]`);
     if (!item) return;
-    item.classList.toggle("hidden", visibility[id] === false && id !== "settings");
+    // 动漫库的显隐由「离线下载」设置里的三态开关控制，这里不碰它。
+    item.classList.toggle("hidden", visibility[id] === false && id !== "settings" && id !== "library");
     nav.append(item);
   });
-  if (!["collection", "schedule", "timeline", "statistics", "ranking"].includes(state.activeView)) {
+  if (!["collection", "library", "schedule", "timeline", "statistics", "ranking"].includes(state.activeView)) {
     state.activeView = "collection";
   }
   if (visibility[state.activeView] === false) {

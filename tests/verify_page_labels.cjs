@@ -2,7 +2,7 @@ const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const source=require('./frontend_source.cjs'),html=fs.readFileSync('static/index.html','utf8');
 const labels=[...html.matchAll(/<\w+\b[^>]*data-page-label="([^"]+)"[^>]*>([^<]*)/g)].map(m=>({dataset:{pageLabel:m[1]},textContent:m[2]}));
 const references=[...html.matchAll(/data-page-text="([^"]+)"/g)].map(m=>({dataset:{pageText:m[1]},textContent:''}));
-const custom={collection:'我的书架',schedule:'每周追番',timeline:'日记',statistics:'数据中心',ranking:'排行榜页面'};
+const custom={collection:'我的书架',library:'我的库存',schedule:'每周追番',timeline:'日记',statistics:'数据中心',ranking:'排行榜页面'};
 const nodes={};const $=id=>nodes[id]||=( {innerHTML:'',classList:{toggle(){}},style:{setProperty(){}},insertAdjacentHTML(){},addEventListener(){}} );
 const state={settings:{sidebar_labels:custom},ranking_boards:[],rankingBoard:null,rankingDirtyBoards:new Set()};
 const ctx=vm.createContext({state,$,$$:selector=>selector==='[data-page-label]'?labels:selector==='[data-page-text]'?references:[],escapeHtml:String,createRankingBoard(){},CATEGORIES:[],rankingPeriodOptions:()=>'',bindRankingInteractions(){},showRankingHoverTitles:()=>false,rankingHoverDelay:()=>2});

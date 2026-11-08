@@ -9,6 +9,11 @@ const start = html.indexOf('<dialog class="modal offline-modal" id="offlineModal
 const end = html.indexOf('</dialog>', start) + '</dialog>'.length;
 assert(start > 0 && end > start, 'offline modal exists');
 const modal = html.slice(start, end);
+const settingsStart = html.indexOf('<div class="offline-settings">');
+const settingsEnd = html.indexOf('<div class="settings-section-title" data-settings-section="sharing"');
+assert(settingsStart > 0 && settingsEnd > settingsStart, 'offline settings block exists');
+const settingsBlock = html.slice(settingsStart, settingsEnd);
+
 
 const setup = `
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -25,7 +30,7 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
     const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}`);
+    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}<div>${settingsBlock}</div>`);
     await page.addScriptTag({ content: setup + fs.readFileSync('static/modules/offline.js', 'utf8') });
     await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
 
@@ -39,6 +44,8 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
         ],
         jobs: [],
       };
+      // 本地文件标签默认进「当前番」视图；这里测的是番内列表渲染，显式声明。
+      offlineView.libraryMode = false;
       renderOfflineLocal();
       switchOfflineTab('local');
       $('#offlineModal').showModal();
@@ -122,29 +129,9 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
     const onToast = await page.evaluate(() => toasts.at(-1).text);
     assert.equal(onToast, '已订阅「A组」的新集', onToast);
 
-    // 6) 设置页的订阅列表：总开关关着要先说一句「只在手动检查时才查」。
-    await page.evaluate(async () => {
-      window.api = async () => ({
-        ok: true,
-        auto_follow: false,
-        items: [{ id: 1, keyword: '测试番', group_name: 'A组', enabled: 1, last_checked: '' }],
-      });
-      await refreshSubscriptions();
-    });
-    const subList = await page.locator('#offlineSubList').textContent();
-    assert.match(subList, /「自动追新番」关着/, subList);
-    assert.match(subList, /立即检查全部订阅/, subList);
-
-    await page.evaluate(async () => {
-      window.api = async () => ({
-        ok: true,
-        auto_follow: true,
-        items: [{ id: 1, keyword: '测试番', group_name: 'A组', enabled: 1, last_checked: '' }],
-      });
-      await refreshSubscriptions();
-    });
-    const subListOn = await page.locator('#offlineSubList').textContent();
-    assert.ok(!/关着/.test(subListOn), `开关打开后不该再有这句：${subListOn}`);
+    // 6) 旧「设置页订阅列表」已迁到动漫库的订阅管理（文案由 verify_library_sidebar 覆盖）；
+    //    refreshSubscriptions 在宿主元素消失时直接返回，不报错。
+    await page.evaluate(async () => { await refreshSubscriptions(); });
 
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Offline missing files + subscribe wording: 缺文件不再假装能播，订阅文案不再空头承诺。');

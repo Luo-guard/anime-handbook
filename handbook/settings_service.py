@@ -104,6 +104,7 @@ def _normalize_settings(body, settings):
         "schedule_card_fields",
         "auto_open_offline_enabled",
         "auto_open_offline_collections",
+        "library_sidebar",
     }
     balance_initial = (
         int(body["episode_balance_initial"])
@@ -211,6 +212,10 @@ def _normalize_settings(body, settings):
                 value = bool(value)
             elif key == "show_custom_move_button_without_collections":
                 value = bool(value)
+            elif key == "library_sidebar":
+                value = str(value or "show")
+                if value not in ("show", "hide", "auto"):
+                    raise ValueError("动漫库侧边栏取值无效")
             elif key == "auto_open_offline_collections":
                 if not isinstance(value, list):
                     raise ValueError("触发的收藏夹需为列表")

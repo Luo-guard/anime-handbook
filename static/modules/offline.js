@@ -21,6 +21,8 @@ const offlineView = {
   // 「我的库」视图：全库聚合数据 + 筛选状态；libraryMode=false 表示正在看某个番的文件列表。
   library: { items: [], disk: null, filter: "all", query: "", token: 0, loaded: false },
   libraryMode: true,
+  // 详情页「我的库」按钮置位：本地文件标签强制进总览（否则默认进当前番）。
+  forceLibraryTab: false,
 };
 
 function offlineStatus(target, text, isError = false) {
@@ -91,11 +93,20 @@ function switchOfflineTab(tab) {
   });
   $("#offlineSearchPanel").classList.toggle("hidden", tab !== "search");
   $("#offlineLocalPanel").classList.toggle("hidden", tab !== "local");
-  $("#offlineSettingsPanel").classList.toggle("hidden", tab !== "settings");
+  $("#offlineSettingsPanel")?.classList.toggle("hidden", tab !== "settings");
   if (tab === "local") {
-    // 本地文件标签默认停在媒体库总览；点某张卡片才进到那个番的文件列表。
-    if (offlineView.libraryMode !== false) openLibraryView();
-    else showLibraryChrome(false);
+    if (offlineView.forceLibraryTab) {
+      // 「我的库」按钮：强制看全库总览。
+      offlineView.forceLibraryTab = false;
+      openLibraryView();
+    } else if (offlineView.libraryMode === false) {
+      showLibraryChrome(false);
+    } else if (offlineView.animeId) {
+      // 从详情页进来：默认直接看这一番的本地文件。
+      openAnimeLocalView(offlineView.animeId, offlineView.animeName);
+    } else {
+      openLibraryView();
+    }
   }
   if (tab === "settings") loadOfflineSettings();
 }
@@ -775,6 +786,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (remove.dataset.job) return removeJob(remove.dataset.job);
   });
   $("#offlineSaveSettings")?.addEventListener("click", saveOfflineSettings);
+  // 设置面板已搬进主设置弹窗，但读写逻辑共用这套字段，启动时先填一次。
+  loadOfflineSettings();
   $("#offlineMigrate")?.addEventListener("click", migrateMediaRoot);
   $("#offlineResetRoot")?.addEventListener("click", () => {
     $("#offlineMediaRoot").value = "";
@@ -801,6 +814,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#offlineLibraryBack")?.addEventListener("click", openLibraryView);
   $("#openLibrary")?.addEventListener("click", () => {
     openOffline();
+    offlineView.forceLibraryTab = true;
     switchOfflineTab("local");
   });
   $("#offlineSubtitleToggle")?.addEventListener("click", toggleSubtitleRenderer);

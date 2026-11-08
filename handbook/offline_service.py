@@ -679,27 +679,36 @@ class OfflineService:
         # local_files 本身不存这个字段（归档后的文件名已经格式化过）。
         # 早期任务没写 episode_key，就按番内 job 的种子标题里的 [05] 集数对回去。
         jobs_by_key: dict[str, str] = {}
-        fallback: list[tuple[int, str]] = []
+        groups_by_key: dict[str, str] = {}
+        fallback: list[tuple[int, str, str]] = []
         for job in jobs:
             title = str(job.get("source_title") or job.get("torrent_name") or "").strip()
-            if not title:
+            group = str(job.get("group_name") or "").strip()
+            if not title and not group:
                 continue
             key = str(job.get("episode_key") or "")
             if key:
-                jobs_by_key[key] = title
+                if title:
+                    jobs_by_key[key] = title
+                if group:
+                    groups_by_key[key] = group
             else:
                 numbers = [int(n) for n in re.findall(r"\[(\d{1,3})\]", title)]
                 if numbers:
-                    fallback.append((numbers[-1], title))
+                    fallback.append((numbers[-1], title, group))
         for item in files:
             key = str(item.get("episode_key") or "")
             title = jobs_by_key.get(key, "")
+            group = groups_by_key.get(key, "")
             if not title and fallback:
                 match = re.search(r"(\d+)$", key.rsplit(":", 1)[-1])
                 if match:
                     number = int(match.group(1))
-                    title = next((t for n, t in fallback if n == number), "")
+                    hit = next((entry for entry in fallback if entry[0] == number), None)
+                    if hit:
+                        title, group = hit[1], hit[2]
             item["source_title"] = title
+            item["group_name"] = group
         ready = {str(item.get("episode_key")) for item in files if item.get("exists")}
         missing = [item for item in files if not item.get("exists")]
         return {
@@ -852,9 +861,24 @@ class OfflineService:
         return {"ok": True}
 
     def subscriptions(self, anime_id: int | None = None) -> dict[str, Any]:
+        items = self.store.subscriptions(anime_id)
+        # 订阅管理页要显示番名：一次把涉及到的番全查出来。
+        ids = {int(item.get("anime_id") or 0) for item in items if item.get("anime_id")}
+        names: dict[int, str] = {}
+        if ids:
+            with self.store.db.connect() as db:
+                marks = ",".join("?" for _ in ids)
+                rows = db.execute(
+                    f"SELECT id, name, name_cn FROM anime WHERE id IN ({marks})",
+                    tuple(ids),
+                ).fetchall()
+                for row in rows:
+                    names[int(row["id"])] = str(row["name_cn"] or row["name"] or f"番剧 {row['id']}")
+        for item in items:
+            item["anime_name"] = names.get(int(item.get("anime_id") or 0), "")
         return {
             "ok": True,
-            "items": self.store.subscriptions(anime_id),
+            "items": items,
             "auto_follow": bool(self.config().get("auto_follow")),
         }
 

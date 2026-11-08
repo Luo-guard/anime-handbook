@@ -8,6 +8,11 @@ const start = html.indexOf('<dialog class="modal offline-modal" id="offlineModal
 const end = html.indexOf('</dialog>', start) + '</dialog>'.length;
 assert(start > 0 && end > start, 'offline modal exists');
 const modal = html.slice(start, end);
+const settingsStart = html.indexOf('<div class="offline-settings">');
+const settingsEnd = html.indexOf('<div class="settings-section-title" data-settings-section="sharing"');
+assert(settingsStart > 0 && settingsEnd > settingsStart, 'offline settings block exists');
+const settingsBlock = html.slice(settingsStart, settingsEnd);
+
 
 const setup = `
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -24,7 +29,7 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
     const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}`);
+    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}<div>${settingsBlock}</div>`);
     await page.addScriptTag({ content: setup + fs.readFileSync('static/modules/offline.js', 'utf8') });
     await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
 
@@ -47,6 +52,8 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
         ],
         jobs: [],
       };
+      // 本地文件标签默认进「当前番」视图；这里测的是番内列表渲染，显式声明。
+      offlineView.libraryMode = false;
       renderOfflineLocal();
       switchOfflineTab('local');
       $('#offlineModal').showModal();

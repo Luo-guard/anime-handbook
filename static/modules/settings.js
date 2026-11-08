@@ -304,7 +304,7 @@ function renderSettingsPanels() {
   $("#sidebarSettingsList").innerHTML = sidebarOrder().map((id, index) => `
     <div class="sidebar-setting-item">
       <label class="mini-check">
-        <input type="checkbox" class="sidebar-visibility-check" data-sidebar-id="${id}" ${visibility[id] !== false || id === "settings" ? "checked" : ""} ${id === "settings" ? "disabled" : ""} />
+        <input type="checkbox" class="sidebar-visibility-check" data-sidebar-id="${id}" ${visibility[id] !== false || id === "settings" ? "checked" : ""} ${id === "settings" || id === "library" ? "disabled" : ""} title="${id === "library" ? "动漫库的显隐由「设置 → 离线下载」的三态开关控制" : ""}" />
         <span>${escapeHtml(pageLabel(id))}</span>
       </label>
       <span class="sidebar-order-actions">

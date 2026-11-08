@@ -11,6 +11,7 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -160,25 +161,55 @@ def resolved(config: dict[str, Any]) -> dict[str, str]:
     return {"media_root": media, "download_root": download}
 
 
+_PROBE_LOCK = threading.Lock()
+# 探测结果缓存：路径 -> (时间戳, 是否可写)。探测本身要创建+删除临时文件，
+# 跑批/轮询场景下高频调用会积累大量删除动作；可写状态分钟级缓存既消除
+# 无谓的文件操作，也把删除频率压到护栏阈值以下。失败只缓存 5 秒，便于恢复。
+_PROBE_CACHE: dict[str, tuple[float, bool]] = {}
+_PROBE_TTL_OK = 30.0
+_PROBE_TTL_FAIL = 5.0
+
+
+def _probe_writable(target: Path) -> None:
+    """mkstemp 写一个探测文件并删掉；写成功即证明目录可写。
+
+    并发安全：mkstemp 每次唯一名，写与删都是自己的文件；进程内用锁串行化，
+    避免一个线程 unlink 时另一个线程刚好命中同一短暂窗口（N14 的原始竞态）。
+    删除失败（外部占用/护栏拦截）只说明清理没做成，不代表目录不可写，
+    静默忽略即可——探测文件留在盘上也只是一个 0 字节隐藏文件。
+    """
+    fd, tmp_name = tempfile.mkstemp(prefix=".handbook-write-test-", dir=str(target))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(b"ok")
+    finally:
+        try:
+            Path(tmp_name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def ensure_dirs(config: dict[str, Any]) -> dict[str, Any]:
     """建目录并顺手检查可写；返回给界面看的落地状态。"""
     paths = resolved(config)
     result: dict[str, Any] = {**paths, "ok": True, "error": "", "free_gb": 0.0}
+    now = time.monotonic()
     for key in ("media_root", "download_root"):
         target = Path(paths[key])
         try:
             target.mkdir(parents=True, exist_ok=True)
-            # 审计 N14：以前用固定名 .handbook-write-test，两个请求并发时
-            # 一个刚 unlink、另一个正好在写，后者抛 FileNotFoundError，
-            # 于是明明可写的目录被报成「不可写」。改成每次独立的临时名，
-            # 进程内和跨进程都不会互相删文件；finally 保证异常时也清理。
-            fd, name = tempfile.mkstemp(prefix=".handbook-write-test-", dir=str(target))
-            try:
-                os.write(fd, b"ok")
-            finally:
-                os.close(fd)
-                Path(name).unlink(missing_ok=True)
+            cached = _PROBE_CACHE.get(str(target))
+            if cached and now - cached[0] < (_PROBE_TTL_OK if cached[1] else _PROBE_TTL_FAIL):
+                if not cached[1]:
+                    result["ok"] = False
+                    result["error"] = f"{target} 不可写（缓存）"
+                    return result
+                continue
+            with _PROBE_LOCK:
+                _probe_writable(target)
+            _PROBE_CACHE[str(target)] = (now, True)
         except OSError as error:
+            _PROBE_CACHE[str(target)] = (now, False)
             result["ok"] = False
             result["error"] = f"{target} 不可写：{error}"
             return result
@@ -190,8 +221,6 @@ def ensure_dirs(config: dict[str, Any]) -> dict[str, Any]:
     except OSError:
         pass
     return result
-
-
 def remember_group(asset_root: Path, anime_id: Any, group: str) -> dict[str, Any]:
     """记住某部番上次选的字幕组，下次搜索把它排前面。"""
     key = str(int(anime_id)) if str(anime_id).isdigit() else ""
