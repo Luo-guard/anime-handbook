@@ -845,13 +845,16 @@ const PC_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 function pcLoadPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(PC_PREFS_KEY) || "{}");
+    const skip = Math.round(Number(raw.skip));
     return {
       speed: PC_SPEEDS.includes(Number(raw.speed)) ? Number(raw.speed) : 1,
       volume: Number.isFinite(Number(raw.volume)) ? Math.min(1, Math.max(0, Number(raw.volume))) : 1,
       muted: raw.muted === true,
+      // 顶栏快进按钮一次跳的秒数（Kazumi buttonSkipTime），默认 80
+      skip: Number.isFinite(skip) && skip > 0 ? Math.min(600, skip) : 80,
     };
   } catch (error) {
-    return { speed: 1, volume: 1, muted: false };
+    return { speed: 1, volume: 1, muted: false, skip: 80 };
   }
 }
 
@@ -859,6 +862,25 @@ function pcSavePrefs(patch) {
   try {
     localStorage.setItem(PC_PREFS_KEY, JSON.stringify({ ...pcLoadPrefs(), ...patch }));
   } catch (error) { /* 忽略 */ }
+}
+
+// 快进按钮的界面同步：悬停提示文案 + 图标里的秒数数字都跟着偏好走。
+function pcApplySkipUI() {
+  const skip = pcLoadPrefs().skip;
+  const btn = $("#pcSkipForward");
+  if (btn) btn.dataset.tip = `快进${skip}秒，长按修改时间`;
+  const glyph = $("#pcSkipGlyphText");
+  if (glyph) glyph.textContent = String(skip);
+}
+
+function pcOpenSkipDialog() {
+  const dialog = $("#pcSkipModal");
+  const input = $("#pcSkipInput");
+  if (!dialog || !input) return;
+  input.value = String(pcLoadPrefs().skip);
+  dialog.showModal();
+  input.focus();
+  input.select();
 }
 
 function pcFormatTime(seconds) {
@@ -1113,6 +1135,43 @@ function pcInit() {
     playLocalFile(Number(item.dataset.id));
   });
   $("#pcScreenshot")?.addEventListener("click", pcScreenshot);
+  // 顶栏快进按钮（Kazumi 式）：单击跳 skip 秒，长按 500ms 弹「跳过秒数」对话框。
+  pcApplySkipUI();
+  let pcSkipPressTimer = 0;
+  let pcSkipLongPressed = false;
+  $("#pcSkipForward")?.addEventListener("click", () => {
+    if (pcSkipLongPressed) { pcSkipLongPressed = false; return; }
+    const target = video.currentTime + pcLoadPrefs().skip;
+    video.currentTime = Number.isFinite(video.duration) && video.duration > 0
+      ? Math.min(video.duration - 0.05, target)
+      : target;
+  });
+  $("#pcSkipForward")?.addEventListener("pointerdown", () => {
+    pcSkipLongPressed = false;
+    pcSkipPressTimer = setTimeout(() => {
+      pcSkipLongPressed = true;
+      pcOpenSkipDialog();
+    }, 500);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach((type) => {
+    $("#pcSkipForward")?.addEventListener(type, () => clearTimeout(pcSkipPressTimer));
+  });
+  $("#pcSkipForward")?.addEventListener("contextmenu", (event) => event.preventDefault());
+  // 长按后 click 可能被模态弹窗吞掉，抑制标志要在弹窗关闭时复位，
+  // 否则下一次点击（尤其键盘触发的、不带 pointerdown）会被误吃。
+  $("#pcSkipModal")?.addEventListener("close", () => { pcSkipLongPressed = false; });
+  $("#pcSkipInput")?.addEventListener("input", (event) => {
+    event.target.value = event.target.value.replace(/\D+/g, "").slice(0, 3);
+  });
+  $("#pcSkipSave")?.addEventListener("click", () => {
+    const value = Math.min(600, Math.max(1, parseInt($("#pcSkipInput")?.value, 10) || 0));
+    if (value) {
+      pcSavePrefs({ skip: value });
+      pcApplySkipUI();
+      toast(`快进秒数已改为 ${value} 秒`);
+    }
+    $("#pcSkipModal")?.close();
+  });
   $("#pcSendFocus")?.addEventListener("click", () => {
     pcWake();
     $("#dmSendInput")?.focus();
