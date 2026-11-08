@@ -4560,3 +4560,10 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 /* 完结 / 未知态徽标没有圆点：只留状态文字，别留一个空占位（用户看到的「多出一块空格」） */
 .update-badge.finished .update-badge-dot,
 .update-badge.unknown .update-badge-dot { display: none; }
+
+/* 「选择站点 / 管理站点」弹窗的内容框（520/560px）比 .modal 壳（740px）窄，
+   块级布局让内容框靠左，壳右侧多出一条透明空档——看上去像弹窗被一条竖线
+   截断、整体也不在屏幕正中。让壳收缩包住内容框，模态 dialog 的自动居中
+   就会对准真正的弹窗。 */
+.rules-dialog,
+.rules-menu-dialog { width: fit-content; max-width: calc(100vw - 28px); }

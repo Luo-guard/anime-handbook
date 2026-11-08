@@ -153,6 +153,24 @@ async function loadLinkRules() { return linkRulesState.items; }
     assert.match(await page.locator('#rulesMenuStatus').textContent(), /共 3 个站点/);
     // 真实页面上哈希会在弹出后被清掉；about:blank 的测试环境不允许改历史记录，跳过校验。
 
+    // 壳要收缩包住内容框：以前壳固定 740px、内容 520px 靠左，右侧多出一条
+    // 透明空档，看上去像被竖线截断、弹窗整体也不在屏幕正中。
+    // 极窄视口下 UA 会把 dialog 钳到 calc(100% - 2em - 6px)，壳与框允许有
+    // 这个公式带来的差值；要锁死的是两层「同心」：框在壳内居中、壳在视口居中。
+    const geometry = await page.evaluate(() => {
+      const dialog = document.querySelector('#rulesMenuModal');
+      const frame = dialog.querySelector('.modal-frame');
+      const d = dialog.getBoundingClientRect();
+      const f = frame.getBoundingClientRect();
+      return {
+        frameInDialogOffset: Math.round((d.left + d.width / 2) - (f.left + f.width / 2)),
+        dialogInViewportOffset: Math.round((innerWidth / 2) - (d.left + d.width / 2)),
+      };
+    });
+    assert.equal(geometry.frameInDialogOffset, 0, '内容框要在壳内水平居中（右侧不留透明空档）');
+    assert.ok(Math.abs(geometry.dialogInViewportOffset) <= 8,
+      `弹窗要在屏幕正中（滚动条宽度内误差 ≤8px），实际偏 ${geometry.dialogInViewportOffset}px`);
+
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Rules menu: built-in entry renders as a real anchor with a shareable hash, lists cached stations, filters by name/host, opens stations through native links, opens the menu from the #rules-menu hash, pins a station into the detail row, and refuses to exceed the link limit.');
   } finally {
