@@ -4645,3 +4645,140 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   color: var(--green-800); font: inherit; font-size: 12px; cursor: pointer;
 }
 .offline-library-back:hover { background: var(--green-50); }
+
+/* ===== Kazumi 式自绘播放器控制栏 ===== */
+.player-topbar {
+  position: absolute; left: 0; right: 0; top: 0; z-index: 6;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px 18px;
+  background: linear-gradient(rgba(0, 0, 0, .55), transparent);
+  opacity: 1; transition: opacity .25s ease;
+}
+.player-topbar-title {
+  color: rgba(255, 255, 255, .92); font-size: 12.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4;
+}
+.player-topbar-actions { display: flex; gap: 2px; flex: 0 0 auto; }
+.pc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  width: 34px; height: 34px; padding: 0;
+  border: 0; border-radius: 8px; background: transparent;
+  color: rgba(255, 255, 255, .92); cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.pc-btn svg { width: 19px; height: 19px; flex: 0 0 auto; }
+.pc-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .16); color: #fff; }
+.pc-btn:disabled { opacity: .35; cursor: default; }
+.pc-btn.pc-text { width: auto; min-width: 40px; padding: 0 9px; font-size: 12.5px; font-weight: 600; }
+.pc-btn .pc-i-pause, .pc-btn .pc-i-muted { display: none; }
+.pc-btn[data-state="playing"] .pc-i-play { display: none; }
+.pc-btn[data-state="playing"] .pc-i-pause { display: block; }
+.pc-btn[data-state="muted"] .pc-i-vol { display: none; }
+.pc-btn[data-state="muted"] .pc-i-muted { display: block; }
+
+.player-controls {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+  padding: 20px 12px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .78));
+  opacity: 1; transition: opacity .25s ease;
+}
+.pc-progress {
+  position: relative; height: 16px; cursor: pointer; touch-action: none;
+}
+.pc-progress::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 6px; height: 4px;
+  border-radius: 99px; background: rgba(255, 255, 255, .24);
+}
+.pc-buffered, .pc-played {
+  position: absolute; left: 0; top: 6px; height: 4px; border-radius: 99px;
+  width: 0; pointer-events: none;
+}
+.pc-buffered { background: rgba(255, 255, 255, .32); }
+.pc-played { background: var(--green-500, #4c9e7a); }
+.pc-thumb {
+  position: absolute; top: 8px; width: 12px; height: 12px; border-radius: 50%;
+  background: #fff; transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+  opacity: 0; transition: opacity .15s; pointer-events: none;
+}
+.pc-progress:hover .pc-thumb, .pc-progress:active .pc-thumb { opacity: 1; }
+.pc-tooltip {
+  position: absolute; bottom: 22px; transform: translateX(-50%);
+  padding: 2px 8px; border-radius: 6px; background: rgba(15, 20, 17, .92);
+  color: #fff; font-size: 11px; pointer-events: none; white-space: nowrap;
+}
+.pc-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.pc-group { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.pc-group.pc-center { flex: 1 1 auto; justify-content: center; gap: 6px; min-width: 0; }
+.pc-time {
+  color: rgba(255, 255, 255, .88); font-size: 12px; margin-left: 4px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pc-dm-input {
+  flex: 0 1 260px; min-width: 90px; height: 30px; padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .3); border-radius: 999px;
+  background: rgba(255, 255, 255, .14); color: #fff;
+  font: inherit; font-size: 12px;
+  transition: border-color .15s, background .15s;
+}
+.pc-dm-input::placeholder { color: rgba(255, 255, 255, .55); }
+.pc-dm-input:focus { outline: none; border-color: var(--green-500, #4c9e7a); background: rgba(255, 255, 255, .2); }
+.pc-send {
+  flex: 0 0 auto; height: 30px; padding: 0 13px;
+  border: 0; border-radius: 999px;
+  background: var(--green-600, #3f8a6b); color: #fff;
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.pc-send:hover { filter: brightness(1.12); }
+.pc-btn.pc-danmaku { width: auto; padding: 0 9px; font-size: 12px; font-weight: 600; }
+.pc-btn.pc-danmaku svg { width: 17px; height: 17px; }
+.pc-btn.pc-danmaku.is-off { color: rgba(255, 255, 255, .55); }
+.pc-pop-host { position: relative; display: inline-flex; align-items: center; }
+.pc-volume {
+  width: 0; opacity: 0; height: 4px; accent-color: var(--green-500, #4c9e7a);
+  transition: width .18s ease, opacity .18s ease; cursor: pointer;
+}
+.pc-vol-host:hover .pc-volume, .pc-volume:focus-visible { width: 72px; opacity: 1; margin-right: 6px; }
+.pc-menu {
+  position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 10;
+  min-width: 108px; padding: 5px;
+  border-radius: 10px; background: rgba(16, 21, 18, .95);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.pc-menu.hidden { display: none; }
+.pc-menu button {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 11px; border: 0; border-radius: 7px;
+  background: transparent; color: rgba(255, 255, 255, .92);
+  font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+}
+.pc-menu button:hover { background: rgba(255, 255, 255, .12); }
+.pc-menu button.active { color: var(--green-400, #6cc19a); font-weight: 700; }
+.pc-menu.pc-list { min-width: 168px; max-height: 250px; overflow-y: auto; }
+.pc-menu-empty { margin: 8px 10px; color: rgba(255, 255, 255, .6); font-size: 12px; }
+
+/* 自动隐藏：播放中鼠标不动 2.6 秒 */
+.offline-player-video.player-idle { cursor: none; }
+.player-idle .player-topbar, .player-idle .player-controls { opacity: 0; pointer-events: none; }
+
+/* 全屏时视频铺满，控制栏浮在画面上 */
+.offline-player-video:fullscreen video { width: 100%; height: 100%; max-height: none; object-fit: contain; }
+
+/* 快捷键说明收进底栏 */
+.pc-shortcuts { flex: 0 0 auto; color: var(--muted); font-size: 11.5px; }
+.pc-shortcuts summary { cursor: pointer; color: var(--muted); }
+.pc-shortcuts summary:hover { color: var(--green-800); }
+.pc-shortcuts ul { margin: 6px 0 0; padding: 0 0 0 4px; list-style: none; display: grid; gap: 3px; }
+.pc-shortcuts b {
+  display: inline-block; padding: 0 5px; border: 1px solid var(--line);
+  border-radius: 5px; background: rgb(var(--theme-rgb) / .05);
+  font-weight: 600; font-size: 11px;
+}
+#danmakuPanel { z-index: 8; }
+@media (max-width: 640px) {
+  .pc-dm-input { flex-basis: 130px; }
+  .pc-time { font-size: 11px; }
+  .pc-row { flex-wrap: wrap; }
+  .pc-group.pc-center { order: 3; flex-basis: 100%; }
+}

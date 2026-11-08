@@ -135,9 +135,21 @@ function dmShielded(text, words) {
   return words.some((word) => text.toLowerCase().includes(word.toLowerCase()));
 }
 
+function dmMineItems() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("handbook.danmaku.mine") || "{}");
+    const list = raw[String(danmakuView.fileId || 0)];
+    return Array.isArray(list) ? list : [];
+  } catch (error) {
+    return [];
+  }
+}
+
 function dmSetItems(items, source, note) {
   const words = dmShieldWords();
-  danmakuView.items = (Array.isArray(items) ? items : [])
+  // 自己发过的弹幕一直都在：换源、重载后也合并回来。
+  const mine = dmMineItems();
+  danmakuView.items = (Array.isArray(items) ? items : []).concat(mine)
     .filter((item) => item && Number.isFinite(Number(item.time)) && item.text)
     .map((item) => ({
       time: Number(item.time),
@@ -153,6 +165,26 @@ function dmSetItems(items, source, note) {
   danmakuView.sourceNote = note || (danmakuView.items.length ? `已加载 ${danmakuView.items.length} 条弹幕` : "没有弹幕");
   dmAssignLanes();
   dmRenderPanelStatus();
+}
+
+// 发送弹幕：没有弹幕服务器，只进本机画面并存进 localStorage（换集/重启都在）。
+function dmSendMine(text) {
+  const clean = String(text || "").trim().slice(0, 100);
+  if (!clean || !danmakuView.video) return false;
+  const time = Number(danmakuView.video.currentTime) || 0;
+  const item = { time, mode: 1, color: "#ffffff", size: 25, text: clean, lane: -1 };
+  danmakuView.items = [...danmakuView.items, item].sort((a, b) => a.time - b.time);
+  dmAssignLanes();
+  dmRenderPanelStatus();
+  try {
+    const raw = JSON.parse(localStorage.getItem("handbook.danmaku.mine") || "{}");
+    const key = String(danmakuView.fileId || 0);
+    const list = Array.isArray(raw[key]) ? raw[key] : [];
+    list.push({ time, mode: 1, color: "#ffffff", size: 25, text: clean });
+    raw[key] = list.slice(-500);
+    localStorage.setItem("handbook.danmaku.mine", JSON.stringify(raw));
+  } catch (error) { /* 存不上就只在本局显示 */ }
+  return true;
 }
 
 function dmFontFor(item) {
@@ -416,7 +448,10 @@ function dmRenderPanelStatus() {
   const toggle = document.getElementById("offlineDanmakuToggle");
   if (toggle) {
     const on = Boolean(danmakuView.settings.enabled);
-    toggle.textContent = on ? "弹幕 · 开" : "弹幕 · 关";
+    // 控制栏版按钮 = 图标 + 文字，只更新文字节点，别把图标抹掉。
+    const text = document.getElementById("dmToggleText");
+    if (text) text.textContent = on ? "弹幕 · 开" : "弹幕 · 关";
+    else toggle.textContent = on ? "弹幕 · 开" : "弹幕 · 关";
     toggle.setAttribute("aria-pressed", String(on));
     toggle.classList.toggle("is-off", !on);
   }

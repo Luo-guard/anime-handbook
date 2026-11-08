@@ -555,7 +555,10 @@ function playLocalFile(fileId) {
   }
   offlineView.playing = file;
   const video = $("#offlineVideo");
-  $("#offlinePlayerTitle").textContent = `${offlineView.animeName || "本地文件"} · ${episodeLabelOf(file.episode_key)}`;
+  const stageTitle = `${offlineView.animeName || "本地文件"} · ${episodeLabelOf(file.episode_key)}`;
+  $("#offlinePlayerTitle").textContent = stageTitle;
+  const stageTitleNode = $("#pcStageTitle");
+  if (stageTitleNode) stageTitleNode.textContent = stageTitle;
   const sourceTitle = String(file.source_title || "").trim();
   const sourceNode = $("#offlinePlayerSource");
   if (sourceNode) {
@@ -579,6 +582,12 @@ function playLocalFile(fileId) {
     "loadedmetadata",
     () => {
       if (file.resume_ms > 3000) video.currentTime = file.resume_ms / 1000;
+      // 浏览器换 src 后会重置倍速/音量，这里把记忆值贴回去。
+      const prefs = pcLoadPrefs();
+      video.playbackRate = prefs.speed;
+      video.volume = prefs.volume;
+      video.muted = prefs.muted;
+      pcSync();
     },
     { once: true },
   );
@@ -586,6 +595,7 @@ function playLocalFile(fileId) {
   // 弹幕层：浮在 video 上的 canvas，不碰播放内核。同目录弹幕文件 / 已匹配的在线分集
   // 由 dmLoadFor 自己找，找不到会在弹幕设置面板里提示，不打断播放。
   if (typeof dmLoadFor === "function") dmLoadFor(file, offlineView.animeName, offlineView.animeId);
+  pcRefreshEpisodes();
   window.clearInterval(offlineView.resumeTimer);
   offlineView.resumeTimer = window.setInterval(() => saveOfflineResume(), 8000);
 }
@@ -610,6 +620,7 @@ async function saveOfflineResume() {
 function closeOfflinePlayer() {
   saveOfflineResume();
   clearSubtitleSession();
+  if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
   if (typeof dmClear === "function") dmClear();
   window.clearInterval(offlineView.resumeTimer);
   const video = $("#offlineVideo");
@@ -793,6 +804,7 @@ document.addEventListener("DOMContentLoaded", () => {
     switchOfflineTab("local");
   });
   $("#offlineSubtitleToggle")?.addEventListener("click", toggleSubtitleRenderer);
+  pcInit();
   $("#offlinePlayerClose")?.addEventListener("click", closeOfflinePlayer);
   $("#offlinePlayerBackdrop")?.addEventListener("click", closeOfflinePlayer);
   // 非模态 dialog 按 Esc 不会自动关闭，自己补上（其它弹窗此时已收起）。
@@ -810,6 +822,440 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+
+// ===== 自绘播放器控制栏（Kazumi 式）：原生 controls 移除后的全部界面与快捷键 =====
+
+const PC_PREFS_KEY = "handbook.player.prefs";
+const PC_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+
+function pcLoadPrefs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PC_PREFS_KEY) || "{}");
+    return {
+      speed: PC_SPEEDS.includes(Number(raw.speed)) ? Number(raw.speed) : 1,
+      volume: Number.isFinite(Number(raw.volume)) ? Math.min(1, Math.max(0, Number(raw.volume))) : 1,
+      muted: raw.muted === true,
+    };
+  } catch (error) {
+    return { speed: 1, volume: 1, muted: false };
+  }
+}
+
+function pcSavePrefs(patch) {
+  try {
+    localStorage.setItem(PC_PREFS_KEY, JSON.stringify({ ...pcLoadPrefs(), ...patch }));
+  } catch (error) { /* 忽略 */ }
+}
+
+function pcFormatTime(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(total / 3600);
+  const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+  const sec = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${m}:${sec}` : `${m}:${sec}`;
+}
+
+function pcKeyOrder(key) {
+  const [type, sort] = String(key || "0:0").split(":").map(Number);
+  return (type || 0) * 100000 + (sort || 0);
+}
+
+function pcSortedFiles() {
+  return offlineView.local.files
+    .filter((file) => file.exists !== false)
+    .sort((a, b) => pcKeyOrder(a.episode_key) - pcKeyOrder(b.episode_key));
+}
+
+let pcIdleTimer = 0;
+let pcSeeking = false;
+
+function pcWake() {
+  const wrap = $("#offlinePlayerVideoWrap");
+  if (wrap) wrap.classList.remove("player-idle");
+  window.clearTimeout(pcIdleTimer);
+  pcIdleTimer = window.setTimeout(pcSleep, 2600);
+}
+
+function pcSleep() {
+  const wrap = $("#offlinePlayerVideoWrap");
+  const video = $("#offlineVideo");
+  if (!wrap || !video || video.paused || pcSeeking) return;
+  // 面板/菜单开着、正在输弹幕时都不自动藏。
+  if ($(".danmaku-panel:not(.hidden)")) return;
+  if ($("#pcSpeedMenu") && !$("#pcSpeedMenu").classList.contains("hidden")) return;
+  if ($("#pcPlaylistMenu") && !$("#pcPlaylistMenu").classList.contains("hidden")) return;
+  if (document.activeElement === $("#dmSendInput")) return;
+  wrap.classList.add("player-idle");
+}
+
+function pcSync() {
+  const video = $("#offlineVideo");
+  if (!video) return;
+  const duration = Number(video.duration) || 0;
+  const current = Number(video.currentTime) || 0;
+  const time = $("#pcTime");
+  if (time) time.textContent = `${pcFormatTime(current)} / ${pcFormatTime(duration)}`;
+  const pct = duration ? Math.min(100, (current / duration) * 100) : 0;
+  const played = $("#pcPlayed");
+  if (played) played.style.width = `${pct}%`;
+  const thumb = $("#pcThumb");
+  if (thumb) thumb.style.left = `${pct}%`;
+  try {
+    const buffered = video.buffered;
+    const end = buffered.length ? buffered.end(buffered.length - 1) : 0;
+    const node = $("#pcBuffered");
+    if (node) node.style.width = `${duration ? Math.min(100, (end / duration) * 100) : 0}%`;
+  } catch (error) { /* buffered 偶发不可用 */ }
+}
+
+function pcSyncPlayState() {
+  const video = $("#offlineVideo");
+  const button = $("#pcPlay");
+  if (!video || !button) return;
+  const playing = !video.paused && !video.ended;
+  button.dataset.state = playing ? "playing" : "paused";
+  button.setAttribute("aria-label", playing ? "暂停" : "播放");
+  pcWake();
+}
+
+function pcSyncVolume() {
+  const video = $("#offlineVideo");
+  const slider = $("#pcVolume");
+  const mute = $("#pcMute");
+  if (!video || !slider || !mute) return;
+  slider.value = String(video.muted ? 0 : video.volume);
+  mute.dataset.state = video.muted || video.volume === 0 ? "muted" : "on";
+}
+
+function pcSyncSpeed() {
+  const video = $("#offlineVideo");
+  const button = $("#pcSpeed");
+  if (!video || !button) return;
+  button.textContent = `${video.playbackRate}x`;
+  $$("#pcSpeedMenu [data-rate]").forEach((item) => {
+    item.classList.toggle("active", Number(item.dataset.rate) === video.playbackRate);
+  });
+}
+
+function pcTogglePlay() {
+  const video = $("#offlineVideo");
+  if (!video || !video.src) return;
+  if (video.paused || video.ended) video.play().catch(() => {});
+  else video.pause();
+}
+
+function pcSeekBy(delta) {
+  const video = $("#offlineVideo");
+  if (!video || !Number.isFinite(video.duration)) return;
+  video.currentTime = Math.min(video.duration, Math.max(0, video.currentTime + delta));
+  pcSync();
+}
+
+function pcVolumeBy(delta) {
+  const video = $("#offlineVideo");
+  if (!video) return;
+  video.muted = false;
+  video.volume = Math.min(1, Math.max(0, Number(video.volume) + delta));
+  pcSavePrefs({ volume: video.volume, muted: video.muted });
+  pcSyncVolume();
+}
+
+function pcToggleMute() {
+  const video = $("#offlineVideo");
+  if (!video) return;
+  video.muted = !video.muted;
+  pcSavePrefs({ muted: video.muted });
+  pcSyncVolume();
+}
+
+function pcToggleFullscreen() {
+  const wrap = $("#offlinePlayerVideoWrap");
+  if (!wrap) return;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else wrap.requestFullscreen().catch(() => {});
+}
+
+function pcToggleMenu(id) {
+  const menu = $(id);
+  if (!menu) return;
+  const willShow = menu.classList.contains("hidden");
+  $$("#playerControls .pc-menu").forEach((node) => node.classList.add("hidden"));
+  if (willShow) {
+    if (id === "#pcPlaylistMenu") pcRenderPlaylist();
+    if (id === "#pcSpeedMenu") pcSyncSpeed();
+    menu.classList.remove("hidden");
+  }
+  pcWake();
+}
+
+function pcStep(direction) {
+  const files = pcSortedFiles();
+  if (!offlineView.playing) return;
+  const index = files.findIndex((file) => Number(file.id) === Number(offlineView.playing.id));
+  const target = files[index + direction];
+  if (target) playLocalFile(target.id);
+}
+
+function pcRenderPlaylist() {
+  const menu = $("#pcPlaylistMenu");
+  if (!menu) return;
+  const files = pcSortedFiles();
+  menu.innerHTML = files.length
+    ? files.map((file) => {
+        const current = offlineView.playing && Number(file.id) === Number(offlineView.playing.id);
+        return `<button type="button" data-id="${file.id}" class="${current ? "active" : ""}">${current ? "● " : ""}${escapeHtml(episodeLabelOf(file.episode_key))}</button>`;
+      }).join("")
+    : '<p class="pc-menu-empty">还没有可播放的集</p>';
+}
+
+function pcRefreshEpisodes() {
+  const files = pcSortedFiles();
+  const index = offlineView.playing
+    ? files.findIndex((file) => Number(file.id) === Number(offlineView.playing.id))
+    : -1;
+  const prev = $("#pcPrev");
+  const next = $("#pcNext");
+  if (prev) prev.disabled = index <= 0;
+  if (next) next.disabled = index < 0 || index >= files.length - 1;
+  pcRenderPlaylist();
+}
+
+function pcScreenshot() {
+  const video = $("#offlineVideo");
+  if (!video || !video.videoWidth) {
+    toast("视频还没准备好，先等画面出来再截图", "error");
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  try {
+    canvas.getContext("2d").drawImage(video, 0, 0);
+  } catch (error) {
+    toast(`截图失败：${error.message || error}`, "error");
+    return;
+  }
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      toast("截图失败：浏览器没有返回图片", "error");
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const stamp = pcFormatTime(video.currentTime).replace(/:/g, "-");
+    link.href = url;
+    link.download = `${offlineView.animeName || "动漫"} ${episodeLabelOf(offlineView.playing?.episode_key)} ${stamp}.png`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast("截图已保存到浏览器下载目录");
+  }, "image/png");
+}
+
+function pcSendDanmaku() {
+  const input = $("#dmSendInput");
+  const text = String(input?.value || "").trim();
+  if (!text || typeof dmSendMine !== "function") return;
+  if (dmSendMine(text)) {
+    input.value = "";
+    toast(danmakuView.settings.enabled ? "弹幕已发出（保存在本机）" : "已记录；弹幕当前隐藏，开启后可见");
+  }
+}
+
+function pcInit() {
+  if (pcInit.bound) return;
+  pcInit.bound = true;
+  const video = $("#offlineVideo");
+  const wrap = $("#offlinePlayerVideoWrap");
+  const bar = $("#pcProgress");
+  if (!video || !wrap || !bar) return;
+
+  $("#pcPlay")?.addEventListener("click", pcTogglePlay);
+  $("#pcPrev")?.addEventListener("click", () => pcStep(-1));
+  $("#pcNext")?.addEventListener("click", () => pcStep(1));
+  $("#pcFullscreen")?.addEventListener("click", pcToggleFullscreen);
+  $("#pcMute")?.addEventListener("click", pcToggleMute);
+  $("#pcPip")?.addEventListener("click", () => {
+    if (!document.pictureInPictureEnabled) {
+      toast("这个浏览器不支持画中画", "error");
+      return;
+    }
+    if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
+    else video.requestPictureInPicture().catch((error) => toast(`画中画没打开：${error.message || error}`, "error"));
+  });
+  $("#pcSpeed")?.addEventListener("click", () => pcToggleMenu("#pcSpeedMenu"));
+  $("#pcPlaylist")?.addEventListener("click", () => pcToggleMenu("#pcPlaylistMenu"));
+  $("#pcSpeedMenu")?.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-rate]");
+    if (!item) return;
+    video.playbackRate = Number(item.dataset.rate);
+    pcSavePrefs({ speed: video.playbackRate });
+    pcSyncSpeed();
+    $("#pcSpeedMenu")?.classList.add("hidden");
+  });
+  $("#pcPlaylistMenu")?.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-id]");
+    if (!item) return;
+    $("#pcPlaylistMenu")?.classList.add("hidden");
+    playLocalFile(Number(item.dataset.id));
+  });
+  $("#pcScreenshot")?.addEventListener("click", pcScreenshot);
+  $("#pcSendFocus")?.addEventListener("click", () => {
+    pcWake();
+    $("#dmSendInput")?.focus();
+  });
+  $("#dmSendButton")?.addEventListener("click", pcSendDanmaku);
+  $("#dmSendInput")?.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      pcSendDanmaku();
+    }
+  });
+  $("#pcVolume")?.addEventListener("input", (event) => {
+    video.muted = false;
+    video.volume = Number(event.target.value);
+    pcSavePrefs({ volume: video.volume, muted: video.muted });
+    pcSyncVolume();
+  });
+
+  // 进度条：点按/拖动跳转；悬停显示时间。
+  const seekTo = (event) => {
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    if (Number.isFinite(video.duration)) video.currentTime = ratio * video.duration;
+  };
+  bar.addEventListener("pointerdown", (event) => {
+    pcSeeking = true;
+    bar.setPointerCapture(event.pointerId);
+    seekTo(event);
+  });
+  bar.addEventListener("pointermove", (event) => {
+    if (pcSeeking) seekTo(event);
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const tooltip = $("#pcTooltip");
+    if (tooltip && Number.isFinite(video.duration)) {
+      tooltip.hidden = false;
+      tooltip.textContent = pcFormatTime(ratio * video.duration);
+      tooltip.style.left = `${Math.min(96, Math.max(2, ratio * 100))}%`;
+    }
+  });
+  bar.addEventListener("pointerup", (event) => {
+    if (pcSeeking) seekTo(event);
+    pcSeeking = false;
+  });
+  bar.addEventListener("pointerleave", () => {
+    const tooltip = $("#pcTooltip");
+    if (tooltip) tooltip.hidden = true;
+  });
+
+  video.addEventListener("timeupdate", pcSync);
+  video.addEventListener("progress", pcSync);
+  video.addEventListener("durationchange", pcSync);
+  video.addEventListener("play", pcSyncPlayState);
+  video.addEventListener("pause", pcSyncPlayState);
+  video.addEventListener("ended", pcSyncPlayState);
+  video.addEventListener("volumechange", pcSyncVolume);
+  video.addEventListener("ratechange", pcSyncSpeed);
+
+  // 点画面 = 播放/暂停；双击 = 全屏（Kazumi 习惯）。
+  let pcClickTimer = 0;
+  wrap.addEventListener("click", (event) => {
+    if (event.target.closest("button, input, select, .danmaku-panel, .pc-progress, .pc-menu")) return;
+    window.clearTimeout(pcClickTimer);
+    pcClickTimer = window.setTimeout(() => pcTogglePlay(), 220);
+  });
+  wrap.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button, input, select, .danmaku-panel, .pc-progress, .pc-menu")) return;
+    window.clearTimeout(pcClickTimer);
+    pcToggleFullscreen();
+  });
+
+  // 鼠标不动 2.6 秒自动藏控制栏；暂停/面板打开时永远显示。
+  wrap.addEventListener("mousemove", pcWake);
+  wrap.addEventListener("pointerdown", pcWake);
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".pc-pop-host")) {
+      $$("#playerControls .pc-menu").forEach((node) => node.classList.add("hidden"));
+    }
+  });
+
+  // 快捷键（输入框里打字不触发）。
+  document.addEventListener("keydown", (event) => {
+    if (!$("#offlinePlayer")?.open || pcSeeking) return;
+    if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+    switch (event.key) {
+      case " ":
+      case "Spacebar":
+        event.preventDefault();
+        pcTogglePlay();
+        break;
+      case "ArrowLeft":
+        event.preventDefault();
+        pcSeekBy(-5);
+        break;
+      case "ArrowRight":
+        event.preventDefault();
+        pcSeekBy(5);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        pcVolumeBy(0.05);
+        break;
+      case "ArrowDown":
+        event.preventDefault();
+        pcVolumeBy(-0.05);
+        break;
+      case "f":
+      case "F":
+        event.preventDefault();
+        pcToggleFullscreen();
+        break;
+      case "m":
+      case "M":
+        event.preventDefault();
+        pcToggleMute();
+        break;
+      case "s":
+      case "S":
+        event.preventDefault();
+        pcScreenshot();
+        break;
+      case "d":
+      case "D":
+        event.preventDefault();
+        $("#offlineDanmakuToggle")?.click();
+        break;
+      case "n":
+      case "N":
+        event.preventDefault();
+        pcStep(1);
+        break;
+      case "p":
+      case "P":
+        event.preventDefault();
+        pcStep(-1);
+        break;
+      default:
+        return;
+    }
+    pcWake();
+  });
+
+  const prefs = pcLoadPrefs();
+  video.volume = prefs.volume;
+  video.muted = prefs.muted;
+  video.playbackRate = prefs.speed;
+  const speedMenu = $("#pcSpeedMenu");
+  if (speedMenu) {
+    speedMenu.innerHTML = PC_SPEEDS.map(
+      (rate) => `<button type="button" data-rate="${rate}"><span>${rate}x</span><span>${rate === 1 ? "正常" : ""}</span></button>`,
+    ).join("");
+  }
+  pcSyncVolume();
+  pcSyncSpeed();
+  pcRefreshEpisodes();
+}
 
 function formatSpeed(bytes) {
   const value = Number(bytes || 0);

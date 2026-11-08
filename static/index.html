@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-search-v2" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-player-controls" />
   </head>
   <body>
     <div class="app-shell">
@@ -390,7 +390,53 @@
         <h2 id="offlinePlayerTitle">播放</h2>
         <p class="offline-player-source hidden" id="offlinePlayerSource"></p>
         <div class="offline-player-video" id="offlinePlayerVideoWrap">
-          <video id="offlineVideo" controls playsinline preload="metadata"></video>
+          <video id="offlineVideo" playsinline preload="metadata"></video>
+          <div class="player-topbar" id="playerTopbar">
+            <span class="player-topbar-title" id="pcStageTitle"></span>
+            <span class="player-topbar-actions">
+              <button type="button" class="pc-btn" id="pcSendFocus" aria-label="发弹幕" title="发弹幕"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+              <button type="button" class="pc-btn" id="pcScreenshot" aria-label="截图" title="截图（S）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+            </span>
+          </div>
+          <div class="player-controls" id="playerControls">
+            <div class="pc-progress" id="pcProgress" aria-label="播放进度">
+              <div class="pc-buffered" id="pcBuffered"></div>
+              <div class="pc-played" id="pcPlayed"></div>
+              <div class="pc-thumb" id="pcThumb"></div>
+              <div class="pc-tooltip" id="pcTooltip" hidden>00:00</div>
+            </div>
+            <div class="pc-row">
+              <div class="pc-group">
+                <button type="button" class="pc-btn" id="pcPlay" data-state="paused" aria-label="播放/暂停" title="播放/暂停（空格）"><svg class="pc-i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5Z"/></svg><svg class="pc-i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg></button>
+                <button type="button" class="pc-btn" id="pcPrev" aria-label="上一集" title="上一集（P）"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 20 9 12l10-8v16Z"/><rect x="5" y="4" width="2.4" height="16" rx="1"/></svg></button>
+                <button type="button" class="pc-btn" id="pcNext" aria-label="下一集" title="下一集（N）"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4l10 8-10 8V4Z"/><rect x="16.6" y="4" width="2.4" height="16" rx="1"/></svg></button>
+                <span class="pc-time" id="pcTime">00:00 / 00:00</span>
+              </div>
+              <div class="pc-group pc-center">
+                <button type="button" class="pc-btn pc-danmaku" id="offlineDanmakuToggle" aria-pressed="true" title="弹幕开关（D）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 3v-6.8A7.5 7.5 0 0 1 11.5 4h2A7.5 7.5 0 0 1 21 11.5Z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/></svg><span id="dmToggleText">弹幕 · 开</span></button>
+                <button type="button" class="pc-btn" id="offlineDanmakuSettings" aria-label="弹幕设置" title="弹幕设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h8m5.6 0H20M4 12h2.6m5.4 0h8M4 17h10m5 0h1"/><circle cx="14.4" cy="7" r="2"/><circle cx="9.2" cy="12" r="2"/><circle cx="16.2" cy="17" r="2"/></svg></button>
+                <input type="text" class="pc-dm-input" id="dmSendInput" maxlength="100" placeholder="发个友善的弹幕见证当下" />
+                <button type="button" class="pc-send" id="dmSendButton">发送</button>
+              </div>
+              <div class="pc-group">
+                <span class="pc-pop-host pc-vol-host">
+                  <button type="button" class="pc-btn" id="pcMute" data-state="on" aria-label="静音" title="静音（M）"><svg class="pc-i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3v6h3.5L11 19V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/></svg><svg class="pc-i-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3v6h3.5L11 19V5Z"/><path d="m16 9 5 5m0-5-5 5"/></svg></button>
+                  <input type="range" class="pc-volume" id="pcVolume" min="0" max="1" step="0.02" aria-label="音量" />
+                </span>
+                <span class="pc-pop-host">
+                  <button type="button" class="pc-btn pc-text" id="pcSpeed" title="倍速">1.0x</button>
+                  <span class="pc-menu hidden" id="pcSpeedMenu"></span>
+                </span>
+                <button type="button" class="pc-btn" id="pcPip" aria-label="画中画" title="画中画"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12.5" y="11.5" width="6.5" height="5.5" rx="1" fill="currentColor" stroke="none"/></svg></button>
+                <span class="pc-pop-host">
+                  <button type="button" class="pc-btn" id="pcPlaylist" aria-label="播放列表" title="播放列表"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15.5v6l4.5-3Z" fill="currentColor" stroke="none"/></svg></button>
+                  <span class="pc-menu pc-list hidden" id="pcPlaylistMenu"></span>
+                </span>
+                <button type="button" class="offline-subtitle-toggle hidden pc-btn pc-text" id="offlineSubtitleToggle" aria-pressed="true">字幕 · 开</button>
+                <button type="button" class="pc-btn" id="pcFullscreen" aria-label="全屏" title="全屏（F）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>
+              </div>
+            </div>
+          </div>
           <canvas id="danmakuCanvas" class="danmaku-canvas" aria-hidden="true"></canvas>
           <div class="danmaku-panel hidden" id="danmakuPanel">
             <div class="danmaku-panel-head">
@@ -434,9 +480,14 @@
         </div>
         <div class="offline-player-bar">
           <p class="offline-player-meta" id="offlinePlayerMeta"></p>
-          <button type="button" class="offline-subtitle-toggle" id="offlineDanmakuToggle" aria-pressed="true">弹幕 · 开</button>
-          <button type="button" class="offline-subtitle-toggle" id="offlineDanmakuSettings" aria-label="弹幕设置">弹幕设置</button>
-          <button type="button" class="offline-subtitle-toggle hidden" id="offlineSubtitleToggle" aria-pressed="true">字幕 · 开</button>
+          <details class="pc-shortcuts">
+            <summary>快捷键</summary>
+            <ul>
+              <li><b>空格</b> 播放 / 暂停 · <b>← / →</b> 快退 / 快进 5 秒</li>
+              <li><b>↑ / ↓</b> 音量 · <b>M</b> 静音 · <b>F</b> 全屏</li>
+              <li><b>S</b> 截图 · <b>D</b> 弹幕开关 · <b>N / P</b> 下一集 / 上一集</li>
+            </ul>
+          </details>
         </div>
       </div>
     </dialog>
@@ -1323,8 +1374,8 @@
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/danmaku.js?v=20261108-danmaku-source" defer></script>
-    <script src="/modules/offline.js?v=20261108-library" defer></script>
+    <script src="/modules/danmaku.js?v=20261108-player-controls" defer></script>
+    <script src="/modules/offline.js?v=20261108-player-controls" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>
