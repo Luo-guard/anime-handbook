@@ -31,6 +31,16 @@ const HandbookSettings = (() => {
       const keyboardChanged = JSON.stringify(keyboardSettings) !== JSON.stringify(keyboardPreferences());
       if(keyboardChanged && !(await api("/api/health")).features?.keyboard_shortcuts) throw new Error("当前后台尚不支持保存快捷键，请重启手账后台并刷新页面。");
       const scheduleSorting = readScheduleSorting("#scheduleSortingSettings");
+      // 三套周表各自独立：设置页只提交当前选中来源那份，其他来源原样保留。
+      const settingsSource = scheduleSettingsSource();
+      const schedulePreferencesNested = {...(state.settings.schedule_preferences || {})};
+      schedulePreferencesNested[settingsSource] = {
+        schedule_sort: scheduleSorting.schedule_sort,
+        schedule_grouping: scheduleSorting.schedule_grouping,
+        schedule_statuses: $$("#scheduleStatusInputs input:checked").map((input) => Number(input.value)),
+        schedule_origins: $$("#scheduleOriginInputs input:checked").map((input) => input.value),
+        schedule_uncollected: $("#scheduleUncollectedInput").checked,
+      };
       const progressSources = {
         collection_airing_source: $("#collectionAiringSourceInput").value,
         schedule_airing_source: $("#scheduleAiringSourceInput").value,
@@ -52,7 +62,7 @@ const HandbookSettings = (() => {
           // 外观草稿与其他设置由同一次保存提交。
           ...await ThemeSettingsSession.payload(),
           default_view: $("#defaultViewInput").value,
-          ...scheduleSorting,
+          schedule_preferences: schedulePreferencesNested,
           kazumi_writeback: $("#kazumiWritebackInput").checked,
           webdav_kazumi_sync: $("#webdavKazumiSyncInput").checked,
           kazumi_read_only: $("#kazumiReadOnlyInput").checked,
@@ -60,9 +70,6 @@ const HandbookSettings = (() => {
           schedule_source: $("#scheduleSourceInput").value,
           ...progressSources,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
-          schedule_statuses: $$("#scheduleStatusInputs input:checked").map((input) => Number(input.value)),
-          schedule_origins: $$("#scheduleOriginInputs input:checked").map((input) => input.value),
-          schedule_uncollected: $("#scheduleUncollectedInput").checked,
           schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
           top_sync_action: $("#topSyncActionInput").value,
           collection_home: $("#collectionHomeInput").value,
@@ -80,6 +87,7 @@ const HandbookSettings = (() => {
           show_oped_record: $("#showOpedRecordInput").checked,
           show_episode_rating_record: $("#showEpisodeRatingRecordInput").checked,
           show_character_tab: $("#showCharacterTabInput").checked,
+
           auto_open_offline_enabled: $("#autoOpenOfflineInput")?.checked === true,
           auto_open_offline_collections: $$("#autoOpenOfflineCollections input:checked").map((input) => String(input.value)),
           show_bgm_rating: $("#showBgmRatingInput").checked,
@@ -111,7 +119,7 @@ const HandbookSettings = (() => {
           builtin_category_visibility: builtinVisibilityPayload,
         }),
       });
-      verifyScheduleSortingSaved(payload.settings, scheduleSorting);
+      verifySchedulePreferencesSaved(payload.settings, settingsSource, schedulePreferencesNested[settingsSource]);
       if ($("#kazumiReadOnlyInput").checked && payload.settings.kazumi_read_only !== true) throw new Error("当前后台还不支持只读开关，请重启手账后台并刷新后再试。");
       if (!$("#showSearchBgmLinkInput").checked && payload.settings.show_search_bgm_link !== false) throw new Error("当前后台还不支持搜索页 Bangumi 入口开关，请重启手账后台并刷新后再试。");
       if (detailLinksChanged && !Array.isArray(payload.settings.detail_links)) throw new Error("当前后台还不支持详情页链接，请重启手账后台并刷新后再试。");

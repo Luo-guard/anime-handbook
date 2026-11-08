@@ -10,6 +10,42 @@ from .shortcuts import normalize_shortcuts
 from .episode_gestures import normalize_episode_gestures
 from .metadata import SyncService
 
+_SCHEDULE_SOURCES = ("yuc", "kazumi", "as")
+
+
+def _normalize_schedule_preferences(value: Any) -> dict[str, Any]:
+    """三套周表各自的排序/筛选；结构非法直接报错，错误会透给界面。"""
+    if not isinstance(value, dict):
+        raise ValueError("周表偏好无效")
+    result: dict[str, Any] = {}
+    for source in _SCHEDULE_SOURCES:
+        raw = value.get(source)
+        if raw is None:
+            continue
+        if not isinstance(raw, dict):
+            raise ValueError("周表偏好无效")
+        entry: dict[str, Any] = {}
+        for key, item in raw.items():
+            if key == "schedule_sort":
+                if item not in ("time", "score", "popularity"):
+                    raise ValueError("周表排列方式无效")
+                entry[key] = item
+            elif key == "schedule_grouping":
+                entry[key] = normalize_schedule_grouping(item)
+            elif key == "schedule_statuses":
+                if not isinstance(item, list) or any(not isinstance(n, int) or not 1 <= n <= 5 for n in item):
+                    raise ValueError("周表收藏状态筛选无效")
+                entry[key] = list(dict.fromkeys(item))
+            elif key == "schedule_origins":
+                if not isinstance(item, list) or any(n not in {"jp", "cn", "us", "kr", "other", "unknown"} for n in item):
+                    raise ValueError("周表地区筛选无效")
+                entry[key] = list(dict.fromkeys(item))
+            elif key == "schedule_uncollected":
+                entry[key] = bool(item)
+        result[source] = entry
+    return result
+
+
 def _normalize_settings(body, settings):
     if not isinstance(body, dict): raise ValueError("设置内容需为 JSON 对象")
     settings = copy.deepcopy(settings)
@@ -101,6 +137,8 @@ def _normalize_settings(body, settings):
         "schedule_statuses",
         "schedule_origins",
         "schedule_uncollected",
+        "schedule_preferences",
+        "schedule_hidden",
         "schedule_card_fields",
         "auto_open_offline_enabled",
         "auto_open_offline_collections",
@@ -172,6 +210,17 @@ def _normalize_settings(body, settings):
                 value = list(dict.fromkeys(value))
             elif key == "schedule_uncollected":
                 value = bool(value)
+            elif key == "schedule_preferences":
+                value = _normalize_schedule_preferences(value)
+            elif key == "schedule_hidden":
+                if not isinstance(value, list):
+                    raise ValueError("隐藏番剧列表无效")
+                cleaned_hidden: list[int] = []
+                for hidden_item in value:
+                    number = int(hidden_item)
+                    if number > 0 and number not in cleaned_hidden:
+                        cleaned_hidden.append(number)
+                value = cleaned_hidden[:500]
             elif key == "day_start_hour":
                 value = min(23, max(0, int(value)))
             elif key == "show_episode_balance":

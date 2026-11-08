@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261108-library-sidebar" />
+  <link rel="stylesheet" href="/styles.css?v=20261108-per-source" />
   </head>
   <body>
     <div class="app-shell">
@@ -937,11 +937,15 @@
                     <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
           <div class="setting-row"><span><strong>周表来源</strong><small>三套周表独立展示：有 C 的时间与网络上线日期来自長門番堂；Kazumi 使用 Bangumi 放送列表，不提供具体时刻；AS 按实际周次显示原声／字幕的较早放送时间。评分和评分人数来自已关联的 Bangumi / Kazumi 资料。未公布的时间保留空缺，固定按北京时间凌晨 4 点划分播出日；已关联 Bangumi ID 的条目可在详情中加入收藏。</small></span><select id="scheduleSourceInput"><option value="yuc" title="長門番堂（有C）">長門番堂</option><option value="kazumi" title="Kazumi 读取的 Bangumi 放送列表">Bangumi</option><option value="as" title="AnimeSchedule（AS）">AnimeSchedule</option></select></div>
           <div class="setting-row"><span><strong>显示来源切换按钮</strong><small>隐藏后仍可在此处选择来源。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleSourceSwitchInput"><span class="switch"></span></span></div>
+          <div class="setting-row"><span><strong>配置哪一套周表</strong><small>三套周表（長門番堂 / Bangumi / AnimeSchedule）的排序与筛选<strong>相互独立</strong>；先在这里选来源，下面的设置只作用于它。</small></span><select id="scheduleSettingsSource"><option value="yuc">長門番堂（有C）</option><option value="kazumi">Bangumi</option><option value="as">AnimeSchedule</option></select></div>
           <h3 class="settings-subsection-title">排序与显示范围</h3>
           <div class="setting-row stacked"><span><strong>排列方式</strong><small>先调整分组顺序，再选择各组内的排列方式；与周表筛选窗口同步。</small></span><div id="scheduleSortingSettings" class="schedule-sorting-editor"></div></div>
           <div class="setting-row stacked"><span><strong>显示收藏状态</strong><small>支持多选，也可以全部取消。</small></span><div class="schedule-status-options" id="scheduleStatusInputs"></div></div>
           <div class="setting-row stacked"><span><strong>显示地区</strong><small>按 Bangumi 条目分类筛选日漫、国漫、美漫；「其他」含韩漫等，另有来源未标注国家的条目。</small></span><div class="schedule-status-options" id="scheduleOriginInputs"></div></div>
           <label class="setting-row"><span><strong>显示未收藏的番剧</strong><small data-page-text="开启后可以在{schedule}发现尚未加入收藏的作品。">开启后可以在周表发现尚未加入收藏的作品。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleUncollectedInput" /><span class="switch"></span></span></label>
+          <h3 class="settings-subsection-title">隐藏的番剧</h3>
+          <div class="setting-row stacked"><span><strong>把某些番剧设为不显示</strong><small>输入番名（或 Bangumi 编号）加入隐藏列表；三套周表都不再显示它们，收藏夹不受影响。</small></span><span class="schedule-hidden-add"><input type="text" id="scheduleHiddenInput" list="scheduleHiddenOptions" placeholder="输入番名选择" autocomplete="off" /><button type="button" class="secondary-button" id="scheduleHiddenAdd">隐藏</button></span><datalist id="scheduleHiddenOptions"></datalist></div>
+          <div class="setting-row"><span><strong>已隐藏的番剧</strong><small id="scheduleHiddenCount">还没有隐藏任何番剧</small></span><button type="button" class="secondary-button" id="scheduleHiddenManage">查看 / 管理</button></div>
           <h3 class="settings-subsection-title">卡片内容</h3>
           <div class="setting-row stacked"><span><strong>卡片信息显示</strong><small>各项独立开关；关闭后不会影响排序、筛选或详细信息。</small></span></div>
           <div id="scheduleCardFieldInputs"></div>
@@ -1292,7 +1296,8 @@
     </dialog>
 
     <dialog class="modal schedule-dialog" id="scheduleSeasonModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">SEASON ARCHIVE</p><h2>选择放送季度</h2><p class="page-subtitle">按年份回看，按季节寻找。</p><div class="schedule-years" id="scheduleYears"></div></form></dialog>
-    <dialog class="modal schedule-dialog" id="scheduleFilterModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><div class="sd-scroll"><p class="eyebrow">MAKE IT YOURS</p><h2>排序与筛选</h2><p class="schedule-field-title">排列方式</p><div class="schedule-sorting-editor" id="scheduleSortOptions"></div><p class="schedule-field-title">显示收藏状态 · 可多选</p><div class="schedule-status-options" id="scheduleFilterStatuses"></div><label class="schedule-uncollected"><input type="checkbox" id="scheduleFilterUncollected" />也显示未收藏的番剧</label><p class="schedule-field-title">显示地区 · 可多选</p><div class="schedule-status-options" id="scheduleFilterOrigins"></div><p class="schedule-filter-note">地区取自 Bangumi 条目分类（日本／中国／美国…）。「未标注」是来源没有写国家或地区的条目，默认保留。</p><p class="schedule-filter-note" data-page-text="这些选项会记住，并与“设置 → {schedule}”保持一致。">这些选项会记住，并与“设置 → 周表”保持一致。</p></div><div class="modal-actions"><button type="button" class="primary-button" id="scheduleApplyFilter">应用筛选</button></div></form></dialog>
+    <dialog class="modal schedule-dialog" id="scheduleFilterModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><div class="sd-scroll"><p class="eyebrow">MAKE IT YOURS</p><h2>排序与筛选</h2><p class="page-subtitle" id="scheduleFilterSourceLabel"></p><p class="schedule-field-title">排列方式</p><div class="schedule-sorting-editor" id="scheduleSortOptions"></div><p class="schedule-field-title">显示收藏状态 · 可多选</p><div class="schedule-status-options" id="scheduleFilterStatuses"></div><label class="schedule-uncollected"><input type="checkbox" id="scheduleFilterUncollected" />也显示未收藏的番剧</label><p class="schedule-field-title">显示地区 · 可多选</p><div class="schedule-status-options" id="scheduleFilterOrigins"></div><p class="schedule-filter-note">地区取自 Bangumi 条目分类（日本／中国／美国…）。「未标注」是来源没有写国家或地区的条目，默认保留。</p><p class="schedule-filter-note" data-page-text="这些选项会记住，并与“设置 → {schedule}”保持一致。">这些选项会记住，并与“设置 → 周表”保持一致。</p></div><div class="modal-actions"><button type="button" class="primary-button" id="scheduleApplyFilter">应用筛选</button></div></form></dialog>
+    <dialog class="modal schedule-dialog" id="scheduleHiddenModal"><form method="dialog" class="modal-frame"><button class="modal-close" aria-label="关闭">×</button><p class="eyebrow">HIDDEN</p><h2>已隐藏的番剧</h2><p class="page-subtitle">这些番剧不会出现在任何一套周表里；取消隐藏后立即恢复。</p><div class="schedule-hidden-list" id="scheduleHiddenList"></div><div class="modal-actions"><button type="button" class="secondary-button" onclick="this.closest('dialog').close()">关闭</button></div></form></dialog>
     <dialog class="modal rules-dialog" id="linkRulesModal">
       <div class="modal-frame">
         <button type="button" class="modal-close" id="linkRulesClose" aria-label="关闭">×</button>
@@ -1409,7 +1414,7 @@
     </dialog>
     <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261107-origin-filter" defer></script>
+    <script src="/schedule.js?v=20261108-per-source" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
     <script src="/modules/collection.js?v=20261107-quick-menu-light" defer></script>

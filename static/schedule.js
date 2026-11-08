@@ -1,4 +1,7 @@
 function scheduleSource() { return ["yuc", "kazumi", "as"].includes(state.settings.schedule_source) ? state.settings.schedule_source : "yuc"; }
+const scheduleSourceNames = {yuc: "長門番堂", kazumi: "Bangumi", as: "AnimeSchedule"};
+let scheduleSettingsSourceValue = "yuc";
+function scheduleSettingsSource() { return ["yuc", "kazumi", "as"].includes(scheduleSettingsSourceValue) ? scheduleSettingsSourceValue : "yuc"; }
 /* Public season metadata is small; poster images and DOM cards load on demand. */
 const scheduleState = {season: "", week: "", day: 1, data: null, search: "", timer: null, abort: null, request: 0, shown: 30, initialized: false};
 const scheduleDays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -55,8 +58,30 @@ function moveScheduleWeek(delta) {
 }
 
 const scheduleGroupDefaults = {collection: ['collected', 'uncollected'], status: ['1', '2', '3', '4', '5', 'uncollected']};
-function scheduleGrouping() {
-  const saved = state.settings.schedule_grouping || {};
+function schedulePrefsFor(source) {
+  // 三套周表各自独立：新结构 schedule_preferences[source] 优先；
+  // 老数据没有嵌套结构时回退到旧扁平键，第一次保存后该来源就固化下来。
+  const nested = state.settings.schedule_preferences || {};
+  const saved = nested[source];
+  const flat = {
+    schedule_sort: state.settings.schedule_sort,
+    schedule_grouping: state.settings.schedule_grouping,
+    schedule_statuses: state.settings.schedule_statuses,
+    schedule_origins: state.settings.schedule_origins,
+    schedule_uncollected: state.settings.schedule_uncollected,
+  };
+  const raw = saved && typeof saved === "object" && Object.keys(saved).length ? saved : flat;
+  return {
+    sort: scheduleSortNames[raw.schedule_sort] ? raw.schedule_sort : "time",
+    statuses: Array.isArray(raw.schedule_statuses) ? raw.schedule_statuses.map(Number).filter(n => n >= 1 && n <= 5) : [1, 2, 3, 4, 5],
+    origins: Array.isArray(raw.schedule_origins) ? raw.schedule_origins.filter(o => scheduleOriginOptions.some(([id]) => id === o)) : scheduleOriginOptions.map(([id]) => id),
+    uncollected: raw.schedule_uncollected !== false,
+    grouping: raw.schedule_grouping && typeof raw.schedule_grouping === "object" ? raw.schedule_grouping : {},
+  };
+}
+
+function scheduleGrouping(source = scheduleSource()) {
+  const saved = schedulePrefsFor(source).grouping;
   const order = mode => [...new Set([...(saved[mode + '_order'] || []).filter(id => scheduleGroupDefaults[mode].includes(id)), ...scheduleGroupDefaults[mode]])];
   return {mode: ['collection', 'status'].includes(saved.mode) ? saved.mode : 'none', collection_order: order('collection'), status_order: order('status'), sorts: {...saved.sorts}, direction: saved.direction, directions: {...saved.directions}};
 }
@@ -94,18 +119,19 @@ async function requireScheduleSortingSupport() {
   }
 }
 
-function verifyScheduleSortingSaved(settings, requested) {
+function verifySchedulePreferencesSaved(settings, source, requested) {
   const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-  const saved = settings?.schedule_grouping;
-  const matches = saved && Object.entries(requested.schedule_grouping).every(([key, value]) => JSON.stringify(canonical(saved[key])) === JSON.stringify(canonical(value)));
-  if (settings?.schedule_sort !== requested.schedule_sort || !matches) {
+  const saved = settings?.schedule_preferences?.[source] || {};
+  const savedGrouping = saved.schedule_grouping;
+  const matches = savedGrouping && Object.entries(requested.schedule_grouping).every(([key, value]) => JSON.stringify(canonical(savedGrouping[key])) === JSON.stringify(canonical(value)));
+  if (saved.schedule_sort !== requested.schedule_sort || !matches) {
     throw new Error('后台未保存完整的排序规则，请重启手账后台并刷新页面后重试。');
   }
 }
 
-function renderScheduleSorting(selector, draft = null) {
+function renderScheduleSorting(selector, draft = null, source = scheduleSource()) {
   const root = $(selector);
-  root.sortingDraft = draft || {sort: schedulePreferences().sort, grouping: scheduleGrouping()};
+  root.sortingDraft = draft || {sort: schedulePreferences(source).sort, grouping: scheduleGrouping(source)};
   const {sort, grouping} = root.sortingDraft;
   const options = selected => Object.entries(scheduleSortNames).map(([id, name]) => `<option value="${id}" ${id === selected ? 'selected' : ''}>${name}</option>`).join('');
   root.innerHTML = `<label class="schedule-sort-mode"><span>分组方式</span><select data-group-mode aria-label="分组方式">${[['none','不分组'],['collection','已收藏 / 未收藏'],['status','按六种收藏状态']].map(([id,name]) => `<option value="${id}" ${grouping.mode === id ? 'selected' : ''}>${name}</option>`).join('')}</select></label>
@@ -183,23 +209,37 @@ function scheduleOriginOf(item) {
   return scheduleOriginGroup[item.origin || ""] || "unknown";
 }
 
-function schedulePreferences() {
-  return {sort: state.settings.schedule_sort || "time",
-    statuses: state.settings.schedule_statuses || [1, 2, 3, 4, 5],
-    origins: state.settings.schedule_origins || scheduleOriginOptions.map(([id]) => id),
-    uncollected: state.settings.schedule_uncollected !== false};
+function schedulePreferences(source = scheduleSource()) {
+  const prefs = schedulePrefsFor(source);
+  return {sort: prefs.sort, statuses: prefs.statuses, origins: prefs.origins, uncollected: prefs.uncollected};
+}
+
+// ===== 隐藏的番剧：三套周表都不显示；按 Bangumi id 命中，未匹配的条目按标题兜底 =====
+function scheduleHiddenIds() { return (state.settings.schedule_hidden || []).map(Number); }
+function scheduleHiddenSets() {
+  const ids = new Set(scheduleHiddenIds());
+  const names = new Set();
+  state.animes.forEach((anime) => {
+    if (ids.has(Number(anime.id))) [anime.name_cn, anime.name, anime.display_name].forEach((n) => n && names.add(String(n).toLocaleLowerCase()));
+  });
+  return {ids, names};
+}
+function scheduleItemHidden(item, hidden) {
+  return (item.id && hidden.ids.has(Number(item.id))) || hidden.names.has(String(item.title || "").toLocaleLowerCase());
 }
 
 function scheduleFilteredItems() {
   const prefs = schedulePreferences(), keyword = scheduleState.search.trim().toLocaleLowerCase();
+  const hidden = scheduleHiddenSets();
   return (scheduleState.data?.items || []).filter((item) => {
+    if (scheduleItemHidden(item, hidden)) return false;
     const visible = item.collection_type ? prefs.statuses.includes(Number(item.collection_type)) : prefs.uncollected;
     return visible && prefs.origins.includes(scheduleOriginOf(item)) && (!keyword || [item.title, ...(item.aliases || [])].some((name) => name.toLocaleLowerCase().includes(keyword)));
   });
 }
 
 function scheduleComparator(a, b) {
-  const grouping = scheduleGrouping();
+  const grouping = scheduleGrouping(); // 当前来源（默认参数）
   const groupFor = item => grouping.mode === "collection" ? (item.collection_type ? "collected" : "uncollected") : item.collection_type ? String(item.collection_type) : "uncollected";
   let sort = schedulePreferences().sort;
   if (grouping.mode !== "none") {
@@ -406,6 +446,11 @@ function renderSchedule() {
   const notices = [data?.loading ? useAS ? "正在更新 AS 本周日程与条目关联，已有卡片仍可浏览…" : "正在更新季度资料，已有缓存仍可浏览…" : "", data?.error || "", ...(data?.warnings || [])].filter(Boolean);
   if (!data) notices.push(`正在读取${pageLabel("schedule")}…`);
   if (scheduleState.day === 0) notices.push("独立上线作品按日期排列；整季、分批或每周更新以平台公布为准，不推算集数。" );
+  if (scheduleState.data?.items?.length) {
+    const hiddenSets = scheduleHiddenSets();
+    const hiddenCount = scheduleState.data.items.filter((item) => scheduleItemHidden(item, hiddenSets)).length;
+    if (hiddenCount) notices.push(`已按设置隐藏 ${hiddenCount} 部番剧（设置 → 周表 → 隐藏的番剧 可恢复）`);
+  }
   $("#scheduleNotice").textContent = notices.join(" · "); $("#scheduleNotice").hidden = !notices.length;
   $("#scheduleGrid").innerHTML = selected.slice(0, scheduleState.shown).map(scheduleCard).join("") || (data && !data.loading ? '<div class="schedule-empty"><strong>这一天，留一点空白。</strong><p>当前季度或筛选下暂无番剧，可以切换星期、季度或调整筛选。</p></div>' : "");
   if (selected.length > scheduleState.shown) $("#scheduleGrid").insertAdjacentHTML("beforeend", '<button type="button" class="secondary-button schedule-more" id="scheduleMore">继续展开本日番剧</button>');
@@ -424,15 +469,55 @@ function scheduleOriginMarkup(origins, name) {
   return scheduleOriginOptions.map(([id, label]) => `<label><input type="checkbox" name="${name}" value="${id}" ${origins.includes(id) ? "checked" : ""} /><span>${label}</span></label>`).join("");
 }
 
+// ===== 设置页：隐藏番剧的增删与列表 =====
+function renderScheduleHiddenSettings() {
+  const hidden = scheduleHiddenIds();
+  const count = $("#scheduleHiddenCount");
+  if (count) count.textContent = hidden.length ? `已隐藏 ${hidden.length} 部，点右侧按钮查看与恢复` : "还没有隐藏任何番剧";
+  const hiddenSet = new Set(hidden);
+  const datalist = $("#scheduleHiddenOptions");
+  if (datalist) {
+    datalist.innerHTML = state.animes
+      .filter((anime) => !hiddenSet.has(Number(anime.id)))
+      .map((anime) => `<option value="${escapeHtml(anime.display_name || anime.name_cn || anime.name || "")}"></option>`).join("");
+  }
+  if ($("#scheduleHiddenModal")?.open) renderScheduleHiddenList();
+}
+
+function renderScheduleHiddenList() {
+  const host = $("#scheduleHiddenList");
+  if (!host) return;
+  const hidden = scheduleHiddenIds();
+  host.innerHTML = hidden.length
+    ? hidden.map((id) => {
+        const anime = state.animes.find((row) => Number(row.id) === id);
+        const name = anime ? (anime.display_name || anime.name_cn || anime.name) : `番剧 ${id}`;
+        return `<div class="schedule-hidden-item"><img src="/api/covers/${id}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" /><b>${escapeHtml(name)}</b><button type="button" class="secondary-button" data-schedule-unhide="${id}">取消隐藏</button></div>`;
+      }).join("")
+    : '<p class="page-subtitle">没有隐藏任何番剧。</p>';
+}
+
+async function saveScheduleHidden(ids) {
+  const result = await api("/api/settings", {method: "PATCH", body: JSON.stringify({schedule_hidden: ids})});
+  if (!Array.isArray(result.settings?.schedule_hidden)) throw new Error("后台未保存隐藏列表，请重启手账后台后重试。");
+  state.settings = result.settings;
+  renderScheduleHiddenSettings();
+  renderSchedule();
+}
+
 function renderScheduleSettings() {
+  const settingsSource = scheduleSettingsSource();
+  const settingsPrefs = schedulePreferences(settingsSource);
+  const selector = $("#scheduleSettingsSource");
+  if (selector && selector.value !== settingsSource) selector.value = settingsSource;
   $("#scheduleSourceInput").value = scheduleSource();
   $("#scheduleAiringSourceInput").value = state.settings.schedule_airing_source || "bgm";
   $("#scheduleSourceSwitchInput").checked = state.settings.show_schedule_source_switch !== false;
-  const prefs = schedulePreferences();
-  renderScheduleSorting("#scheduleSortingSettings");
-  $("#scheduleStatusInputs").innerHTML = scheduleStatusMarkup(prefs.statuses, "scheduleSettingsStatus");
-  $("#scheduleOriginInputs").innerHTML = scheduleOriginMarkup(prefs.origins, "scheduleSettingsOrigin");
-  $("#scheduleUncollectedInput").checked = prefs.uncollected;
+  renderScheduleSorting("#scheduleSortingSettings", null, settingsSource);
+  $("#scheduleStatusInputs").innerHTML = scheduleStatusMarkup(settingsPrefs.statuses, "scheduleSettingsStatus");
+  $("#scheduleOriginInputs").innerHTML = scheduleOriginMarkup(settingsPrefs.origins, "scheduleSettingsOrigin");
+  $("#scheduleUncollectedInput").checked = settingsPrefs.uncollected;
+  renderScheduleHiddenSettings();
   const visibility = scheduleCardVisibility();
   $("#scheduleCardFieldInputs").innerHTML = scheduleCardFieldOptions.map(([key, label, description]) =>
     `<label class="setting-row"><span><strong>${label}</strong><small>${description}</small></span><span class="switch-row compact"><input type="checkbox" data-schedule-field="${key}" ${visibility[key] ? "checked" : ""} /><span class="switch"></span></span></label>`).join("");
@@ -441,8 +526,10 @@ function renderScheduleSettings() {
 }
 
 function openScheduleFilters() {
-  const prefs = schedulePreferences();
-  renderScheduleSorting("#scheduleSortOptions");
+  const source = scheduleSource();
+  const prefs = schedulePreferences(source);
+  $("#scheduleFilterSourceLabel").textContent = `正在配置：${scheduleSourceNames[source]} —— 三套周表的排序与筛选相互独立`;
+  renderScheduleSorting("#scheduleSortOptions", null, source);
   $("#scheduleFilterStatuses").innerHTML = scheduleStatusMarkup(prefs.statuses, "scheduleFilterStatus");
   $("#scheduleFilterOrigins").innerHTML = scheduleOriginMarkup(prefs.origins, "scheduleFilterOrigin");
   $("#scheduleFilterUncollected").checked = prefs.uncollected;
@@ -504,6 +591,35 @@ function initializeSchedule() {
   };
   $("#scheduleRefresh").onclick = () => loadSchedule(true);
   $("#scheduleFilterButton").onclick = openScheduleFilters;
+  $("#scheduleSettingsSource")?.addEventListener("change", (event) => {
+    scheduleSettingsSourceValue = event.target.value;
+    renderScheduleSettings();
+  });
+  $("#scheduleHiddenAdd")?.addEventListener("click", async () => {
+    const input = $("#scheduleHiddenInput");
+    const value = String(input?.value || "").trim();
+    if (!value) return;
+    const query = value.toLocaleLowerCase();
+    const anime = state.animes.find((row) => [row.display_name, row.name_cn, row.name].some((n) => n && String(n).toLocaleLowerCase() === query))
+      || (/^\d+$/.test(value) ? state.animes.find((row) => Number(row.id) === Number(value)) : null);
+    if (!anime) { toast("没有找到这部番，先确认名字或改用 Bangumi 编号", "error"); return; }
+    const ids = scheduleHiddenIds();
+    if (ids.includes(Number(anime.id))) { toast("这部番已经在隐藏列表里了"); return; }
+    input.value = "";
+    try {
+      await saveScheduleHidden([...ids, Number(anime.id)]);
+      toast(`已从周表隐藏「${anime.display_name || anime.name_cn || anime.name}」`);
+    } catch (error) { toast(error.message, "error"); }
+  });
+  $("#scheduleHiddenManage")?.addEventListener("click", () => {renderScheduleHiddenList(); $("#scheduleHiddenModal").showModal();});
+  $("#scheduleHiddenList")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-schedule-unhide]");
+    if (!button) return;
+    try {
+      await saveScheduleHidden(scheduleHiddenIds().filter((id) => id !== Number(button.dataset.scheduleUnhide)));
+      toast("已恢复显示");
+    } catch (error) { toast(error.message, "error"); }
+  });
   $("#scheduleCloseDetail").onclick = () => $("#scheduleDetailModal").close();
   $("#scheduleSearch").oninput = (event) => {scheduleState.search = event.target.value; scheduleState.shown = 30; renderSchedule();};
   $("#scheduleSeasonButton").onclick = () => {
@@ -517,13 +633,17 @@ function initializeSchedule() {
     try {
       const sorting = readScheduleSorting("#scheduleSortOptions");
       await requireScheduleSortingSupport();
-      const result = await api("/api/settings", {method: "PATCH", body: JSON.stringify({
-        ...sorting,
+      const source = scheduleSource();
+      const preferences = {...(state.settings.schedule_preferences || {})};
+      preferences[source] = {
+        schedule_sort: sorting.schedule_sort,
+        schedule_grouping: sorting.schedule_grouping,
         schedule_statuses: $$("#scheduleFilterStatuses input:checked").map((input) => Number(input.value)),
         schedule_origins: $$("#scheduleFilterOrigins input:checked").map((input) => input.value),
         schedule_uncollected: $("#scheduleFilterUncollected").checked,
-      })});
-      verifyScheduleSortingSaved(result.settings, sorting);
+      };
+      const result = await api("/api/settings", {method: "PATCH", body: JSON.stringify({schedule_preferences: preferences})});
+      verifySchedulePreferencesSaved(result.settings, source, preferences[source]);
       state.settings = result.settings; scheduleState.shown = 30;
       $("#scheduleFilterModal").close(); renderScheduleSettings(); renderSchedule();
     } catch (error) {toast(error.message, "error");}

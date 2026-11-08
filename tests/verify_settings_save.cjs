@@ -4,7 +4,7 @@ const element=selector=>{if(!elements.has(selector))elements.set(selector,{value
 const context={ThemeSettingsSession:{lock(){},payload:async()=>({}),finish(){}},console,Set,JSON,Object,Number,Boolean,state:{settings:{},custom_collections:[],noteThemes:new Set(['other']),timelineThemes:new Set(),activeView:'collection'},
  $:element,$$:selector=>selector==='.builtin-visibility-check'?[{dataset:{category:1},checked:true}]:[],
  toast:message=>notices.push(message),readDetailLinks:()=>[],readScheduleDetailLinks:()=>[],detailLinks:()=>[],syncLinkAdditions:()=>({detail:[],schedule:[],synced:[]}),
- readKeyboardSettings:()=>({}),keyboardPreferences:()=>({}),readScheduleSorting:()=>({schedule_sort:'time'}),requireScheduleSortingSupport:async()=>{},verifyScheduleSortingSaved(){},
+ readKeyboardSettings:()=>({}),keyboardPreferences:()=>({}),readScheduleSorting:()=>({schedule_sort:'time'}),requireScheduleSortingSupport:async()=>{},scheduleSettingsSource:()=>'yuc',verifySchedulePreferencesSaved(){},
  builtinCollectionOrder:()=>[1],sidebarOrder:()=>[],recordThemes:()=>[{id:'other'}],
  api:async(path,options)=>{calls++;const body=JSON.parse(options.body);await new Promise(resolve=>release=resolve);if(shouldFail)throw Error('failed save');return {settings:body}},
 };

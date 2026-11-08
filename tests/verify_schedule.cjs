@@ -86,8 +86,8 @@ assert(run('scheduleComparator(unknownTime,groupFixture[3])')>0);
 console.log('Sort directions: all three sorts reverse, independent group directions retain priority, unknown times stay last.');
 const sortingRequest={schedule_sort:'time',schedule_grouping:{mode:'collection',collection_order:['uncollected','collected'],status_order:['1','2','3','4','5','uncollected'],sorts:{collected:'score'},directions:{collected:'desc'}}};
 ctx.sortingRequest=sortingRequest;
-assert.throws(()=>run('verifyScheduleSortingSaved({schedule_sort:"time",schedule_grouping:{mode:"none"}},sortingRequest)'),/未保存完整/);
-run('verifyScheduleSortingSaved({schedule_sort:"time",schedule_grouping:sortingRequest.schedule_grouping},sortingRequest)');
+assert.throws(()=>run('verifySchedulePreferencesSaved({schedule_preferences:{yuc:{schedule_sort:"time",schedule_grouping:{mode:"none"}}}},"yuc",sortingRequest)'),/未保存完整/);
+run('verifySchedulePreferencesSaved({schedule_preferences:{yuc:{schedule_sort:"time",schedule_grouping:sortingRequest.schedule_grouping}}},"yuc",sortingRequest)');
 (async()=>{
  ctx.api=async()=>({ok:true});
  await assert.rejects(run('requireScheduleSortingSupport()'),/旧版本/);
