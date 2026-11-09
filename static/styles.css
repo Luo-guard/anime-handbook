@@ -3140,6 +3140,8 @@ dialog::backdrop {
 /* 说明文字默认收起，只保留标题右侧的问号；内容仍在 DOM 里，供弹层读取。 */
 .setting-row small.setting-help-source { display: none; }
 #settingsModal .setting-help-source { display: none; }
+/* 说明收进问号后正文默认藏起来；周表筛选弹窗也用同一套（不在 #settingsModal 里）。 */
+.setting-help-source { display: none; }
 .setting-status { display: block; margin-top: 5px; padding-left: 9px; border-left: 2px solid var(--line); color: var(--muted); font-size: 11.5px; line-height: 1.6; }
 .setting-status.is-ok { border-left-color: var(--green-500); color: var(--green-800); }
 .setting-status.is-warn { border-left-color: var(--amber-500, #d8a24a); color: var(--amber-800, #7a5416); }

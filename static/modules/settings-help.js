@@ -5,14 +5,20 @@ let settingHelpPinned = false;
 let settingHelpButton = null;
 let settingHelpTimer = null;
 
-function settingHelpPopover() {
+// 弹层挂在按钮所在的弹窗里（settings 之外还有周表筛选弹窗也用它）；
+// 弹窗在 top layer，挂在别处的 fixed 弹层会被压在下面。
+function settingHelpPopover(host) {
+  const parent = host || $("#settingsModal") || document.body;
   let node = $("#settingHelpPopover");
-  if (node) return node;
+  if (node) {
+    if (node.parentElement !== parent) parent.append(node);
+    return node;
+  }
   node = document.createElement("div");
   node.id = "settingHelpPopover";
   node.className = "setting-help-popover hidden";
   node.setAttribute("role", "tooltip");
-  ($("#settingsModal") || document.body).append(node);
+  parent.append(node);
   return node;
 }
 
@@ -48,7 +54,7 @@ function openSettingHelp(button, pinned) {
   if (!sources) return;
   clearTimeout(settingHelpTimer);
   settingHelpButton = button;
-  const popover = settingHelpPopover();
+  const popover = settingHelpPopover(button.closest("dialog"));
   const title = button.dataset.helpTitle || "";
   popover.innerHTML = `${title ? `<p class="setting-help-title">${escapeHtml(title)}</p>` : ""}<div class="setting-help-body">${settingHelpBody(sources)}</div>`;
   popover.classList.toggle("is-pinned", Boolean(pinned));
@@ -178,6 +184,18 @@ function bindSettingHelpGlobals() {
     if (event.target.closest?.(".setting-help, #settingHelpPopover")) return;
     closeSettingHelp(true);
   });
+  // 鼠标移进说明弹层本身别收起（只绑在设置面板上覆盖不到周表筛选弹窗）。
+  document.addEventListener("pointerover", (event) => {
+    if (event.target.closest?.("#settingHelpPopover")) clearTimeout(settingHelpTimer);
+  });
+  document.addEventListener("pointerout", (event) => {
+    if (event.target.closest?.("#settingHelpPopover") && !settingHelpPinned) scheduleSettingHelpClose(220);
+  });
+  // 弹层是弹窗的子元素，弹窗一关就该一起收起，否则重新打开会残留上次的浮层。
+  // close 事件不冒泡，用捕获阶段接。
+  document.addEventListener("close", (event) => {
+    if (event.target?.querySelector?.("#settingHelpPopover")) closeSettingHelp(true);
+  }, true);
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !settingHelpPinned) return;
     // 只收起说明，别让 <dialog> 顺手把整个设置面板关掉。
@@ -194,7 +212,7 @@ function followSettingHelp() {
     closeSettingHelp(true);
     return;
   }
-  settingHelpPlace(settingHelpButton, settingHelpPopover());
+  settingHelpPlace(settingHelpButton, settingHelpPopover(settingHelpButton.closest("dialog")));
 }
 // 鼠标移进说明本身时不收起，方便看完再走。
 function bindSettingHelpOnce() {
@@ -202,6 +220,8 @@ function bindSettingHelpOnce() {
   bindSettingHelpGlobals();
   const modal = $("#settingsModal");
   modal?.addEventListener?.("scroll", followSettingHelp, { passive: true });
+  // 别的弹窗（周表筛选）里有自己的滚动容器，用捕获兜住所有滚动。
+  document.addEventListener("scroll", followSettingHelp, { passive: true, capture: true });
   window.addEventListener("resize", followSettingHelp);
   modal?.addEventListener?.("pointerenter", (event) => {
     if (event.target.closest?.("#settingHelpPopover")) clearTimeout(settingHelpTimer);

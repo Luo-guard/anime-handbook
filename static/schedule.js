@@ -136,7 +136,7 @@ function renderScheduleSorting(selector, draft = null, source = scheduleSource()
   const options = selected => Object.entries(scheduleSortNames).map(([id, name]) => `<option value="${id}" ${id === selected ? 'selected' : ''}>${name}</option>`).join('');
   root.innerHTML = `<label class="schedule-sort-mode"><span>分组方式</span><select data-group-mode aria-label="分组方式">${[['none','不分组'],['collection','已收藏 / 未收藏'],['status','按六种收藏状态']].map(([id,name]) => `<option value="${id}" ${grouping.mode === id ? 'selected' : ''}>${name}</option>`).join('')}</select></label>
     <div class="schedule-sort-mode" ${grouping.mode === 'none' ? '' : 'hidden'}><span>统一排序</span><div class="schedule-sort-choice"><select data-uniform-sort aria-label="统一排序">${options(sort)}</select>${scheduleDirectionButton("uniform", grouping.direction || scheduleDefaultDirection(sort))}</div></div>
-    ${grouping.mode === 'none' ? '' : `<div class="schedule-group-sort-list">${grouping[grouping.mode + '_order'].map((id, i, order) => `<div class="schedule-group-sort-row" data-sort-row="${id}"><span class="schedule-group-name">${scheduleGroupName(id)}</span><div class="schedule-sort-choice"><select data-group-sort="${id}" aria-label="${scheduleGroupName(id)}组内排序">${options(grouping.sorts[id] || sort)}</select>${scheduleDirectionButton(id, grouping.directions[id] || scheduleDefaultDirection(grouping.sorts[id] || sort))}</div><div class="schedule-group-moves"><button type="button" data-sort-move="-1" data-sort-group="${id}" aria-label="上移${scheduleGroupName(id)}" ${i === 0 ? 'disabled' : ''}><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 7 6 1 11 7Z" fill="currentColor"/></svg></button><button type="button" data-sort-move="1" data-sort-group="${id}" aria-label="下移${scheduleGroupName(id)}" ${i === order.length - 1 ? 'disabled' : ''}><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1 6 7 11 1Z" fill="currentColor"/></svg></button></div></div>`).join('')}</div><small class="schedule-sort-hint">按从上到下的分组顺序排列；上下箭头调整优先级。显示范围仍由下方筛选控制。</small>`}`;
+    ${grouping.mode === 'none' ? '' : `<div class="schedule-group-sort-list">${grouping[grouping.mode + '_order'].map((id, i, order) => `<div class="schedule-group-sort-row" data-sort-row="${id}"><span class="schedule-group-name">${scheduleGroupName(id)}</span><div class="schedule-sort-choice"><select data-group-sort="${id}" aria-label="${scheduleGroupName(id)}组内排序">${options(grouping.sorts[id] || sort)}</select>${scheduleDirectionButton(id, grouping.directions[id] || scheduleDefaultDirection(grouping.sorts[id] || sort))}</div><div class="schedule-group-moves"><button type="button" data-sort-move="-1" data-sort-group="${id}" aria-label="上移${scheduleGroupName(id)}" ${i === 0 ? 'disabled' : ''}><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 7 6 1 11 7Z" fill="currentColor"/></svg></button><button type="button" data-sort-move="1" data-sort-group="${id}" aria-label="下移${scheduleGroupName(id)}" ${i === order.length - 1 ? 'disabled' : ''}><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1 6 7 11 1Z" fill="currentColor"/></svg></button></div></div>`).join('')}</div>`}`;
   root.onchange = event => {
     const input = event.target;
     if (!input.matches('[data-group-mode], [data-group-sort], [data-uniform-sort]')) return;
@@ -525,14 +525,32 @@ function renderScheduleSettings() {
   if (typeof setupSettingHelp === "function") setupSettingHelp();
 }
 
+// 筛选弹窗里的小字说明收进问号（和设置页同一套 interaction）：标题旁的问号讲
+// 三套周表互相独立 + 会被记住；「排列方式」「显示地区」各有自己的说明。
+function setupScheduleFilterHelp() {
+  if (typeof appendSettingHelp !== "function") return;
+  const dialog = $("#scheduleFilterModal");
+  const heading = dialog?.querySelector("h2");
+  if (!dialog || !heading) return;
+  const note = (key) => dialog.querySelector(`[data-help="${key}"]`);
+  const fieldTitle = (text) =>
+    [...dialog.querySelectorAll(".schedule-field-title")].find((node) => node.textContent.trim().startsWith(text));
+  appendSettingHelp(heading, heading, [note("tables"), note("remember")].filter(Boolean));
+  const sortTitle = fieldTitle("排列方式");
+  if (sortTitle) appendSettingHelp(sortTitle, sortTitle, [note("sort")].filter(Boolean));
+  const originTitle = fieldTitle("显示地区");
+  if (originTitle) appendSettingHelp(originTitle, originTitle, [note("regions")].filter(Boolean));
+}
+
 function openScheduleFilters() {
   const source = scheduleSource();
   const prefs = schedulePreferences(source);
-  $("#scheduleFilterSourceLabel").textContent = `正在配置：${scheduleSourceNames[source]} —— 三套周表的排序与筛选相互独立`;
+  $("#scheduleFilterSourceLabel").textContent = `正在配置：${scheduleSourceNames[source]}`;
   renderScheduleSorting("#scheduleSortOptions", null, source);
   $("#scheduleFilterStatuses").innerHTML = scheduleStatusMarkup(prefs.statuses, "scheduleFilterStatus");
   $("#scheduleFilterOrigins").innerHTML = scheduleOriginMarkup(prefs.origins, "scheduleFilterOrigin");
   $("#scheduleFilterUncollected").checked = prefs.uncollected;
+  setupScheduleFilterHelp();
   $("#scheduleFilterModal").showModal();
 }
 
