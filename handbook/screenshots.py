@@ -161,6 +161,12 @@ def delete_image(asset_root: Path, relative: str) -> dict[str, Any]:
     if not target:
         raise ValueError("找不到这张截图")
     target.unlink()
+    # 这组的最后一张删完就把空文件夹一起收掉，截图库里不留空壳。
+    try:
+        if not any(target.parent.iterdir()):
+            target.parent.rmdir()
+    except OSError:
+        pass
     return {"ok": True, "relative": relative}
 
 
