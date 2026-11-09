@@ -46,6 +46,30 @@ def _normalize_schedule_preferences(value: Any) -> dict[str, Any]:
     return result
 
 
+def _normalize_schedule_hidden(value: Any) -> dict[str, list[int]]:
+    """隐藏的番剧按周表来源分开存：在哪一套里隐藏，就只影响那一套。
+
+    旧版本存的是扁平列表（三套通吃），这里兼容：读到列表就展开成三份，
+    前端下一次保存会把嵌套结构固化下来。
+    """
+    def clean(items: Any) -> list[int]:
+        if not isinstance(items, list):
+            raise ValueError("隐藏番剧列表无效")
+        cleaned: list[int] = []
+        for item in items:
+            number = int(item)
+            if number > 0 and number not in cleaned:
+                cleaned.append(number)
+        return cleaned[:500]
+
+    if isinstance(value, dict):
+        return {source: clean(value.get(source, [])) for source in _SCHEDULE_SOURCES}
+    if isinstance(value, list):
+        shared = clean(value)
+        return {source: list(shared) for source in _SCHEDULE_SOURCES}
+    raise ValueError("隐藏番剧列表无效")
+
+
 def _normalize_settings(body, settings):
     if not isinstance(body, dict): raise ValueError("设置内容需为 JSON 对象")
     settings = copy.deepcopy(settings)
@@ -213,14 +237,7 @@ def _normalize_settings(body, settings):
             elif key == "schedule_preferences":
                 value = _normalize_schedule_preferences(value)
             elif key == "schedule_hidden":
-                if not isinstance(value, list):
-                    raise ValueError("隐藏番剧列表无效")
-                cleaned_hidden: list[int] = []
-                for hidden_item in value:
-                    number = int(hidden_item)
-                    if number > 0 and number not in cleaned_hidden:
-                        cleaned_hidden.append(number)
-                value = cleaned_hidden[:500]
+                value = _normalize_schedule_hidden(value)
             elif key == "day_start_hour":
                 value = min(23, max(0, int(value)))
             elif key == "show_episode_balance":

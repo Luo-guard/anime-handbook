@@ -21,11 +21,13 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     // 从干净状态开始：清空嵌套偏好与隐藏列表
     await fetch('http://127.0.0.1:43127/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedule_preferences: {}, schedule_hidden: [], schedule_source: 'yuc' }) });
     await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await page.waitForTimeout(1500);
+    // bootstrap 会拉全量数据（2MB+），机器忙时要好几秒；等它真正初始化完再操作，
+    // 否则按钮的 onclick 还没绑上，点击静默失效。
+    await page.waitForFunction(() => typeof scheduleState !== 'undefined' && scheduleState.initialized === true, null, { timeout: 40000 });
 
     // 1) 周表（yuc）打开筛选弹窗：副标题指明来源；改成「评分优先」并取消「在看」
     await page.evaluate(() => { switchView('schedule'); });
-    await page.waitForTimeout(1200);
+    await page.waitForFunction(() => (scheduleState.data?.items || []).length > 0, null, { timeout: 40000 });
     await page.click('#scheduleFilterButton');
     await page.waitForTimeout(300);
     assert.equal(await page.evaluate(() => document.querySelector('#scheduleFilterSourceLabel').textContent.includes('長門番堂')), true, '弹窗副标题要标明来源');
@@ -73,26 +75,40 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
 
-    // 4) 隐藏番剧：设置里加一部 → 周表消失 + 通知计数；管理弹窗可恢复
-    const target = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json().then((d) => d.animes.find((a) => a.id === 554779) || d.animes[0]);
-    const targetName = target.display_name || target.name_cn || target.name;
-    await page.evaluate(() => document.querySelector('#settingsButton').click());
-    await page.waitForTimeout(500);
-    await page.evaluate(() => switchSettingsTab('schedule'));
-    await page.waitForTimeout(300);
-    await page.fill('#scheduleHiddenInput', targetName);
-    await page.click('#scheduleHiddenAdd');
-    await page.waitForTimeout(700);
+    // 4) 隐藏番剧：入口搬到周表「排序与筛选」，直接点条目隐藏；三套来源各自独立
+    await page.evaluate(() => {
+      const control = document.querySelector('#scheduleSourceSwitch');
+      control.value = 'yuc';
+      control.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await page.waitForFunction(() => scheduleSource() === 'yuc' && (scheduleState.data?.items || []).length > 0, null, { timeout: 40000 });
+    await page.waitForTimeout(400);
+    await page.evaluate(() => openScheduleFilters());
+    await page.waitForTimeout(600);
+    const hiddenId = await page.evaluate(async () => {
+      const btn = document.querySelector('#scheduleHiddenPicker [data-schedule-toggle-hidden]');
+      if (!btn) return null;
+      const id = Number(btn.dataset.scheduleToggleHidden);
+      btn.click();
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      return id;
+    });
+    assert.ok(hiddenId, '筛选弹窗要能直接选中周表条目来隐藏');
     let hiddenNow = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json().then((d) => d.settings.schedule_hidden);
-    assert.ok(hiddenNow.includes(target.id), `隐藏列表要有 ${target.id}，实际：${hiddenNow}`);
-    // 管理弹窗列出并可恢复
-    await page.click('#scheduleHiddenManage');
-    await page.waitForTimeout(300);
-    assert.ok(await page.locator(`#scheduleHiddenList [data-schedule-unhide="${target.id}"]`).count() === 1, '管理列表要列出该番');
-    await page.click(`#scheduleHiddenList [data-schedule-unhide="${target.id}"]`);
-    await page.waitForTimeout(700);
+    assert.ok(Array.isArray(hiddenNow?.yuc) && hiddenNow.yuc.includes(hiddenId), `yuc 里要有 ${hiddenId}，实际：${JSON.stringify(hiddenNow)}`);
+    assert.deepEqual(hiddenNow.kazumi, [], 'kazumi 不能被 yuc 的隐藏波及');
+    assert.deepEqual(hiddenNow.as, [], 'as 不能被 yuc 的隐藏波及');
+    // 管理弹窗：按来源列出，能取消隐藏
+    await page.click('#scheduleHiddenManageFromFilter');
+    await page.waitForTimeout(400);
+    assert.ok(await page.locator(`#scheduleHiddenList [data-schedule-unhide="${hiddenId}"]`).count() === 1, '管理列表要列出刚隐藏的条目');
+    const chipText = await page.evaluate(() => [...document.querySelectorAll('#scheduleHiddenSources .schedule-hidden-source')].map((b) => b.textContent.trim()).join(' | '));
+    assert.ok(chipText.includes('1'), `来源切换按钮要显示各来源的隐藏数量：${chipText}`);
+    await page.click(`#scheduleHiddenList [data-schedule-unhide="${hiddenId}"]`);
+    await page.waitForTimeout(900);
     hiddenNow = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json().then((d) => d.settings.schedule_hidden);
-    assert.ok(!hiddenNow.includes(target.id), '取消隐藏要移出列表');
+    assert.ok(!hiddenNow.yuc.includes(hiddenId), '取消隐藏要移出列表');
+    await page.evaluate(() => document.querySelector('#scheduleHiddenModal').close());
 
     console.log('verify_schedule_sources: OK');
   } finally {

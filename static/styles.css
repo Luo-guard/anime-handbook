@@ -4987,3 +4987,32 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 .schedule-hidden-item img { width: 30px; height: 40px; object-fit: cover; border-radius: 6px; background: rgb(var(--theme-rgb) / .08); flex: 0 0 auto; }
 .schedule-hidden-item b { flex: 1 1 auto; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 筛选弹窗里的「隐藏的番剧」挑选列表：直接点条目，不打字 */
+.schedule-hidden-picker {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 210px; overflow-y: auto;
+  margin-top: 10px; padding: 6px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+}
+.schedule-hidden-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 5px 6px 5px 10px; border-radius: 8px;
+  font-size: 12.5px; color: var(--ink);
+}
+.schedule-hidden-toggle > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-hidden-toggle:hover { background: var(--green-50); }
+.schedule-hidden-toggle.is-hidden > span { color: var(--muted); text-decoration: line-through; }
+.schedule-hidden-toggle .secondary-button { flex: 0 0 auto; padding: 4px 10px; font-size: 11.5px; }
+.schedule-hidden-toggle.is-unlinked { color: var(--muted); }
+.schedule-hidden-toggle em { font-style: normal; font-size: 11px; color: var(--muted); }
+.schedule-hidden-empty { margin: 10px 4px; color: var(--muted); font-size: 12px; }
+.schedule-hidden-manage { margin-top: 12px; }
+/* 管理弹窗顶部的来源切换 */
+.schedule-hidden-sourcebar { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 12px; }
+.schedule-hidden-source {
+  padding: 7px 13px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--green-50); color: var(--muted); cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600;
+}
+.schedule-hidden-source.active { background: var(--green-700); border-color: transparent; color: #fff; }

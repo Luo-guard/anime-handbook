@@ -670,7 +670,8 @@ class HandbookDB:
                 "schedule_airing_source": "bgm",
                 "show_schedule_source_switch": True,
                 "schedule_preferences": {},
-                "schedule_hidden": [],
+                # 隐藏列表按周表来源分开（yuc / kazumi / as），互不影响。
+                "schedule_hidden": {},
                 "schedule_sort": "time",
                 "schedule_grouping": {"mode": "none", "collection_order": ["collected", "uncollected"], "status_order": ["1", "2", "3", "4", "5", "uncollected"], "sorts": {}},
                 "schedule_statuses": [1, 2, 3, 4, 5],
