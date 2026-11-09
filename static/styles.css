@@ -3835,11 +3835,31 @@ dialog::backdrop {
 .video-anime-empty { padding: 12px; color: var(--muted); }
 
 #keyboardBindings { width: 100%; display: grid; gap: 0; }
-.keyboard-group-title { margin: 16px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--muted); }
-.keyboard-group:first-child .keyboard-group-title { margin-top: 4px; }
-.keyboard-binding { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.05fr) 44px; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.keyboard-binding-name { font-size: 13.5px; color: var(--ink); }
-.keyboard-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+/* 快捷键面板：对齐常见软件的「分组标题 + 等宽行 + 右侧按键/开关」三段式。
+   行高、内边距、分组间距全部走同一套变量，新增动作不用再单独调样式。 */
+.keyboard-group { margin-top: 24px; }
+.keyboard-group:first-child { margin-top: 10px; }
+.keyboard-group-title {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 0 0 4px; padding: 0 8px 9px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .12em;
+}
+.keyboard-group-hint { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: 0; opacity: .8; }
+.keyboard-binding {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 44px;
+  gap: 16px; align-items: center;
+  min-height: 46px; padding: 7px 8px;
+  border-radius: 9px;
+  border-bottom: 1px solid var(--line);
+  transition: background .12s ease;
+}
+.keyboard-binding:last-child { border-bottom: 0; }
+.keyboard-binding:hover { background: var(--green-50); }
+.keyboard-binding-name { font-size: 13px; color: var(--ink); }
+.keyboard-keys { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.keyboard-binding > .switch-row { justify-self: end; }
 .shortcut-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 9px; border-radius: 8px; background: var(--green-50); color: var(--green-800); font-size: 12px; line-height: 1.5; }
 .shortcut-chip-label { white-space: nowrap; }
 .shortcut-chip-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px; line-height: 1; padding: 1px 5px; border-radius: 6px; cursor: pointer; }
@@ -3853,8 +3873,9 @@ dialog::backdrop {
 #keyboardStatus { color:var(--danger); font-size:13px; }
 .keyboard-binding.hidden { display:none; }
 @media(max-width:600px){
-  .keyboard-binding { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 40px; gap: 8px; font-size: 13px; }
+  .keyboard-binding { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 40px; gap: 10px; padding: 7px 6px; }
   .shortcut-capture { width: 100%; }
+  .keyboard-keys { justify-content: flex-start; }
 }
 
 #scheduleSourceSwitch[hidden] { display: none; }
@@ -4890,9 +4911,10 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 .pc-shortcuts ul { margin: 6px 0 0; padding: 0 0 0 4px; list-style: none; display: grid; gap: 3px; }
 .pc-shortcuts b {
   display: inline-block; padding: 0 5px; border: 1px solid var(--line);
-  border-radius: 5px; background: rgb(var(--theme-rgb) / .05);
+  border-radius: 5px; background: rgba(var(--theme-rgb), .06);
   font-weight: 600; font-size: 11px;
 }
+.pc-shortcuts-note { margin: 6px 0 0; color: var(--muted); font-size: 11px; opacity: .85; }
 #danmakuPanel { z-index: 8; }
 @media (max-width: 640px) {
   .pc-dm-field { flex-basis: 150px; }

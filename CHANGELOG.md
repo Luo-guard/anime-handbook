@@ -5,6 +5,15 @@
 
 ## 2026-11-09
 
+### 新增：播放器快捷键补齐 Kazumi 全集 + 全部可在设置里配置
+- 对照 Kazumi 的 `defaultShortcuts`（`lib/utils/constants.dart`）逐条核对，补齐 5 个缺失动作：**K 跳过（按顶栏设定的秒数快进）、X 倍速加、Z 倍速减、1/2/3 直接切 1x/2x/3x**。原有 12 个动作（空格/←→/↑↓/M/F/D/S/N/P + Esc）保留；Esc 现在**全屏时先退全屏**，再按才关播放器（对齐 Kazumi 的 exitfullscreen）。
+- **键位不再写死在 switch 里**：播放器按键改为读 设置 → 快捷键 的绑定（`SHORTCUT_ACTIONS` 新增 `scope:"player"` 的 17 个动作，`PC_SHORTCUT_RUNNERS` 负责派发），用户改键/禁用立即生效。播放器内的「快捷键」说明也改成按当前绑定动态生成，改过键位不会说错。
+- **作用域命名空间**：全局与播放器各自独立查重，`1/2/3`、`↑/↓`、`F` 这类同键互不冲突（播放器是弹窗，弹窗打开时全局快捷键整体让位）。前端 `validateKeyboardPreferences`、后端 `handbook/shortcuts.py` 的 `PLAYER_ACTIONS` + 分组查重同步实现。
+- **修了一个会连带打死导航的坑**：全局 keydown 原本不按作用域过滤，`↓` 同时命中「下一个界面」和「音量减」会让匹配数=2 而**双双失效**（`↑/↓` 导航、`1/2/3` 跳页同理）。现已按 scope 过滤。
+- **设置界面风格统一**：快捷键面板改成「分组标题（带说明） + 等高行（46px）+ 名称左/按键右/开关最右」的三段式，行悬停高亮、分组间距统一、窄屏重排，新增动作不用再单独调样式。
+- 测试：新增 `tests/verify_player_shortcuts.cjs`（三组 17 个动作、默认键位逐条对齐 Kazumi、改键后重载仍生效、跨作用域同键不报重复）；`verify_keyboard_settings`、`verify_offline_player_layer`、`verify_settings_save` 与后端 `pytest`（575 通过，仍只有那个历史遗留的并发用例失败）全过。版本号 `?v=20261109-player-keys`（keyboard.js / offline.js / styles.css），后端已重启。
+
+
 ### 改版：隐藏番剧搬到周表「排序与筛选」，并按三套来源各自独立
 - **数据结构**：`schedule_hidden` 从扁平列表改成 `{yuc: [], kazumi: [], as: []}`（后端 `_normalize_schedule_hidden`，旧扁平数据读到时展开成三份、下次保存固化）。在哪一套周表里隐藏，就只影响那一套，改一套不波及另外两套。
 - **交互**：设置页的「输入番名 + 隐藏」整行删除，改成只能**在周表上直接点条目**——「排序与筛选」弹窗底部新增「隐藏的番剧」列表（当前来源的全部条目，未关联 Bangumi 的标「未关联条目」不可隐藏），点「隐藏/取消隐藏」立即生效、不打断筛选设置。

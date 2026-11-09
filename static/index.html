@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261109-hidden-per-source" />
+  <link rel="stylesheet" href="/styles.css?v=20261109-player-keys" />
   </head>
   <body>
     <div class="app-shell">
@@ -514,11 +514,8 @@
           <p class="offline-player-meta" id="offlinePlayerMeta"></p>
           <details class="pc-shortcuts">
             <summary>快捷键</summary>
-            <ul>
-              <li><b>空格</b> 播放 / 暂停 · <b>← / →</b> 快退 / 快进 5 秒</li>
-              <li><b>↑ / ↓</b> 音量 · <b>M</b> 静音 · <b>F</b> 全屏</li>
-              <li><b>S</b> 截图 · <b>D</b> 弹幕开关 · <b>N / P</b> 下一集 / 上一集</li>
-            </ul>
+            <ul id="pcShortcutHelpList"></ul>
+            <p class="pc-shortcuts-note">按键可在 设置 → 快捷键 → 播放器 里修改。</p>
           </details>
         </div>
       </div>
@@ -1447,14 +1444,14 @@
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261108-search-ui" defer></script>
     <script src="/modules/events.js?v=20261108-detail-corner" defer></script>
-    <script src="/modules/keyboard.js?v=20261101-multi-key" defer></script>
+    <script src="/modules/keyboard.js?v=20261109-player-keys" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-dm-kazumi" defer></script>
-    <script src="/modules/offline.js?v=20261108-skip-btn" defer></script>
+    <script src="/modules/offline.js?v=20261109-player-keys" defer></script>
     <script src="/modules/library-view.js?v=20261108-library-sidebar" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

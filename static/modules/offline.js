@@ -824,6 +824,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // 非模态 dialog 按 Esc 不会自动关闭，自己补上（其它弹窗此时已收起）。
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && $("#offlinePlayer")?.open) {
+      // 全屏时第一下 Esc 退全屏（对齐 Kazumi 的 exitfullscreen），再按才关播放器。
+      if (document.fullscreenElement) {
+        event.preventDefault();
+        pcToggleFullscreen();
+        return;
+      }
       event.preventDefault();
       closeOfflinePlayer();
     }
@@ -1097,6 +1103,81 @@ function pcSendDanmaku() {
   }
 }
 
+// 播放器快捷键的动作表：id 必须和 keyboard.js 里的 player_* 一一对应。
+const PC_SHORTCUT_RUNNERS = {
+  player_play_pause: () => pcTogglePlay(),
+  player_rewind: () => pcSeekBy(-5),
+  player_forward: () => pcSeekBy(5),
+  player_skip: () => pcSeekBy(pcLoadPrefs().skip),
+  player_prev: () => pcStep(-1),
+  player_next: () => pcStep(1),
+  player_volume_up: () => pcVolumeBy(0.05),
+  player_volume_down: () => pcVolumeBy(-0.05),
+  player_mute: () => pcToggleMute(),
+  player_fullscreen: () => pcToggleFullscreen(),
+  player_danmaku: () => $("#offlineDanmakuToggle")?.click(),
+  player_screenshot: () => pcScreenshot(),
+  player_speed_up: () => pcStepSpeed(1),
+  player_speed_down: () => pcStepSpeed(-1),
+  player_speed_1: () => pcApplySpeed(1),
+  player_speed_2: () => pcApplySpeed(2),
+  player_speed_3: () => pcApplySpeed(3),
+};
+
+// 播放器里的「快捷键」说明：按当前绑定生成，用户改过键位也不会说错。
+function pcRenderShortcutHelp() {
+  const list = $("#pcShortcutHelpList");
+  if (!list || typeof SHORTCUT_ACTIONS === "undefined" || typeof keyboardPreferences !== "function") return;
+  const preferences = keyboardPreferences();
+  const keysOf = (id) => {
+    const item = preferences.bindings[id];
+    if (!preferences.enabled || !item?.enabled) return "";
+    return item.keys.map((key) => `<b>${shortcutLabel(key)}</b>`).join(" / ");
+  };
+  const lines = [
+    ["player_play_pause", "player_rewind", "player_forward", "player_skip"],
+    ["player_volume_up", "player_volume_down", "player_mute", "player_fullscreen"],
+    ["player_prev", "player_next", "player_danmaku", "player_screenshot"],
+    ["player_speed_down", "player_speed_up", "player_speed_1", "player_speed_2", "player_speed_3"],
+  ];
+  list.innerHTML = lines.map((ids) => {
+    const parts = ids
+      .map((id) => ({ action: SHORTCUT_ACTIONS.find((row) => row.id === id), keys: keysOf(id) }))
+      .filter((row) => row.action && row.keys)
+      .map((row) => `${row.keys} ${row.action.name.replace(/（.*?）/, "")}`);
+    return parts.length ? `<li>${parts.join(" · ")}</li>` : "";
+  }).filter(Boolean).join("") || '<li>播放器快捷键已全部关闭，可在设置里重新启用。</li>';
+}
+
+function pcApplySpeed(rate) {
+  const video = $("#offlineVideo");
+  if (!video || !PC_SPEEDS.includes(rate)) return;
+  video.playbackRate = rate;
+  pcSavePrefs({ speed: rate });
+  pcSyncSpeed();
+}
+
+function pcStepSpeed(delta) {
+  const video = $("#offlineVideo");
+  if (!video) return;
+  const index = PC_SPEEDS.indexOf(video.playbackRate);
+  const next = Math.min(PC_SPEEDS.length - 1, Math.max(0, (index < 0 ? PC_SPEEDS.indexOf(1) : index) + delta));
+  pcApplySpeed(PC_SPEEDS[next]);
+}
+
+// 当前按键命中哪个播放器动作；读用户的快捷键配置，读不到就退回默认键位。
+function pcShortcutActionFor(event) {
+  if (typeof shortcutKey !== "function" || typeof keyboardPreferences !== "function") return "";
+  const preferences = keyboardPreferences();
+  if (!preferences.enabled) return "";
+  const key = shortcutKey(event);
+  if (!key) return "";
+  const match = SHORTCUT_ACTIONS.find((action) => action.scope === "player"
+    && preferences.bindings[action.id]?.enabled
+    && preferences.bindings[action.id].keys.includes(key));
+  return match?.id || "";
+}
+
 function pcInit() {
   if (pcInit.bound) return;
   pcInit.bound = true;
@@ -1135,6 +1216,9 @@ function pcInit() {
     playLocalFile(Number(item.dataset.id));
   });
   $("#pcScreenshot")?.addEventListener("click", pcScreenshot);
+  $(".pc-shortcuts")?.addEventListener("toggle", (event) => {
+    if (event.target.open) pcRenderShortcutHelp();
+  });
   // 顶栏快进按钮（Kazumi 式）：单击跳 skip 秒，长按 500ms 弹「跳过秒数」对话框。
   pcApplySkipUI();
   let pcSkipPressTimer = 0;
@@ -1253,65 +1337,19 @@ function pcInit() {
     }
   });
 
-  // 快捷键（输入框里打字不触发）。
+  // 快捷键：按键映射统一来自 设置 → 快捷键（keyboard.js 的 SHORTCUT_ACTIONS，
+  // scope=player）。这里只负责把动作 id 派发到播放器函数，键位不再写死在 switch 里，
+  // 用户在设置里改/禁用都能生效。
   document.addEventListener("keydown", (event) => {
     if (!$("#offlinePlayer")?.open || pcSeeking) return;
+    if (event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229) return;
     if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
-    switch (event.key) {
-      case " ":
-      case "Spacebar":
-        event.preventDefault();
-        pcTogglePlay();
-        break;
-      case "ArrowLeft":
-        event.preventDefault();
-        pcSeekBy(-5);
-        break;
-      case "ArrowRight":
-        event.preventDefault();
-        pcSeekBy(5);
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        pcVolumeBy(0.05);
-        break;
-      case "ArrowDown":
-        event.preventDefault();
-        pcVolumeBy(-0.05);
-        break;
-      case "f":
-      case "F":
-        event.preventDefault();
-        pcToggleFullscreen();
-        break;
-      case "m":
-      case "M":
-        event.preventDefault();
-        pcToggleMute();
-        break;
-      case "s":
-      case "S":
-        event.preventDefault();
-        pcScreenshot();
-        break;
-      case "d":
-      case "D":
-        event.preventDefault();
-        $("#offlineDanmakuToggle")?.click();
-        break;
-      case "n":
-      case "N":
-        event.preventDefault();
-        pcStep(1);
-        break;
-      case "p":
-      case "P":
-        event.preventDefault();
-        pcStep(-1);
-        break;
-      default:
-        return;
-    }
+    const actionId = pcShortcutActionFor(event);
+    if (!actionId) return;
+    const handler = PC_SHORTCUT_RUNNERS[actionId];
+    if (!handler) return;
+    event.preventDefault();
+    handler(video);
     pcWake();
   });
 

@@ -14,6 +14,26 @@ const SHORTCUT_ACTIONS = [
   {id:"new_ranking",name:"新增排名表单",key:"Alt+n",enabled:false},
   {id:"refresh_schedule",name:"刷新周表",key:"Alt+r",enabled:false},
   {id:"filter",name:"打开当前页排序与筛选",key:"f",enabled:false},
+  // ===== 播放器（对齐 Kazumi 的 defaultShortcuts；scope=player 只在本地播放器里生效）=====
+  // 播放器是弹窗，弹窗打开时全局导航快捷键整体让位，所以这里可以和导航用同键
+  // （比如 1/2/3 在播放器里是倍速），校验按 scope 分组做。
+  {id:"player_play_pause",name:"播放 / 暂停",key:"Space",enabled:true,scope:"player"},
+  {id:"player_rewind",name:"快退 5 秒",key:"ArrowLeft",enabled:true,scope:"player"},
+  {id:"player_forward",name:"快进 5 秒",key:"ArrowRight",enabled:true,scope:"player"},
+  {id:"player_volume_up",name:"音量加",key:"ArrowUp",enabled:true,scope:"player"},
+  {id:"player_volume_down",name:"音量减",key:"ArrowDown",enabled:true,scope:"player"},
+  {id:"player_mute",name:"静音",key:"m",enabled:true,scope:"player"},
+  {id:"player_fullscreen",name:"全屏 / 退出全屏",key:"f",enabled:true,scope:"player"},
+  {id:"player_danmaku",name:"弹幕开关",key:"d",enabled:true,scope:"player"},
+  {id:"player_screenshot",name:"截图",key:"s",enabled:true,scope:"player"},
+  {id:"player_prev",name:"上一集",key:"p",enabled:true,scope:"player"},
+  {id:"player_next",name:"下一集",key:"n",enabled:true,scope:"player"},
+  {id:"player_skip",name:"跳过（按设定的秒数快进）",key:"k",enabled:true,scope:"player"},
+  {id:"player_speed_down",name:"倍速减",key:"z",enabled:true,scope:"player"},
+  {id:"player_speed_up",name:"倍速加",key:"x",enabled:true,scope:"player"},
+  {id:"player_speed_1",name:"倍速：1 倍",key:"1",enabled:true,scope:"player"},
+  {id:"player_speed_2",name:"倍速：2 倍",key:"2",enabled:true,scope:"player"},
+  {id:"player_speed_3",name:"倍速：3 倍",key:"3",enabled:true,scope:"player"},
 ];
 function shortcutKeysFor(item, fallback) {
   if (item) {
@@ -37,15 +57,20 @@ function shortcutLabel(key) {
   const labels={MouseBack:"鼠标后退侧键",MouseForward:"鼠标前进侧键",ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",Space:"空格",Escape:"Esc"};
   return key.split("+").map(part=>labels[part]||part).join(" + ");
 }
+function shortcutScope(action) {
+  return action.scope === "player" ? "player" : "app";
+}
 function validateKeyboardPreferences(value) {
-  const used=new Map();
-  for(const action of SHORTCUT_ACTIONS){
-    const item=value.bindings[action.id];
-    if(!item||!item.enabled||(action.desktop&&window.handbookOnline))continue;
-    for(const key of item.keys){
-      if(!key)continue;
-      if(used.has(key))throw Error(`快捷键「${shortcutLabel(key)}」重复：${used.get(key)}、${action.name}`);
-      used.set(key,action.name);
+  // 全局和播放器各自一套命名空间：播放器在弹窗里接管按键，和导航同键不冲突。
+  const used = { app: new Map(), player: new Map() };
+  for (const action of SHORTCUT_ACTIONS) {
+    const item = value.bindings[action.id];
+    if (!item || !item.enabled || (action.desktop && window.handbookOnline)) continue;
+    const bucket = used[shortcutScope(action)];
+    for (const key of item.keys) {
+      if (!key) continue;
+      if (bucket.has(key)) throw Error(`快捷键「${shortcutLabel(key)}」重复：${bucket.get(key)}、${action.name}`);
+      bucket.set(key, action.name);
     }
   }
   return value;
@@ -54,6 +79,19 @@ const SHORTCUT_GROUPS = [
   { title: "切换界面", actions: ["collection", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next"] },
   { title: "界面操作", actions: ["sidebar", "search", "filter"] },
   { title: "记录与周表", actions: ["new_record", "new_ranking", "refresh_schedule"] },
+  {
+    title: "播放器 · 播放控制",
+    hint: "只在本地播放器打开时生效",
+    actions: ["player_play_pause", "player_rewind", "player_forward", "player_skip", "player_prev", "player_next", "player_volume_up", "player_volume_down", "player_mute", "player_fullscreen"],
+  },
+  {
+    title: "播放器 · 字幕与截图",
+    actions: ["player_danmaku", "player_screenshot"],
+  },
+  {
+    title: "播放器 · 倍速",
+    actions: ["player_speed_down", "player_speed_up", "player_speed_1", "player_speed_2", "player_speed_3"],
+  },
   { title: "系统", actions: ["shutdown"] },
 ];
 function shortcutActionName(action) {
@@ -192,6 +230,12 @@ function renderKeyboardSettings(value = keyboardPreferences()) {
     const title = document.createElement("p");
     title.className = "keyboard-group-title";
     title.textContent = group.title;
+    if (group.hint) {
+      const hint = document.createElement("span");
+      hint.className = "keyboard-group-hint";
+      hint.textContent = group.hint;
+      title.append(hint);
+    }
     section.append(title);
     actions.forEach((action) => section.append(buildShortcutRow(action, value.bindings[action.id])));
     list.append(section);
@@ -246,7 +290,9 @@ document.addEventListener("keydown",event=>{
   if(isKeyboardEditingTarget(document.activeElement)||event.composedPath().some(isKeyboardEditingTarget))return;
   const preferences=keyboardPreferences();if(!preferences.enabled)return;
   const key=shortcutKey(event);if(!key)return;
-  const matches=SHORTCUT_ACTIONS.filter(action=>preferences.bindings[action.id].enabled&&preferences.bindings[action.id].keys.includes(key));
+  // 只认全局（scope=app）的动作：播放器动作由播放器自己的 handler 处理，
+  // 否则 ↑/↓、1/2/3 这类同键动作会在这里撞成「匹配到多个」而双双失效。
+  const matches=SHORTCUT_ACTIONS.filter(action=>shortcutScope(action)==="app"&&preferences.bindings[action.id].enabled&&preferences.bindings[action.id].keys.includes(key));
   if(matches.length!==1)return;
   // The settings page is a dialog, but it is also a sidebar entry, so navigation
   // shortcuts stay available there. Every other open dialog still wins.
@@ -283,7 +329,7 @@ function handleShortcutMouse(event) {
   }
   const prefs=keyboardPreferences();if(!prefs.enabled)return;
   const key=shortcutKey(event);
-  const matches=SHORTCUT_ACTIONS.filter(action=>prefs.bindings[action.id].enabled&&prefs.bindings[action.id].keys.includes(key));
+  const matches=SHORTCUT_ACTIONS.filter(action=>shortcutScope(action)==="app"&&prefs.bindings[action.id].enabled&&prefs.bindings[action.id].keys.includes(key));
   if(matches.length!==1)return;
   claimedShortcutMouseButtons.add(event.button);
   if(!event.defaultPrevented){event.preventDefault();event.stopPropagation();}

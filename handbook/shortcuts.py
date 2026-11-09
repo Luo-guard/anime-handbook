@@ -1,7 +1,16 @@
 """Validation for account-specific keyboard bindings (defaults live in keyboard.js)."""
 import re
 
-ACTIONS = {"collection", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next", "sidebar", "shutdown", "search", "new_record", "new_ranking", "refresh_schedule", "filter"}
+APP_ACTIONS = {"collection", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next", "sidebar", "shutdown", "search", "new_record", "new_ranking", "refresh_schedule", "filter"}
+# 播放器快捷键（与键盘模块里的 scope=player 一一对应；和全局动作各自一套命名空间，
+# 所以 Space / 1 / 2 / 3 这类同键不算冲突）。
+PLAYER_ACTIONS = {
+    "player_play_pause", "player_rewind", "player_forward", "player_volume_up", "player_volume_down",
+    "player_mute", "player_fullscreen", "player_danmaku", "player_screenshot", "player_prev",
+    "player_next", "player_skip", "player_speed_down", "player_speed_up",
+    "player_speed_1", "player_speed_2", "player_speed_3",
+}
+ACTIONS = APP_ACTIONS | PLAYER_ACTIONS
 MAX_KEYS_PER_ACTION = 8
 
 
@@ -24,7 +33,7 @@ def normalize_shortcuts(value):
     if not isinstance(bindings, dict) or set(bindings) - ACTIONS:
         raise ValueError("快捷键操作无效")
     result = {}
-    used = set()
+    used = {}
     for action, item in bindings.items():
         if not isinstance(item, dict) or not isinstance(item.get("enabled"), bool):
             raise ValueError("快捷键格式错误")
@@ -47,9 +56,11 @@ def normalize_shortcuts(value):
             if not _valid_key(key):
                 raise ValueError("快捷键按键无效")
         if item["enabled"]:
+            # 全局和播放器分开查重：同一个键可以既是导航键又是播放器键。
+            bucket = used.setdefault("player" if action in PLAYER_ACTIONS else "app", set())
             for key in keys:
-                if key in used:
+                if key in bucket:
                     raise ValueError("启用的快捷键不能重复")
-                used.add(key)
+                bucket.add(key)
         result[action] = {"enabled": item["enabled"], "keys": keys}
     return {"enabled": value.get("enabled", True), "bindings": result}
