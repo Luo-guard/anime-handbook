@@ -199,10 +199,14 @@ async function bootstrap() {
     if (typeof applyWeeklyThemeForToday === "function") applyWeeklyThemeForToday();
     if (typeof startThemePlanWatcher === "function") startThemePlanWatcher();
     applySidebarLayout();
-    let initialView = ["timeline", "statistics", "ranking", "schedule"].includes(state.settings.default_view)
+    let initialView = ["library", "timeline", "statistics", "ranking", "schedule"].includes(state.settings.default_view)
       ? state.settings.default_view
       : "collection";
-    if (sidebarVisibility()[initialView] === false) initialView = state.activeView;
+    // 媒体库有独立三态开关：设成隐藏时不能当打开页面，退回收藏夹。
+    if (initialView === "library" && typeof librarySidebarMode === "function" && librarySidebarMode() === "hide") {
+      initialView = "collection";
+    }
+    if (!pageVisible(initialView)) initialView = state.activeView;
     if (initialView === "collection") applyCollectionHome();
     switchView(initialView);
     applyNoteComposerMode();

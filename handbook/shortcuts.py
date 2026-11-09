@@ -1,7 +1,7 @@
 """Validation for account-specific keyboard bindings (defaults live in keyboard.js)."""
 import re
 
-APP_ACTIONS = {"collection", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next", "sidebar", "shutdown", "search", "new_record", "new_ranking", "refresh_schedule", "filter"}
+APP_ACTIONS = {"collection", "library", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next", "sidebar", "shutdown", "search", "new_record", "new_ranking", "refresh_schedule", "filter"}
 # 播放器快捷键（与键盘模块里的 scope=player 一一对应；和全局动作各自一套命名空间，
 # 所以 Space / 1 / 2 / 3 这类同键不算冲突）。
 PLAYER_ACTIONS = {

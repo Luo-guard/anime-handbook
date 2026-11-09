@@ -386,7 +386,7 @@ def _normalize_settings(body, settings):
                 if value not in {"webdav", "kazumi"}:
                     raise ValueError("同步按钮功能无效")
             elif key == "default_view":
-                if value not in {"collection", "schedule", "timeline", "statistics", "ranking"}:
+                if value not in {"collection", "library", "schedule", "timeline", "statistics", "ranking"}:
                     raise ValueError("默认主页无效")
             elif key == "record_themes":
                 if not isinstance(value, list):
@@ -441,7 +441,7 @@ def _normalize_settings(body, settings):
                 if not isinstance(value, dict):
                     raise ValueError("页面名称设置格式错误")
                 labels = {}
-                for page in ("collection", "schedule", "timeline", "statistics", "ranking"):
+                for page in ("collection", "library", "schedule", "timeline", "statistics", "ranking"):
                     name = value.get(page, "")
                     if not isinstance(name, str) or len(name.strip()) > 20 or any(ord(c) < 32 for c in name):
                         raise ValueError("页面名称需为不超过 20 个字符的文字")
@@ -451,10 +451,13 @@ def _normalize_settings(body, settings):
             elif key == "sidebar_order":
                 if not isinstance(value, list):
                     raise ValueError("侧边栏顺序格式错误")
-                allowed_items = {"collection", "schedule", "timeline", "statistics", "ranking", "settings"}
+                # 「媒体库」也要能排序：它由独立的三态开关控制显隐，但顺序跟其它页面一样存这里。
+                # 早先白名单里没有 library，前端怎么拖都会被这段过滤回原位 —— 用户看到的
+                # 「上移下移不生效」就是这个原因。
+                allowed_items = {"collection", "library", "schedule", "timeline", "statistics", "ranking", "settings"}
                 ordered = [item for item in value if item in allowed_items]
                 value = ordered + [
-                    item for item in ["collection", "schedule", "timeline", "statistics", "ranking", "settings"]
+                    item for item in ["collection", "library", "schedule", "timeline", "statistics", "ranking", "settings"]
                     if item not in ordered
                 ]
             pending_settings[key] = value

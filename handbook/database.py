@@ -663,7 +663,7 @@ class HandbookDB:
                     "ranking": True,
                     "settings": True,
                 },
-                "sidebar_order": ["collection", "schedule", "timeline", "statistics", "ranking", "settings"],
+                "sidebar_order": ["collection", "library", "schedule", "timeline", "statistics", "ranking", "settings"],
                 "sidebar_labels": {},
                 "schedule_source": "yuc",
                 "collection_airing_source": "bgm",

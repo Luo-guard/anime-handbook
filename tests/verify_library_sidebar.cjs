@@ -5,6 +5,12 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
 (async () => {
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  // 显隐是跨用例共享的状态：先固定成「始终显示」，别被上一个用例的 hide 带崩。
+  await fetch('http://127.0.0.1:43127/api/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:43127' },
+    body: JSON.stringify({ library_sidebar: 'show' }),
+  });
   await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
   // bootstrap 拉全量数据，后台刚重启时要几秒；固定 sleep 会假失败。
   await page.waitForFunction(() => (state?.animes || []).length > 0, null, { timeout: 40000 });

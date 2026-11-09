@@ -630,6 +630,9 @@ function initLibraryView() {
       await api("/api/settings", { method: "PATCH", body: JSON.stringify({ library_sidebar: mode }) });
       state.settings.library_sidebar = mode;
       applyLibrarySidebarVisibility();
+      // 主界面设置里那颗「媒体库」勾选框也得跟着变，否则两个入口各说各话。
+      syncLibraryVisibilityCheckbox?.();
+      syncSettingsNavigation?.(true);
       toast("已保存");
     } catch (error) {
       toast(`没存上：${error.message || error}`, "error");

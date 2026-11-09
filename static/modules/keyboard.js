@@ -5,6 +5,7 @@ const SHORTCUT_ACTIONS = [
   {id:"statistics",name:"打开记录统计",page:"statistics",key:"4",enabled:true},
   {id:"ranking",name:"打开排名",page:"ranking",key:"5",enabled:true},
   {id:"settings",name:"打开设置",page:"settings",key:"6",enabled:true},
+  {id:"library",name:"打开媒体库",page:"library",key:"7",enabled:true},
   {id:"previous",name:"上一个界面",key:"ArrowUp",enabled:true},
   {id:"next",name:"下一个界面",key:"ArrowDown",enabled:true},
   {id:"sidebar",name:"收起 / 展开侧边栏",key:"b",enabled:true},
@@ -76,7 +77,7 @@ function validateKeyboardPreferences(value) {
   return value;
 }
 const SHORTCUT_GROUPS = [
-  { title: "切换界面", actions: ["collection", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next"] },
+  { title: "切换界面", actions: ["collection", "library", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next"] },
   { title: "界面操作", actions: ["sidebar", "search", "filter"] },
   { title: "记录与周表", actions: ["new_record", "new_ranking", "refresh_schedule"] },
   {
@@ -265,7 +266,8 @@ function navigateByShortcut(view) {
 function runShortcut(action) {
   if(action.page)return navigateByShortcut(action.page);
   if(action.id==="previous"||action.id==="next"){
-    const order=sidebarOrder().filter(id=>sidebarVisibility()[id]!==false);
+    // 用 pageVisible：媒体库不在 sidebar_visibility 里，隐藏后也得跳过。
+    const order=sidebarOrder().filter(id=>pageVisible(id));
     const index=order.indexOf(currentShortcutView());if(!order.length||index<0)return false;
     // Stop at the first/last page instead of wrapping around.
     const target=index+(action.id==="next"?1:-1);

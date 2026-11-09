@@ -228,6 +228,17 @@ function sidebarVisibility() {
   return { collection: true, schedule: true, timeline: true, statistics: true, ranking: true, settings: true, ...(state.settings.sidebar_visibility || {}), settings: true };
 }
 
+// 某个页面此刻是否真的可见。媒体库不归 sidebar_visibility 管（它有自己的三态开关，
+// auto 还要看库里有没有东西），所以直接读导航按钮的最终状态最准。
+function pageVisible(id) {
+  if (id === "library") {
+    const button = document.querySelector('#libraryNavButton');
+    return button ? !button.classList.contains("hidden") : true;
+  }
+  if (id === "settings") return true;
+  return sidebarVisibility()[id] !== false;
+}
+
 function applySidebarLayout() {
   $$(".sidebar-power-area, #shutdownBackendCompact").forEach(element => {
     element.classList.toggle("hidden", !enabledSetting("show_shutdown_button"));

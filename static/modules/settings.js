@@ -267,7 +267,7 @@ function renderSettingsPanels() {
   renderScheduleSettings();
   renderSharingSettings();
   renderWebdavSettings();
-  $("#defaultViewInput").value = ["timeline", "statistics", "ranking", "schedule"].includes(
+  $("#defaultViewInput").value = ["library", "timeline", "statistics", "ranking", "schedule"].includes(
     state.settings.default_view,
   )
     ? state.settings.default_view
@@ -301,10 +301,13 @@ function renderSettingsPanels() {
   }).join("");
   $("#sidebarNameInputs").innerHTML = Object.keys(SIDEBAR_ITEMS).filter(id => id !== "settings").map(id => `<label class="page-name-row"><span>${SIDEBAR_ITEMS[id]}</span><input type="text" data-page-name="${id}" maxlength="20" value="${escapeHtml(state.settings.sidebar_labels?.[id] || "")}" placeholder="${SIDEBAR_ITEMS[id]}" aria-label="${SIDEBAR_ITEMS[id]}名称" /></label>`).join("");
   const visibility = sidebarVisibility();
+  // 媒体库有自己的三态开关（始终显示 / 有内容时 / 隐藏），这里的勾选框跟它是同一个设置：
+  // 勾上=显示，取消=隐藏；auto 也算勾上。以前这颗勾选框是 disabled，用户想在这儿隐藏根本点不动。
+  const libraryShown = librarySidebarMode() !== "hide";
   $("#sidebarSettingsList").innerHTML = sidebarOrder().map((id, index) => `
     <div class="sidebar-setting-item">
       <label class="mini-check">
-        <input type="checkbox" class="sidebar-visibility-check" data-sidebar-id="${id}" ${visibility[id] !== false || id === "settings" ? "checked" : ""} ${id === "settings" || id === "library" ? "disabled" : ""} title="${id === "library" ? "媒体库的显隐由「设置 → 媒体库」的三态开关控制" : ""}" />
+        <input type="checkbox" class="sidebar-visibility-check" data-sidebar-id="${id}" ${(id === "library" ? libraryShown : visibility[id] !== false || id === "settings") ? "checked" : ""} ${id === "settings" ? "disabled" : ""} ${id === "settings" ? 'title="设置页永远显示"' : id === "library" ? 'title="与「设置 → 媒体库」的显示开关同步：勾上=显示，取消=隐藏"' : ""} />
         <span>${escapeHtml(pageLabel(id))}</span>
       </label>
       <span class="sidebar-order-actions">
@@ -313,7 +316,11 @@ function renderSettingsPanels() {
       </span>
     </div>
   `).join("");
-  $$(".sidebar-visibility-check").forEach(input => input.addEventListener("change", () => syncSettingsNavigation(true)));
+  $$(".sidebar-visibility-check").forEach(input => input.addEventListener("change", () => {
+    // 媒体库不仅要在这里显示，还要落到 library_sidebar 上（复用三态开关那条保存通路）。
+    if (input.dataset.sidebarId === "library") setLibrarySidebarMode(input.checked ? "show" : "hide");
+    syncSettingsNavigation(true);
+  }));
   const builtinCategoryVisibility = builtinVisibility();
   $("#builtinVisibilityList").innerHTML = CATEGORIES.map((category) => `
     <label class="mini-check">
@@ -967,6 +974,30 @@ async function deleteThemeProfile(id) {
   applyTheme();
   renderThemeControls();
   toast(`已删除「${target.name || "方案"}」，当前使用「${fallback.name || "另一套"}」`);
+}
+
+function librarySidebarMode() {
+  return state.settings?.library_sidebar || "show";
+}
+
+// 改媒体库显隐：走三态开关那条通路（立即保存 + 应用 + toast），两条入口共享同一份配置。
+function setLibrarySidebarMode(mode) {
+  const select = $("#librarySidebarMode");
+  if (select) {
+    select.value = mode;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+  state.settings.library_sidebar = mode;
+  api("/api/settings", { method: "PATCH", body: JSON.stringify({ library_sidebar: mode }) })
+    .then(() => applyLibrarySidebarVisibility?.())
+    .catch((error) => toast(`没存上：${error.message || error}`, "error"));
+}
+
+// 三态开关改过之后，把「侧边栏显示与顺序」里的勾选框同步过来。
+function syncLibraryVisibilityCheckbox() {
+  const box = $('.sidebar-visibility-check[data-sidebar-id="library"]');
+  if (box) box.checked = librarySidebarMode() !== "hide";
 }
 
 let settingsGroupsInitialized = false;
