@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>超分兼容性自检</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 24px; min-height: 100vh; box-sizing: border-box;
+    background: #12161a; color: #e8edf2;
+    font: 14px/1.7 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  h1 { margin: 0 0 6px; font-size: 20px; }
+  p { margin: 6px 0; color: #a9b6c2; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  video { width: 100%; background: #000; border-radius: 10px; display: block; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0; }
+  select, button {
+    font: inherit; padding: 7px 12px; border-radius: 8px;
+    border: 1px solid #2c3844; background: #1b2229; color: #e8edf2; cursor: pointer;
+  }
+  button:hover { border-color: #4c9e7a; }
+  code { background: #1b2229; padding: 1px 6px; border-radius: 5px; }
+  #result { white-space: pre-wrap; background: #1b2229; border: 1px solid #2c3844;
+    border-radius: 10px; padding: 12px 14px; margin-top: 12px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  .ok { color: #6cc19a; }
+  .bad { color: #e0736b; }
+  .hint { margin-top: 18px; padding: 12px 14px; border-left: 3px solid #4c9e7a; background: #182019; border-radius: 0 10px 10px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>超分兼容性自检</h1>
+  <p>这个页面只用浏览器原生 <code>&lt;video&gt;</code> 播同一个本地文件，没有弹窗、没有自绘控制栏、没有遮罩层。
+     用同一套超分插件在这里试一次，就能判断问题出在播放器外壳还是插件本身。</p>
+
+  <div class="bar">
+    <select id="episode"></select>
+    <button type="button" id="grab">抓一帧（检测能否读像素）</button>
+    <button type="button" id="info">刷新状态</button>
+  </div>
+
+  <video id="v" controls playsinline preload="metadata"></video>
+  <div id="result">等待选择文件…</div>
+
+  <div class="hint">
+    <p><strong>怎么看结果：</strong></p>
+    <p>1. 这里超分生效、手账播放器里不生效 → 问题在播放器外壳（弹窗/遮罩层挡住了插件的输出），告诉我，我改外壳。</p>
+    <p>2. 这里也不生效 → 插件/显卡侧没跑起来（硬件加速被关、插件不支持 Chrome 自绘播放器、或源分辨率已到上限）。</p>
+    <p>3. 「抓一帧」失败并提示安全限制 → 画面无法被脚本读取，画布类超分插件一定失效。</p>
+  </div>
+</div>
+<script>
+const api = async (path) => {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`${path} → HTTP ${response.status}`);
+  return response.json();
+};
+
+const video = document.getElementById('v');
+const select = document.getElementById('episode');
+const result = document.getElementById('result');
+let files = [];
+
+function log(text, kind = '') {
+  result.innerHTML = kind ? `<span class="${kind}">${text}</span>` : text;
+}
+
+async function boot() {
+  try {
+    const library = await api('/api/offline/library');
+    const groups = [];
+    for (const item of library.items || []) {
+      const state = await api(`/api/offline/state?anime_id=${item.anime_id}`);
+      const playable = (state.files || []).filter((file) => file.exists !== false);
+      if (playable.length) groups.push({ name: item.name, files: playable });
+    }
+    if (!groups.length) {
+      log('媒体库里还没有可播放的文件，先在播放器里下一集再说。', 'bad');
+      return;
+    }
+    const flatten = [];
+    for (const group of groups) {
+      for (const file of group.files) flatten.push({ ...file, label: `${group.name} · ${file.episode_key || file.id}` });
+    }
+    files = flatten;
+    select.innerHTML = flatten.map((file) => `<option value="${file.id}">${file.label}</option>`).join('');
+    play(flatten[0].id);
+  } catch (error) {
+    log(`读取媒体库失败：${error.message}`, 'bad');
+  }
+}
+
+function play(id) {
+  video.src = `/api/offline/stream/${id}.mp4`;
+  video.load();
+  log('已载入，点播放开始；然后观察超分是否生效。');
+}
+
+select.addEventListener('change', () => play(select.value));
+
+document.getElementById('info').addEventListener('click', () => {
+  showState();
+});
+
+function showState() {
+  const lines = [
+    `分辨率：${video.videoWidth}×${video.videoHeight}`,
+    `时长：${Number.isFinite(video.duration) ? video.duration.toFixed(1) + ' 秒' : '未知'}`,
+    `播放状态：${video.paused ? '暂停' : '播放中'}`,
+    `地址：${video.currentSrc || '（空）'}`,
+    `画中画 API：${document.pictureInPictureEnabled ? '可用' : '不可用'}`,
+  ];
+  log(lines.join('\n'));
+}
+
+document.getElementById('grab').addEventListener('click', () => {
+  try {
+    if (!video.videoWidth) {
+      log('还没有画面，先点播放，等几秒再抓。', 'bad');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const data = canvas.toDataURL('image/png');
+    log([
+      `抓帧成功：${canvas.width}×${canvas.height}`,
+      `PNG 数据长度：${data.length} 字节`,
+      '说明画面可以被脚本读取，画布类超分插件在技术上能工作。',
+    ].join('\n'), 'ok');
+  } catch (error) {
+    log(`抓帧失败：${error.message}\n画布被跨域/安全策略污染，画布类超分插件会失效。`, 'bad');
+  }
+});
+
+video.addEventListener('loadedmetadata', showState);
+video.addEventListener('playing', showState);
+
+boot();
+</script>
+</body>
+</html>

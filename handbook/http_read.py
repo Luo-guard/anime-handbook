@@ -212,7 +212,9 @@ class ReadRoutes:
                     "writable": offline_config.ensure_dirs(config),
                 })
             elif path.startswith("/api/offline/stream/"):
-                file_id = int(path.rsplit("/", 1)[-1])
+                # 允许 /stream/12 与 /stream/12.mp4 两种写法：带上扩展名后，
+                # 浏览器的「另存为」和部分扩展（按后缀识别视频）都能正常处理。
+                file_id = int(path.rsplit("/", 1)[-1].split(".")[0])
                 row = OfflineStore(self.database).file(file_id)
                 if not row:
                     raise ValueError("这一集还没有本地文件")

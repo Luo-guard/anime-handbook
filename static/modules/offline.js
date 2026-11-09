@@ -586,7 +586,7 @@ function playLocalFile(fileId) {
   $("#offlinePlayerMeta").textContent = file.subtitle_path
     ? "页面内字幕加载中（第一次约需十几秒，之后切集是即时的）…"
     : "这一集没有内封字幕。";
-  video.src = `/api/offline/stream/${file.id}`;
+  video.src = `/api/offline/stream/${file.id}.mp4`;
   if (file.subtitle_path) setupSubtitleRenderer(file, video);
   openOfflinePlayerDialog();
   video.addEventListener(
