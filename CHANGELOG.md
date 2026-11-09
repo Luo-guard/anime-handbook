@@ -5,6 +5,12 @@
 
 ## 2026-11-09
 
+### 调整：设置页标题行与搜索框对齐、拉开标题下留白
+- 搜索框**右边缘与下方内容卡右边缘对齐**：原来 `.settings-title-row` 有 `padding-right: 46px`（当年给右上角 × 让位），把搜索框往里缩了一截；× 在标题上方、纵向根本不重叠，这 46px 纯属多余，去掉后搜索框右边正好落在内容卡右边缘（实测两者同为 917px）。
+- 搜索框**底边与「手账设置」标题底部对齐**：标题行改 `align-items: flex-end`，两者底边严格同线（107px）。
+- **标题与设置项之间拉开留白**：标题行下方加 `margin-bottom: 30px`（原来间距是 0，标题和下面的分类卡紧贴）。
+- 回归：`verify_settings_batch` / `verify_settings_no_hscroll`（1080/1000/430 三档无横向滚动条）/ `verify_settings_tabs` / `verify_settings_save` 全过。版本号 `?v=20261109-settings-head`。
+
 ### 修复：动漫库页面整页空白
 - 根因：`#libraryView` 这段 markup 被放在了 `<main class="main-content">` **外面**（和 `.app-shell` 同级，夹在离线弹窗 `</dialog>` 之后）。`.view` 是普通文档流的块，结果整个库视图排在 720px 高的视口**下方**（实测 `top = 720`），点导航只能看到背景图。库里数据其实早渲染好了——所以只看 DOM 断言的测试一直是通过的。
 - 修复：把整段 `<section class="view" id="libraryView">`（53 行）移进 `<main>`，排在排名视图之后，缩进对齐其它视图。

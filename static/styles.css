@@ -4526,9 +4526,14 @@ dialog.offline-player {
 dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none; }
 /* ===== 设置搜索（VS Code 式）：标题行右侧的实感输入框；搜索时隐藏分类导航，
    命中的设置行按分类平铺在内容区里，命中文字用 Highlight API 高亮。 ===== */
+/* 标题行：搜索框右边缘要贴住下方内容卡的右边缘（原来 padding-right:46px 是
+   给右上角 × 让位，但 × 在标题上方、纵向根本不重叠，这 46px 只让搜索框缩了
+   一截）；底边与「手账设置」标题对齐用 flex-end；整行下方留出明显空白，别让
+   标题和设置项贴在一起。 */
 .settings-title-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding-right: 46px;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  padding-right: 0;
+  margin-bottom: 30px;
 }
 .settings-title-row h2 { margin: 0; }
 .settings-search { position: relative; flex: 0 1 280px; min-width: 200px; }
