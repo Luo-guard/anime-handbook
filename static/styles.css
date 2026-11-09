@@ -4229,17 +4229,18 @@ dialog::backdrop {
 /* primary 不再有特殊底色：找资源和相关番剧是同一层级的文字动作。 */
 
 /* 详情弹窗右上角的「我的库 · 找资源」合并按钮：四分之一圆贴在弹窗角上，
-   只留一个下载图标。外角由 dialog 的 22px 圆角裁齐，内角 100% 圆出弧线。
+   只留一个下载图标。定位由 details.js 按弹窗的视口矩形设置（fixed），所以
+   外角要自己圆成和卡片一致的 22px，内角 100% 圆出弧线。
    注意 --theme-rgb 是逗号串，必须用 rgba(..., a) 旧语法，斜杠写法会失效。 */
 .detail-corner-download {
   position: absolute;
   top: 0;
-  right: -15px; /* 抵掉 .progress-modal 的 scrollbar-gutter，让外角贴住弹窗真实角落 */
+  right: 0;
   z-index: 2;
   width: 56px;
   height: 56px;
   border: 0;
-  border-bottom-left-radius: 100%;
+  border-radius: 0 22px 0 100%;
   background: var(--green-700);
   color: #fff;
   cursor: pointer;
@@ -4247,12 +4248,15 @@ dialog::backdrop {
   align-items: flex-start;
   justify-content: flex-end;
   padding: 13px 14px 0 0;
-  box-shadow: -2px 3px 10px rgba(5, 20, 12, .18);
   transition: background .15s, transform .15s;
 }
 .detail-corner-download:hover { background: var(--green-600); transform: scale(1.04); }
 .detail-corner-download:active { transform: scale(.97); }
 .detail-corner-download:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
+/* 弹窗打开时自动焦点落在表单容器上（tabindex=-1 + autofocus），别让容器
+   自己带描边；也不让角标按钮成为「第一个可聚焦元素」——那样一打开就顶着
+   一圈 focus ring，看着像多余的白边。 */
+#progressForm:focus { outline: none; }
 .detail-corner-download svg { width: 20px; height: 20px; }
 @media(max-width:650px){.detail-corner-download{width:46px;height:46px;padding:10px 11px 0 0;right:0}.detail-corner-download svg{width:17px;height:17px}}
 

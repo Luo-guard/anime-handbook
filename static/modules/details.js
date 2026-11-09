@@ -155,6 +155,36 @@ function applyBgmRatingLink(rating, anime, hasRating) {
   }
 }
 
+// 详情弹窗右上角的四分之一圆下载角标要贴住卡片真实的右上角。弹窗为滚动条
+// 预留了两侧槽（scrollbar-gutter: stable both-edges），绝对定位只能落在
+// padding box 里，右边会空出半个槽宽；用负 right 补偿又会把按钮顶进滚动区域、
+// 给弹窗添一条横向滚动条（且槽宽随浏览器/缩放变化，写死 15px 会顶出卡边）。
+// 所以直接按弹窗的视口矩形把它固定住：既严丝合缝，弹窗内部滚动时也一直贴角。
+function syncDetailCornerButton() {
+  const dialog = document.querySelector("#progressModal");
+  const button = dialog?.querySelector(".detail-corner-download");
+  if (!dialog || !button || !dialog.open) return;
+  const rect = dialog.getBoundingClientRect();
+  const size = button.offsetWidth || 56;
+  button.style.position = "fixed";
+  button.style.top = `${Math.round(rect.top)}px`;
+  button.style.left = `${Math.round(rect.right - size)}px`;
+  button.style.right = "auto";
+}
+
+window.addEventListener("resize", () => {
+  if (document.querySelector("#progressModal")?.open) syncDetailCornerButton();
+});
+window.addEventListener("scroll", () => {
+  if (document.querySelector("#progressModal")?.open) syncDetailCornerButton();
+}, { passive: true });
+// 详情内容异步补齐（封面、集数标记、评论）会让弹窗高度变化、垂直居中位置
+// 跟着动，用 ResizeObserver 兜住，避免角标停在旧位置。
+if (typeof ResizeObserver !== "undefined") {
+  const detailDialog = document.querySelector("#progressModal");
+  if (detailDialog) new ResizeObserver(() => syncDetailCornerButton()).observe(detailDialog);
+}
+
 function openProgress(animeId) {
   const anime = state.animes.find((item) => item.id === animeId);
   if (!anime) return;
@@ -207,6 +237,7 @@ function openProgress(animeId) {
     : "未取得章节列表时可手动填写章节数";
   renderEpisodeGrid();
   $("#progressModal").showModal();
+  syncDetailCornerButton();
   ensureEpisodeTitles(anime);
   refreshEpisodeRecordAnnotations(anime.id);
   // 打开详情就刷一次「已下载」角标：以前从没做过这个标记，下载完的集在

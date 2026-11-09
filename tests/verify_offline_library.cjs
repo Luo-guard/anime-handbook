@@ -13,7 +13,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     openProgress(state.animes.find((a) => a.id)?.id);
     const corner = document.querySelector('#openOffline.detail-corner-download');
     const mine = document.querySelector('#openLibrary');
-    return { exists: Boolean(corner), mineRemoved: !mine, cornerInModal: Boolean(corner?.closest('#progressForm')) };
+    return { exists: Boolean(corner), mineRemoved: !mine, cornerInModal: Boolean(corner?.closest('#progressModal')) };
   });
   assert.equal(button.exists, true, '详情页要有右上角下载角标按钮');
   assert.equal(button.cornerInModal, true, '角标按钮应在详情弹窗内');
