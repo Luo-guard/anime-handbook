@@ -396,7 +396,7 @@ function renderOfflineLocal() {
             </div>
             <div class="offline-row-actions">
               <button type="button" class="offline-play" data-file="${file.id}">播放</button>
-              <button type="button" class="offline-remove" data-file="${file.id}" title="移到回收站并删除记录">删除</button>
+              <button type="button" class="offline-remove" data-file="${file.id}" title="删除文件与记录（不进回收站）">删除</button>
             </div>
           </article>`;
       }),
@@ -654,16 +654,16 @@ async function removeLocalFile(fileId) {
   if (!file) return;
   const gone = file.exists === false;
   const label = episodeLabelOf(file.episode_key);
-  // 文件本来就不在了，再说「移到 _trash，可以找回来」就是假话。
+  // 直接删盘上的文件，不进回收站——提示里必须说清楚删了找不回来。
   if (!window.confirm(gone
     ? `删掉「${label}」这条记录？磁盘上已经没有这个文件了，这一步只清记录。`
-    : `删除 ${label}？文件会移到媒体库的 _trash 目录，需要时可以找回来。`)) return;
+    : `删除 ${label}？会直接把视频文件从硬盘上删掉，不进回收站，删了找不回来。`)) return;
   try {
     await api("/api/offline/delete", {
       method: "POST",
       body: JSON.stringify({ mode: "file", anime_id: offlineView.animeId, episode_key: file.episode_key }),
     });
-    toast(gone ? "已删掉记录" : "已移到回收站");
+    toast(gone ? "已删掉记录" : "已删除文件");
     refreshOfflineLocal();
   } catch (error) {
     toast(error.message || "删除失败", "error");

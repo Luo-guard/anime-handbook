@@ -50,7 +50,9 @@ class ResolveTest(unittest.TestCase):
     def test_default_media_root_is_absolute(self):
         root = cfg.default_media_root()
         self.assertTrue(Path(root).is_absolute())
-        self.assertTrue(root.endswith("离线视频"))
+        # 默认放在项目内的 media/，跟项目同盘，备份/搬移时媒体跟着走
+        self.assertEqual(Path(root), Path(cfg.__file__).resolve().parents[1] / "media")
+        self.assertTrue(root.endswith("/media"))
 
     def test_download_root_defaults_inside_media_root(self):
         paths = cfg.resolved({"media_root": "D:/media", "download_root": ""})

@@ -752,33 +752,19 @@ class OfflineService:
 
     # ---- 删除 ---------------------------------------------------------
 
-    def _trash_path(self, media_root: str, source: Path) -> Path:
-        """不直接删除，挪进媒体库里的回收站，留一条后悔路。"""
-        target_dir = Path(media_root) / "_trash" / time.strftime("%Y%m%d-%H%M%S")
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target = target_dir / source.name
-        counter = 1
-        while target.exists():
-            target = target_dir / f"{source.stem}-{counter}{source.suffix}"
-            counter += 1
-        return target
-
     def delete_episode_file(self, anime_id: int, episode_key: str) -> dict[str, Any]:
+        """直接删掉硬盘上的文件并清记录（不进回收站，删了就没了）。"""
         row = self.store.file_for(int(anime_id), str(episode_key or ""))
         if not row:
             raise OfflineError("这一集没有本地文件")
         source = Path(str(row.get("file_path") or ""))
-        moved = ""
+        removed = ""
         if source.is_file():
-            config = self.config()
-            media_root = offline_config.resolved(config)["media_root"]
-            target = self._trash_path(media_root, source)
             try:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(source), str(target))
-                moved = str(target)
+                source.unlink()
+                removed = str(source)
             except OSError as error:
-                raise OfflineError(f"文件没能移入回收站：{error}") from error
+                raise OfflineError(f"文件删除失败：{error}") from error
         subtitle = Path(str(row.get("subtitle_path") or ""))
         if subtitle.is_file():
             try:
@@ -786,7 +772,7 @@ class OfflineService:
             except OSError:
                 pass
         self.store.delete_file(int(anime_id), str(episode_key))
-        return {"ok": True, "moved_to": moved}
+        return {"ok": True, "deleted": removed}
 
     def retry_archive(self, media_id: int) -> dict[str, Any]:
         """手动重试一次归档，让已经卡在 failed 的任务立刻重新整理。

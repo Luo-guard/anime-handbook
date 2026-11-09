@@ -218,7 +218,7 @@ async function libPlay(fileId) {
 }
 
 async function libDelete(fileId, label) {
-  // removeLocalFile 自带确认提示与回收目录逻辑；把上下文对齐让它删完能刷新对地方。
+  // removeLocalFile 自带确认提示（直接删文件）；把上下文对齐让它删完能刷新对地方。
   offlineView.animeId = librarySidebar.detail.animeId;
   offlineView.animeName = librarySidebar.detail.name;
   offlineView.local = { files: librarySidebar.files, jobs: librarySidebar.jobs };

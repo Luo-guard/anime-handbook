@@ -46,20 +46,19 @@ _TEXTS = ("media_root", "download_root", "screenshot_root", "screenshot_name_for
 DEFAULT_SCREENSHOT_NAME = "{episode}_{time}"
 
 
-def default_media_root() -> str:
-    """优先放 D/E/F 盘根目录下，找不到就退回用户视频目录。
+def project_root() -> Path:
+    """项目根目录（handbook/ 的上一级）。"""
+    return Path(__file__).resolve().parents[1]
 
-    刻意不放在项目目录：项目会被同步到 GitHub，几十 GB 视频进去以后历史记录
-    清不掉。
+
+def default_media_root() -> str:
+    """默认放在项目目录下的 media/。
+
+    跟项目同盘：备份、整体搬移时媒体跟着走，不用再记第二个路径。
+    视频不会被推到 GitHub——auto_sync 只收显式 --paths 里的代码/文档，
+    且 mp4/mkv/png 这类二进制类型直接拒绝。
     """
-    for letter in ("D", "E", "F"):
-        drive = Path(f"{letter}:/")
-        try:
-            if drive.exists():
-                return f"{letter}:/动漫/离线视频"
-        except OSError:
-            continue
-    return str(Path.home() / "Videos" / "动漫手账").replace("\\", "/")
+    return str(project_root() / "media").replace("\\", "/")
 
 
 def config_path(asset_root: Path) -> Path:

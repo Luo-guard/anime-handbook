@@ -402,8 +402,13 @@ class ArchiveTest(unittest.TestCase):
             service._archive_job(job["id"])
         self.assertEqual(self.store.job(job["id"])["status"], "ready")
 
-        # 删掉第 2 集（走正常回收站路径）。
+        # 删掉第 2 集：直接删硬盘上的文件，不进回收站。
+        target = Path(self.store.file_for(99, "0:2")["file_path"])
+        self.assertTrue(target.is_file())
         service.delete_episode_file(99, "0:2")
+        self.assertFalse(target.exists(), "删除要真的把文件删掉")
+        self.assertFalse((target.parent.parent / "_trash").exists(), "不再生成回收站目录")
+
         self.assertEqual(
             [row["episode_key"] for row in self.store.files_for_anime(99)], ["0:1"]
         )
