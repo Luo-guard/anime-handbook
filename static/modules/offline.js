@@ -1376,8 +1376,9 @@ function pcInit() {
   video.playbackRate = prefs.speed;
   const speedMenu = $("#pcSpeedMenu");
   if (speedMenu) {
+    // 只显示倍率，和菜单里其它档位一致；以前 1x 后面还跟一个「正常」，看着像两种信息。
     speedMenu.innerHTML = PC_SPEEDS.map(
-      (rate) => `<button type="button" data-rate="${rate}"><span>${rate}x</span><span>${rate === 1 ? "正常" : ""}</span></button>`,
+      (rate) => `<button type="button" data-rate="${rate}"><span>${rate}x</span></button>`,
     ).join("");
   }
   pcSyncVolume();
