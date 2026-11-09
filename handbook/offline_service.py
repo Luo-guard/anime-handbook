@@ -101,6 +101,23 @@ _AUTO_CHECK_LOCK = threading.Lock()
 _AUTO_CHECK_RUNNING = False
 
 
+def _release_episode(item: dict[str, Any]) -> int:
+    """条目对应第几集；标题里认不出来就是 0。
+
+    判新不能只看发布时间：蜜柑有的镜像不给 pubDate（历史 bug 就是因此永远判不出
+    新集），但标题里的集数一直都有，所以以「集数是否超过已有最大集」为主判据。
+    """
+    try:
+        return int(media_tools.episode_number(str(item.get("title") or "")))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _release_order(item: dict[str, Any]) -> tuple[int, str]:
+    """「更新」程度：先比集数，集数相同再比发布时间。"""
+    return (_release_episode(item), str(item.get("published_at") or ""))
+
+
 class OfflineService:
     def __init__(self, db: Any) -> None:
         self.db = db
@@ -868,6 +885,63 @@ class OfflineService:
             "auto_follow": bool(self.config().get("auto_follow")),
         }
 
+    def _known_episode_number(self, sub: dict[str, Any], items: list[dict[str, Any]]) -> int:
+        """这部番已经见过的最大集数：本地文件 / 下载任务 / 上次处理的那条种子。"""
+        numbers: list[int] = []
+        anime_id = int(sub.get("anime_id") or 0)
+        try:
+            for row in self.store.files_for_anime(anime_id):
+                match = re.search(r":(\d+)$", str(row.get("episode_key") or ""))
+                if match:
+                    numbers.append(int(match.group(1)))
+            for row in self.store.jobs_for_anime(anime_id):
+                title = str(row.get("source_title") or row.get("torrent_name") or "")
+                numbers.append(_release_episode({"title": title}))
+        except Exception:  # noqa: BLE001 - 读库出错不该让整轮检查挂掉
+            pass
+        last_torrent = str(sub.get("last_torrent") or "")
+        if last_torrent:
+            known = next((item for item in items if str(item.get("id") or "") == last_torrent), None)
+            if known:
+                numbers.append(_release_episode(known))
+        return max(numbers or [0])
+
+    def _fresh_releases(
+        self,
+        sub: dict[str, Any],
+        all_items: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """在这一批候选里挑出「还没下过的新集」。
+
+        主判据是**集数**：超过已有最大集才算新。发布时间不能当主判据——蜜柑有的
+        镜像干脆不给 pubDate（历史上订阅永远判不出新集就是这个原因）。集数认不出来
+        时才退回发布时间，且水位线取「上次处理的那条种子」的发布时间，而不是上次
+        检查时间：用检查时间会把检查之前刚发布的集永久吞掉。
+        """
+        known = self._known_episode_number(sub, all_items)
+        last_torrent = next(
+            (item for item in all_items if str(item.get("id") or "") == str(sub.get("last_torrent") or "")),
+            None,
+        )
+        watermark = str((last_torrent or {}).get("published_at") or "")
+        fresh: list[dict[str, Any]] = []
+        for item in candidates:
+            number = _release_episode(item)
+            if number and known:
+                if number > known:
+                    fresh.append(item)
+                continue
+            if number:
+                # 一份都还没下过：任何一集都算新，后面只挑最高的一集下。
+                fresh.append(item)
+                continue
+            published = str(item.get("published_at") or "")
+            if published and (not watermark or published > watermark):
+                fresh.append(item)
+        fresh.sort(key=_release_order)
+        return fresh
+
     def check_subscriptions(self, *, force: bool = False) -> dict[str, Any]:
         """按订阅搜一遍，有更新的集就下最新一条。
 
@@ -910,22 +984,23 @@ class OfflineService:
                 and (not predicate_group or item.get("group") == predicate_group)
                 and str(item.get("id") or "") != str(sub.get("last_torrent") or "")
             ]
-            candidates.sort(key=lambda item: str(item.get("published_at") or ""))
+            candidates.sort(key=_release_order)
             if not last:
                 # 首次检查：把当前最新一条记成基准，不下载。
                 newest = candidates[-1] if candidates else None
                 self.store.touch_subscription(
                     sub["id"],
-                    last_checked=str((newest or {}).get("published_at") or now_iso()),
+                    last_checked=now_iso(),
                     last_torrent=str((newest or {}).get("id") or ""),
                 )
                 entry["status"] = "baseline"
                 entry["title"] = (newest or {}).get("title") or "还没有可记录的条目"
                 results.append(entry)
                 continue
-            fresh = [item for item in candidates if str(item.get("published_at") or "") > last]
+            fresh = self._fresh_releases(sub, found["items"], candidates)
             if not fresh:
-                self.store.touch_subscription(sub["id"], last_checked=now_iso(), last_torrent=str(sub.get("last_torrent") or ""))
+                # 没新集：只推进检查时刻，水位线（last_torrent）原样保留。
+                self.store.touch_subscription(sub["id"], last_checked=now_iso())
                 entry["status"] = "nothing"
                 results.append(entry)
                 continue
@@ -942,16 +1017,20 @@ class OfflineService:
                 )
                 self.store.touch_subscription(
                     sub["id"],
-                    last_checked=str(target.get("published_at") or now_iso()),
+                    last_checked=now_iso(),
                     last_torrent=str(target.get("id") or ""),
                 )
                 entry["status"] = "downloaded"
                 entry["title"] = str(target.get("title") or "")
                 downloaded += 1
-            except OfflineError as error:
+            except Exception as error:  # noqa: BLE001
+                # 单条订阅失败（qB 没开、网络断）只算这一条出错，不能让整轮检查 500：
+                # 之前只捕 OfflineError，QBError 会一路冒到 HTTP 层，用户在订阅页
+                # 点「立即检查」只会看到「后台暂时无法处理请求」。
                 entry["status"] = "error"
-                entry["title"] = str(error)
-                # 失败也推进检查时间，否则前端轮询会反复重试同一条种子。
+                entry["title"] = str(error) or error.__class__.__name__
+                # 失败也推进检查时间，否则前端轮询会反复重试同一条种子；
+                # last_torrent 不动，下一轮仍会把这一集当成新集重试。
                 self.store.touch_subscription(sub["id"], last_checked=now_iso())
             results.append(entry)
         return {

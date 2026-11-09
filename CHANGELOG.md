@@ -5,6 +5,23 @@
 
 ## 2026-11-09
 
+### 修复：订阅已久却从不自动下载（判新逻辑彻底失效）
+用户报「明明订阅了黒ネズミたち这个字幕组，昨天更的第 6 集却没自动下」。查出三层问题，叠在一起让自动追番**从来**没成功过：
+
+1. **发布时间全都解析成空串（根因）**：蜜柑 RSS 把 `torrent:pubDate` / `torrent:contentLength` 包在 `<torrent xmlns=...>` 容器里，不是 `<item>` 的直接子节点，而 `mikan._child_text()` 只扫第一层 → `published_at` 恒为 `""`。旧判新是 `published_at > last_checked`，空串永远比不过 → 每一轮都判「没有新集」，然后把 `last_checked` 推进到当前时刻，把新集永久吞掉。
+2. **水位线用错了字段**：即使时间能解析，用「上次检查时刻」当水位线也会漏——只要在某一集发布之后查过一次（哪怕那次因为 qB 没开而失败），这一集就再也不算新。
+3. **单条订阅失败会打崩整轮检查**：`check_subscriptions` 只捕 `OfflineError`，qB 没开时 `QBError` 一路冒到 HTTP 层，订阅页点「立即检查」只看到「后台暂时无法处理请求（编号 …）」。
+
+修法：
+- `mikan._child_text()` 加一层向容器内查找（`<torrent>` 里的 `contentLength` / `pubDate`），发布时间恢复解析。
+- 判新改为**以集数为主判据**：取 `local_files` / `local_media` / `last_torrent` 三处的最大集数，标题集数更大才算新；集数认不出时才退回发布时间，且水位线取 `last_torrent` 那条的发布时间。
+- `last_checked` 只负责「6 小时内不重复查」，不再兼作判新水位线；`touch_subscription` 的 `last_torrent` 改成「不传就保持原值」，没下成的一轮不会把水位线抹掉。
+- 单条订阅的下载异常统一捕获，失败写成该条的 `error` 状态（如「qBittorrent 返回 502…」），整轮检查照常返回 200。
+
+真机验证：修好后对该订阅做一次检查，正确识别出 `[黒ネズミたち] … - 06 (CR 1920x1080 AVC AAC MKV) 931.7 MB` 为待下新集；因本机 qBittorrent 未启动，下载如实报「qBittorrent 返回 502 / 目标计算机积极拒绝」，且水位线保持不变（下一轮仍会补下这一集）。另已把「自动追新番」总开关打开（原先为关闭，这也是不会自动下载的直接原因之一）。
+
+测试：`test_mikan` 增加「字段嵌在 `<torrent>` 容器里」的解析用例；`test_offline_subs` 增加「发布时间缺失也能按集数判新」「检查时刻晚于发布时间时不吞掉漏掉的集」「下载异常不冒泡」「不传 last_torrent 不清水位线」四个用例，共 18 个全过。
+
 ### 变更：媒体库与截图目录迁入项目内 `media/`；删除改为直接删文件
 - **默认路径**：`media_root` 从「按盘符挑第一个存在的盘 → `D:/动漫/离线视频`」改成 `<项目>/media`；截图默认随之变成 `<项目>/media/截图`。跟项目同盘同目录，备份或整体搬移时媒体跟着走，不用再记第二个路径。`auto_sync.py` 只收显式 `--paths` 里的代码/文档，且 mp4/mkv/png 直接判 not eligible，所以视频不会被推到 GitHub。
 - **已完成迁移**：`D:\动漫\离线视频`（1.6 GB）整体移到 `D:\动漫\动漫手账\media`，数据库 `local_files.file_path`（2 条）与 `local_media.save_path`（2 条）就地改写；迁移前备份 `data/backups/handbook-before-media-move-20261109-162011.db`。实测两集都 `exists: true`、直接播放正常、媒体库磁盘统计指向新目录。

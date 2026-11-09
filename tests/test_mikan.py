@@ -146,6 +146,29 @@ class ParseFeedTest(unittest.TestCase):
         self.assertEqual(entry["resolution"], "1080p")
         self.assertEqual(entry["subtitles"], "简日内封".replace("简日", "简体"))
 
+    def test_fields_nested_in_torrent_container(self):
+        """真机报文：torrent:contentLength / pubDate 包在 <torrent> 里，不是 item 直接子节点。
+
+        只扫第一层会把发布时间读成空串，订阅判新就永远判不出新集（线上 bug）。
+        """
+        payload = feed(
+            "<item>"
+            "<guid isPermaLink=\"false\">t</guid>"
+            "<title>[字幕组] 测试番 - 06 [1080p]</title>"
+            '<torrent xmlns="https://mikanime.tv/0.1/">'
+            "<link>https://mikanime.tv/Home/Episode/nest1</link>"
+            "<contentLength>976958272</contentLength>"
+            "<pubDate>2026-11-08T22:31:05.526839</pubDate>"
+            "</torrent>"
+            '<enclosure type="application/x-bittorrent" length="976958272" '
+            'url="https://mikanime.tv/Download/20261108/nest1.torrent" />'
+            "</item>"
+        )
+        entry = mikan.parse_feed(payload)[0]
+        self.assertEqual(entry["published_at"], "2026-11-08T22:31:05.526839")
+        self.assertEqual(entry["size"], 976958272)
+        self.assertEqual(entry["id"], "nest1")
+
     def test_broken_entry_is_skipped_not_fatal(self):
         payload = feed(item("[A] 有标题 [1080p]") + "<item><title></title></item>" + item("[B] 也正常 [720p]"))
         items = mikan.parse_feed(payload)

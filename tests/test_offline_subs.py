@@ -65,6 +65,15 @@ class SubscriptionStoreTest(unittest.TestCase):
         self.assertEqual(row["last_checked"], "2026-11-01T00:00:00")
         self.assertEqual(row["last_torrent"], "abc")
 
+    def test_touch_without_torrent_keeps_watermark(self):
+        """没下成（qB 没开）时不能把水位线抹掉。"""
+        sub = self.store.add_subscription(anime_id=1, keyword="番")
+        self.store.touch_subscription(sub["id"], last_checked="2026-11-01T00:00:00", last_torrent="abc")
+        self.store.touch_subscription(sub["id"], last_checked="2026-11-02T00:00:00")
+        row = self.store.subscriptions()[0]
+        self.assertEqual(row["last_torrent"], "abc", "只更新检查时刻，不能清掉水位线")
+        self.assertEqual(row["last_checked"], "2026-11-02T00:00:00")
+
     def test_subscribe_reports_auto_follow_switch(self):
         """审计 N13：自动追番关着时，前端要能说清「还不会自动下载」。"""
         offline_config.save(self.root, {"media_root": str(self.root / "media"), "auto_follow": False})
@@ -125,8 +134,44 @@ class CheckLogicTest(unittest.TestCase):
         self.assertEqual(self.downloaded, [])
         self.assertEqual(result["items"][0]["status"], "baseline")
         row = self.store.subscriptions()[0]
-        self.assertEqual(row["last_checked"], "2026-11-01T10:00:00")
+        # last_checked 只负责「6 小时内别重复查」，记的是检查时刻；
+        # 判新用水位线（last_torrent 那条），两者别混用。
+        self.assertTrue(row["last_checked"], "检查时刻要记下来做节流")
         self.assertEqual(row["last_torrent"], "t1")
+
+    def test_episode_number_beats_missing_publish_time(self):
+        """真机回归：镜像不给 pubDate 时也要能判出新集。
+
+        用户的订阅「黒ネズミたち」就栽在这里——published_at 全是空串，
+        `published > last` 永远为假，昨天更的第 6 集永远不下。
+        """
+        self.run_check([item("e1", "A", "")])
+        self.downloaded.clear()
+        _, result = self.run_check([
+            item("e1", "A", ""),
+            item("e2", "A", ""),
+            item("e6", "A", ""),
+        ])
+        self.assertEqual(result["downloaded"], 1, f"应判出新集，实际 {result}")
+        self.assertEqual(self.downloaded[0]["title"].rsplit(" ", 1)[-1], "e6")
+
+    def test_missed_episode_is_not_swallowed_by_later_checks(self):
+        """检查时间晚于发布时间时，漏掉的集不能被永久跳过。
+
+        旧逻辑用 last_checked 当水位线：只要在 06 发布之后查过一次（哪怕那次
+        因为别的原因没下），06 就再也不算「新」了。
+        """
+        self.run_check([item("e1", "A", "2026-11-01T10:00:00")])
+        # 模拟「昨天 22:31 更了 06，但直到今晚才查到」：last_checked 已经是今晚
+        sub = self.store.subscriptions()[0]
+        self.store.touch_subscription(sub["id"], last_checked="2026-11-10T23:00:00", last_torrent="e1")
+        self.downloaded.clear()
+        _, result = self.run_check([
+            item("e1", "A", "2026-11-01T10:00:00"),
+            item("e6", "A", "2026-11-08T22:31:00"),
+        ])
+        self.assertEqual(result["downloaded"], 1, f"漏掉的集要补下，实际 {result}")
+        self.assertEqual(self.downloaded[0]["title"].rsplit(" ", 1)[-1], "e6")
 
     def test_newer_entry_is_downloaded_once(self):
         sub, _ = self.run_check([item("t1", "A", "2026-11-01T10:00:00")])
@@ -169,6 +214,34 @@ class CheckLogicTest(unittest.TestCase):
         self.assertEqual(result["downloaded"], 1)
         self.assertEqual(len(self.downloaded), 1)
         self.assertEqual(self.downloaded[0]["torrent_url"], "https://mikanime.tv/Download/t4.torrent")
+
+    def test_download_failure_is_reported_not_raised(self):
+        """qB 没开时不能把整轮检查打成 500。
+
+        以前这里只捕 OfflineError，QBError 一路冒到 HTTP 层，用户在订阅页点
+        「立即检查」只会看到「后台暂时无法处理请求」。
+        """
+        from handbook.qbittorrent import QBError
+
+        self.run_check([item("e1", "A", "2026-11-01T10:00:00")])
+        self.downloaded.clear()
+        boom = patch.object(
+            OfflineService,
+            "download",
+            new=lambda _self, **kw: (_ for _ in ()).throw(QBError("qBittorrent 连不上")),
+        )
+        with boom, patch.object(
+            mikan,
+            "search",
+            return_value={
+                "base": "https://mikanime.tv",
+                "items": [item("e1", "A", "2026-11-01T10:00:00"), item("e6", "A", "2026-11-08T22:31:00")],
+                "truncated": False,
+            },
+        ):
+            result = self.service.check_subscriptions(force=True)
+        self.assertEqual(result["items"][0]["status"], "error")
+        self.assertIn("连不上", result["items"][0]["title"])
 
     def test_search_failure_is_reported_not_raised(self):
         with patch.object(mikan, "search", side_effect=mikan.MikanError("连不上")):

@@ -341,13 +341,25 @@ class OfflineStore:
             row = db.execute("SELECT * FROM local_subscriptions WHERE id = ?", (int(sub_id),)).fetchone()
         return dict(row) if row else None
 
-    def touch_subscription(self, sub_id: int, *, last_checked: str, last_torrent: str = "") -> None:
+    def touch_subscription(self, sub_id: int, *, last_checked: str, last_torrent: str | None = None) -> None:
+        """更新检查时刻；``last_torrent`` 不传就保持原值。
+
+        这个字段是「上次处理到哪条」的水位线，只在真的下了某条之后才该推进。
+        以前默认空串并总是覆盖，导致「这一轮没下成」（qB 没开、条目没解析出来）
+        顺手把水位线抹掉，下一轮判新的依据就丢了。
+        """
         with self.db.connect() as db:
-            db.execute(
-                "UPDATE local_subscriptions SET last_checked = ?, last_torrent = ?, updated_at = ?"
-                " WHERE id = ?",
-                (str(last_checked), str(last_torrent), now_iso(), int(sub_id)),
-            )
+            if last_torrent is None:
+                db.execute(
+                    "UPDATE local_subscriptions SET last_checked = ?, updated_at = ? WHERE id = ?",
+                    (str(last_checked), now_iso(), int(sub_id)),
+                )
+            else:
+                db.execute(
+                    "UPDATE local_subscriptions SET last_checked = ?, last_torrent = ?, updated_at = ?"
+                    " WHERE id = ?",
+                    (str(last_checked), str(last_torrent), now_iso(), int(sub_id)),
+                )
 
     def delete_subscription(self, sub_id: int) -> bool:
         with self.db.connect() as db:

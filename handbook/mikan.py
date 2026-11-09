@@ -119,11 +119,18 @@ def parse_title(title: str) -> dict[str, Any]:
 
 
 def _child_text(node: ElementTree.Element, suffix: str) -> str:
-    """读取带命名空间的子节点（``torrent:contentLength`` 前缀随主机变化）。"""
+    """读取带命名空间的子节点（``torrent:contentLength`` 前缀随主机变化）。
+
+    蜜柑的 RSS 把 ``torrent:contentLength`` / ``torrent:pubDate`` 包在
+    ``<torrent>`` 容器里（不是 ``<item>`` 的直接子节点），只扫第一层会全部读到
+    空字符串——发布时间拿不到，订阅判新就永远判不出新集。
+    """
     for child in node:
-        tag = child.tag.rsplit("}", 1)[-1]
-        if tag == suffix and child.text:
+        if child.tag.rsplit("}", 1)[-1] == suffix and child.text:
             return child.text.strip()
+        for grand in child:
+            if grand.tag.rsplit("}", 1)[-1] == suffix and grand.text:
+                return grand.text.strip()
     return ""
 
 
