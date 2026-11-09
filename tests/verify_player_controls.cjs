@@ -36,8 +36,11 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
       (id) => Boolean(document.getElementById(id))),
     stageTitle: document.querySelector('#pcStageTitle').textContent,
     shortcutsHint: Boolean(document.querySelector('.pc-shortcuts')),
+    // 播放/暂停要夹在上一集与下一集之间（Kazumi 式居中的主操作）
+    order: [...document.querySelectorAll('#playerControls .pc-group:first-of-type .pc-btn')].map((b) => b.id),
   }));
   assert.equal(base.nativeControls, false, '原生 controls 要移除');
+  assert.deepEqual(base.order, ['pcPrev', 'pcPlay', 'pcNext'], `左下角顺序应为 上一集/播放暂停/下一集，实际 ${base.order}`);
   assert.equal(base.buttons, true, '控制栏控件要齐全');
   assert.ok(base.stageTitle.includes('学生会也有洞！'), `舞台标题：${base.stageTitle}`);
   assert.equal(base.shortcutsHint, true, '快捷键说明要有');
@@ -159,7 +162,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     assert.equal(list.active, true, '当前集要有标记');
   }
 
-  // 9) 截图
+  // 9) 截图：现在入库到媒体库（按番名分文件夹），不再走浏览器下载
   await page.waitForFunction(() => {
     const v = document.querySelector('#offlineVideo');
     return v && Number.isFinite(v.duration) && v.duration > 0 && v.readyState >= 2;
@@ -170,11 +173,20 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     v.currentTime = Math.min(3, Math.max(0.5, v.duration * 0.1));
   });
   await page.waitForTimeout(900);
+  const shotsBefore = (await (await fetch('http://127.0.0.1:43127/api/offline/screenshots')).json()).count;
   await page.click('#pcScreenshot');
-  await page.waitForTimeout(1200);
-  assert.ok(downloads.length >= 1, '截图要产生下载');
-  assert.ok(downloads[0].suggestedFilename().endsWith('.png'), `文件名：${downloads[0].suggestedFilename()}`);
-  assert.ok(downloads[0].suggestedFilename().includes('学生会'), `文件名要带番名：${downloads[0].suggestedFilename()}`);
+  await page.waitForTimeout(1600);
+  const shotList = await (await fetch('http://127.0.0.1:43127/api/offline/screenshots')).json();
+  assert.equal(shotList.count, shotsBefore + 1, `截图要入库到媒体库：${shotsBefore} → ${shotList.count}`);
+  assert.ok(downloads.length === 0, '入库成功后不该再触发浏览器下载');
+  const newest = shotList.groups?.[0];
+  assert.ok(/学生会/.test(newest?.folder || ''), `截图要按番名建文件夹，实际 ${newest?.folder}`);
+  assert.ok(/\.png$/.test(newest?.images?.[0]?.name || ''), `截图文件名：${newest?.images?.[0]?.name}`);
+  // 清理这张测试截图，别污染真实媒体库
+  await fetch('http://127.0.0.1:43127/api/offline/screenshot/delete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:43127' },
+    body: JSON.stringify({ relative: newest.images[0].relative }),
+  }).catch(() => {});
 
   // 10) 全屏（F）
   await page.keyboard.press('KeyF');
