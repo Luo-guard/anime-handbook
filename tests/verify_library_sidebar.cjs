@@ -6,7 +6,8 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
-  await page.waitForTimeout(1500);
+  // bootstrap 拉全量数据，后台刚重启时要几秒；固定 sleep 会假失败。
+  await page.waitForFunction(() => (state?.animes || []).length > 0, null, { timeout: 40000 });
 
   // 1) 导航按钮存在且默认显示（library_sidebar 默认 show）
   assert.equal(await page.locator('#libraryNavButton').count(), 1, '导航要有动漫库按钮');
@@ -14,7 +15,8 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
 
   // 2) 点导航进库视图：媒体库网格 + 磁盘统计
   await page.click('#libraryNavButton');
-  await page.waitForTimeout(900);
+  // /api/offline/library 要扫一遍本地文件，等卡片真正渲染出来再断言。
+  await page.waitForFunction(() => document.querySelectorAll('#libGrid .library-card').length > 0, null, { timeout: 30000 });
   const media = await page.evaluate(() => ({
     viewActive: document.querySelector('#libraryView').classList.contains('active'),
     cards: [...document.querySelectorAll('#libGrid .library-card')].map((c) => c.dataset.name),
@@ -120,32 +122,43 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   await page.click('#settingsButton');
   await page.waitForTimeout(500);
   await page.evaluate(() => switchSettingsTab('offline'));
-  // loadOfflineSettings 是异步填表，跑批时偶发慢半拍，等它到位再断言。
-  await page.waitForFunction(() => document.getElementById('offlineQbHost')?.value.length > 0, null, { timeout: 8000 }).catch(() => {});
+  // loadOfflineSettings 是异步填表：先等，没等到就再触发一次，别用固定 sleep 赌。
+  const qbFilled = await page
+    .waitForFunction(() => document.getElementById('offlineQbHost')?.value.length > 0, null, { timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!qbFilled) {
+    await page.evaluate(() => loadOfflineSettings());
+    await page.waitForFunction(() => document.getElementById('offlineQbHost')?.value.length > 0, null, { timeout: 20000 });
+  }
   const settingsTab = await page.evaluate(() => ({
     fields: ['offlineMediaRoot', 'offlineQbHost', 'offlineAutoFollow', 'librarySidebarMode',
       'offlineSaveSettings', 'offlineCheckSubs'].every((id) => Boolean(document.getElementById(id))),
     qbHost: document.getElementById('offlineQbHost').value,
     sidebarMode: document.getElementById('librarySidebarMode').value,
   }));
-  assert.equal(settingsTab.fields, true, '离线设置要全部迁进设置弹窗');
+  assert.equal(settingsTab.fields, true, '媒体库设置要全部迁进设置弹窗');
   assert.ok(settingsTab.qbHost.length > 0, `qB 地址要预填：${settingsTab.qbHost}`);
+  // 分类顺序跟着主导航：媒体库夹在番剧详情和周表之间，名字就叫「媒体库」
+  const navOrder = await page.evaluate(() => [...document.querySelectorAll('#settingsSideNav button')].map((b) => b.textContent.trim()));
+  const at = (label) => navOrder.indexOf(label);
+  assert.equal(navOrder[at('媒体库') - 1], '番剧详情', `媒体库要排在番剧详情之后：${navOrder.join(' / ')}`);
+  assert.equal(navOrder[at('媒体库') + 1], '周表', `媒体库要排在周表之前：${navOrder.join(' / ')}`);
   assert.equal(settingsTab.sidebarMode, 'show');
   await page.evaluate(() => {
     const select = document.querySelector('#librarySidebarMode');
     select.value = 'hide';
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  await page.waitForTimeout(600);
-  assert.equal(await page.evaluate(() => document.querySelector('#libraryNavButton').classList.contains('hidden')), true, '选隐藏后导航按钮要消失');
+  // 侧边栏重建是异步的（保存后重渲染），等状态落定再断言，别用固定 sleep。
+  await page.waitForFunction(() => document.querySelector('#libraryNavButton')?.classList.contains('hidden') === true, null, { timeout: 10000 });
   assert.equal(await page.evaluate(() => document.querySelector('#settingsModal').querySelector('#libraryNavButton') === null), true);
   await page.evaluate(() => {
     const select = document.querySelector('#librarySidebarMode');
     select.value = 'show';
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  await page.waitForTimeout(500);
-  assert.equal(await page.evaluate(() => document.querySelector('#libraryNavButton').classList.contains('hidden')), false, '改回显示要恢复');
+  await page.waitForFunction(() => document.querySelector('#libraryNavButton')?.classList.contains('hidden') === false, null, { timeout: 10000 });
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
 

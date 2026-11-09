@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261109-play-center2" />
+  <link rel="stylesheet" href="/styles.css?v=20261109-media-section2" />
   </head>
   <body>
     <div class="app-shell">
@@ -390,7 +390,7 @@
       <div class="modal-frame">
         <button type="button" class="modal-close" id="offlineClose" aria-label="关闭">×</button>
         <p class="eyebrow">OFFLINE</p>
-        <h2 id="offlineHeading">离线下载</h2>
+        <h2 id="offlineHeading">媒体库</h2>
         <p class="offline-target" id="offlineTarget"></p>
         <div class="offline-tabs" role="tablist">
           <button type="button" class="offline-tab active" data-offline-tab="search" role="tab" aria-selected="true">找资源</button>
@@ -649,6 +649,7 @@
 <button type="button" class="active" data-settings-tab="main">主界面设置</button>
 <button type="button" data-settings-tab="collection" data-page-label="collection">收藏夹</button>
 <button type="button" data-settings-tab="detail">番剧详情</button>
+<button type="button" data-settings-tab="offline">媒体库</button>
 <button type="button" data-settings-tab="schedule" data-page-label="schedule">周表</button>
 <button type="button" data-settings-tab="record" data-page-label="timeline">看番记录</button>
 <button type="button" data-settings-tab="statistics" data-page-label="statistics">记录统计</button>
@@ -656,7 +657,6 @@
 <button type="button" data-settings-tab="keyboard">快捷键</button>
 <button type="button" data-settings-tab="data">数据来源</button>
 <button type="button" data-settings-tab="sharing">账号与同步</button>
-<button type="button" data-settings-tab="offline">离线下载</button>
 </aside>
           <div class="settings-list">
           <div class="settings-section-title" data-settings-section="main">主界面设置</div>
@@ -850,9 +850,9 @@
             <div class="settings-custom-list" id="settingsCustomCollections"></div>
           </div>
           
-<h3 class="settings-subsection-title">离线下载</h3>
+<h3 class="settings-subsection-title">媒体库</h3>
           <label class="setting-row">
-            <span><strong>加入收藏时自动打开「找资源」</strong><small>把番加入下面勾选的收藏夹时，自动打开离线下载并搜好番名；未勾选的收藏夹和从前一样不触发。默认关闭。</small></span>
+            <span><strong>加入收藏时自动打开「找资源」</strong><small>把番加入下面勾选的收藏夹时，自动打开媒体库并搜好番名；未勾选的收藏夹和从前一样不触发。默认关闭。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="autoOpenOfflineInput" /><span class="switch"></span></span>
           </label>
           <div class="setting-row stacked" id="autoOpenOfflineCollectionsRow">
@@ -1100,7 +1100,7 @@
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
           <h3 class="settings-subsection-title">自动追番</h3>
           <label class="setting-row">
-            <span><strong>自动追新番</strong><small>开启后，离线下载里订阅过的「关键词 + 字幕组」会定时检查蜜柑并自动下载新集。与「离线下载 → 设置」里的开关是同一个配置。</small></span>
+            <span><strong>自动追新番</strong><small>开启后，媒体库里订阅过的「关键词 + 字幕组」会定时检查蜜柑并自动下载新集。与「媒体库 → 设置」里的开关是同一个配置。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="autoFollowSetting" /><span class="switch"></span></span>
           </label>
           <h3 class="settings-subsection-title">Bangumi 资料来源</h3>
@@ -1150,9 +1150,10 @@
             </span>
             <span class="read-only-badge green">本地</span>
           </div>
-          <div class="settings-section-title" data-settings-section="offline">离线下载</div>
+          <div class="settings-section-title" data-settings-section="offline">媒体库</div>
           <div class="offline-settings">
-            <label class="offline-field"><span>动漫库侧边栏</span>
+            <h3 class="settings-subsection-title">侧边栏与入口</h3>
+            <label class="offline-field"><span>媒体库侧边栏</span>
               <select id="librarySidebarMode">
                 <option value="show">始终显示</option>
                 <option value="auto">有本地内容时显示</option>
@@ -1161,16 +1162,19 @@
               <small>改动立即生效并保存；「有本地内容时」指媒体库里至少有一部可以播的番</small>
             </label>
 
+            <h3 class="settings-subsection-title">目录与命名</h3>
             <label class="offline-field"><span>媒体库目录</span><input type="text" id="offlineMediaRoot" placeholder="留空使用默认目录" autocomplete="off" /><small id="offlineMediaHint"></small></label>
             <label class="offline-field"><span>下载临时目录</span><input type="text" id="offlineDownloadRoot" placeholder="留空使用 媒体库/_incoming" autocomplete="off" /></label>
             <label class="offline-field"><span>截图保存目录</span><input type="text" id="offlineScreenshotRoot" placeholder="留空使用 媒体库/截图" autocomplete="off" /><small id="offlineScreenshotHint"></small></label>
             <label class="offline-field"><span>截图命名格式</span><input type="text" id="offlineScreenshotName" placeholder="{episode}_{time}" autocomplete="off" /><small>可用占位符：{episode} 集数、{time} 时间码、{date} 日期、{anime} 番名；同名自动加序号。扩展名固定 .png</small></label>
+            <h3 class="settings-subsection-title">下载器</h3>
             <div class="offline-field-row">
               <label class="offline-field"><span>qBittorrent 地址</span><input type="text" id="offlineQbHost" autocomplete="off" /></label>
               <label class="offline-field offline-field-small"><span>端口</span><input type="number" id="offlineQbPort" min="1" max="65535" /></label>
             </div>
             <label class="offline-field"><span>下载分类</span><input type="text" id="offlineQbCategory" autocomplete="off" /></label>
             <label class="offline-switch"><input type="checkbox" id="offlineSeedAfter" /><span>下载完成后继续做种<small>关掉会在归档后删除原始文件，省一半空间</small></span></label>
+            <h3 class="settings-subsection-title">订阅</h3>
             <label class="offline-switch"><input type="checkbox" id="offlineAutoFollow" /><span>自动追新番<small>默认关闭；开启后才会定时检查你订阅过的番</small></span></label>
             <button type="button" class="text-button" id="offlineCheckSubs">立即检查全部订阅</button>
             <p class="offline-status" id="offlineSettingsStatus" role="status"></p>
@@ -1470,7 +1474,7 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261106-collection-order" defer></script>
-    <script src="/modules/settings.js?v=20261108-search-nav" defer></script>
+    <script src="/modules/settings.js?v=20261109-media-section2" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261108-search-ui" defer></script>
@@ -1482,7 +1486,7 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-dm-kazumi" defer></script>
-    <script src="/modules/offline.js?v=20261109-media-path" defer></script>
+    <script src="/modules/offline.js?v=20261109-media-section" defer></script>
     <script src="/modules/library-view.js?v=20261109-media-path" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

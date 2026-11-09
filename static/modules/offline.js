@@ -1,4 +1,4 @@
-// 离线下载面板：搜蜜柑 → 交给 qBittorrent → 本地文件播放。
+// 媒体库面板：搜蜜柑 → 交给 qBittorrent → 本地文件播放。
 // 依赖 core.js 的 state/$/$$/escapeHtml/toast 与 network.js 的 api()。
 const offlineView = {
   animeId: 0,
@@ -59,7 +59,7 @@ function openOffline() {
   const switched = offlineView.animeId !== animeId || offlineView.animeName !== name;
   offlineView.animeId = animeId;
   offlineView.animeName = name;
-  $("#offlineHeading").textContent = "离线下载";
+  $("#offlineHeading").textContent = "媒体库";
   $("#offlineTarget").textContent = name || "";
   $("#offlineTarget").classList.toggle("hidden", !name);
   // 同一个番再次打开也要补填：搜索框可能被清空过，再点「找资源」

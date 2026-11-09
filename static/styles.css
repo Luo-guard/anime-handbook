@@ -4109,7 +4109,7 @@ dialog::backdrop {
 .rules-menu-pin:disabled { opacity: .5; cursor: default; }
 @media (max-width: 650px) { .rules-menu-host { display: none; } }
 
-/* 离线下载面板：与规则菜单保持同一套视觉语言。 */
+/* 媒体库面板：与规则菜单保持同一套视觉语言。 */
 .offline-modal .modal-frame { width: min(780px, 96vw); max-height: 88vh; display: flex; flex-direction: column; }
 .offline-tabs { display: flex; gap: 6px; margin: 4px 0 12px; border-bottom: 1px solid var(--line); }
 .offline-tab { appearance: none; border: 0; background: transparent; padding: 8px 14px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
@@ -4162,6 +4162,13 @@ dialog::backdrop {
 .offline-switch input { margin: 3px 0 0; accent-color: var(--green-700); flex: 0 0 auto; }
 .offline-switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
 .offline-settings-actions { display: flex; gap: 12px; align-items: center; margin-top: 2px; }
+/* 媒体库设置用表单流承载，分组标题沿用其他分类的小标题排版，但去掉整行色块。 */
+.offline-settings > .settings-subsection-title {
+  margin: 12px 0 -2px; padding: 0 2px 7px;
+  background: transparent; border-bottom: 1px solid var(--line);
+  letter-spacing: .06em;
+}
+.offline-settings > .settings-subsection-title:first-child { margin-top: 0; }
 
 .offline-subscribe { appearance: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 9px; padding: 6px 11px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .offline-subscribe:hover { border-color: var(--green-700); color: var(--green-700); background: var(--green-50); }

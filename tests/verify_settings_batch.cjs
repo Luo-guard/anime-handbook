@@ -6,7 +6,9 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
   await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
-  await page.waitForTimeout(1400);
+  // bootstrap 拉全量数据，机器忙时要好几秒；固定 sleep 会在数据到位前就断言。
+  await page.waitForFunction(() => (state?.animes || []).length > 0, null, { timeout: 40000 });
+  await page.waitForTimeout(400);
 
   // T6 完结番徽标：文字「已完结」、没有圆点占位（display:none）
   const badge = await page.evaluate(() => {

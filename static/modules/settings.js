@@ -304,7 +304,7 @@ function renderSettingsPanels() {
   $("#sidebarSettingsList").innerHTML = sidebarOrder().map((id, index) => `
     <div class="sidebar-setting-item">
       <label class="mini-check">
-        <input type="checkbox" class="sidebar-visibility-check" data-sidebar-id="${id}" ${visibility[id] !== false || id === "settings" ? "checked" : ""} ${id === "settings" || id === "library" ? "disabled" : ""} title="${id === "library" ? "动漫库的显隐由「设置 → 离线下载」的三态开关控制" : ""}" />
+        <input type="checkbox" class="sidebar-visibility-check" data-sidebar-id="${id}" ${visibility[id] !== false || id === "settings" ? "checked" : ""} ${id === "settings" || id === "library" ? "disabled" : ""} title="${id === "library" ? "媒体库的显隐由「设置 → 媒体库」的三态开关控制" : ""}" />
         <span>${escapeHtml(pageLabel(id))}</span>
       </label>
       <span class="sidebar-order-actions">
@@ -976,11 +976,24 @@ function syncSettingsNavigation(preview = false) {
   const visibility = sidebarVisibility();
   if (preview) $$(".sidebar-visibility-check").forEach(input => { visibility[input.dataset.sidebarId] = input.checked; });
   const tabs = new Map($$("[data-settings-tab]").map(button => [button.dataset.settingsTab, button]));
-  const pageTabs = sidebarOrder().map(id => Object.keys(SETTINGS_PAGE_IDS).find(tab => SETTINGS_PAGE_IDS[tab] === id)).filter(Boolean);
   const nav = $("#settingsSideNav"), list = $(".settings-list");
-  ["main", ...pageTabs.flatMap((tab) => (tab === "collection" ? ["collection", "detail"] : [tab])), "keyboard", "data", "sharing"].forEach(tab => {
+  // 设置分类跟随主导航的顺序：主界面在最前，接着按侧边栏里页面的实际顺序排
+  // （收藏夹后面挂番剧详情，媒体库对应「媒体库」这一节），最后是工具类分类。
+  // 之前媒体库（offline）没进这个序列，永远不会被 append，就一直留在最前面。
+  const SETTINGS_TABS_BY_PAGE = {
+    collection: ["collection", "detail"],
+    library: ["offline"],
+    schedule: ["schedule"],
+    timeline: ["record"],
+    statistics: ["statistics"],
+    ranking: ["ranking"],
+  };
+  const orderedTabs = ["main", ...sidebarOrder().flatMap((id) => SETTINGS_TABS_BY_PAGE[id] || []), "keyboard", "data", "sharing"];
+  orderedTabs.forEach(tab => {
     const button = tabs.get(tab);
     if (!button) return;
+    // 媒体库（offline）的显隐是这一节自己的三态开关管的，不能跟着侧边栏一起藏，
+    // 否则用户把侧边栏关掉就再也进不来打开了。
     button.classList.toggle("hidden", Boolean(SETTINGS_PAGE_IDS[tab] && visibility[SETTINGS_PAGE_IDS[tab]] === false));
     nav.append(button);
     const group = $(`.settings-group[data-settings-group="${tab}"]`);
@@ -1403,12 +1416,21 @@ function runSettingsSearch(query) {
     if (!group) continue;
     let currentSub = null;
     const matched = [];
-    for (const node of group.children) {
-      if (node.classList?.contains("settings-subsection-title")) currentSub = node;
-      if (!node.classList?.contains("setting-row")) continue;
-      const haystack = `${currentSub?.textContent || ""} ${node.textContent}`.toLowerCase();
-      if (tokens.every((token) => haystack.includes(token))) matched.push({ node, sub: currentSub });
-    }
+    // 媒体库那一节是表单流（.offline-settings 里放 .offline-field / .offline-switch），
+    // 不是 .setting-row；只认 .setting-row 会让它整节搜不到。这里按同样的顺序往下走一层。
+    const ROW_CLASSES = ["setting-row", "offline-field", "offline-field-row", "offline-switch"];
+    const walk = (parent) => {
+      for (const node of parent.children) {
+        const cls = node.classList;
+        if (!cls) continue;
+        if (cls.contains("settings-subsection-title")) { currentSub = node; continue; }
+        if (cls.contains("offline-settings")) { walk(node); continue; }
+        if (!ROW_CLASSES.some((name) => cls.contains(name))) continue;
+        const haystack = `${currentSub?.textContent || ""} ${node.textContent}`.toLowerCase();
+        if (tokens.every((token) => haystack.includes(token))) matched.push({ node, sub: currentSub });
+      }
+    };
+    walk(group);
     if (!matched.length) continue;
     const section = document.createElement("div");
     section.className = "settings-search-section";
@@ -1436,7 +1458,9 @@ function runSettingsSearch(query) {
   panel.hidden = false;
   modal.classList.add("settings-searching");
   applySearchHighlight(panel, tokens);
-  settingsSearchState.matches = $$(".setting-row", panel);
+  // .offline-field-row 里还套着两个 .offline-field，只留外层，遍历时不会一步跳两次。
+  settingsSearchState.matches = $$(".setting-row, .offline-field, .offline-field-row, .offline-switch", panel)
+    .filter((node) => !(node.classList.contains("offline-field") && node.parentElement?.classList.contains("offline-field-row")));
   $("#settingsSearchPrev")?.classList.toggle("hidden", !settingsSearchState.matches.length);
   $("#settingsSearchNext")?.classList.toggle("hidden", !settingsSearchState.matches.length);
   focusFirstSearchMatch();

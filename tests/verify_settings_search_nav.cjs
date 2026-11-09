@@ -89,6 +89,18 @@ const assert = require('node:assert/strict');
   assert.equal(after.marks, 0, '清空后不应残留 mark');
   assert.ok(after.counterHidden && after.prevHidden, '清空后计数与箭头应隐藏');
 
+  // 媒体库那一节是表单流（.offline-field/.offline-switch），以前整节搜不到，这里补一条
+  await input.fill('截图');
+  await page.waitForTimeout(400);
+  const media = await page.evaluate(() => ({
+    sections: [...document.querySelectorAll('#settingsSearchResults .settings-search-section-title')].map((n) => n.textContent.trim()),
+    hits: [...document.querySelectorAll('#settingsSearchResults .offline-field > span')].map((n) => n.textContent.trim()),
+  }));
+  assert.ok(media.sections.some((t) => t.startsWith('媒体库 ·')), `搜索要能命中媒体库分类：${media.sections}`);
+  assert.ok(media.hits.includes('截图保存目录') && media.hits.includes('截图命名格式'), `要列出截图两项：${media.hits}`);
+  await input.fill('');
+  await page.waitForTimeout(300);
+
   await browser.close();
   console.log('PASS 设置搜索导航：高亮/计数/遍历/循环/清空还原全部通过');
 })().catch((error) => { console.error(error); process.exit(1); });

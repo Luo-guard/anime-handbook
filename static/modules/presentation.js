@@ -239,7 +239,7 @@ function applySidebarLayout() {
   sidebarOrder().forEach((id) => {
     const item = $(`.nav-item[data-nav-id="${id}"]`);
     if (!item) return;
-    // 动漫库的显隐由「离线下载」设置里的三态开关控制，这里不碰它。
+    // 媒体库的显隐由「设置 → 媒体库」里的三态开关控制，这里不碰它。
     item.classList.toggle("hidden", visibility[id] === false && id !== "settings" && id !== "library");
     nav.append(item);
   });
