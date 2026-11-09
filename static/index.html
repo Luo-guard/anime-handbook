@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261109-media-section2" />
+  <link rel="stylesheet" href="/styles.css?v=20261109-lib-redesign13" />
   </head>
   <body>
     <div class="app-shell">
@@ -260,65 +260,139 @@
         </section>
         <section class="view" id="libraryView">
           <header class="page-header">
-            <div><p class="eyebrow">MEDIA LIBRARY</p><h1 data-page-label="library">媒体库</h1><p class="page-subtitle">视频与截图都在这里：本地文件、订阅与找资源。</p></div>
-            <div class="library-tabs" role="tablist">
-              <button type="button" class="library-tab active" data-library-tab="media">媒体库</button>
-              <button type="button" class="library-tab" data-library-tab="subs">订阅管理</button>
-              <button type="button" class="library-tab" data-library-tab="search">找资源</button>
+            <div>
+              <p class="eyebrow">MEDIA LIBRARY</p>
+              <h1 data-page-label="library">媒体库</h1>
+              <p class="page-subtitle" id="librarySubtitle">本地文件、订阅与找资源，都在这里。</p>
+            </div>
+            <div class="library-tabs" role="tablist" aria-label="媒体库分区">
+              <button type="button" class="library-tab active" data-library-tab="media" role="tab" aria-selected="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.6"/><path d="m10.2 9.2 4.6 2.8-4.6 2.8z"/></svg>
+                <span>媒体库</span>
+              </button>
+              <button type="button" class="library-tab" data-library-tab="subs" role="tab" aria-selected="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h5"/><path d="M8 9h8M8 13h5"/><path d="M18 15v6M15 18h6"/></svg>
+                <span>订阅管理</span>
+              </button>
+              <button type="button" class="library-tab" data-library-tab="search" role="tab" aria-selected="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+                <span>找资源</span>
+              </button>
             </div>
           </header>
-          <div class="overview-panel library-panel " id="libraryMediaPanel">
-            <div class="library-kind" id="libraryKindSwitch" role="tablist" aria-label="浏览类型">
-              <button type="button" class="library-kind-btn active" data-library-kind="video" role="tab" aria-selected="true">视频</button>
-              <button type="button" class="library-kind-btn" data-library-kind="image" role="tab" aria-selected="false">图片<span id="libraryImageCount" class="library-kind-count"></span></button>
+
+          <div class="library-shell library-panel" id="libraryMediaPanel">
+            <div class="lib-head">
+              <div class="library-kind" id="libraryKindSwitch" role="tablist" aria-label="浏览类型">
+                <button type="button" class="library-kind-btn active" data-library-kind="video" role="tab" aria-selected="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.6"/><path d="m10.2 9.2 4.6 2.8-4.6 2.8z"/></svg>
+                  <span>视频</span><b class="library-kind-count" id="libraryVideoCount"></b>
+                </button>
+                <button type="button" class="library-kind-btn" data-library-kind="image" role="tab" aria-selected="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.6"/><circle cx="8.6" cy="10" r="1.6"/><path d="m4 17.5 4.9-4.6 3.4 3.1 2.7-2.4 4.8 4.3"/></svg>
+                  <span>图片</span><b class="library-kind-count" id="libraryImageCount"></b>
+                </button>
+              </div>
+              <div class="lib-head-tools">
+                <label class="search-box lib-search" id="libVideoSearchWrap">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+                  <input type="search" id="libSearch" placeholder="搜索番名" autocomplete="off" />
+                </label>
+                <label class="search-box lib-search hidden" id="libImageSearchWrap">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+                  <input type="search" id="libImageSearch" placeholder="搜索番名或文件名" autocomplete="off" />
+                </label>
+                <label class="lib-sort" id="libSortWrap">
+                  <span>排序</span>
+                  <select id="libSort" aria-label="排序方式">
+                    <option value="recent">最近更新</option>
+                    <option value="watched">续看优先</option>
+                    <option value="progress">观看进度</option>
+                    <option value="name">名称</option>
+                    <option value="size">占用空间</option>
+                    <option value="episodes">已收集数</option>
+                  </select>
+                </label>
+                <button type="button" class="lib-icon-button" id="libRefresh" title="重新读取媒体库" aria-label="重新读取媒体库">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4.2V9h-4.8"/></svg>
+                </button>
+                <button type="button" class="lib-icon-button hidden" id="libImageRefresh" title="重新读取截图" aria-label="重新读取截图">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4.2V9h-4.8"/></svg>
+                </button>
+              </div>
             </div>
+
             <div id="libraryVideoPane">
-            <div class="library-toolbar">
-              <select id="libFilter" aria-label="按收藏夹筛选">
-                <option value="all">全部收藏</option>
-                <option value="1">在看</option>
-                <option value="2">想看</option>
-                <option value="3">搁置</option>
-                <option value="4">看过</option>
-                <option value="5">抛弃</option>
-              </select>
-              <input type="search" id="libSearch" placeholder="搜索本地番名" autocomplete="off" />
+              <div class="lib-filter-row">
+                <div class="category-tabs lib-filter-tabs" id="libFilterTabs" role="tablist" aria-label="按收藏夹筛选"></div>
+                <p class="lib-count-hint" id="libCountHint"></p>
+              </div>
+              <div class="lib-continue-hero hidden" id="libContinueHero"></div>
+              <div class="library-grid" id="libGrid"></div>
             </div>
-            <div class="library-grid" id="libGrid"></div>
-            <p class="library-disk hidden" id="libDisk"></p>
-            </div>
+
             <div id="libraryImagePane" class="hidden">
-              <div class="library-toolbar">
-                <input type="search" id="libImageSearch" placeholder="搜索番名或文件名" autocomplete="off" />
-                <button type="button" class="secondary-button compact-button" id="libImageRefresh">刷新</button>
+              <div class="lib-filter-row">
+                <div class="category-tabs lib-filter-tabs" id="libImageFolders" role="tablist" aria-label="按截图分组筛选"></div>
+                <p class="lib-count-hint" id="libImageCountHint"></p>
               </div>
               <p class="library-image-hint" id="libImageHint"></p>
               <div id="libImageGroups" class="lib-image-groups"></div>
             </div>
+
+            <footer class="lib-footer" id="libFooter">
+              <span class="lib-disk-text" id="libDisk"></span>
+              <span class="lib-disk-meter" id="libDiskMeter" title="磁盘占用"><i></i></span>
+            </footer>
           </div>
-          <div class="overview-panel library-panel hidden" id="libraryDetailPanel">
-            <button type="button" class="offline-library-back" id="libDetailBack">← 返回媒体库</button>
+
+          <div class="library-shell library-panel hidden" id="libraryDetailPanel">
+            <div class="lib-detail-bar">
+              <button type="button" class="lib-back" id="libDetailBack">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                <span>返回媒体库</span>
+              </button>
+              <span class="lib-detail-hint" id="libDetailHint"></span>
+            </div>
             <div class="lib-detail-head">
               <img id="libDetailCover" alt="" />
-              <div>
-                <h3 id="libDetailTitle"></h3>
+              <div class="lib-detail-text">
+                <h2 id="libDetailTitle"></h2>
                 <p class="library-meta" id="libDetailMeta"></p>
                 <div class="lib-source-chips hidden" id="libSourceChips"></div>
               </div>
             </div>
             <div class="lib-episodes" id="libEpisodes"></div>
           </div>
-          <div class="overview-panel library-panel hidden" id="librarySubsPanel">
+
+          <div class="library-shell library-panel hidden" id="librarySubsPanel">
             <div class="lib-subs-head">
-              <label class="offline-switch"><input type="checkbox" id="libAutoFollow" /><span>自动追新番<small>开启后才会定时检查订阅</small></span></label>
-              <button type="button" class="primary-button" id="libCheckSubs">立即检查全部订阅</button>
+              <div class="lib-subs-title">
+                <h2 class="lib-panel-title">订阅管理</h2>
+                <p class="library-meta" id="libSubsStatus" role="status"></p>
+              </div>
+              <div class="lib-subs-actions">
+                <label class="switch-row compact lib-follow-switch" title="开启后才会定时检查订阅">
+                  <input type="checkbox" id="libAutoFollow" />
+                  <span class="switch"></span>
+                  <span class="lib-follow-text">自动追新番<small>开启后才会定时检查订阅</small></span>
+                </label>
+                <button type="button" class="primary-button" id="libCheckSubs">立即检查全部订阅</button>
+              </div>
             </div>
-            <p class="library-meta" id="libSubsStatus" role="status"></p>
             <div class="lib-sub-list" id="libSubList"></div>
           </div>
-          <div class="overview-panel library-panel hidden" id="librarySearchPanel">
-            <div class="library-toolbar">
-              <input type="search" id="libSearchQuery" placeholder="输入番名或关键词搜索资源" autocomplete="off" />
+
+          <div class="library-shell library-panel hidden" id="librarySearchPanel">
+            <div class="lib-search-head">
+              <h2 class="lib-panel-title">找资源</h2>
+              <p class="library-meta">从蜜柑计划搜索，命中收藏里同名的番才能直接下载或订阅。</p>
+            </div>
+            <div class="lib-search-bar">
+              <label class="search-box lib-search-lg">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+                <input type="search" id="libSearchQuery" placeholder="输入番名或关键词搜索资源" autocomplete="off" />
+              </label>
               <button type="button" class="primary-button" id="libSearchGo">搜索</button>
             </div>
             <p class="library-meta" id="libSearchStatus" role="status"></p>
@@ -1487,8 +1561,8 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-dm-kazumi" defer></script>
-    <script src="/modules/offline.js?v=20261109-sr" defer></script>
-    <script src="/modules/library-view.js?v=20261109-sidebar-fix" defer></script>
+    <script src="/modules/offline.js?v=20261109-lib-redesign13" defer></script>
+    <script src="/modules/library-view.js?v=20261109-lib-redesign13" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

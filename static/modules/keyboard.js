@@ -277,7 +277,8 @@ function runShortcut(action) {
   if(action.id==="sidebar"){setSidebarCollapsed(!$(".app-shell").classList.contains("sidebar-collapsed"));return true;}
   if(action.id==="shutdown"){if(window.handbookOnline)return false;shutdownHandbookBackend();return true;}
   if(action.id==="search"){
-    const selector={collection:"#searchInput",schedule:"#scheduleSearch",timeline:"#timelineSearchInput"}[state.activeView];const input=selector&&$(selector);if(!input)return false;input.focus();input.select();return true;
+    const libraryTarget=(typeof librarySidebar!=="undefined"&&librarySidebar.kind==="image")?"#libImageSearch":"#libSearch";
+    const selector={collection:"#searchInput",schedule:"#scheduleSearch",timeline:"#timelineSearchInput",library:libraryTarget}[state.activeView];const input=selector&&$(selector);if(!input)return false;input.focus();input.select();return true;
   }
   if(action.id==="new_record"){if(!navigateByShortcut("timeline"))return false;$("#writeNoteButton").click();return true;}
   if(action.id==="new_ranking"){if(!navigateByShortcut("ranking"))return false;$("#createRankingButton").click();return true;}

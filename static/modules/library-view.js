@@ -11,11 +11,13 @@ const librarySidebar = {
   imageIndex: 0,
   imageRoot: "",
   imageTotal: 0,
+  imageFolder: "",     // 图片库里选中的分组（空 = 全部）
   imagesLoaded: false,
   items: [],
   disk: null,
   filter: "all",
   query: "",
+  sort: "recent",
   token: 0,
   loaded: false,
   detail: null,       // 打开的番 { animeId, name }
@@ -25,7 +27,24 @@ const librarySidebar = {
   subs: [],
   subsLoaded: false,
   searching: false,
+  heroKey: "",        // 已经渲染过的续看横幅（避免搜索时反复重建图片）
 };
+
+const LIB_SORT_OPTIONS = [
+  { id: "recent", label: "最近更新" },
+  { id: "watched", label: "续看优先" },
+  { id: "progress", label: "观看进度" },
+  { id: "name", label: "名称" },
+  { id: "size", label: "占用空间" },
+  { id: "episodes", label: "已收集数" },
+];
+
+function libBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value >= (1 << 30)) return `${(value / (1 << 30)).toFixed(value >= 10 * (1 << 30) ? 0 : 1)} GB`;
+  if (value >= (1 << 20)) return `${Math.round(value / (1 << 20))} MB`;
+  return `${Math.max(1, Math.round(value / 1024))} KB`;
+}
 
 function libVisible() {
   return !$("#libraryNavButton")?.classList.contains("hidden");
@@ -65,7 +84,8 @@ function switchLibraryTab(tab) {
     item.classList.toggle("active", active);
     item.setAttribute("aria-selected", String(active));
   });
-  $("#libraryMediaPanel")?.classList.toggle("hidden", tab !== "media");
+  // 详情是「替换」不是「追加」：否则详情会排在总览下面，得往下滚才看得见。
+  $("#libraryMediaPanel")?.classList.toggle("hidden", tab !== "media" || Boolean(librarySidebar.detail));
   $("#libraryDetailPanel")?.classList.toggle("hidden", tab !== "media" || !librarySidebar.detail);
   $("#librarySubsPanel")?.classList.toggle("hidden", tab !== "subs");
   $("#librarySearchPanel")?.classList.toggle("hidden", tab !== "search");
@@ -77,6 +97,8 @@ function switchLibraryTab(tab) {
 
 async function loadLibrarySidebar() {
   const token = ++librarySidebar.token;
+  const button = $("#libRefresh");
+  button?.classList.add("spinning");
   try {
     const data = await api("/api/offline/library");
     if (token !== librarySidebar.token) return;
@@ -88,34 +110,168 @@ async function loadLibrarySidebar() {
   } catch (error) {
     if (token === librarySidebar.token) {
       const grid = $("#libGrid");
-      if (grid) grid.innerHTML = `<p class="offline-empty">媒体库加载失败：${escapeHtml(error.message || error)}</p>`;
+      if (grid) grid.innerHTML = `<div class="lib-empty"><b>媒体库加载失败</b><p>${escapeHtml(error.message || String(error))}</p></div>`;
     }
+  } finally {
+    if (token === librarySidebar.token) button?.classList.remove("spinning");
   }
 }
 
 function libFilteredItems() {
-  const { items, filter, query } = librarySidebar;
+  const { items, filter, query, sort } = librarySidebar;
   const q = query.trim().toLowerCase();
-  return items.filter((item) =>
+  const list = items.filter((item) =>
     (filter === "all" || String(item.collection_type) === filter)
     && (!q || item.name.toLowerCase().includes(q)));
+  const byRecent = (a, b) => String(b.last_updated || "").localeCompare(String(a.last_updated || ""));
+  const comparators = {
+    recent: byRecent,
+    watched: (a, b) => (Number(Boolean(b.continue_file_id)) - Number(Boolean(a.continue_file_id))) || byRecent(a, b),
+    progress: (a, b) => libProgress(b) - libProgress(a) || byRecent(a, b),
+    name: (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"),
+    size: (a, b) => (Number(b.size_bytes) || 0) - (Number(a.size_bytes) || 0),
+    episodes: (a, b) => (Number(b.file_count) || 0) - (Number(a.file_count) || 0) || byRecent(a, b),
+  };
+  return [...list].sort(comparators[sort] || byRecent);
+}
+
+function libProgress(item) {
+  const total = Math.max(Number(item.episode_count) || 0, Number(item.file_count) || 0, 1);
+  return Math.min(1, (Number(item.watched_count) || 0) / total);
+}
+
+// 收藏夹页签：带计数，只留还有内容的分类，扫描时少一眼干扰。
+function renderLibraryFilters() {
+  const host = $("#libFilterTabs");
+  if (!host) return;
+  const q = librarySidebar.query.trim().toLowerCase();
+  const scoped = librarySidebar.items.filter((item) => !q || item.name.toLowerCase().includes(q));
+  const counts = new Map();
+  scoped.forEach((item) => {
+    const key = String(item.collection_type || 0);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  const options = [
+    { id: "all", name: "全部", count: scoped.length },
+    ...CATEGORIES.map((category) => ({
+      id: String(category.id),
+      name: category.name,
+      count: counts.get(String(category.id)) || 0,
+    }))
+      // 空分类不占位置；但正在看的那个分类留着，否则一搜索就把筛选悄悄重置了。
+      .filter((option) => option.count > 0 || option.id === librarySidebar.filter),
+  ];
+  host.innerHTML = options.map((option) => `
+    <button type="button" class="category-tab${librarySidebar.filter === option.id ? " active" : ""}"
+      data-lib-filter="${option.id}" role="tab" aria-selected="${librarySidebar.filter === option.id}">
+      <span>${escapeHtml(option.name)}</span><span class="tab-count">${option.count}</span>
+    </button>`).join("");
 }
 
 function renderLibraryGrid() {
   const grid = $("#libGrid");
   if (!grid) return;
+  renderLibraryFilters();
   const visible = libFilteredItems();
+  const totalFiles = visible.reduce((sum, item) => sum + (Number(item.file_count) || 0), 0);
+  const totalSize = visible.reduce((sum, item) => sum + (Number(item.size_bytes) || 0), 0);
+  const hint = $("#libCountHint");
+  if (hint) {
+    hint.textContent = visible.length
+      ? `${visible.length} 部 · ${totalFiles} 集 · ${libBytes(totalSize)}`
+      : "";
+  }
   grid.innerHTML = visible.length
     ? visible.map((item) => libraryCard(item)).join("")
-    : '<p class="offline-empty">这里还没有可以播的番：用「找资源」下载几集，或到设置里检查媒体库目录</p>';
-  const disk = librarySidebar.disk;
-  const diskNode = $("#libDisk");
-  if (diskNode) {
-    diskNode.textContent = disk && disk.total_gb
-      ? `媒体库目录 ${disk.media_root} · 剩余 ${disk.free_gb} GB / 共 ${disk.total_gb} GB`
-      : "";
-    diskNode.classList.toggle("hidden", !diskNode.textContent);
+    : (librarySidebar.items.length
+      ? `<div class="lib-empty">
+           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+           <b>没有匹配的番</b><p>换个筛选或关键词试试。</p>
+         </div>`
+      : `<div class="lib-empty">
+           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.6"/><path d="m10.2 9.2 4.6 2.8-4.6 2.8z"/></svg>
+           <b>媒体库还是空的</b><p>用「找资源」搜到番剧下载几集，或到设置里检查媒体库目录。</p>
+           <button type="button" class="primary-button" data-lib-go-search>去找资源</button>
+         </div>`);
+  renderLibraryHero();
+  renderLibraryDisk();
+  updateLibrarySubtitle();
+  const count = $("#libraryVideoCount");
+  if (count) count.textContent = librarySidebar.items.length ? String(librarySidebar.items.length) : "";
+}
+
+// 顶部横幅：最近看过的一部番，一键接着看（不跟着排序走，否则按名称排序时会挑到奇怪的那部）。
+function renderLibraryHero() {
+  const host = $("#libContinueHero");
+  if (!host) return;
+  const q = librarySidebar.query.trim().toLowerCase();
+  const candidates = librarySidebar.items.filter((entry) =>
+    entry.continue_file_id
+    && (librarySidebar.filter === "all" || String(entry.collection_type) === librarySidebar.filter)
+    && (!q || entry.name.toLowerCase().includes(q)));
+  const item = candidates.sort((a, b) => String(b.last_updated || "").localeCompare(String(a.last_updated || "")))[0];
+  if (!item) {
+    host.classList.add("hidden");
+    host.innerHTML = "";
+    librarySidebar.heroKey = "";
+    return;
   }
+  const key = `${item.anime_id}:${item.continue_file_id}`;
+  if (key === librarySidebar.heroKey && host.innerHTML) { host.classList.remove("hidden"); return; }
+  librarySidebar.heroKey = key;
+  const resume = Number(item.continue_resume_ms) || 0;
+  const minutes = Math.floor(resume / 60000);
+  const seconds = String(Math.floor((resume % 60000) / 1000)).padStart(2, "0");
+  const bits = [episodeLabelOf(item.continue_episode_key)];
+  if (resume > 0) bits.push(`看到 ${minutes}:${seconds}`);
+  bits.push(`已收 ${item.file_count}${item.episode_count ? ` / 全 ${item.episode_count}` : ""} 集`);
+  bits.push(libBytes(item.size_bytes));
+  const cover = item.cover || `/api/covers/${item.anime_id}`;
+  host.classList.remove("hidden");
+  host.innerHTML = `
+    <div class="lib-hero-bg" style="background-image:url('${escapeHtml(cover)}')"></div>
+    <div class="lib-hero-body">
+      <img class="lib-hero-thumb" src="${escapeHtml(cover)}" alt="" onerror="this.remove()" />
+      <div class="lib-hero-text">
+        <p class="lib-hero-label">继续观看</p>
+        <h2 title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h2>
+        <p class="lib-hero-meta">${escapeHtml(bits.join(" · "))}</p>
+        <div class="lib-hero-actions">
+          <button type="button" class="lib-hero-play" data-hero-play="${item.continue_file_id}" data-hero-anime="${item.anime_id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+            <span>继续播放</span>
+          </button>
+          <button type="button" class="lib-hero-detail" data-hero-detail="${item.anime_id}" data-hero-name="${escapeHtml(item.name)}">全部集数</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderLibraryDisk() {
+  const footer = $("#libFooter");
+  const text = $("#libDisk");
+  const meter = $("#libDiskMeter");
+  const disk = librarySidebar.disk;
+  const usable = disk && Number(disk.total_gb) > 0;
+  footer?.classList.toggle("hidden", !usable);
+  if (!usable) return;
+  const usedPct = Math.min(100, Math.max(0, ((Number(disk.total_gb) - Number(disk.free_gb)) / Number(disk.total_gb)) * 100));
+  if (text) text.textContent = `媒体库目录 ${disk.media_root} · 已用 ${usedPct.toFixed(0)}% · 剩余 ${disk.free_gb} GB / 共 ${disk.total_gb} GB`;
+  if (meter) {
+    meter.classList.toggle("warn", usedPct >= 80 && usedPct < 95);
+    meter.classList.toggle("full", usedPct >= 95);
+    const bar = meter.querySelector("i");
+    if (bar) bar.style.width = `${usedPct}%`;
+  }
+}
+
+function updateLibrarySubtitle() {
+  const node = $("#librarySubtitle");
+  if (!node) return;
+  // 数字已经在面板里（筛选页签 + 计数），副标题只说一句人话，别再重复一遍。
+  node.textContent = librarySidebar.items.length
+    ? "本地文件、订阅与找资源，都在这里。"
+    : "还没有本地文件：去「找资源」下几集，或到设置里检查媒体库目录。";
 }
 
 // ---------- 番详情：按字幕组区分来源 ----------
@@ -128,8 +284,11 @@ async function openLibraryDetail(animeId, name) {
   $("#libDetailTitle").textContent = librarySidebar.detail.name || `番剧 ${animeId}`;
   $("#libDetailCover").src = `/api/covers/${animeId}`;
   $("#libDetailMeta").textContent = "加载中…";
+  $("#libDetailHint").textContent = "";
   $("#libEpisodes").innerHTML = "";
   $("#libSourceChips").classList.add("hidden");
+  // 从总览卡片进来时要滚到详情，否则停在原来的网格位置像没反应。
+  panel?.scrollIntoView({ behavior: "smooth", block: "start" });
   try {
     const data = await api(`/api/offline/state?anime_id=${Number(animeId)}`);
     librarySidebar.files = (data.files || []).filter((file) => file.exists !== false);
@@ -172,36 +331,32 @@ function renderLibraryDetail() {
   }
   const files = libSortedFiles();
   const totalSize = files.reduce((sum, file) => sum + (Number(file.file_size) || 0), 0);
-  const sizeText = totalSize >= (1 << 30)
-    ? `${(totalSize / (1 << 30)).toFixed(1)} GB`
-    : `${Math.max(1, Math.round(totalSize / (1 << 20)))} MB`;
   const meta = $("#libDetailMeta");
   const metaParts = [`已收 ${librarySidebar.files.length} 集`];
   if (librarySidebar.detail.episodeCount) metaParts.push(`全 ${librarySidebar.detail.episodeCount} 集`);
-  metaParts.push(sizeText);
+  metaParts.push(libBytes(totalSize));
   if (multiple) metaParts.push(`${groups.length} 个来源`);
   meta.textContent = metaParts.join(" · ");
+  const hint = $("#libDetailHint");
+  if (hint) hint.textContent = `${libSortedFiles().length} 集可播放${multiple ? ` · ${groups.length} 个来源` : ""}`;
   const host = $("#libEpisodes");
   host.innerHTML = files.length
     ? files.map((file) => {
         const group = String(file.group_name || "").trim();
-        const size = Number(file.file_size) >= (1 << 20)
-          ? `${Math.round(Number(file.file_size) / (1 << 20))} MB`
-          : `${Math.max(1, Math.round((Number(file.file_size) || 0) / 1024))} KB`;
         const resume = Number(file.resume_ms) || 0;
         const minutes = Math.floor(resume / 60000);
         const seconds = String(Math.floor((resume % 60000) / 1000)).padStart(2, "0");
-        const bits = [group || "来源未知", size];
+        const bits = [group || "来源未知", libBytes(file.file_size)];
         if (file.subtitle_path) bits.push("内封字幕");
         if (resume > 0) bits.push(`看到 ${minutes}:${seconds}`);
-        return `<div class="lib-episode" data-id="${file.id}">
+        return `<div class="lib-episode${resume > 0 ? " watched" : ""}" data-id="${file.id}">
           <div class="lib-ep-info">
             <b>${escapeHtml(episodeLabelOf(file.episode_key))}</b>
             <small>${escapeHtml(bits.join(" · "))}</small>
             ${file.source_title ? `<small class="lib-source-title" title="${escapeHtml(file.source_title)}">${escapeHtml(file.source_title)}</small>` : ""}
           </div>
           <div class="lib-ep-actions">
-            <button type="button" class="pc-btn pc-text lib-play" data-id="${file.id}">播放</button>
+            <button type="button" class="pc-btn pc-text lib-play" data-id="${file.id}">${resume > 0 ? "继续" : "播放"}</button>
             <button type="button" class="pc-btn pc-text lib-delete danger" data-id="${file.id}" data-label="${escapeHtml(episodeLabelOf(file.episode_key))}">删除</button>
           </div>
         </div>`;
@@ -238,7 +393,9 @@ async function loadLibrarySubs() {
     const follow = $("#libAutoFollow");
     if (follow) follow.checked = data.auto_follow === true;
     renderLibrarySubs();
-    if (status) status.textContent = librarySidebar.subs.length ? "" : "还没有订阅。到「找资源」搜到资源后点「订阅」，新集就会自动下载。";
+    if (status) status.textContent = librarySidebar.subs.length
+      ? `${librarySidebar.subs.filter((sub) => sub.enabled).length} 条启用中，共 ${librarySidebar.subs.length} 条订阅`
+      : "还没有订阅。到「找资源」搜到资源后点「订阅」，新集就会自动下载。";
   } catch (error) {
     if (status) status.textContent = `订阅加载失败：${error.message || error}`;
   }
@@ -252,7 +409,8 @@ function renderLibrarySubs() {
     const bits = [`关键词：${sub.keyword}`];
     if (sub.group_name) bits.push(`字幕组：${sub.group_name}`);
     bits.push(`上次检查：${last}`);
-    return `<div class="lib-sub-item" data-id="${sub.id}">
+    return `<div class="lib-sub-item${sub.enabled ? "" : " off"}" data-id="${sub.id}">
+      <img class="lib-sub-cover" src="/api/covers/${sub.anime_id}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
       <div class="lib-sub-info">
         <b>${escapeHtml(sub.anime_name || `番剧 ${sub.anime_id}`)}</b>
         <small>${escapeHtml(bits.join(" · "))}</small>
@@ -410,19 +568,28 @@ async function libSubscribe(button) {
 
 function switchLibraryKind(kind) {
   librarySidebar.kind = kind === "image" ? "image" : "video";
+  const isImage = librarySidebar.kind === "image";
   $$("#libraryKindSwitch .library-kind-btn").forEach((button) => {
     const active = button.dataset.libraryKind === librarySidebar.kind;
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
   });
-  $("#libraryVideoPane")?.classList.toggle("hidden", librarySidebar.kind !== "video");
-  $("#libraryImagePane")?.classList.toggle("hidden", librarySidebar.kind !== "image");
-  $("#libraryDetailPanel")?.classList.toggle("hidden", librarySidebar.kind !== "video" || !librarySidebar.detail);
-  if (librarySidebar.kind === "image") loadLibraryImages();
+  $("#libraryVideoPane")?.classList.toggle("hidden", isImage);
+  $("#libraryImagePane")?.classList.toggle("hidden", !isImage);
+  // 搜索框/刷新钮按类型换一个，别让两个搜索框同时出现。
+  $("#libVideoSearchWrap")?.classList.toggle("hidden", isImage);
+  $("#libImageSearchWrap")?.classList.toggle("hidden", !isImage);
+  $("#libSortWrap")?.classList.toggle("hidden", isImage);
+  $("#libRefresh")?.classList.toggle("hidden", isImage);
+  $("#libImageRefresh")?.classList.toggle("hidden", !isImage);
+  $("#libraryDetailPanel")?.classList.toggle("hidden", isImage || !librarySidebar.detail);
+  if (isImage) loadLibraryImages();
 }
 
 async function loadLibraryImages() {
   const hint = $("#libImageHint");
+  const button = $("#libImageRefresh");
+  button?.classList.add("spinning");
   if (hint && !librarySidebar.imagesLoaded) hint.textContent = "读取截图…";
   try {
     const data = await api("/api/offline/screenshots");
@@ -432,9 +599,12 @@ async function loadLibraryImages() {
     librarySidebar.imagesLoaded = true;
     const badge = $("#libraryImageCount");
     if (badge) badge.textContent = librarySidebar.imageTotal ? String(librarySidebar.imageTotal) : "";
+    renderLibraryImageFolders();
     renderLibraryImages();
   } catch (error) {
     if (hint) hint.textContent = `读取截图失败：${error.message || error}`;
+  } finally {
+    button?.classList.remove("spinning");
   }
 }
 
@@ -449,27 +619,58 @@ function libImageTime(name) {
   return found[3] ? `${found[1]}:${found[2]}:${found[3]}` : `${found[1]}:${found[2]}`;
 }
 
+function renderLibraryImageFolders() {
+  const host = $("#libImageFolders");
+  if (!host) return;
+  const groups = librarySidebar.imageGroups || [];
+  const total = groups.reduce((sum, group) => sum + group.images.length, 0);
+  const options = [
+    { folder: "", name: "全部截图", count: total },
+    ...groups.map((group) => ({ folder: group.folder, name: group.folder, count: group.images.length })),
+  ];
+  if (librarySidebar.imageFolder && !options.some((option) => option.folder === librarySidebar.imageFolder)) {
+    librarySidebar.imageFolder = "";
+  }
+  host.innerHTML = options.map((option) => `
+    <button type="button" class="category-tab${librarySidebar.imageFolder === option.folder ? " active" : ""}"
+      data-lib-folder="${escapeHtml(option.folder)}" role="tab" aria-selected="${librarySidebar.imageFolder === option.folder}">
+      <span>${escapeHtml(option.name)}</span><span class="tab-count">${option.count}</span>
+    </button>`).join("");
+}
+
 function renderLibraryImages() {
   const host = $("#libImageGroups");
   const hint = $("#libImageHint");
   if (!host) return;
   const query = String($("#libImageSearch")?.value || "").trim().toLocaleLowerCase();
-  const groups = (librarySidebar.imageGroups || []).map((group) => ({
-    ...group,
-    images: group.images.filter((image) => !query
-      || group.folder.toLocaleLowerCase().includes(query)
-      || image.name.toLocaleLowerCase().includes(query)),
-  })).filter((group) => group.images.length);
+  const groups = (librarySidebar.imageGroups || [])
+    .filter((group) => !librarySidebar.imageFolder || group.folder === librarySidebar.imageFolder)
+    .map((group) => ({
+      ...group,
+      images: group.images.filter((image) => !query
+        || group.folder.toLocaleLowerCase().includes(query)
+        || image.name.toLocaleLowerCase().includes(query)),
+    })).filter((group) => group.images.length);
   const flat = [];
   groups.forEach((group) => group.images.forEach((image) => flat.push({ ...image, folder: group.folder })));
   librarySidebar.imageFlat = flat;
+  const countHint = $("#libImageCountHint");
+  if (countHint) countHint.textContent = flat.length ? `${flat.length} 张` : "";
   if (hint) {
     hint.textContent = flat.length
-      ? `共 ${flat.length} 张 · 保存位置：${librarySidebar.imageRoot || "截图目录"}`
-      : (librarySidebar.imageTotal ? "没有匹配的截图" : "还没有截图：在播放器里按 S 或点顶栏相机按钮截一张试试");
+      ? `保存位置：${librarySidebar.imageRoot || "截图目录"}`
+      : "";
   }
   if (!flat.length) {
-    host.innerHTML = "";
+    host.innerHTML = librarySidebar.imageTotal
+      ? `<div class="lib-empty">
+           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m21 21-4.4-4.4M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+           <b>没有匹配的截图</b><p>换个关键词，或切回「全部截图」。</p>
+         </div>`
+      : `<div class="lib-empty">
+           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.6"/><circle cx="8.6" cy="10" r="1.6"/><path d="m4 17.5 4.9-4.6 3.4 3.1 2.7-2.4 4.8 4.3"/></svg>
+           <b>还没有截图</b><p>播放时按 S，或点播放器顶栏的相机按钮截图。</p>
+         </div>`;
     return;
   }
   host.innerHTML = groups.map((group) => {
@@ -525,8 +726,36 @@ function initLibraryView() {
   if (initLibraryView.bound) return;
   initLibraryView.bound = true;
 
-  $$(".library-tab").forEach((item) => item.addEventListener("click", () => switchLibraryTab(item.dataset.libraryTab)));
+  $$(".library-tab").forEach((item) => item.addEventListener("click", () => {
+    // 点顶部「媒体库」页签 = 回到总览，别把上次打开的详情留在原地。
+    if (item.dataset.libraryTab === "media") {
+      librarySidebar.detail = null;
+      librarySidebar.sourceFilter = "";
+    }
+    switchLibraryTab(item.dataset.libraryTab);
+  }));
   $$("#libraryKindSwitch .library-kind-btn").forEach((item) => item.addEventListener("click", () => switchLibraryKind(item.dataset.libraryKind)));
+  $("#libSort")?.addEventListener("change", (event) => {
+    librarySidebar.sort = event.target.value;
+    renderLibraryGrid();
+  });
+  $("#libRefresh")?.addEventListener("click", () => {
+    librarySidebar.loaded = false;
+    loadLibrarySidebar();
+  });
+  $("#libFilterTabs")?.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-lib-filter]");
+    if (!tab) return;
+    librarySidebar.filter = tab.dataset.libFilter;
+    renderLibraryGrid();
+  });
+  $("#libImageFolders")?.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-lib-folder]");
+    if (!tab) return;
+    librarySidebar.imageFolder = tab.dataset.libFolder || "";
+    renderLibraryImageFolders();
+    renderLibraryImages();
+  });
   $("#libImageSearch")?.addEventListener("input", () => renderLibraryImages());
   $("#libImageRefresh")?.addEventListener("click", () => { librarySidebar.imagesLoaded = false; loadLibraryImages(); });
   $("#libImageGroups")?.addEventListener("click", (event) => {
@@ -542,16 +771,24 @@ function initLibraryView() {
     if (event.key === "ArrowLeft") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex - 1); }
     else if (event.key === "ArrowRight") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex + 1); }
   });
-  $("#libFilter")?.addEventListener("change", (event) => {
-    librarySidebar.filter = event.target.value;
-    renderLibraryGrid();
-  });
+
   $("#libSearch")?.addEventListener("input", (event) => {
     librarySidebar.query = event.target.value;
     renderLibraryGrid();
   });
+  $("#libContinueHero")?.addEventListener("click", (event) => {
+    const play = event.target.closest("[data-hero-play]");
+    if (play) {
+      const item = librarySidebar.items.find((entry) => Number(entry.anime_id) === Number(play.dataset.heroAnime));
+      libPlayFromItem(item, Number(play.dataset.heroPlay));
+      return;
+    }
+    const detail = event.target.closest("[data-hero-detail]");
+    if (detail) openLibraryDetail(detail.dataset.heroDetail, detail.dataset.heroName || "");
+  });
   $("#libGrid")?.addEventListener("click", (event) => {
-    const continueButton = event.target.closest(".library-continue");
+    if (event.target.closest("[data-lib-go-search]")) { switchLibraryTab("search"); return; }
+    const continueButton = event.target.closest(".library-continue, .library-play-fab");
     if (continueButton) {
       event.stopPropagation();
       const animeId = Number(continueButton.dataset.anime);
@@ -571,6 +808,13 @@ function initLibraryView() {
       }
       openLibraryDetail(card.dataset.anime, card.dataset.name);
     }
+  });
+  $("#libGrid")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const card = event.target.closest?.(".library-card");
+    if (!card || event.target !== card) return;
+    event.preventDefault();
+    card.click();
   });
   $("#libDetailBack")?.addEventListener("click", () => {
     librarySidebar.detail = null;

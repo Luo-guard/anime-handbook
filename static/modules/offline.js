@@ -348,11 +348,12 @@ function libraryCard(item) {
   const seconds = String(Math.floor((resume % 60000) / 1000)).padStart(2, "0");
   const continueLabel = `${episodeLabelOf(item.continue_episode_key)}${resume > 0 ? ` · 看到 ${minutes}:${seconds}` : " · 从头看"}`;
   return `
-    <article class="library-card" data-anime="${item.anime_id}" data-name="${escapeHtml(item.name)}">
+    <article class="library-card" data-anime="${item.anime_id}" data-name="${escapeHtml(item.name)}" role="button" tabindex="0" aria-label="打开《${escapeHtml(item.name)}》的本地文件">
       <div class="library-cover">
         <img src="/api/covers/${item.anime_id}" loading="lazy" alt="" onerror="this.style.visibility='hidden'" />
         ${category ? `<span class="library-badge">${escapeHtml(category.name)}</span>` : ""}
         <span class="library-size">${escapeHtml(size)}</span>
+        ${item.continue_file_id ? `<button type="button" class="library-play-fab" data-continue="${item.continue_file_id}" data-anime="${item.anime_id}" title="继续播放" aria-label="继续播放"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button>` : ""}
       </div>
       <div class="library-body">
         <p class="library-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</p>
