@@ -20,7 +20,17 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     cards: [...document.querySelectorAll('#libGrid .library-card')].map((c) => c.dataset.name),
     disk: document.querySelector('#libDisk').textContent,
     tabs: [...document.querySelectorAll('.library-tab')].map((t) => t.dataset.libraryTab),
+    // 曾出过「DOM 有内容但整页空白」：视图被放在 .main-content 外面，
+    // 排在视口下方。这里必须真的落在视口内。
+    placement: (() => {
+      const v = document.querySelector('#libraryView');
+      const r = v.getBoundingClientRect();
+      return { inMain: Boolean(v.closest('.main-content')), top: Math.round(r.top), height: Math.round(r.height) };
+    })(),
   }));
+  assert.equal(media.placement.inMain, true, '动漫库视图要放在 .main-content 里');
+  assert.ok(media.placement.top >= 0 && media.placement.top < 120, `视图起点要在视口内，实际 top=${media.placement.top}`);
+  assert.ok(media.placement.height > 200, `视图要有实际高度，实际 ${media.placement.height}`);
   assert.equal(media.viewActive, true, '动漫库视图要激活');
   assert.ok(media.cards.includes('学生会也有洞！'), `网格要列出真实番：${media.cards}`);
   assert.ok(media.disk.includes('GB'), `磁盘统计：${media.disk}`);

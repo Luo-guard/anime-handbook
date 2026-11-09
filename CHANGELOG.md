@@ -5,6 +5,11 @@
 
 ## 2026-11-09
 
+### 修复：动漫库页面整页空白
+- 根因：`#libraryView` 这段 markup 被放在了 `<main class="main-content">` **外面**（和 `.app-shell` 同级，夹在离线弹窗 `</dialog>` 之后）。`.view` 是普通文档流的块，结果整个库视图排在 720px 高的视口**下方**（实测 `top = 720`），点导航只能看到背景图。库里数据其实早渲染好了——所以只看 DOM 断言的测试一直是通过的。
+- 修复：把整段 `<section class="view" id="libraryView">`（53 行）移进 `<main>`，排在排名视图之后，缩进对齐其它视图。
+- 补测试：`verify_library_sidebar` 增加三条几何断言（在 `.main-content` 内、`top` 落在视口内、有实际高度），专门堵「DOM 有内容但看不见」这类问题。三个页签（媒体库/订阅管理/找资源）与往返切换均已实测。
+
 ### 修复：详情弹窗右上角下载角标的贴合与焦点描边
 - 角标改用 **JS 按弹窗视口矩形固定（fixed）**：原来靠 `right: -15px` 硬抵 `scrollbar-gutter`，槽宽随浏览器/缩放变化，会顶出卡边；改成负偏移后又会给弹窗添一条横向滚动条（`scrollWidth` 比 `clientWidth` 大 15px）。现在打开/缩放/弹窗尺寸变化（ResizeObserver）/页面滚动都会重算位置，`gapRight=0`、无横向滚动，弹窗内部滚动时角标也始终贴角。外角自带 22px 圆角与卡片一致（fixed 不再被 dialog 圆角裁剪）。
 - **去掉角标多余的一圈浅色描边**：根因是 dialog 打开时自动聚焦「第一个可聚焦元素」——把按钮移出表单后它就中招，`:focus-visible` 画出 `--active-inset` 描边。改为表单容器 `tabindex="-1" autofocus` 承接焦点，容器自身 `outline: none`；顺带避免以前「刚打开详情按回车会触发下载按钮」的隐患。

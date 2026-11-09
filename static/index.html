@@ -258,6 +258,59 @@
             <div class="ranking-workspace" id="rankingWorkspace"></div>
           </div>
         </section>
+        <section class="view" id="libraryView">
+          <header class="page-header">
+            <div><p class="eyebrow">MEDIA LIBRARY</p><h1 data-page-label="library">动漫库</h1><p class="page-subtitle">本地收藏、订阅与找资源，都在这里。</p></div>
+            <div class="library-tabs" role="tablist">
+              <button type="button" class="library-tab active" data-library-tab="media">媒体库</button>
+              <button type="button" class="library-tab" data-library-tab="subs">订阅管理</button>
+              <button type="button" class="library-tab" data-library-tab="search">找资源</button>
+            </div>
+          </header>
+          <div class="overview-panel library-panel " id="libraryMediaPanel">
+            <div class="library-toolbar">
+              <select id="libFilter" aria-label="按收藏夹筛选">
+                <option value="all">全部收藏</option>
+                <option value="1">在看</option>
+                <option value="2">想看</option>
+                <option value="3">搁置</option>
+                <option value="4">看过</option>
+                <option value="5">抛弃</option>
+              </select>
+              <input type="search" id="libSearch" placeholder="搜索本地番名" autocomplete="off" />
+            </div>
+            <div class="library-grid" id="libGrid"></div>
+            <p class="library-disk hidden" id="libDisk"></p>
+          </div>
+          <div class="overview-panel library-panel hidden" id="libraryDetailPanel">
+            <button type="button" class="offline-library-back" id="libDetailBack">← 返回媒体库</button>
+            <div class="lib-detail-head">
+              <img id="libDetailCover" alt="" />
+              <div>
+                <h3 id="libDetailTitle"></h3>
+                <p class="library-meta" id="libDetailMeta"></p>
+                <div class="lib-source-chips hidden" id="libSourceChips"></div>
+              </div>
+            </div>
+            <div class="lib-episodes" id="libEpisodes"></div>
+          </div>
+          <div class="overview-panel library-panel hidden" id="librarySubsPanel">
+            <div class="lib-subs-head">
+              <label class="offline-switch"><input type="checkbox" id="libAutoFollow" /><span>自动追新番<small>开启后才会定时检查订阅</small></span></label>
+              <button type="button" class="primary-button" id="libCheckSubs">立即检查全部订阅</button>
+            </div>
+            <p class="library-meta" id="libSubsStatus" role="status"></p>
+            <div class="lib-sub-list" id="libSubList"></div>
+          </div>
+          <div class="overview-panel library-panel hidden" id="librarySearchPanel">
+            <div class="library-toolbar">
+              <input type="search" id="libSearchQuery" placeholder="输入番名或关键词搜索资源" autocomplete="off" />
+              <button type="button" class="primary-button" id="libSearchGo">搜索</button>
+            </div>
+            <p class="library-meta" id="libSearchStatus" role="status"></p>
+            <div class="lib-search-results" id="libSearchResults"></div>
+          </div>
+        </section>
       </main>
 
       <div class="collection-floating-controls" id="collectionFloatingControls" data-floating-view="collection">
@@ -362,59 +415,6 @@
         </section>
       </div>
     </dialog>
-    <section class="view" id="libraryView">
-      <header class="page-header">
-        <div><p class="eyebrow">MEDIA LIBRARY</p><h1 data-page-label="library">动漫库</h1><p class="page-subtitle">本地收藏、订阅与找资源，都在这里。</p></div>
-        <div class="library-tabs" role="tablist">
-          <button type="button" class="library-tab active" data-library-tab="media">媒体库</button>
-          <button type="button" class="library-tab" data-library-tab="subs">订阅管理</button>
-          <button type="button" class="library-tab" data-library-tab="search">找资源</button>
-        </div>
-      </header>
-      <div class="overview-panel library-panel " id="libraryMediaPanel">
-        <div class="library-toolbar">
-          <select id="libFilter" aria-label="按收藏夹筛选">
-            <option value="all">全部收藏</option>
-            <option value="1">在看</option>
-            <option value="2">想看</option>
-            <option value="3">搁置</option>
-            <option value="4">看过</option>
-            <option value="5">抛弃</option>
-          </select>
-          <input type="search" id="libSearch" placeholder="搜索本地番名" autocomplete="off" />
-        </div>
-        <div class="library-grid" id="libGrid"></div>
-        <p class="library-disk hidden" id="libDisk"></p>
-      </div>
-      <div class="overview-panel library-panel hidden" id="libraryDetailPanel">
-        <button type="button" class="offline-library-back" id="libDetailBack">← 返回媒体库</button>
-        <div class="lib-detail-head">
-          <img id="libDetailCover" alt="" />
-          <div>
-            <h3 id="libDetailTitle"></h3>
-            <p class="library-meta" id="libDetailMeta"></p>
-            <div class="lib-source-chips hidden" id="libSourceChips"></div>
-          </div>
-        </div>
-        <div class="lib-episodes" id="libEpisodes"></div>
-      </div>
-      <div class="overview-panel library-panel hidden" id="librarySubsPanel">
-        <div class="lib-subs-head">
-          <label class="offline-switch"><input type="checkbox" id="libAutoFollow" /><span>自动追新番<small>开启后才会定时检查订阅</small></span></label>
-          <button type="button" class="primary-button" id="libCheckSubs">立即检查全部订阅</button>
-        </div>
-        <p class="library-meta" id="libSubsStatus" role="status"></p>
-        <div class="lib-sub-list" id="libSubList"></div>
-      </div>
-      <div class="overview-panel library-panel hidden" id="librarySearchPanel">
-        <div class="library-toolbar">
-          <input type="search" id="libSearchQuery" placeholder="输入番名或关键词搜索资源" autocomplete="off" />
-          <button type="button" class="primary-button" id="libSearchGo">搜索</button>
-        </div>
-        <p class="library-meta" id="libSearchStatus" role="status"></p>
-        <div class="lib-search-results" id="libSearchResults"></div>
-      </div>
-    </section>
     <div class="offline-player-backdrop" id="offlinePlayerBackdrop" hidden></div>
     <dialog class="modal offline-player" id="offlinePlayer">
       <div class="modal-frame offline-player-frame">
