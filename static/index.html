@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261109-player-keys" />
+  <link rel="stylesheet" href="/styles.css?v=20261109-media-image" />
   </head>
   <body>
     <div class="app-shell">
@@ -28,7 +28,7 @@
           </button>
           <button class="nav-item" data-view="library" data-nav-id="library" id="libraryNavButton">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v16H4zM14 4h6v16h-6z" opacity=".0"/><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10v16H5.5A1.5 1.5 0 0 1 4 18.5ZM14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14ZM12 4v16"/></svg>
-            <span data-page-label="library">动漫库</span>
+            <span data-page-label="library">媒体库</span>
           </button>
           <button class="nav-item" data-view="schedule" data-nav-id="schedule">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2ZM7 14h3M14 14h3M7 17h3"/></svg>
@@ -260,7 +260,7 @@
         </section>
         <section class="view" id="libraryView">
           <header class="page-header">
-            <div><p class="eyebrow">MEDIA LIBRARY</p><h1 data-page-label="library">动漫库</h1><p class="page-subtitle">本地收藏、订阅与找资源，都在这里。</p></div>
+            <div><p class="eyebrow">MEDIA LIBRARY</p><h1 data-page-label="library">媒体库</h1><p class="page-subtitle">视频与截图都在这里：本地文件、订阅与找资源。</p></div>
             <div class="library-tabs" role="tablist">
               <button type="button" class="library-tab active" data-library-tab="media">媒体库</button>
               <button type="button" class="library-tab" data-library-tab="subs">订阅管理</button>
@@ -268,6 +268,11 @@
             </div>
           </header>
           <div class="overview-panel library-panel " id="libraryMediaPanel">
+            <div class="library-kind" id="libraryKindSwitch" role="tablist" aria-label="浏览类型">
+              <button type="button" class="library-kind-btn active" data-library-kind="video" role="tab" aria-selected="true">视频</button>
+              <button type="button" class="library-kind-btn" data-library-kind="image" role="tab" aria-selected="false">图片<span id="libraryImageCount" class="library-kind-count"></span></button>
+            </div>
+            <div id="libraryVideoPane">
             <div class="library-toolbar">
               <select id="libFilter" aria-label="按收藏夹筛选">
                 <option value="all">全部收藏</option>
@@ -281,6 +286,15 @@
             </div>
             <div class="library-grid" id="libGrid"></div>
             <p class="library-disk hidden" id="libDisk"></p>
+            </div>
+            <div id="libraryImagePane" class="hidden">
+              <div class="library-toolbar">
+                <input type="search" id="libImageSearch" placeholder="搜索番名或文件名" autocomplete="off" />
+                <button type="button" class="secondary-button compact-button" id="libImageRefresh">刷新</button>
+              </div>
+              <p class="library-image-hint" id="libImageHint"></p>
+              <div id="libImageGroups" class="lib-image-groups"></div>
+            </div>
           </div>
           <div class="overview-panel library-panel hidden" id="libraryDetailPanel">
             <button type="button" class="offline-library-back" id="libDetailBack">← 返回媒体库</button>
@@ -517,6 +531,21 @@
             <ul id="pcShortcutHelpList"></ul>
             <p class="pc-shortcuts-note">按键可在 设置 → 快捷键 → 播放器 里修改。</p>
           </details>
+        </div>
+      </div>
+    </dialog>
+    <dialog class="modal lib-image-viewer" id="libImageViewer">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="libImageClose" aria-label="关闭">×</button>
+        <div class="lib-image-stage">
+          <button type="button" class="lib-image-nav prev" id="libImagePrev" aria-label="上一张">‹</button>
+          <img id="libImageView" alt="" />
+          <button type="button" class="lib-image-nav next" id="libImageNext" aria-label="下一张">›</button>
+        </div>
+        <p class="lib-image-caption" id="libImageCaption"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" id="libImageDelete">删除这张</button>
+          <button type="button" class="primary-button" id="libImageDone">关闭</button>
         </div>
       </div>
     </dialog>
@@ -1134,6 +1163,8 @@
 
             <label class="offline-field"><span>媒体库目录</span><input type="text" id="offlineMediaRoot" placeholder="留空使用默认目录" autocomplete="off" /><small id="offlineMediaHint"></small></label>
             <label class="offline-field"><span>下载临时目录</span><input type="text" id="offlineDownloadRoot" placeholder="留空使用 媒体库/_incoming" autocomplete="off" /></label>
+            <label class="offline-field"><span>截图保存目录</span><input type="text" id="offlineScreenshotRoot" placeholder="留空使用 媒体库/截图" autocomplete="off" /><small id="offlineScreenshotHint"></small></label>
+            <label class="offline-field"><span>截图命名格式</span><input type="text" id="offlineScreenshotName" placeholder="{episode}_{time}" autocomplete="off" /><small>可用占位符：{episode} 集数、{time} 时间码、{date} 日期、{anime} 番名；同名自动加序号。扩展名固定 .png</small></label>
             <div class="offline-field-row">
               <label class="offline-field"><span>qBittorrent 地址</span><input type="text" id="offlineQbHost" autocomplete="off" /></label>
               <label class="offline-field offline-field-small"><span>端口</span><input type="number" id="offlineQbPort" min="1" max="65535" /></label>
@@ -1452,7 +1483,7 @@
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-dm-kazumi" defer></script>
     <script src="/modules/offline.js?v=20261109-player-keys" defer></script>
-    <script src="/modules/library-view.js?v=20261108-library-sidebar" defer></script>
+    <script src="/modules/library-view.js?v=20261109-media-image" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

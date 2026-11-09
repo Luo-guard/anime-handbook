@@ -5,6 +5,13 @@
 
 const librarySidebar = {
   tab: "media",
+  kind: "video",       // video / image：媒体库里的视频与截图两个视图
+  imageGroups: [],
+  imageFlat: [],
+  imageIndex: 0,
+  imageRoot: "",
+  imageTotal: 0,
+  imagesLoaded: false,
   items: [],
   disk: null,
   filter: "all",
@@ -399,6 +406,119 @@ async function libSubscribe(button) {
   }
 }
 
+// ---------- 图片库（播放器截图，和视频同在一个媒体库里） ----------
+
+function switchLibraryKind(kind) {
+  librarySidebar.kind = kind === "image" ? "image" : "video";
+  $$("#libraryKindSwitch .library-kind-btn").forEach((button) => {
+    const active = button.dataset.libraryKind === librarySidebar.kind;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $("#libraryVideoPane")?.classList.toggle("hidden", librarySidebar.kind !== "video");
+  $("#libraryImagePane")?.classList.toggle("hidden", librarySidebar.kind !== "image");
+  $("#libraryDetailPanel")?.classList.toggle("hidden", librarySidebar.kind !== "video" || !librarySidebar.detail);
+  if (librarySidebar.kind === "image") loadLibraryImages();
+}
+
+async function loadLibraryImages() {
+  const hint = $("#libImageHint");
+  if (hint && !librarySidebar.imagesLoaded) hint.textContent = "读取截图…";
+  try {
+    const data = await api("/api/offline/screenshots");
+    librarySidebar.imageGroups = data.groups || [];
+    librarySidebar.imageRoot = data.root || "";
+    librarySidebar.imageTotal = Number(data.count || 0);
+    librarySidebar.imagesLoaded = true;
+    const badge = $("#libraryImageCount");
+    if (badge) badge.textContent = librarySidebar.imageTotal ? String(librarySidebar.imageTotal) : "";
+    renderLibraryImages();
+  } catch (error) {
+    if (hint) hint.textContent = `读取截图失败：${error.message || error}`;
+  }
+}
+
+function libImageUrl(relative) {
+  return `/api/offline/screenshot-file?path=${encodeURIComponent(relative)}`;
+}
+
+function libImageTime(name) {
+  // 文件名里的时间码：第03集_06-12 → 06:12；带小时就是 01-02-03 → 01:02:03
+  const found = String(name || "").match(/(\d{2})-(\d{2})(?:-(\d{2}))?\.png$/i);
+  if (!found) return "";
+  return found[3] ? `${found[1]}:${found[2]}:${found[3]}` : `${found[1]}:${found[2]}`;
+}
+
+function renderLibraryImages() {
+  const host = $("#libImageGroups");
+  const hint = $("#libImageHint");
+  if (!host) return;
+  const query = String($("#libImageSearch")?.value || "").trim().toLocaleLowerCase();
+  const groups = (librarySidebar.imageGroups || []).map((group) => ({
+    ...group,
+    images: group.images.filter((image) => !query
+      || group.folder.toLocaleLowerCase().includes(query)
+      || image.name.toLocaleLowerCase().includes(query)),
+  })).filter((group) => group.images.length);
+  const flat = [];
+  groups.forEach((group) => group.images.forEach((image) => flat.push({ ...image, folder: group.folder })));
+  librarySidebar.imageFlat = flat;
+  if (hint) {
+    hint.textContent = flat.length
+      ? `共 ${flat.length} 张 · 保存位置：${librarySidebar.imageRoot || "截图目录"}`
+      : (librarySidebar.imageTotal ? "没有匹配的截图" : "还没有截图：在播放器里按 S 或点顶栏相机按钮截一张试试");
+  }
+  if (!flat.length) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = groups.map((group) => {
+    const thumbs = group.images.map((image) => {
+      const index = flat.findIndex((row) => row.relative === image.relative);
+      const time = libImageTime(image.name);
+      return `<button type="button" class="lib-image-thumb" data-image-index="${index}" title="${escapeHtml(image.name)}">
+        <img src="${libImageUrl(image.relative)}" alt="${escapeHtml(image.name)}" loading="lazy" decoding="async" />
+        <span>${escapeHtml(time || image.name)}</span>
+      </button>`;
+    }).join("");
+    return `<section class="lib-image-group">
+      <header><h3>${escapeHtml(group.folder)}</h3><span>${group.images.length} 张</span></header>
+      <div class="lib-image-grid">${thumbs}</div>
+    </section>`;
+  }).join("");
+}
+
+function openLibraryImage(index) {
+  const flat = librarySidebar.imageFlat || [];
+  if (!flat.length) return;
+  const total = flat.length;
+  librarySidebar.imageIndex = ((Number(index) || 0) + total) % total;
+  const image = flat[librarySidebar.imageIndex];
+  $("#libImageView").src = libImageUrl(image.relative);
+  $("#libImageView").alt = image.name;
+  $("#libImageCaption").textContent = `${image.folder} / ${image.name}　（${librarySidebar.imageIndex + 1} / ${total}）`;
+  $("#libImagePrev").disabled = total <= 1;
+  $("#libImageNext").disabled = total <= 1;
+  const dialog = $("#libImageViewer");
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+async function deleteLibraryImage() {
+  const flat = librarySidebar.imageFlat || [];
+  const image = flat[librarySidebar.imageIndex];
+  if (!image) return;
+  try {
+    await api("/api/offline/screenshot/delete", { method: "POST", body: JSON.stringify({ relative: image.relative }) });
+    toast(`已删除 ${image.name}`);
+    $("#libImageViewer")?.close();
+    librarySidebar.imagesLoaded = false;
+    await loadLibraryImages();
+    if ((librarySidebar.imageFlat || []).length) openLibraryImage(Math.min(librarySidebar.imageIndex, librarySidebar.imageFlat.length - 1));
+  } catch (error) {
+    toast(`删除失败：${error.message || error}`, "error");
+  }
+}
+
 // ---------- 初始化 ----------
 
 function initLibraryView() {
@@ -406,6 +526,22 @@ function initLibraryView() {
   initLibraryView.bound = true;
 
   $$(".library-tab").forEach((item) => item.addEventListener("click", () => switchLibraryTab(item.dataset.libraryTab)));
+  $$("#libraryKindSwitch .library-kind-btn").forEach((item) => item.addEventListener("click", () => switchLibraryKind(item.dataset.libraryKind)));
+  $("#libImageSearch")?.addEventListener("input", () => renderLibraryImages());
+  $("#libImageRefresh")?.addEventListener("click", () => { librarySidebar.imagesLoaded = false; loadLibraryImages(); });
+  $("#libImageGroups")?.addEventListener("click", (event) => {
+    const thumb = event.target.closest("[data-image-index]");
+    if (thumb) openLibraryImage(Number(thumb.dataset.imageIndex));
+  });
+  $("#libImagePrev")?.addEventListener("click", () => openLibraryImage(librarySidebar.imageIndex - 1));
+  $("#libImageNext")?.addEventListener("click", () => openLibraryImage(librarySidebar.imageIndex + 1));
+  $("#libImageDelete")?.addEventListener("click", deleteLibraryImage);
+  $("#libImageClose")?.addEventListener("click", () => $("#libImageViewer")?.close());
+  $("#libImageDone")?.addEventListener("click", () => $("#libImageViewer")?.close());
+  $("#libImageViewer")?.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex - 1); }
+    else if (event.key === "ArrowRight") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex + 1); }
+  });
   $("#libFilter")?.addEventListener("change", (event) => {
     librarySidebar.filter = event.target.value;
     renderLibraryGrid();

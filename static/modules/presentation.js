@@ -182,7 +182,7 @@ function setSidebarCollapsed(collapsed) {
 
 const SIDEBAR_ITEMS = {
   collection: "收藏夹",
-  library: "动漫库",
+  library: "媒体库",
   schedule: "周表",
   timeline: "看番记录",
   statistics: "记录统计",

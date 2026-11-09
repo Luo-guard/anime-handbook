@@ -4995,6 +4995,62 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 #libraryView .library-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 
+/* 媒体库：视频 / 图片 切换 + 截图库 */
+.library-kind {
+  display: inline-flex; gap: 4px; margin-bottom: 14px;
+  padding: 4px; border: 1px solid var(--line); border-radius: 11px;
+  background: rgba(255, 255, 255, .6);
+}
+.library-kind-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.library-kind-btn:hover { color: var(--ink); }
+.library-kind-btn.active { background: var(--green-700); color: #fff; }
+.library-kind-count { font-size: 11px; opacity: .85; }
+.library-image-hint { margin: 2px 2px 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.lib-image-groups { display: flex; flex-direction: column; gap: 22px; }
+.lib-image-group > header {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-bottom: 10px; padding-bottom: 7px; border-bottom: 1px solid var(--line);
+}
+.lib-image-group h3 { margin: 0; font-size: 14px; color: var(--ink); }
+.lib-image-group header span { color: var(--muted); font-size: 11.5px; }
+.lib-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.lib-image-thumb {
+  position: relative; padding: 0; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); cursor: zoom-in; overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+.lib-image-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lib-image-thumb span {
+  position: absolute; left: 6px; bottom: 6px;
+  padding: 1px 7px; border-radius: 6px;
+  background: rgba(0, 0, 0, .62); color: #fff; font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.lib-image-thumb:hover { border-color: var(--active-inset); box-shadow: 0 6px 18px rgb(24 40 30 / .16); }
+.lib-image-viewer .modal-frame { width: min(1080px, 94vw); }
+.lib-image-stage { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.lib-image-stage img {
+  max-width: 100%; max-height: min(72vh, 720px); border-radius: 12px;
+  background: #0e1411; object-fit: contain;
+}
+.lib-image-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 38px; height: 38px; border: 0; border-radius: 50%;
+  background: rgba(18, 24, 20, .55); color: #fff;
+  font-size: 22px; line-height: 1; cursor: pointer;
+}
+.lib-image-nav:hover:not(:disabled) { background: rgba(18, 24, 20, .78); }
+.lib-image-nav:disabled { opacity: .3; cursor: default; }
+.lib-image-nav.prev { left: 8px; }
+.lib-image-nav.next { right: 8px; }
+.lib-image-caption { margin: 10px 2px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
 /* 动漫库面板继承 overview-panel 毛玻璃底板；内部间距微调 */
 .library-panel.library-panel { padding: 18px 22px 20px; }
 .library-tabs { flex: 0 0 auto; }

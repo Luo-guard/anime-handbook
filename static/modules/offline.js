@@ -1077,19 +1077,36 @@ function pcScreenshot() {
     toast(`截图失败：${error.message || error}`, "error");
     return;
   }
-  canvas.toBlob((blob) => {
+  canvas.toBlob(async (blob) => {
     if (!blob) {
       toast("截图失败：浏览器没有返回图片", "error");
       return;
     }
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const stamp = pcFormatTime(video.currentTime).replace(/:/g, "-");
-    link.href = url;
-    link.download = `${offlineView.animeName || "动漫"} ${episodeLabelOf(offlineView.playing?.episode_key)} ${stamp}.png`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast("截图已保存到浏览器下载目录");
+    const anime = offlineView.animeName || "动漫";
+    const episode = episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
+    // 先进媒体库的图片库（按番名分文件夹、按模板命名）；后台不可用时退回浏览器下载。
+    try {
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("读取截图失败"));
+        reader.readAsDataURL(blob);
+      });
+      const result = await api("/api/offline/screenshot", {
+        method: "POST",
+        body: JSON.stringify({ anime, episode, seconds: video.currentTime, data }),
+      });
+      toast(`已存入媒体库 · 图片：「${result.folder}」/ ${result.name}`);
+    } catch (error) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = pcFormatTime(video.currentTime).replace(/:/g, "-");
+      link.href = url;
+      link.download = `${anime} ${episode} ${stamp}.png`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast(`入库失败（${error.message || error}），已改为下载到浏览器`, "error");
+    }
   }, "image/png");
 }
 
@@ -1423,6 +1440,8 @@ async function loadOfflineSettings() {
     const config = data.config || {};
     $("#offlineMediaRoot").value = config.media_root || "";
     $("#offlineDownloadRoot").value = config.download_root || "";
+    $("#offlineScreenshotRoot").value = config.screenshot_root || "";
+    $("#offlineScreenshotName").value = config.screenshot_name_format || "";
     $("#offlineQbHost").value = config.qb_host || "127.0.0.1";
     $("#offlineQbPort").value = config.qb_port || 8080;
     $("#offlineQbCategory").value = config.qb_category || "AnimeHandbook";
@@ -1431,6 +1450,7 @@ async function loadOfflineSettings() {
     const paths = data.paths || {};
     $("#offlineMediaRoot").placeholder = data.default_media_root || "";
     $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
+    if ($("#offlineScreenshotHint")) $("#offlineScreenshotHint").textContent = `截图实际保存到：${paths.screenshot_root || "?"}`;
     const writable = data.writable || {};
     const room = writable.free_gb ? `，剩余 ${writable.free_gb} GB` : "";
     offlineStatus(
@@ -1453,6 +1473,8 @@ async function saveOfflineSettings() {
       body: JSON.stringify({
         media_root: $("#offlineMediaRoot").value.trim(),
         download_root: $("#offlineDownloadRoot").value.trim(),
+        screenshot_root: $("#offlineScreenshotRoot").value.trim(),
+        screenshot_name_format: $("#offlineScreenshotName").value.trim(),
         qb_host: $("#offlineQbHost").value.trim() || "127.0.0.1",
         qb_port: Number($("#offlineQbPort").value) || 8080,
         qb_category: $("#offlineQbCategory").value.trim() || "AnimeHandbook",
@@ -1462,6 +1484,7 @@ async function saveOfflineSettings() {
     });
     const paths = data.paths || {};
     $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
+    if ($("#offlineScreenshotHint")) $("#offlineScreenshotHint").textContent = `截图实际保存到：${paths.screenshot_root || "?"}`;
     const writable = data.writable || {};
     offlineStatus(status, writable.ok ? "已保存，目录可写" : writable.error || "已保存，但目录不可写", !writable.ok);
     toast("离线设置已保存");

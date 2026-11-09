@@ -6,6 +6,7 @@ from .assets import replace_background_bytes
 from .common import MAX_DETAIL_LINKS
 from .link_rules import RuleFetchError, cache_path, payload as rules_payload, refresh as refresh_rules
 from . import offline_config
+from . import screenshots as screenshot_tools
 from . import danmaku as danmaku_tools
 from .offline_service import OfflineError, OfflineService
 
@@ -33,6 +34,9 @@ class PostRoutes:
                 "/api/link-rules/refresh",
                 # 离线设置是本机配置（盘符、下载器端口），不写收藏数据。
                 "/api/offline/settings",
+                # 截图写的是本机图片库目录，同样是本机文件。
+                "/api/offline/screenshot",
+                "/api/offline/screenshot/delete",
                 # 弹幕代理只是转发查询，不改动任何收藏数据。
                 "/api/danmaku/proxy",
             }
@@ -53,6 +57,19 @@ class PostRoutes:
                     "paths": offline_config.resolved(config),
                     "writable": offline_config.ensure_dirs(config),
                 })
+            elif path == "/api/offline/screenshot":
+                self.send_json(screenshot_tools.save_png(
+                    self.database.asset_root,
+                    anime=str(body.get("anime") or ""),
+                    episode=str(body.get("episode") or ""),
+                    seconds=body.get("seconds") or 0,
+                    data_url=str(body.get("data") or ""),
+                ))
+            elif path == "/api/offline/screenshot/delete":
+                self.send_json(screenshot_tools.delete_image(
+                    self.database.asset_root,
+                    str(body.get("relative") or ""),
+                ))
             elif path == "/api/offline/download":
                 service = OfflineService(self.database)
                 self.send_json(service.download(

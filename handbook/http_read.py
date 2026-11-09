@@ -7,6 +7,7 @@ from urllib.parse import quote, unquote
 
 from . import media as media_tools
 from . import offline_config
+from . import screenshots as screenshot_tools
 from . import danmaku as danmaku_tools
 from .offline import OfflineStore
 from .offline_service import OfflineError, OfflineService
@@ -184,6 +185,21 @@ class ReadRoutes:
                 self.send_json(OfflineService(self.database).subscriptions(anime_id))
             elif path == "/api/offline/library":
                 self.send_json(OfflineService(self.database).library())
+            elif path == "/api/offline/screenshots":
+                self.send_json({"ok": True, **screenshot_tools.list_library(self.database.asset_root)})
+            elif path == "/api/offline/screenshot-file":
+                relative = unquote(query.get("path", [""])[0] or "")
+                target = screenshot_tools.image_path(self.database.asset_root, relative)
+                if not target:
+                    self.send_error_json(404, "找不到这张截图")
+                    return
+                body = target.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", mimetypes.guess_type(target.name)[0] or "image/png")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
             elif path == "/api/offline/summary":
                 self.send_json(OfflineService(self.database).summary())
             elif path == "/api/offline/settings":

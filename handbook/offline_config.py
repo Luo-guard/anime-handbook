@@ -24,6 +24,8 @@ MAX_TEXT = 400
 DEFAULTS: dict[str, Any] = {
     "media_root": "",          # 空表示用 default_media_root()
     "download_root": "",       # 空表示 <media_root>/_incoming
+    "screenshot_root": "",     # 空表示 <media_root>/截图
+    "screenshot_name_format": "",  # 空表示 DEFAULT_SCREENSHOT_NAME
     "qb_host": DEFAULT_QB_HOST,
     "qb_port": DEFAULT_QB_PORT,
     "qb_category": DEFAULT_CATEGORY,
@@ -38,7 +40,10 @@ DEFAULTS: dict[str, Any] = {
 
 _BOOLS = ("seed_after_done", "auto_follow")
 _INTS = {"qb_port": (1, 65535), "warn_size_gb": (1, 500), "low_space_gb": (1, 5000)}
-_TEXTS = ("media_root", "download_root", "font_dir", "mikan_host", "qb_host", "qb_category")
+_TEXTS = ("media_root", "download_root", "screenshot_root", "screenshot_name_format", "font_dir", "mikan_host", "qb_host", "qb_category")
+
+# 截图文件名模板：{episode} 集数、{time} 时间码、{date} 日期、{anime} 番名。
+DEFAULT_SCREENSHOT_NAME = "{episode}_{time}"
 
 
 def default_media_root() -> str:
@@ -155,10 +160,11 @@ def save_settings(asset_root: Path, document: Any) -> dict[str, Any]:
 
 
 def resolved(config: dict[str, Any]) -> dict[str, str]:
-    """算出真正使用的两个目录，不改动原始配置。"""
+    """算出真正使用的几个目录，不改动原始配置。"""
     media = _clean_text(config.get("media_root")) or _clean_text(default_media_root())
     download = _clean_text(config.get("download_root")) or f"{media}/_incoming"
-    return {"media_root": media, "download_root": download}
+    shots = _clean_text(config.get("screenshot_root")) or f"{media}/截图"
+    return {"media_root": media, "download_root": download, "screenshot_root": shots}
 
 
 _PROBE_LOCK = threading.Lock()
