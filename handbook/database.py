@@ -672,6 +672,8 @@ class HandbookDB:
                 "schedule_preferences": {},
                 # 隐藏列表按周表来源分开（yuc / kazumi / as），互不影响。
                 "schedule_hidden": {},
+                # 没关联 Bangumi 的条目没有数字 ID，改按标题隐藏。
+                "schedule_hidden_titles": {},
                 "schedule_sort": "time",
                 "schedule_grouping": {"mode": "none", "collection_order": ["collected", "uncollected"], "status_order": ["1", "2", "3", "4", "5", "uncollected"], "sorts": {}},
                 "schedule_statuses": [1, 2, 3, 4, 5],

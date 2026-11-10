@@ -5456,6 +5456,20 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 .schedule-hidden-item img { width: 30px; height: 40px; object-fit: cover; border-radius: 6px; background: rgb(var(--theme-rgb) / .08); flex: 0 0 auto; }
 .schedule-hidden-item b { flex: 1 1 auto; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 没有 Bangumi 关联、按标题藏起来的条目：没有封面，用一个斜纹占位块撑住行高 */
+.schedule-hidden-thumb {
+  width: 30px; height: 40px; flex: 0 0 auto;
+  border: 1px solid rgb(var(--theme-rgb) / .12); border-radius: 6px;
+  background:
+    repeating-linear-gradient(135deg, rgb(var(--theme-rgb) / .1) 0 4px, transparent 4px 8px),
+    rgb(var(--theme-rgb) / .05);
+}
+.schedule-hidden-tag {
+  flex: 0 0 auto; font-style: normal;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgb(var(--theme-rgb) / .08); color: var(--muted);
+  font-size: 10.5px;
+}
 
 /* 筛选弹窗里的「隐藏的番剧」挑选列表：直接点条目，不打字 */
 .schedule-hidden-picker {

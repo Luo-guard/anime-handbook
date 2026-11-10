@@ -234,16 +234,43 @@ function scheduleHiddenIds(source = scheduleSource()) {
   return scheduleHiddenMap()[source] || [];
 }
 
+// 没关联 Bangumi 的条目（AS 里的国漫居多）没有数字 ID，只能按标题藏。
+// 单独存一份，和 ID 列表取并集，两边都能用。
+function scheduleHiddenTitleMap() {
+  const raw = state.settings.schedule_hidden_titles;
+  return Object.fromEntries(SCHEDULE_SOURCE_KEYS.map((source) => [
+    source,
+    (Array.isArray(raw?.[source]) ? raw[source] : []).map((title) => String(title || "").trim()).filter(Boolean),
+  ]));
+}
+
+function scheduleHiddenTitles(source = scheduleSource()) {
+  return scheduleHiddenTitleMap()[source] || [];
+}
+
+function scheduleTitleKey(title) {
+  return String(title || "").trim().toLocaleLowerCase();
+}
+
+function scheduleHiddenCount(source = scheduleSource()) {
+  return scheduleHiddenIds(source).length + scheduleHiddenTitles(source).length;
+}
+
 function scheduleHiddenSets(source = scheduleSource()) {
   const ids = new Set(scheduleHiddenIds(source));
   const names = new Set();
   state.animes.forEach((anime) => {
     if (ids.has(Number(anime.id))) [anime.name_cn, anime.name, anime.display_name].forEach((n) => n && names.add(String(n).toLocaleLowerCase()));
   });
-  return {ids, names};
+  const titles = new Set(scheduleHiddenTitles(source).map(scheduleTitleKey));
+  return {ids, names, titles};
 }
 function scheduleItemHidden(item, hidden) {
-  return (item.id && hidden.ids.has(Number(item.id))) || hidden.names.has(String(item.title || "").toLocaleLowerCase());
+  if (item.id && hidden.ids.has(Number(item.id))) return true;
+  const title = String(item.title || "");
+  if (!title) return false;
+  const key = scheduleTitleKey(title);
+  return hidden.titles.has(key) || hidden.names.has(key);
 }
 
 function scheduleFilteredItems() {
@@ -503,7 +530,7 @@ function scheduleHiddenModalSource() {
 
 function renderScheduleHiddenSettings() {
   const source = scheduleSettingsSource();
-  const count = scheduleHiddenIds(source).length;
+  const count = scheduleHiddenCount(source);
   const node = $("#scheduleHiddenCount");
   if (node) node.textContent = count
     ? `当前来源「${scheduleSourceNames[source]}」已隐藏 ${count} 部；点右侧按钮查看与恢复`
@@ -511,7 +538,7 @@ function renderScheduleHiddenSettings() {
   renderScheduleHiddenPicker();
   const manage = $("#scheduleHiddenManageFromFilter");
   if (manage) {
-    const filterCount = scheduleHiddenIds(scheduleSource()).length;
+    const filterCount = scheduleHiddenCount(scheduleSource());
     manage.textContent = filterCount ? `查看已隐藏（${filterCount}）` : "查看已隐藏";
   }
   if ($("#scheduleHiddenModal")?.open) renderScheduleHiddenList();
@@ -560,12 +587,20 @@ function renderScheduleHiddenList() {
   const subtitle = $("#scheduleHiddenSubtitle");
   if (subtitle) subtitle.textContent = `隐藏只作用于「${label}」这一套周表，另外两套不受影响；取消隐藏后立即恢复。`;
   const ids = scheduleHiddenIds(source);
-  host.innerHTML = ids.length
-    ? ids.map((id) => {
-        const anime = state.animes.find((row) => Number(row.id) === id);
-        const name = anime ? (anime.display_name || anime.name_cn || anime.name) : `番剧 ${id}`;
-        return `<div class="schedule-hidden-item"><img src="/api/covers/${id}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" /><b>${escapeHtml(name)}</b><button type="button" class="secondary-button" data-schedule-unhide="${id}">取消隐藏</button></div>`;
-      }).join("")
+  const titles = scheduleHiddenTitles(source);
+  const rows = [
+    ...ids.map((id) => {
+      const anime = state.animes.find((row) => Number(row.id) === id);
+      const name = anime ? (anime.display_name || anime.name_cn || anime.name) : `番剧 ${id}`;
+      const cover = anime
+        ? `<img src="/api/covers/${id}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" />`
+        : `<span class="schedule-hidden-thumb" aria-hidden="true"></span>`;
+      return `<div class="schedule-hidden-item">${cover}<b>${escapeHtml(name)}</b><button type="button" class="secondary-button" data-schedule-unhide="${id}">取消隐藏</button></div>`;
+    }),
+    ...titles.map((title) => `<div class="schedule-hidden-item"><span class="schedule-hidden-thumb" aria-hidden="true"></span><b>${escapeHtml(title)}</b><em class="schedule-hidden-tag">按标题</em><button type="button" class="secondary-button" data-schedule-unhide-title="${escapeHtml(title)}">取消隐藏</button></div>`),
+  ];
+  host.innerHTML = rows.length
+    ? rows.join("")
     : `<p class="page-subtitle">「${label}」还没有隐藏任何番剧。</p>`;
 }
 
@@ -574,6 +609,23 @@ async function saveScheduleHidden(ids, source = scheduleSource()) {
   map[source] = [...new Set(ids.map(Number).filter((n) => n > 0))];
   const result = await api("/api/settings", {method: "PATCH", body: JSON.stringify({schedule_hidden: map})});
   const saved = result.settings?.schedule_hidden;
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) throw new Error("后台未保存隐藏列表，请重启手账后台后重试。");
+  state.settings = result.settings;
+  renderScheduleHiddenSettings();
+  renderSchedule();
+}
+
+async function saveScheduleHiddenTitles(titles, source = scheduleSource()) {
+  const map = scheduleHiddenTitleMap();
+  const seen = new Set();
+  map[source] = (titles || []).map((title) => String(title || "").trim()).filter((title) => {
+    const key = scheduleTitleKey(title);
+    if (!title || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const result = await api("/api/settings", {method: "PATCH", body: JSON.stringify({schedule_hidden_titles: map})});
+  const saved = result.settings?.schedule_hidden_titles;
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) throw new Error("后台未保存隐藏列表，请重启手账后台后重试。");
   state.settings = result.settings;
   renderScheduleHiddenSettings();
@@ -745,7 +797,7 @@ function updateSchedulePickBar() {
   const bar = $("#schedulePickBar");
   if (!bar) return;
   const countNode = $("#schedulePickCount");
-  if (countNode) countNode.textContent = String(scheduleHiddenIds(scheduleSource()).length);
+  if (countNode) countNode.textContent = String(scheduleHiddenCount(scheduleSource()));
   const cards = $$("#scheduleGrid .schedule-card").length;
   const hint = $("#schedulePickHint");
   if (hint) {
@@ -802,21 +854,28 @@ async function hideScheduleCard(button, key) {
   if (button.dataset.hiding === "1") return;
   const item = scheduleState.data?.items.find((row) => row.key === key);
   if (!item) return;
-  if (!Number(item.id)) {
+  // 有 Bangumi ID 的按 ID 藏；没有的（AS 的国漫等）按标题藏——不因为「没关联」就拦着。
+  const byId = Number(item.id) > 0;
+  const title = String(item.title || "").trim();
+  if (!byId && !title) {
     button.classList.add("pick-nudge");
     window.setTimeout(() => button.classList.remove("pick-nudge"), 420);
-    toast("这个条目还没关联 Bangumi，暂时藏不了", "error");
+    toast("这个条目既没有 Bangumi 关联、也没有标题，藏不了", "error");
     return;
   }
   const before = scheduleFlipCapture();
   const source = scheduleSource();
-  const name = item.title || "这部番";
+  const name = title || "这部番";
   button.dataset.hiding = "1";
   button.classList.add("is-hiding");
   button.setAttribute("aria-hidden", "true");
   await new Promise((resolve) => window.setTimeout(resolve, scheduleReduceMotion() ? 0 : 190));
   try {
-    await saveScheduleHidden([...scheduleHiddenIds(source), Number(item.id)], source);
+    if (byId) {
+      await saveScheduleHidden([...scheduleHiddenIds(source), Number(item.id)], source);
+    } else {
+      await saveScheduleHiddenTitles([...scheduleHiddenTitles(source), title], source);
+    }
     requestAnimationFrame(() => scheduleFlipPlay(before));
     toast(`已隐藏「${name}」 · 「查看已隐藏」里随时能恢复`);
   } catch (error) {
@@ -890,6 +949,17 @@ function initializeSchedule() {
     renderScheduleHiddenList();
   });
   $("#scheduleHiddenList")?.addEventListener("click", async (event) => {
+    const byTitle = event.target.closest("[data-schedule-unhide-title]");
+    if (byTitle) {
+      const source = scheduleHiddenModalSource();
+      const key = scheduleTitleKey(byTitle.dataset.scheduleUnhideTitle);
+      try {
+        await saveScheduleHiddenTitles(scheduleHiddenTitles(source).filter((title) => scheduleTitleKey(title) !== key), source);
+        renderScheduleHiddenList();
+        toast("已恢复显示");
+      } catch (error) { toast(error.message, "error"); }
+      return;
+    }
     const button = event.target.closest("[data-schedule-unhide]");
     if (!button) return;
     const source = scheduleHiddenModalSource();

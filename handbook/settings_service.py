@@ -70,6 +70,38 @@ def _normalize_schedule_hidden(value: Any) -> dict[str, list[int]]:
     raise ValueError("隐藏番剧列表无效")
 
 
+def _normalize_schedule_hidden_titles(value: Any) -> dict[str, list[str]]:
+    """按标题隐藏的番剧，按周表来源分开存。
+
+    有些条目（尤其 AnimeSchedule 的国漫）压根没有关联到 Bangumi，拿不到数字 ID，
+    只靠 ``schedule_hidden`` 的 ID 列表就藏不掉。这里单独存一份标题，
+    匹配时和 ID 列表取并集；标题按原样保存（去首尾空格、去重、截断），
+    比较时再统一小写。
+    """
+    def clean(items: Any) -> list[str]:
+        if not isinstance(items, list):
+            raise ValueError("隐藏番剧标题列表无效")
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            title = str(item or "").strip()
+            if not title:
+                continue
+            folded = title.casefold()
+            if folded in seen:
+                continue
+            seen.add(folded)
+            cleaned.append(title[:120])
+        return cleaned[:500]
+
+    if isinstance(value, dict):
+        return {source: clean(value.get(source, [])) for source in _SCHEDULE_SOURCES}
+    if isinstance(value, list):
+        shared = clean(value)
+        return {source: list(shared) for source in _SCHEDULE_SOURCES}
+    raise ValueError("隐藏番剧标题列表无效")
+
+
 def _normalize_settings(body, settings):
     if not isinstance(body, dict): raise ValueError("设置内容需为 JSON 对象")
     settings = copy.deepcopy(settings)
@@ -163,6 +195,7 @@ def _normalize_settings(body, settings):
         "schedule_uncollected",
         "schedule_preferences",
         "schedule_hidden",
+        "schedule_hidden_titles",
         "schedule_card_fields",
         "auto_open_offline_enabled",
         "auto_open_offline_collections",
@@ -238,6 +271,8 @@ def _normalize_settings(body, settings):
                 value = _normalize_schedule_preferences(value)
             elif key == "schedule_hidden":
                 value = _normalize_schedule_hidden(value)
+            elif key == "schedule_hidden_titles":
+                value = _normalize_schedule_hidden_titles(value)
             elif key == "day_start_hour":
                 value = min(23, max(0, int(value)))
             elif key == "show_episode_balance":
