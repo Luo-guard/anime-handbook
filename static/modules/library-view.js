@@ -318,7 +318,8 @@ async function openLibraryDetail(animeId, name) {
     librarySidebar.files = raw.filter((file) => file.exists !== false);
     // 记录还在、文件却没了的集数：卡片和详情现在都只数能播的，
     // 但这件事得说出来，否则用户会以为「已收」无故少了一集。
-    librarySidebar.missing = Math.max(0, raw.length - librarySidebar.files.length);
+    // 后台 state 已经算好 missing_count，优先用它，别在前端重复一套判断。
+    librarySidebar.missing = Number(data.missing_count ?? (raw.length - librarySidebar.files.length)) || 0;
     librarySidebar.jobs = data.jobs || [];
     renderLibraryDetail();
   } catch (error) {
