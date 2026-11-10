@@ -239,6 +239,17 @@ function pageVisible(id) {
   return sidebarVisibility()[id] !== false;
 }
 
+// 设置里点上移/下移时只调这个：主侧边栏立刻按新顺序重排，但不碰显隐、
+// 也不改当前所在页面（applySidebarLayout 会顺带做这两件事，预览时太跳）。
+function applySidebarOrder() {
+  const nav = $(".main-nav");
+  if (!nav) return;
+  sidebarOrder().forEach((id) => {
+    const item = $(`.nav-item[data-nav-id="${id}"]`);
+    if (item) nav.append(item);
+  });
+}
+
 function applySidebarLayout() {
   $$(".sidebar-power-area, #shutdownBackendCompact").forEach(element => {
     element.classList.toggle("hidden", !enabledSetting("show_shutdown_button"));

@@ -320,6 +320,7 @@ function renderSettingsPanels() {
     // 媒体库不仅要在这里显示，还要落到 library_sidebar 上（复用三态开关那条保存通路）。
     if (input.dataset.sidebarId === "library") setLibrarySidebarMode(input.checked ? "show" : "hide");
     syncSettingsNavigation(true);
+    if (typeof applySidebarOrder === "function") applySidebarOrder();
   }));
   const builtinCategoryVisibility = builtinVisibility();
   $("#builtinVisibilityList").innerHTML = CATEGORIES.map((category) => `
@@ -349,7 +350,9 @@ function renderSettingsPanels() {
         const position = order.indexOf(control.dataset.sidebarId);
         control.disabled = control.dataset.direction === "up" ? position === 0 : position === order.length - 1;
       });
+      // 设置里的顺序和主侧边栏必须是同一份：这里立刻重排，别等按「保存」。
       syncSettingsNavigation(true);
+      if (typeof applySidebarOrder === "function") applySidebarOrder();
     });
   });
   $$(".builtin-order-button").forEach((button) => {
