@@ -277,7 +277,14 @@ function updateLibrarySubtitle() {
 // ---------- 番详情：按字幕组区分来源 ----------
 
 async function openLibraryDetail(animeId, name) {
-  librarySidebar.detail = { animeId: Number(animeId) || 0, name: String(name || "") };
+  // episode_count 只有总览列表里带着，详情单独取一次 state 拿不到它，
+  // 这里顺手带上，否则「全 N 集」永远显示不出来。
+  const known = librarySidebar.items.find((entry) => Number(entry.anime_id) === Number(animeId));
+  librarySidebar.detail = {
+    animeId: Number(animeId) || 0,
+    name: String(name || ""),
+    episodeCount: Number(known?.episode_count) || 0,
+  };
   switchLibraryTab("media");
   const panel = $("#libraryDetailPanel");
   if (panel) panel.classList.remove("hidden");
@@ -797,17 +804,7 @@ function initLibraryView() {
       return;
     }
     const card = event.target.closest(".library-card");
-    if (card) {
-      const item = librarySidebar.items.find((entry) => Number(entry.anime_id) === Number(card.dataset.anime));
-      if (item) {
-        librarySidebar.detail = {
-          animeId: item.anime_id,
-          name: item.name,
-          episodeCount: item.episode_count || 0,
-        };
-      }
-      openLibraryDetail(card.dataset.anime, card.dataset.name);
-    }
+    if (card) openLibraryDetail(card.dataset.anime, card.dataset.name);
   });
   $("#libGrid")?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;

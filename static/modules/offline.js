@@ -803,7 +803,9 @@ document.addEventListener("DOMContentLoaded", () => {
     renderLibrary();
   });
   $("#offlineLibraryGrid")?.addEventListener("click", (event) => {
-    const continueButton = event.target.closest(".library-continue");
+    // 卡片右下角的「▶ 看到 12:34」和封面中央的播放圆钮都是续播入口，
+    // 少写一个就会被下面那条「点卡片=打开本地文件」抢走，点了不播反而跳列表。
+    const continueButton = event.target.closest(".library-continue, .library-play-fab");
     if (continueButton) {
       event.stopPropagation();
       continueWatching(continueButton.dataset.anime, continueButton.dataset.continue);

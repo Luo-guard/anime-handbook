@@ -278,7 +278,10 @@ function runShortcut(action) {
   if(action.id==="shutdown"){if(window.handbookOnline)return false;shutdownHandbookBackend();return true;}
   if(action.id==="search"){
     const libraryTarget=(typeof librarySidebar!=="undefined"&&librarySidebar.kind==="image")?"#libImageSearch":"#libSearch";
-    const selector={collection:"#searchInput",schedule:"#scheduleSearch",timeline:"#timelineSearchInput",library:libraryTarget}[state.activeView];const input=selector&&$(selector);if(!input)return false;input.focus();input.select();return true;
+    const selector={collection:"#searchInput",schedule:"#scheduleSearch",timeline:"#timelineSearchInput",library:libraryTarget}[state.activeView];const input=selector&&$(selector);
+    // offsetParent 为 null = 被 hidden 的祖先藏起来了（媒体库详情页就是这样），
+    // 这时候 focus 没有视觉反馈，等于按键失灵，直接当作没有目标。
+    if(!input||input.offsetParent===null)return false;input.focus();input.select();return true;
   }
   if(action.id==="new_record"){if(!navigateByShortcut("timeline"))return false;$("#writeNoteButton").click();return true;}
   if(action.id==="new_ranking"){if(!navigateByShortcut("ranking"))return false;$("#createRankingButton").click();return true;}

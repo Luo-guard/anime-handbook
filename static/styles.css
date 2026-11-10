@@ -5589,6 +5589,13 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 .spb-done:hover { background: var(--green-800); transform: translateY(-1px); }
 
+/* 隐藏模式里把右下角浮钮让出来，否则窄屏时它正好压在工具条的「完成」上 */
+body.schedule-picking [data-floating-view="schedule"] {
+  opacity: 0; pointer-events: none;
+  transform: translateY(12px) scale(.96);
+  transition: opacity .18s ease, transform .18s ease;
+}
+
 /* 卡片：隐藏模式下悬停压暗封面，正中浮出「隐藏」——不跟角标抢位置 */
 #scheduleView.pick-mode .schedule-card .poster-wrap::before {
   content: "";

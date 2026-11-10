@@ -249,7 +249,9 @@ function scheduleHiddenTitles(source = scheduleSource()) {
 }
 
 function scheduleTitleKey(title) {
-  return String(title || "").trim().toLocaleLowerCase();
+  // 后端会把标题截到 120 字再存，这里跟着截，否则超长标题藏下去、
+  // 匹配时用的是完整标题，两边对不上就会「藏了又回来」。
+  return String(title || "").trim().slice(0, 120).toLocaleLowerCase();
 }
 
 function scheduleHiddenCount(source = scheduleSource()) {
@@ -604,6 +606,16 @@ function renderScheduleHiddenList() {
     : `<p class="page-subtitle">「${label}」还没有隐藏任何番剧。</p>`;
 }
 
+// 连点两张卡片时，两次保存都会「先读当前列表、再把新 id 拼上去」：
+// 后一次读到的还是前一次写回来的旧列表，于是把前一次刚藏的又放了出来。
+// 这里把写操作串起来，轮到谁执行时再读最新状态。
+let scheduleHiddenWriteChain = Promise.resolve();
+function queueScheduleHiddenWrite(task) {
+  const next = scheduleHiddenWriteChain.then(task, task);
+  scheduleHiddenWriteChain = next.catch(() => {});
+  return next;
+}
+
 async function saveScheduleHidden(ids, source = scheduleSource()) {
   const map = scheduleHiddenMap();
   map[source] = [...new Set(ids.map(Number).filter((n) => n > 0))];
@@ -763,6 +775,8 @@ function enterSchedulePickMode() {
   scheduleState.pickHidden = true;
   if (typeof switchView === "function" && state.activeView !== "schedule") switchView("schedule");
   $("#scheduleView")?.classList.add("pick-mode");
+  // 右下角那颗「排序与筛选」浮钮会和工具条右侧的「完成」叠在一起，隐藏模式里先让它退场。
+  document.body.classList.add("schedule-picking");
   renderSchedule();
   // 不主动滚动：弹窗关掉后用户本来就在原位，硬滚一下反而像页面跳了。
   window.setTimeout(() => schedulePulseCards(), 160);
@@ -772,6 +786,7 @@ function exitSchedulePickMode() {
   if (!scheduleState.pickHidden) return;
   scheduleState.pickHidden = false;
   $("#scheduleView")?.classList.remove("pick-mode");
+  document.body.classList.remove("schedule-picking");
   $$("#scheduleGrid .schedule-card").forEach((card) => card.classList.remove("pick-in", "is-hiding"));
   updateSchedulePickBar();
   renderSchedule();
@@ -872,9 +887,9 @@ async function hideScheduleCard(button, key) {
   await new Promise((resolve) => window.setTimeout(resolve, scheduleReduceMotion() ? 0 : 190));
   try {
     if (byId) {
-      await saveScheduleHidden([...scheduleHiddenIds(source), Number(item.id)], source);
+      await queueScheduleHiddenWrite(() => saveScheduleHidden([...scheduleHiddenIds(source), Number(item.id)], source));
     } else {
-      await saveScheduleHiddenTitles([...scheduleHiddenTitles(source), title], source);
+      await queueScheduleHiddenWrite(() => saveScheduleHiddenTitles([...scheduleHiddenTitles(source), title], source));
     }
     requestAnimationFrame(() => scheduleFlipPlay(before));
     toast(`已隐藏「${name}」 · 「查看已隐藏」里随时能恢复`);
@@ -954,7 +969,7 @@ function initializeSchedule() {
       const source = scheduleHiddenModalSource();
       const key = scheduleTitleKey(byTitle.dataset.scheduleUnhideTitle);
       try {
-        await saveScheduleHiddenTitles(scheduleHiddenTitles(source).filter((title) => scheduleTitleKey(title) !== key), source);
+        await queueScheduleHiddenWrite(() => saveScheduleHiddenTitles(scheduleHiddenTitles(source).filter((title) => scheduleTitleKey(title) !== key), source));
         renderScheduleHiddenList();
         toast("已恢复显示");
       } catch (error) { toast(error.message, "error"); }
@@ -964,7 +979,7 @@ function initializeSchedule() {
     if (!button) return;
     const source = scheduleHiddenModalSource();
     try {
-      await saveScheduleHidden(scheduleHiddenIds(source).filter((id) => id !== Number(button.dataset.scheduleUnhide)), source);
+      await queueScheduleHiddenWrite(() => saveScheduleHidden(scheduleHiddenIds(source).filter((id) => id !== Number(button.dataset.scheduleUnhide)), source));
       renderScheduleHiddenList();
       toast("已恢复显示");
     } catch (error) { toast(error.message, "error"); }
