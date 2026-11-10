@@ -87,19 +87,42 @@ const BILI_XML = `<i>
   assert.equal(render.items, 5);
 
   // 5) 屏蔽词与开关持久化
+  //    开关是纯图标按钮（Kazumi 式），没有文字节点，状态要看 aria-pressed / is-off / 对勾角标。
   const shield = await page.evaluate((xml) => {
     document.getElementById('dmShield').value = '剧透';
     document.getElementById('dmShield').dispatchEvent(new Event('change'));
     dmSetItems(dmParseText(xml), 'import', '屏蔽词测试');
-    document.getElementById('offlineDanmakuToggle').click();
+    const toggle = document.getElementById('offlineDanmakuToggle');
+    const badge = toggle.querySelector('.pc-dm-badge');
+    const snapshot = () => ({
+      pressed: toggle.getAttribute('aria-pressed'),
+      offClass: toggle.classList.contains('is-off'),
+      badgeShown: badge ? getComputedStyle(badge).display !== 'none' : null,
+      sendDisabled: document.getElementById('dmSendButton')?.disabled === true,
+      placeholder: document.getElementById('dmSendInput')?.placeholder || '',
+    });
+    const beforeOff = snapshot();
+    toggle.click();                       // 关
+    const offState = snapshot();
+    toggle.click();                       // 再开回来
+    const onState = snapshot();
+    toggle.click();                       // 复位成「关」，保持后面用例的前提
     const saved = JSON.parse(localStorage.getItem('handbook.danmaku.settings') || '{}');
     return { count: danmakuView.items.length, enabled: danmakuView.settings.enabled,
-      savedEnabled: saved.enabled, label: document.getElementById('offlineDanmakuToggle').textContent };
+      savedEnabled: saved.enabled, beforeOff, offState, onState };
   }, BILI_XML);
   assert.equal(shield.count, 4, '含「剧透」的那条要被屏蔽');
   assert.equal(shield.enabled, false);
   assert.equal(shield.savedEnabled, false, '设置要写进 localStorage');
-  assert.equal(shield.label, '弹幕 · 关');
+  assert.equal(shield.beforeOff.pressed, 'true', '默认应为开启');
+  assert.equal(shield.beforeOff.badgeShown, true, '开启时角标（对勾）要显示');
+  assert.equal(shield.offState.pressed, 'false', '关掉后 aria-pressed 要变 false');
+  assert.equal(shield.offState.offClass, true, '关掉后按钮要带 is-off');
+  assert.equal(shield.offState.badgeShown, false, '关掉后角标要隐藏');
+  assert.equal(shield.offState.sendDisabled, true, '关掉弹幕后发送框和按钮要禁用');
+  assert.equal(shield.offState.placeholder, '已关闭弹幕');
+  assert.equal(shield.onState.pressed, 'true', '再点一次要能开回来');
+  assert.equal(shield.onState.badgeShown, true);
 
   // 6) 后端接口：本地弹幕查询可用、代理拒绝公网地址（不能变成任意 URL 代理）
   const api = await page.evaluate(async () => {
