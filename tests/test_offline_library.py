@@ -75,6 +75,17 @@ class LibraryTest(unittest.TestCase):
         data = self.service.library()
         self.assertEqual([item["anime_id"] for item in data["items"]], [], "文件全不在的番不进媒体库")
 
+    def test_file_count_only_counts_playable_files(self):
+        """卡片「已收 N 集」和详情同口径：只数磁盘上真在的文件。"""
+        self._make_anime(1, "测试番A", watched=[])
+        self._make_file(1, "0:1", "a1.mp4")
+        self._make_file(1, "0:2", "a2.mp4")
+        (self.media / "a2.mp4").unlink()   # 记录还在，文件被手动删掉
+
+        item = next(row for row in self.service.library()["items"] if row["anime_id"] == 1)
+        self.assertEqual(item["file_count"], 1, "已收集数只算还能播的那一集")
+        self.assertEqual(item["missing_count"], 1, "缺的那一集单独报出来，供详情提示")
+
     def test_bgm_style_watched_keys_map_through_episodes(self):
         import json
         episodes = [{"key": "bgm:900001", "type": 0, "sort": 1}]

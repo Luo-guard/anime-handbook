@@ -22,8 +22,10 @@ const librarySidebar = {
   sort: "recent",
   token: 0,
   loaded: false,
+  loadedAt: 0,        // 上次成功拉到列表的时间戳，用来做 30 秒缓存
   detail: null,       // 打开的番 { animeId, name }
   files: [],
+  missing: 0,         // 详情里「记录还在、文件不在」的集数
   jobs: [],
   sourceFilter: "",   // 选中的字幕组（多来源时）
   subs: [],
@@ -31,6 +33,10 @@ const librarySidebar = {
   searching: false,
   heroKey: "",        // 已经渲染过的续看横幅（避免搜索时反复重建图片）
 };
+
+// 来回切页签时没必要每次都重新扫一遍媒体库目录：30 秒内直接用上次的结果，
+// 超过窗口、点了刷新、或刚删/刚下载过才重新拉。
+const LIB_CACHE_MS = 30000;
 
 const LIB_SORT_OPTIONS = [
   { id: "recent", label: "最近更新" },
@@ -66,6 +72,7 @@ async function applyLibrarySidebarVisibility() {
         librarySidebar.items = data.items || [];
         librarySidebar.disk = data.disk || null;
         librarySidebar.loaded = true;
+        librarySidebar.loadedAt = Date.now();
       }
       hide = librarySidebar.items.length === 0;
     } catch (error) { hide = false; }
@@ -97,7 +104,13 @@ function switchLibraryTab(tab) {
 
 // ---------- 媒体库总览 ----------
 
-async function loadLibrarySidebar() {
+async function loadLibrarySidebar(force = false) {
+  // 已经有结果、而且还在缓存窗口里：直接用现成的重绘，不发请求。
+  if (!force && librarySidebar.loaded && Date.now() - librarySidebar.loadedAt < LIB_CACHE_MS) {
+    renderLibraryGrid();
+    applyLibrarySidebarVisibility();
+    return;
+  }
   const token = ++librarySidebar.token;
   const button = $("#libRefresh");
   button?.classList.add("spinning");
@@ -107,6 +120,7 @@ async function loadLibrarySidebar() {
     librarySidebar.items = data.items || [];
     librarySidebar.disk = data.disk || null;
     librarySidebar.loaded = true;
+    librarySidebar.loadedAt = Date.now();
     renderLibraryGrid();
     applyLibrarySidebarVisibility();
   } catch (error) {
@@ -300,7 +314,11 @@ async function openLibraryDetail(animeId, name) {
   panel?.scrollIntoView({ behavior: "smooth", block: "start" });
   try {
     const data = await api(`/api/offline/state?anime_id=${Number(animeId)}`);
-    librarySidebar.files = (data.files || []).filter((file) => file.exists !== false);
+    const raw = data.files || [];
+    librarySidebar.files = raw.filter((file) => file.exists !== false);
+    // 记录还在、文件却没了的集数：卡片和详情现在都只数能播的，
+    // 但这件事得说出来，否则用户会以为「已收」无故少了一集。
+    librarySidebar.missing = Math.max(0, raw.length - librarySidebar.files.length);
     librarySidebar.jobs = data.jobs || [];
     renderLibraryDetail();
   } catch (error) {
@@ -347,7 +365,12 @@ function renderLibraryDetail() {
   if (multiple) metaParts.push(`${groups.length} 个来源`);
   meta.textContent = metaParts.join(" · ");
   const hint = $("#libDetailHint");
-  if (hint) hint.textContent = `${libSortedFiles().length} 集可播放${multiple ? ` · ${groups.length} 个来源` : ""}`;
+  if (hint) {
+    const bits = [`${libSortedFiles().length} 集可播放`];
+    if (multiple) bits.push(`${groups.length} 个来源`);
+    if (librarySidebar.missing) bits.push(`另有 ${librarySidebar.missing} 集的文件已不在磁盘上`);
+    hint.textContent = bits.join(" · ");
+  }
   const host = $("#libEpisodes");
   host.innerHTML = files.length
     ? files.map((file) => {
@@ -388,7 +411,7 @@ async function libDelete(fileId, label) {
   offlineView.local = { files: librarySidebar.files, jobs: librarySidebar.jobs };
   await removeLocalFile(Number(fileId));
   openLibraryDetail(librarySidebar.detail.animeId, librarySidebar.detail.name);
-  loadLibrarySidebar();
+  loadLibrarySidebar(true);   // 删过文件，缓存作废
 }
 
 // ---------- 订阅管理 ----------
@@ -543,6 +566,8 @@ async function libDownload(button) {
     });
     button.textContent = "已提交";
     toast("已交给 qBittorrent");
+    // 下载会改变媒体库内容与磁盘占用，别让用户切回总览时还看 30 秒前的旧数据。
+    librarySidebar.loadedAt = 0;
   } catch (error) {
     button.disabled = false;
     button.textContent = "下载";
@@ -841,10 +866,7 @@ function initLibraryView() {
     librarySidebar.sort = event.target.value;
     renderLibraryGrid();
   });
-  $("#libRefresh")?.addEventListener("click", () => {
-    librarySidebar.loaded = false;
-    loadLibrarySidebar();
-  });
+  $("#libRefresh")?.addEventListener("click", () => loadLibrarySidebar(true));
   $("#libFilterTabs")?.addEventListener("click", (event) => {
     const tab = event.target.closest("[data-lib-filter]");
     if (!tab) return;

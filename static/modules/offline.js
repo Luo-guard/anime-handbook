@@ -22,7 +22,6 @@ const offlineView = {
   library: { items: [], disk: null, filter: "all", query: "", token: 0, loaded: false },
   libraryMode: true,
   // 详情页「我的库」按钮置位：本地文件标签强制进总览（否则默认进当前番）。
-  forceLibraryTab: false,
 };
 
 function offlineStatus(target, text, isError = false) {
@@ -93,13 +92,8 @@ function switchOfflineTab(tab) {
   });
   $("#offlineSearchPanel").classList.toggle("hidden", tab !== "search");
   $("#offlineLocalPanel").classList.toggle("hidden", tab !== "local");
-  $("#offlineSettingsPanel")?.classList.toggle("hidden", tab !== "settings");
   if (tab === "local") {
-    if (offlineView.forceLibraryTab) {
-      // 「我的库」按钮：强制看全库总览。
-      offlineView.forceLibraryTab = false;
-      openLibraryView();
-    } else if (offlineView.libraryMode === false) {
+    if (offlineView.libraryMode === false) {
       showLibraryChrome(false);
     } else if (offlineView.animeId) {
       // 从详情页进来：默认直接看这一番的本地文件。
@@ -108,7 +102,6 @@ function switchOfflineTab(tab) {
       openLibraryView();
     }
   }
-  if (tab === "settings") loadOfflineSettings();
 }
 
 async function runOfflineSearch() {
@@ -767,12 +760,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const button = event.target.closest(".offline-download");
     if (button) startOfflineDownload(Number(button.dataset.index));
   });
-  $("#offlineSubList")?.addEventListener("click", (event) => {
-    const toggle = event.target.closest("[data-sub-toggle]");
-    if (toggle) return toggleSubscription(toggle.dataset.subToggle, toggle.dataset.enabled !== "1");
-    const remove = event.target.closest("[data-sub-del]");
-    if (remove) return removeSubscription(remove.dataset.subDel);
-  });
   $("#offlineCheckSubs")?.addEventListener("click", checkSubscriptions);
   $("#offlineLocalList")?.addEventListener("click", (event) => {
     const retry = event.target.closest("[data-retry]");
@@ -815,11 +802,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (card) openAnimeLocalView(card.dataset.anime, card.dataset.name);
   });
   $("#offlineLibraryBack")?.addEventListener("click", openLibraryView);
-  $("#openLibrary")?.addEventListener("click", () => {
-    openOffline();
-    offlineView.forceLibraryTab = true;
-    switchOfflineTab("local");
-  });
   $("#offlineSubtitleToggle")?.addEventListener("click", toggleSubtitleRenderer);
   pcInit();
   $("#offlinePlayerClose")?.addEventListener("click", closeOfflinePlayer);
@@ -1065,52 +1047,137 @@ function pcRefreshEpisodes() {
   pcRenderPlaylist();
 }
 
-function pcScreenshot() {
+// 超分扩展（NijiLucid 等）会把放大后的画面画在自己的 canvas 上，同时把 <video>
+// 设成 opacity:0；这时候 drawImage(video) 拿到的还是原分辨率的帧。
+// 这里先找视频层里那块覆盖画布（排除弹幕层和字幕层），有就用它。
+function pcUpscaleCanvas(video) {
+  // 扩展一般把画布塞进 video 的父元素；万一是塞到播放器容器（旧结构/别的扩展），
+  // 再往外找一层，两边都兜住。
+  const roots = [video?.closest("#pcVideoSurface"), video?.parentElement, video?.closest("#offlinePlayerVideoWrap")];
+  const found = [];
+  for (const root of roots) {
+    if (!root) continue;
+    root.querySelectorAll("canvas").forEach((node) => {
+      if (node.id === "danmakuCanvas" || node.classList.contains("JASSUB")) return;
+      if (!node.width || !node.height) return;
+      if (!found.includes(node)) found.push(node);
+    });
+  }
+  if (!found.length) return null;
+  // 取面积最大的那块：超分画布是源的 N 倍，弹幕/字幕都比它小。
+  const best = found.sort((a, b) => b.width * b.height - a.width * a.height)[0];
+  // 比原片还小的画布肯定不是超分结果（可能是某个扩展的 UI 浮层），
+  // 用它截图反而会把画面截糊，宁可退回原视频帧。
+  const native = Number(video?.videoWidth) || 0;
+  if (native && best.width < native) return null;
+  return best;
+}
+
+// WebGL 画布如果没开 preserveDrawingBuffer，合成之后再去读可能是一张全透明的图。
+// 抽 24×14 的小样看一眼，全透明就当没抓到，退回原始视频帧。
+function pcCanvasIsBlank(canvas) {
+  try {
+    const probe = document.createElement("canvas");
+    probe.width = 24;
+    probe.height = 14;
+    const ctx = probe.getContext("2d");
+    ctx.drawImage(canvas, 0, 0, probe.width, probe.height);
+    const data = ctx.getImageData(0, 0, probe.width, probe.height).data;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] !== 0) return false;
+    }
+    return true;
+  } catch (error) {
+    return false;   // 读不出来就别乱退回，按有内容处理
+  }
+}
+
+function pcDrawShot(video, source) {
+  const width = source ? source.width : video.videoWidth;
+  const height = source ? source.height : video.videoHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext("2d").drawImage(source || video, 0, 0, width, height);
+  return canvas;
+}
+
+// 4K 截图的 PNG 可能十几兆，入库接口会拒；超过上限就等比缩到 1920 宽再编码一次。
+function pcShotBlob(canvas, maxBytes = 9 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error("浏览器没有返回图片")); return; }
+      if (blob.size <= maxBytes || canvas.width <= 1920) { resolve(blob); return; }
+      const ratio = 1920 / canvas.width;
+      const scaled = document.createElement("canvas");
+      scaled.width = 1920;
+      scaled.height = Math.round(canvas.height * ratio);
+      scaled.getContext("2d").drawImage(canvas, 0, 0, scaled.width, scaled.height);
+      scaled.toBlob((next) => next ? resolve(next) : reject(new Error("浏览器没有返回图片")), "image/png");
+    }, "image/png");
+  });
+}
+
+async function pcScreenshot() {
   const video = $("#offlineVideo");
   if (!video || !video.videoWidth) {
     toast("视频还没准备好，先等画面出来再截图", "error");
     return;
   }
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  let canvas = null;
+  let upscaled = false;
   try {
-    canvas.getContext("2d").drawImage(video, 0, 0);
+    const source = pcUpscaleCanvas(video);
+    canvas = pcDrawShot(video, source);
+    upscaled = Boolean(source);
+    // 超分画布读出来是空的（WebGL 缓冲已被清）→ 退回原始帧，别截出一张透明图。
+    if (upscaled && pcCanvasIsBlank(canvas)) {
+      canvas = pcDrawShot(video, null);
+      upscaled = false;
+    }
+  } catch (error) {
+    // 画布被跨域污染之类：至少保证原分辨率能截下来。
+    try {
+      canvas = pcDrawShot(video, null);
+      upscaled = false;
+    } catch (inner) {
+      toast(`截图失败：${inner.message || inner}`, "error");
+      return;
+    }
+  }
+  let blob;
+  try {
+    blob = await pcShotBlob(canvas);
   } catch (error) {
     toast(`截图失败：${error.message || error}`, "error");
     return;
   }
-  canvas.toBlob(async (blob) => {
-    if (!blob) {
-      toast("截图失败：浏览器没有返回图片", "error");
-      return;
-    }
-    const anime = offlineView.animeName || "动漫";
-    const episode = episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
-    // 先进媒体库的图片库（按番名分文件夹、按模板命名）；后台不可用时退回浏览器下载。
-    try {
-      const data = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(reader.error || new Error("读取截图失败"));
-        reader.readAsDataURL(blob);
-      });
-      const result = await api("/api/offline/screenshot", {
-        method: "POST",
-        body: JSON.stringify({ anime, episode, seconds: video.currentTime, data }),
-      });
-      toast(`已存入媒体库 · 图片：「${result.folder}」/ ${result.name}`);
-    } catch (error) {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const stamp = pcFormatTime(video.currentTime).replace(/:/g, "-");
-      link.href = url;
-      link.download = `${anime} ${episode} ${stamp}.png`;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast(`入库失败（${error.message || error}），已改为下载到浏览器`, "error");
-    }
-  }, "image/png");
+  const anime = offlineView.animeName || "动漫";
+  const episode = episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
+  const sizeTag = upscaled ? `超分 ${canvas.width}×${canvas.height} · ` : "";
+  // 先进媒体库的图片库（按番名分文件夹、按模板命名）；后台不可用时退回浏览器下载。
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("读取截图失败"));
+      reader.readAsDataURL(blob);
+    });
+    const result = await api("/api/offline/screenshot", {
+      method: "POST",
+      body: JSON.stringify({ anime, episode, seconds: video.currentTime, data }),
+    });
+    toast(`已存入媒体库 · ${sizeTag}图片：「${result.folder}」/ ${result.name}`);
+  } catch (error) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const stamp = pcFormatTime(video.currentTime).replace(/:/g, "-");
+    link.href = url;
+    link.download = `${anime} ${episode} ${stamp}.png`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast(`入库失败（${error.message || error}），已改为下载到浏览器`, "error");
+  }
 }
 
 function pcSendDanmaku() {
@@ -1462,7 +1529,6 @@ async function loadOfflineSettings() {
       writable.ok ? `目录可写${room}` : writable.error || "目录不可写",
       !writable.ok,
     );
-    refreshSubscriptions();
   } catch (error) {
     offlineStatus(status, error.message || "读取设置失败", true);
   }
@@ -1523,71 +1589,8 @@ async function subscribeFromResult(index) {
         ? `已订阅「${who}」的新集`
         : `已订阅「${who}」；到 设置 → 数据来源 打开「自动追新番」后才会自动下载`,
     );
-    refreshSubscriptions();
   } catch (error) {
     toast(error.message || "订阅失败", "error");
-  }
-}
-
-async function refreshSubscriptions() {
-  const host = $("#offlineSubList");
-  if (!host) return;
-  try {
-    const data = await api(`/api/offline/subscriptions?anime_id=${offlineView.animeId}`);
-    const items = data.items || [];
-    if (!items.length) {
-      host.innerHTML = `<p class="offline-empty">还没有订阅。到「找资源」页，在结果上点「订阅」。</p>`;
-      return;
-    }
-    // 订阅存着但总开关关着，列表看着像「已经在追了」，其实什么都不会自动下。
-    const hint = data.auto_follow
-      ? ""
-      : `<p class="offline-empty">「自动追新番」关着：这些订阅只在点「立即检查全部订阅」时才会查一次。</p>`;
-    host.innerHTML = hint + items
-      .map((sub) => {
-        const enabled = Number(sub.enabled || 0) === 1;
-        const checked = sub.last_checked ? String(sub.last_checked).slice(0, 16).replace("T", " ") : "还没检查";
-        return `
-          <article class="offline-row">
-            <div class="offline-row-main">
-              <p class="offline-row-title">${escapeHtml(sub.keyword)}</p>
-              <p class="offline-row-meta"><span class="offline-group">${escapeHtml(sub.group_name || "不限字幕组")}</span><span class="offline-date">上次检查 ${escapeHtml(checked)}</span>${enabled ? "" : '<span class="offline-tag">已暂停</span>'}</p>
-            </div>
-            <div class="offline-row-actions">
-              <button type="button" class="offline-play" data-sub-toggle="${sub.id}" data-enabled="${enabled ? 1 : 0}">${enabled ? "暂停" : "恢复"}</button>
-              <button type="button" class="offline-remove" data-sub-del="${sub.id}">取消</button>
-            </div>
-          </article>`;
-      })
-      .join("");
-  } catch (error) {
-    host.innerHTML = `<p class="offline-empty">${escapeHtml(error.message || "读取订阅失败")}</p>`;
-  }
-}
-
-async function toggleSubscription(subId, enabled) {
-  try {
-    await api("/api/offline/subscribe", {
-      method: "POST",
-      body: JSON.stringify({ id: Number(subId), enabled }),
-    });
-    refreshSubscriptions();
-  } catch (error) {
-    toast(error.message || "操作失败", "error");
-  }
-}
-
-async function removeSubscription(subId) {
-  if (!window.confirm("取消这条追番订阅？已经下好的文件不受影响。")) return;
-  try {
-    await api("/api/offline/unsubscribe", {
-      method: "POST",
-      body: JSON.stringify({ id: Number(subId) }),
-    });
-    toast("已取消订阅");
-    refreshSubscriptions();
-  } catch (error) {
-    toast(error.message || "取消失败", "error");
   }
 }
 
@@ -1600,7 +1603,6 @@ async function checkSubscriptions() {
     const downloaded = Number(data.downloaded || 0);
     const checked = Number(data.checked || 0);
     toast(checked ? (downloaded ? `检查 ${checked} 条，下载了 ${downloaded} 集` : `检查 ${checked} 条，没有新集`) : "没有需要检查的订阅");
-    refreshSubscriptions();
     refreshOfflineLocal();
   } catch (error) {
     toast(error.message || "检查失败", "error");

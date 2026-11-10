@@ -341,11 +341,8 @@ function collectionSortDirection() {
 }
 
 function updateSortPicker() {
-  const modeNames = { name: "名称", rank: "评分", popularity: "热度", airdate: "首播", latest: "最新一集", kazumi: "加入时间", custom: "自定义" };
   const mode = collectionSortMode();
   const direction = collectionSortDirection();
-  const sortLabel = $("#collectionSortPickerLabel");
-  if (sortLabel) sortLabel.textContent = modeNames[mode] || "名称";
   $$("[data-sort-mode]").forEach((row) => {
     const active = row.dataset.sortMode === mode;
     row.classList.toggle("active", active);

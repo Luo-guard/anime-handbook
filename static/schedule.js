@@ -537,7 +537,6 @@ function renderScheduleHiddenSettings() {
   if (node) node.textContent = count
     ? `当前来源「${scheduleSourceNames[source]}」已隐藏 ${count} 部；点右侧按钮查看与恢复`
     : `当前来源「${scheduleSourceNames[source]}」还没有隐藏任何番剧`;
-  renderScheduleHiddenPicker();
   const manage = $("#scheduleHiddenManageFromFilter");
   if (manage) {
     const filterCount = scheduleHiddenCount(scheduleSource());
@@ -546,36 +545,12 @@ function renderScheduleHiddenSettings() {
   if ($("#scheduleHiddenModal")?.open) renderScheduleHiddenList();
 }
 
-// 筛选弹窗里的挑选列表：直接列当前周表的全部条目，点一下隐藏、再点恢复。
-function renderScheduleHiddenPicker() {
-  const host = $("#scheduleHiddenPicker");
-  if (!host) return;
-  const source = scheduleSource();
-  const hidden = new Set(scheduleHiddenIds(source));
-  const items = [...(scheduleState.data?.items || [])]
-    .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "zh-CN"));
-  if (!items.length) {
-    host.innerHTML = '<p class="schedule-hidden-empty">这一套周表还没加载出条目，稍后再试。</p>';
-    return;
-  }
-  host.innerHTML = items.map((item) => {
-    const id = Number(item.id) || 0;
-    const name = item.title || item.aliases?.[0] || "未命名";
-    if (!id) {
-      return `<div class="schedule-hidden-toggle is-unlinked"><span>${escapeHtml(name)}</span><em>未关联条目</em></div>`;
-    }
-    const isHidden = hidden.has(id);
-    return `<div class="schedule-hidden-toggle${isHidden ? " is-hidden" : ""}"><span>${escapeHtml(name)}</span><button type="button" class="secondary-button" data-schedule-toggle-hidden="${id}" data-hidden-state="${isHidden ? "1" : "0"}">${isHidden ? "取消隐藏" : "隐藏"}</button></div>`;
-  }).join("");
-}
-
 function renderScheduleHiddenSources() {
   const host = $("#scheduleHiddenSources");
   if (!host) return;
-  const map = scheduleHiddenMap();
   const current = scheduleHiddenModalSource();
   host.innerHTML = SCHEDULE_SOURCE_KEYS.map((source) => {
-    const count = (map[source] || []).length;
+    const count = scheduleHiddenCount(source);   // ID 藏的和按标题藏的都算
     return `<button type="button" class="schedule-hidden-source${source === current ? " active" : ""}" data-hidden-source="${source}">${scheduleSourceNames[source]}${count ? ` · ${count}` : ""}</button>`;
   }).join("");
 }
@@ -593,7 +568,11 @@ function renderScheduleHiddenList() {
   const rows = [
     ...ids.map((id) => {
       const anime = state.animes.find((row) => Number(row.id) === id);
-      const name = anime ? (anime.display_name || anime.name_cn || anime.name) : `番剧 ${id}`;
+      // 收藏夹里没有的番只能显示 ID 太丑：先在当前周表数据里按 id 找一次名字。
+      const scheduled = (scheduleState.data?.items || []).find((row) => Number(row.id) === id);
+      const name = anime
+        ? (anime.display_name || anime.name_cn || anime.name)
+        : (scheduled?.title || `番剧 ${id}`);
       const cover = anime
         ? `<img src="/api/covers/${id}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" />`
         : `<span class="schedule-hidden-thumb" aria-hidden="true"></span>`;
@@ -644,17 +623,6 @@ async function saveScheduleHiddenTitles(titles, source = scheduleSource()) {
   renderSchedule();
 }
 
-async function toggleScheduleHidden(id, hidden) {
-  const source = scheduleSource();
-  const ids = scheduleHiddenIds(source);
-  const name = (scheduleState.data?.items || []).find((item) => Number(item.id) === Number(id))?.title || "这部番";
-  try {
-    await saveScheduleHidden(hidden ? ids.filter((n) => n !== Number(id)) : [...ids, Number(id)], source);
-    renderScheduleHiddenPicker();
-    toast(hidden ? `已恢复显示「${name}」` : `已从「${scheduleSourceNames[source]}」周表隐藏「${name}」`);
-  } catch (error) { toast(error.message, "error"); }
-}
-
 function renderScheduleSettings() {
   const settingsSource = scheduleSettingsSource();
   const settingsPrefs = schedulePreferences(settingsSource);
@@ -702,7 +670,8 @@ function openScheduleFilters() {
   $("#scheduleFilterStatuses").innerHTML = scheduleStatusMarkup(prefs.statuses, "scheduleFilterStatus");
   $("#scheduleFilterOrigins").innerHTML = scheduleOriginMarkup(prefs.origins, "scheduleFilterOrigin");
   $("#scheduleFilterUncollected").checked = prefs.uncollected;
-  renderScheduleHiddenPicker();
+  // 打开筛选弹窗时刷新「查看已隐藏（N）」的计数，别显示上次的旧数字。
+  renderScheduleHiddenSettings();
   setupScheduleFilterHelp();
   $("#scheduleFilterModal").showModal();
 }
@@ -983,12 +952,6 @@ function initializeSchedule() {
       renderScheduleHiddenList();
       toast("已恢复显示");
     } catch (error) { toast(error.message, "error"); }
-  });
-  // 筛选弹窗：直接点条目隐藏/恢复，只动当前来源。
-  $("#scheduleHiddenPicker")?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-schedule-toggle-hidden]");
-    if (!button) return;
-    toggleScheduleHidden(Number(button.dataset.scheduleToggleHidden), button.dataset.hiddenState === "1");
   });
   $("#scheduleCloseDetail").onclick = () => $("#scheduleDetailModal").close();
   $("#scheduleSearch").oninput = (event) => {scheduleState.search = event.target.value; scheduleState.shown = 30; renderSchedule();};

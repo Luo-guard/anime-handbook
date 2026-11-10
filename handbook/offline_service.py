@@ -669,7 +669,10 @@ class OfflineService:
                     "cover": f"/api/covers/{anime_id}",
                     "collection_type": int(info.get("collection_type") or 0),
                     "episode_count": int(info.get("episode_count") or 0),
-                    "file_count": len(ordered),
+                    # 「已收 N 集」只数磁盘上真能播的文件，和详情页口径一致；
+                    # 早期这里数的是数据库记录，手动删过文件后卡片会比详情多一集。
+                    "file_count": len(playable),
+                    "missing_count": len(ordered) - len(playable),
                     "watched_count": sum(1 for row in playable if is_watched(row)),
                     "size_bytes": size_bytes,
                     "continue_file_id": int(continue_row["id"]),

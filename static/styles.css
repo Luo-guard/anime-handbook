@@ -615,43 +615,11 @@ h1 {
   .collection-toolbar-actions { justify-content: flex-start; }
 }
 
-.sort-direction-button {
-  display: inline-flex;
-  width: 28px;
-  height: 42px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 2px 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--muted);
-  background: var(--surface);
-  cursor: pointer;
-  font: 700 14px/12px system-ui, sans-serif;
-}
-
-.sort-direction-button:hover { border-color: var(--green-700); }
-.sort-direction-button.asc .sort-arrow-up,
-.sort-direction-button.desc .sort-arrow-down { color: var(--green-800); }
-.sort-direction-button.asc .sort-arrow-down,
-.sort-direction-button.desc .sort-arrow-up { opacity: .28; }
-
-.sort-picker { position:relative; }
-.sort-picker-current { display:flex; align-items:center; gap:5px; min-width:104px; height:42px; padding:0 10px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:var(--surface); cursor:pointer; font:inherit; }
-.sort-picker-arrows { display:flex; gap:1px; margin-left:auto; color:var(--muted); font-style:normal; }
-.sort-picker-arrows i { font-style:normal; }
-.sort-picker-current b { color:var(--muted); font-size:13px; }
 .sort-picker-menu { position:absolute; z-index:20; top:calc(100% + 5px); right:0; width:135px; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:var(--surface); box-shadow:var(--shadow); }
 .sort-picker-menu > div { display:grid; grid-template-columns:1fr 24px 24px; align-items:center; padding:3px 5px 3px 10px; }
 .sort-picker-menu > div:hover,.sort-picker-menu > div.active { background:var(--green-50); color:var(--green-800); }
 .sort-picker-menu button { border:0; border-radius:5px; color:var(--muted); background:transparent; cursor:pointer; font:700 14px/22px system-ui,sans-serif; }
 .sort-picker-menu button.active { color:var(--green-800); background:var(--green-100); }
-
-.season-filter-wrap {
-  position: relative;
-}
 
 .collection-floating-controls { position:fixed; right:28px; bottom:28px; z-index:30; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
 .collection-floating-button { width:62px; height:62px; border:0; border-radius:18px; color:#fff; background:var(--green-800); box-shadow:0 10px 28px rgb(var(--theme-rgb) / .32); cursor:pointer; font:700 31px/1 system-ui,sans-serif; }
@@ -4173,8 +4141,6 @@ dialog::backdrop {
 .offline-subscribe { appearance: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 9px; padding: 6px 11px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .offline-subscribe:hover { border-color: var(--green-700); color: var(--green-700); background: var(--green-50); }
 .offline-subs { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
-.offline-sub-list { display: grid; gap: 2px; max-height: 190px; overflow: auto; }
-
 /* 详情弹窗头部重排：标题、日期链接、评分与收藏状态各归各位。 */
 .progress-hero { align-items: start; gap: 18px; }
 .progress-hero h2 { margin: 0 42px 7px 0; font-size: 22px; line-height: 1.42; }
@@ -5515,8 +5481,6 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 
 /* ===== 周表：隐藏番剧管理 ===== */
-.schedule-hidden-add { display: flex; gap: 8px; align-items: center; min-width: 0; }
-.schedule-hidden-add input { min-width: 180px; }
 .schedule-hidden-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
 .schedule-hidden-item {
   display: flex; align-items: center; gap: 10px;
@@ -5539,25 +5503,6 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   font-size: 10.5px;
 }
 
-/* 筛选弹窗里的「隐藏的番剧」挑选列表：直接点条目，不打字 */
-.schedule-hidden-picker {
-  display: flex; flex-direction: column; gap: 4px;
-  max-height: 210px; overflow-y: auto;
-  margin-top: 10px; padding: 6px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
-}
-.schedule-hidden-toggle {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 5px 6px 5px 10px; border-radius: 8px;
-  font-size: 12.5px; color: var(--ink);
-}
-.schedule-hidden-toggle > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.schedule-hidden-toggle:hover { background: var(--green-50); }
-.schedule-hidden-toggle.is-hidden > span { color: var(--muted); text-decoration: line-through; }
-.schedule-hidden-toggle .secondary-button { flex: 0 0 auto; padding: 4px 10px; font-size: 11.5px; }
-.schedule-hidden-toggle.is-unlinked { color: var(--muted); }
-.schedule-hidden-toggle em { font-style: normal; font-size: 11px; color: var(--muted); }
-.schedule-hidden-empty { margin: 10px 4px; color: var(--muted); font-size: 12px; }
 .schedule-hidden-manage { margin-top: 12px; }
 /* 管理弹窗顶部的来源切换 */
 .schedule-hidden-sourcebar { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 12px; }
