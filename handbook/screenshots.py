@@ -170,5 +170,40 @@ def delete_image(asset_root: Path, relative: str) -> dict[str, Any]:
     return {"ok": True, "relative": relative}
 
 
+def delete_images(asset_root: Path, relatives: list[Any]) -> dict[str, Any]:
+    """批量删除截图：逐张删，最后统一收掉空文件夹。
+
+    一张删失败不该拖累整批（文件被占用、刚好被手动挪走都可能），
+    所以返回 deleted / failed 两份清单，让界面能说清「删了几张、还剩几张」。
+    """
+    wanted = [str(item or "").strip() for item in (relatives or [])]
+    wanted = [item for item in dict.fromkeys(wanted) if item]
+    if not wanted:
+        raise ValueError("没有选中要删除的截图")
+    if len(wanted) > 500:
+        raise ValueError("一次最多删除 500 张截图")
+    deleted: list[str] = []
+    failed: list[dict[str, str]] = []
+    parents: set[Path] = set()
+    for relative in wanted:
+        target = _resolve(asset_root, relative)
+        if not target:
+            failed.append({"relative": relative, "error": "找不到这张截图"})
+            continue
+        parents.add(target.parent)
+        try:
+            target.unlink()
+            deleted.append(relative)
+        except OSError as error:
+            failed.append({"relative": relative, "error": str(error)})
+    for folder in parents:
+        try:
+            if folder.is_dir() and not any(folder.iterdir()):
+                folder.rmdir()
+        except OSError:
+            pass
+    return {"ok": True, "deleted": deleted, "failed": failed}
+
+
 def folder_name(asset_root: Path, relative: str) -> str:
     return Path(str(relative or "")).parent.name

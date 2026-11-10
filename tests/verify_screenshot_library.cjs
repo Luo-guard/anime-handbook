@@ -75,6 +75,8 @@ const post = (path, body) => fetch(`${API}${path}`, {
     assert.ok((await page.evaluate(() => document.querySelector('#libImageView').naturalWidth)) > 0, '大图要真的加载出来');
 
     // 5) 删除：大图里删一张，列表数量要少一张
+    // 删除现在有二次确认，headless 里必须显式接受，否则 confirm 返回 false 会当成取消。
+    page.once('dialog', (dialog) => dialog.accept());
     const beforeDelete = (await (await fetch(`${API}/api/offline/screenshots`)).json()).groups
       .find((item) => item.folder === '回归测试番')?.count || 0;
     await page.click('#libImageDelete');

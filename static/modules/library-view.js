@@ -12,6 +12,8 @@ const librarySidebar = {
   imageRoot: "",
   imageTotal: 0,
   imageFolder: "",     // 图片库里选中的分组（空 = 全部）
+  imageSelecting: false,
+  imageSelected: new Set(),   // 多选要删的截图（存 relative）
   imagesLoaded: false,
   items: [],
   disk: null,
@@ -590,6 +592,8 @@ function switchLibraryKind(kind) {
   $("#libRefresh")?.classList.toggle("hidden", isImage);
   $("#libImageRefresh")?.classList.toggle("hidden", !isImage);
   $("#libraryDetailPanel")?.classList.toggle("hidden", isImage || !librarySidebar.detail);
+  $("#libImageSelect")?.classList.toggle("hidden", !isImage);
+  if (!isImage && librarySidebar.imageSelecting) setImageSelecting(false);
   if (isImage) loadLibraryImages();
 }
 
@@ -684,8 +688,12 @@ function renderLibraryImages() {
     const thumbs = group.images.map((image) => {
       const index = flat.findIndex((row) => row.relative === image.relative);
       const time = libImageTime(image.name);
-      return `<button type="button" class="lib-image-thumb" data-image-index="${index}" title="${escapeHtml(image.name)}">
+      const selected = librarySidebar.imageSelected.has(image.relative);
+      // 勾选泡用 <i>：<span> 被下面的时间码样式占着，会被一起改位置。
+      return `<button type="button" class="lib-image-thumb${selected ? " is-selected" : ""}" data-image-index="${index}"
+        aria-pressed="${selected}" title="${escapeHtml(image.name)}">
         <img src="${libImageUrl(image.relative)}" alt="${escapeHtml(image.name)}" loading="lazy" decoding="async" />
+        <i class="lib-image-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4.4 4.4L19.4 7.2"/></svg></i>
         <span>${escapeHtml(time || image.name)}</span>
       </button>`;
     }).join("");
@@ -694,6 +702,91 @@ function renderLibraryImages() {
       <div class="lib-image-grid">${thumbs}</div>
     </section>`;
   }).join("");
+}
+
+function setImageSelecting(on) {
+  librarySidebar.imageSelecting = Boolean(on);
+  if (!on) librarySidebar.imageSelected.clear();
+  const button = $("#libImageSelect");
+  if (button) {
+    button.setAttribute("aria-pressed", String(librarySidebar.imageSelecting));
+    button.textContent = librarySidebar.imageSelecting ? "取消选择" : "选择";
+  }
+  $("#libImageGroups")?.classList.toggle("is-selecting", librarySidebar.imageSelecting);
+  if (librarySidebar.imageSelecting) renderLibraryImages();
+  else {
+    // 退出时把已经画出来的选中态擦掉，不用整块重绘。
+    $$("#libImageGroups .lib-image-thumb.is-selected").forEach((thumb) => {
+      thumb.classList.remove("is-selected");
+      thumb.setAttribute("aria-pressed", "false");
+    });
+  }
+  updateImageActionBar();
+}
+
+function updateImageActionBar() {
+  const bar = $("#libImageActionBar");
+  if (!bar) return;
+  const total = (librarySidebar.imageFlat || []).length;
+  const count = librarySidebar.imageSelected.size;
+  const node = $("#libImageSelCount");
+  if (node) node.textContent = String(count);
+  const del = $("#libImageDeleteSelected");
+  if (del) del.disabled = count === 0;
+  const all = $("#libImageSelectAll");
+  if (all) all.textContent = total > 0 && count >= total ? "取消全选" : "全选";
+  if (librarySidebar.imageSelecting) {
+    if (bar.classList.contains("hidden")) {
+      bar.classList.remove("hidden");
+      void bar.offsetWidth;
+      bar.classList.add("is-in");
+    }
+    return;
+  }
+  if (!bar.classList.contains("hidden")) {
+    bar.classList.remove("is-in");
+    window.setTimeout(() => { if (!librarySidebar.imageSelecting) bar.classList.add("hidden"); }, 200);
+  }
+}
+
+function toggleImageSelected(index) {
+  const image = (librarySidebar.imageFlat || [])[index];
+  if (!image) return;
+  const set = librarySidebar.imageSelected;
+  if (set.has(image.relative)) set.delete(image.relative); else set.add(image.relative);
+  const thumb = document.querySelector(`#libImageGroups .lib-image-thumb[data-image-index="${index}"]`);
+  if (thumb) {
+    thumb.classList.toggle("is-selected", set.has(image.relative));
+    thumb.setAttribute("aria-pressed", String(set.has(image.relative)));
+  }
+  updateImageActionBar();
+}
+
+async function deleteSelectedImages() {
+  const relatives = [...librarySidebar.imageSelected];
+  if (!relatives.length) return;
+  // 截图删了就是没了（不进回收站），批量更要拦一道。
+  if (!window.confirm(`删除选中的 ${relatives.length} 张截图？删除后不可恢复。`)) return;
+  const button = $("#libImageDeleteSelected");
+  if (button) { button.disabled = true; button.textContent = "删除中…"; }
+  try {
+    const data = await api("/api/offline/screenshot/delete-batch", {
+      method: "POST",
+      body: JSON.stringify({ relatives }),
+    });
+    const deleted = (data.deleted || []).length;
+    const failed = (data.failed || []).length;
+    toast(failed ? `删了 ${deleted} 张，${failed} 张没删掉（可能已经被移走）` : `已删除 ${deleted} 张截图`);
+    librarySidebar.imageSelected.clear();
+    librarySidebar.imagesLoaded = false;
+    await loadLibraryImages();
+    if (!(librarySidebar.imageFlat || []).length) setImageSelecting(false);
+    else updateImageActionBar();
+  } catch (error) {
+    toast(`删除失败：${error.message || error}`, "error");
+  } finally {
+    if (button) { button.disabled = false; button.textContent = "删除选中"; }
+  }
 }
 
 function openLibraryImage(index) {
@@ -715,6 +808,8 @@ async function deleteLibraryImage() {
   const flat = librarySidebar.imageFlat || [];
   const image = flat[librarySidebar.imageIndex];
   if (!image) return;
+  // 截图删掉就找不回来了，先拦一下。
+  if (!window.confirm(`删除「${image.name}」？删除后不可恢复。`)) return;
   try {
     await api("/api/offline/screenshot/delete", { method: "POST", body: JSON.stringify({ relative: image.relative }) });
     toast(`已删除 ${image.name}`);
@@ -767,7 +862,25 @@ function initLibraryView() {
   $("#libImageRefresh")?.addEventListener("click", () => { librarySidebar.imagesLoaded = false; loadLibraryImages(); });
   $("#libImageGroups")?.addEventListener("click", (event) => {
     const thumb = event.target.closest("[data-image-index]");
-    if (thumb) openLibraryImage(Number(thumb.dataset.imageIndex));
+    if (!thumb) return;
+    const index = Number(thumb.dataset.imageIndex);
+    if (librarySidebar.imageSelecting) { toggleImageSelected(index); return; }
+    openLibraryImage(index);
+  });
+  $("#libImageSelect")?.addEventListener("click", () => setImageSelecting(!librarySidebar.imageSelecting));
+  $("#libImageCancelSelect")?.addEventListener("click", () => setImageSelecting(false));
+  $("#libImageSelectAll")?.addEventListener("click", () => {
+    const flat = librarySidebar.imageFlat || [];
+    const all = flat.length > 0 && librarySidebar.imageSelected.size >= flat.length;
+    librarySidebar.imageSelected = new Set(all ? [] : flat.map((image) => image.relative));
+    renderLibraryImages();
+    updateImageActionBar();
+  });
+  $("#libImageDeleteSelected")?.addEventListener("click", deleteSelectedImages);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !librarySidebar.imageSelecting || event.defaultPrevented) return;
+    if (document.querySelector("dialog[open]")) return;
+    setImageSelecting(false);
   });
   $("#libImagePrev")?.addEventListener("click", () => openLibraryImage(librarySidebar.imageIndex - 1));
   $("#libImageNext")?.addEventListener("click", () => openLibraryImage(librarySidebar.imageIndex + 1));

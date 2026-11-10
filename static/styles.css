@@ -5410,6 +5410,74 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   box-shadow: 0 8px 22px rgb(24 40 30 / .18);
   transform: translateY(-2px);
 }
+
+/* ===== 图片库：多选与批量删除 ===== */
+.lib-text-button {
+  height: 36px; padding: 0 13px; flex: 0 0 auto;
+  border: 1px solid var(--line); border-radius: 11px;
+  background: rgba(255, 255, 255, .92); color: var(--green-800);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.lib-text-button:hover { background: var(--green-50); border-color: rgb(var(--theme-rgb) / .3); }
+.lib-text-button[aria-pressed="true"] {
+  background: var(--green-700); border-color: transparent; color: #fff;
+}
+
+/* 多选态：缩略图不再放大，改成能勾选的样子 */
+.lib-image-groups.is-selecting .lib-image-thumb { cursor: pointer; }
+.lib-image-groups.is-selecting .lib-image-thumb:hover { transform: none; }
+.lib-image-thumb.is-selected {
+  border-color: var(--green-700);
+  box-shadow: 0 0 0 2px rgb(var(--theme-rgb) / .35);
+}
+.lib-image-thumb.is-selected img { opacity: .82; }
+.lib-image-check {
+  position: absolute; right: 7px; top: 7px; z-index: 2;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1.5px solid rgba(255, 255, 255, .85);
+  background: rgba(10, 18, 14, .45);
+  color: #fff; opacity: 0; transform: scale(.9);
+  transition: opacity .14s ease, transform .14s ease, background .14s ease;
+  pointer-events: none;
+}
+.lib-image-check svg { width: 12px; height: 12px; }
+.lib-image-groups.is-selecting .lib-image-check { opacity: 1; transform: none; }
+.lib-image-thumb.is-selected .lib-image-check { background: var(--green-700); border-color: transparent; }
+
+/* 批量操作条：贴在面板底部，跟隐藏模式的工具条一个手感 */
+.lib-image-actionbar {
+  position: sticky; bottom: 10px; z-index: 22;
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 14px; padding: 10px 12px 10px 16px;
+  border: 1px solid rgb(var(--theme-rgb) / .18); border-radius: 15px;
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 16px 38px rgb(var(--theme-rgb) / .2);
+  backdrop-filter: blur(12px);
+  transform: translateY(10px); opacity: 0;
+  transition: transform .22s cubic-bezier(.22, .61, .36, 1), opacity .18s ease;
+}
+.lib-image-actionbar.is-in { transform: none; opacity: 1; }
+.lib-sel-count { font-size: 12.5px; color: var(--ink); }
+.lib-sel-count b { color: #a8433c; font-variant-numeric: tabular-nums; }
+.lib-sel-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.lib-sel-ghost {
+  height: 32px; padding: 0 13px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--surface); color: var(--green-800);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.lib-sel-ghost:hover { background: var(--green-50); }
+.lib-sel-danger {
+  height: 32px; padding: 0 16px;
+  border: 0; border-radius: 9px;
+  background: #a8433c; color: #fff;
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  transition: background .15s ease, opacity .15s ease;
+}
+.lib-sel-danger:hover:not(:disabled) { background: #93372f; }
+.lib-sel-danger:disabled { opacity: .45; cursor: not-allowed; }
 .lib-image-thumb:hover img { transform: scale(1.04); }
 .library-image-hint:empty { display: none; }
 .library-image-hint { margin: 12px 18px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

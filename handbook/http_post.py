@@ -37,6 +37,7 @@ class PostRoutes:
                 # 截图写的是本机图片库目录，同样是本机文件。
                 "/api/offline/screenshot",
                 "/api/offline/screenshot/delete",
+                "/api/offline/screenshot/delete-batch",
                 # 弹幕代理只是转发查询，不改动任何收藏数据。
                 "/api/danmaku/proxy",
             }
@@ -69,6 +70,11 @@ class PostRoutes:
                 self.send_json(screenshot_tools.delete_image(
                     self.database.asset_root,
                     str(body.get("relative") or ""),
+                ))
+            elif path == "/api/offline/screenshot/delete-batch":
+                self.send_json(screenshot_tools.delete_images(
+                    self.database.asset_root,
+                    body.get("relatives") or [],
                 ))
             elif path == "/api/offline/download":
                 service = OfflineService(self.database)
