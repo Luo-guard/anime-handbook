@@ -3,7 +3,7 @@ const scheduleSourceNames = {yuc: "長門番堂", kazumi: "Bangumi", as: "AnimeS
 let scheduleSettingsSourceValue = "yuc";
 function scheduleSettingsSource() { return ["yuc", "kazumi", "as"].includes(scheduleSettingsSourceValue) ? scheduleSettingsSourceValue : "yuc"; }
 /* Public season metadata is small; poster images and DOM cards load on demand. */
-const scheduleState = {season: "", week: "", day: 1, data: null, search: "", timer: null, abort: null, request: 0, shown: 30, initialized: false};
+const scheduleState = {season: "", week: "", day: 1, data: null, search: "", timer: null, abort: null, request: 0, shown: 30, initialized: false, pickHidden: false};
 const scheduleDays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const scheduleSortNames = {time: "时间顺序", score: "评分优先", popularity: "热度优先"};
 const scheduleCardFieldOptions = [
@@ -467,13 +467,17 @@ function renderSchedule() {
   if (scheduleState.data?.items?.length) {
     const hiddenSets = scheduleHiddenSets();
     const hiddenCount = scheduleState.data.items.filter((item) => scheduleItemHidden(item, hiddenSets)).length;
-    if (hiddenCount) notices.push(`已隐藏 ${hiddenCount} 部番剧（右上角「排序与筛选」→ 隐藏的番剧 可恢复）`);
+    if (hiddenCount) notices.push(`已隐藏 ${hiddenCount} 部番剧（右下角「排序与筛选」→ 隐藏的番剧 可恢复）`);
   }
   $("#scheduleNotice").textContent = notices.join(" · "); $("#scheduleNotice").hidden = !notices.length;
   $("#scheduleGrid").innerHTML = selected.slice(0, scheduleState.shown).map(scheduleCard).join("") || (data && !data.loading ? '<div class="schedule-empty"><strong>这一天，留一点空白。</strong><p>当前季度或筛选下暂无番剧，可以切换星期、季度或调整筛选。</p></div>' : "");
   if (selected.length > scheduleState.shown) $("#scheduleGrid").insertAdjacentHTML("beforeend", '<button type="button" class="secondary-button schedule-more" id="scheduleMore">继续展开本日番剧</button>');
   $("#scheduleMore")?.addEventListener("click", () => {scheduleState.shown += 30; renderSchedule();});
-  $$("[data-schedule-key]", $("#scheduleGrid")).forEach((button) => button.onclick = () => showScheduleDetail(button.dataset.scheduleKey));
+  $$("[data-schedule-key]", $("#scheduleGrid")).forEach((button) => button.onclick = () => {
+    if (scheduleState.pickHidden) { hideScheduleCard(button, button.dataset.scheduleKey); return; }
+    showScheduleDetail(button.dataset.scheduleKey);
+  });
+  if (scheduleState.pickHidden) updateSchedulePickBar();
   $("#scheduleSource").innerHTML = `<span>播出日按北京时间 04:00—次日 03:59 划分；放送时间已换算为北京时间，不代表字幕上线时间。收藏进度按 Bangumi 逐集日程，未收藏的按首播日推算。</span><span>时间：<a href="https://yuc.wiki/${scheduleState.season}/" target="_blank" rel="noopener noreferrer">長門番堂</a> · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>　评分：Bangumi / Kazumi${data?.fetched_at ? `　缓存更新 ${new Date(data.fetched_at * 1000).toLocaleString("zh-CN")}` : ""}</span>`;
   if (scheduleSource() === "kazumi") $("#scheduleSource").textContent = "来源：Kazumi / Bangumi 放送列表。仅提供星期，不提供具体放送时刻；未收藏作品的进度只能按日期估算。";
   if (useAS) $("#scheduleSource").innerHTML = '<span>北京时间 · 凌晨 4 点换日。采用 AS 原声／字幕的较早计划时间，合并重复放送；不代表各地区平台或字幕组同步上线。</span><span>日程：<a href="https://animeschedule.net" target="_blank" rel="noopener noreferrer">AnimeSchedule</a>　编号：<a href="https://github.com/Rhilip/BangumiExtLinker" target="_blank" rel="noopener noreferrer">BangumiExtLinker · CC BY 4.0</a>　评分：Bangumi / Kazumi</span>';
@@ -668,6 +672,161 @@ function showScheduleDetail(key) {
   $("#scheduleDetailModal").showModal();
 }
 
+
+// ===== 隐藏模式：从筛选弹窗回到周表，点卡片直接隐藏 =====
+// 旧做法是在筛选弹窗里列一长条清单挨个点「隐藏」，离卡片上下文太远；
+// 现在先把弹窗收起来、回到周表，卡片本身就是按钮，点哪张藏哪张。
+function scheduleReduceMotion() {
+  return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+}
+
+function openScheduleHiddenManager(source = scheduleSource()) {
+  scheduleHiddenModalSourceValue = source;
+  renderScheduleHiddenList();
+  $("#scheduleHiddenModal")?.showModal();
+}
+
+// 弹窗收起要有个「退场」，否则界面会硬切；animationend 和超时双保险，
+// 万一动画被系统关掉了也不会卡在关不掉的状态。
+function closeScheduleDialogAnimated(dialog, after) {
+  if (!dialog?.open) { after?.(); return; }
+  if (scheduleReduceMotion()) { dialog.close(); after?.(); return; }
+  let finished = false;
+  let timer = 0;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    dialog.classList.remove("is-closing");
+    try { dialog.close(); } catch (error) { /* 已经关掉了 */ }
+    after?.();
+  };
+  dialog.addEventListener("animationend", finish, {once: true});
+  timer = window.setTimeout(finish, 260);
+  dialog.classList.add("is-closing");
+}
+
+function enterSchedulePickMode() {
+  if (scheduleState.pickHidden) return;
+  scheduleState.pickHidden = true;
+  if (typeof switchView === "function" && state.activeView !== "schedule") switchView("schedule");
+  $("#scheduleView")?.classList.add("pick-mode");
+  renderSchedule();
+  // 不主动滚动：弹窗关掉后用户本来就在原位，硬滚一下反而像页面跳了。
+  window.setTimeout(() => schedulePulseCards(), 160);
+}
+
+function exitSchedulePickMode() {
+  if (!scheduleState.pickHidden) return;
+  scheduleState.pickHidden = false;
+  $("#scheduleView")?.classList.remove("pick-mode");
+  $$("#scheduleGrid .schedule-card").forEach((card) => card.classList.remove("pick-in", "is-hiding"));
+  updateSchedulePickBar();
+  renderSchedule();
+}
+
+// 卡片逐个亮一下，告诉用户「现在这些都能点」。
+function schedulePulseCards() {
+  const cards = $$("#scheduleGrid .schedule-card");
+  if (!cards.length || scheduleReduceMotion()) return;
+  cards.forEach((card, index) => {
+    if (card.classList.contains("is-hiding")) return;
+    card.style.setProperty("--pick-delay", `${Math.min(index, 14) * 16}ms`);
+    card.classList.add("pick-in");
+    card.addEventListener("animationend", () => {
+      card.classList.remove("pick-in");
+      card.style.removeProperty("--pick-delay");
+    }, {once: true});
+  });
+}
+
+// 工具条：显示/隐藏都走 is-in / is-out，别直接切 hidden 造成硬跳。
+function updateSchedulePickBar() {
+  const bar = $("#schedulePickBar");
+  if (!bar) return;
+  const countNode = $("#schedulePickCount");
+  if (countNode) countNode.textContent = String(scheduleHiddenIds(scheduleSource()).length);
+  const cards = $$("#scheduleGrid .schedule-card").length;
+  const hint = $("#schedulePickHint");
+  if (hint) {
+    hint.textContent = !scheduleState.data
+      ? "正在读取周表，卡片出来就能点了…"
+      : cards
+        ? "点任意一张卡片，把它从这套周表里藏起来；换星期可以接着挑"
+        : "这一天已经没有能挑的番剧了，换个星期继续，或者点「完成」";
+  }
+  if (scheduleState.pickHidden) {
+    if (bar.classList.contains("hidden")) {
+      bar.classList.remove("hidden", "is-out");
+      void bar.offsetWidth;            // 先落一帧，is-in 的过渡才有起点
+      bar.classList.add("is-in");
+    }
+    return;
+  }
+  if (!bar.classList.contains("hidden")) {
+    bar.classList.remove("is-in");
+    bar.classList.add("is-out");
+    window.setTimeout(() => {
+      if (!scheduleState.pickHidden) { bar.classList.add("hidden"); bar.classList.remove("is-out"); }
+    }, 220);
+  }
+}
+
+// 隐藏一张卡片：记下其它卡片的位置 → 卡片缩掉 → 写设置 → 剩下的滑到新位置。
+function scheduleFlipCapture() {
+  const map = new Map();
+  $$("#scheduleGrid .schedule-card").forEach((card) => map.set(card.dataset.scheduleKey, card.getBoundingClientRect()));
+  return map;
+}
+
+function scheduleFlipPlay(before) {
+  if (!before?.size || scheduleReduceMotion()) return;
+  $$("#scheduleGrid .schedule-card").forEach((card) => {
+    const prev = before.get(card.dataset.scheduleKey);
+    if (!prev) { card.classList.add("flip-enter"); return; }
+    const now = card.getBoundingClientRect();
+    const dx = prev.left - now.left, dy = prev.top - now.top;
+    if (!dx && !dy) return;
+    card.style.transition = "none";
+    card.style.transform = `translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(() => {
+      card.classList.add("flip-moving");
+      card.style.transition = "";
+      card.style.transform = "";
+      window.setTimeout(() => card.classList.remove("flip-moving"), 470);
+    });
+  });
+}
+
+async function hideScheduleCard(button, key) {
+  if (button.dataset.hiding === "1") return;
+  const item = scheduleState.data?.items.find((row) => row.key === key);
+  if (!item) return;
+  if (!Number(item.id)) {
+    button.classList.add("pick-nudge");
+    window.setTimeout(() => button.classList.remove("pick-nudge"), 420);
+    toast("这个条目还没关联 Bangumi，暂时藏不了", "error");
+    return;
+  }
+  const before = scheduleFlipCapture();
+  const source = scheduleSource();
+  const name = item.title || "这部番";
+  button.dataset.hiding = "1";
+  button.classList.add("is-hiding");
+  button.setAttribute("aria-hidden", "true");
+  await new Promise((resolve) => window.setTimeout(resolve, scheduleReduceMotion() ? 0 : 190));
+  try {
+    await saveScheduleHidden([...scheduleHiddenIds(source), Number(item.id)], source);
+    requestAnimationFrame(() => scheduleFlipPlay(before));
+    toast(`已隐藏「${name}」 · 「查看已隐藏」里随时能恢复`);
+  } catch (error) {
+    button.classList.remove("is-hiding");
+    button.removeAttribute("aria-hidden");
+    delete button.dataset.hiding;
+    toast(error.message, "error");
+  }
+}
+
 function initializeSchedule() {
   if (scheduleState.initialized) return;
   scheduleState.initialized = true;
@@ -700,12 +859,7 @@ function initializeSchedule() {
   });
   // 两处入口共用同一个管理弹窗，各自带上自己的来源：设置页跟「配置哪一套周表」，
   // 筛选弹窗跟当前正在看的周表。
-  const openHiddenManager = (source) => {
-    scheduleHiddenModalSourceValue = source;
-    renderScheduleHiddenList();
-    $("#scheduleHiddenModal").showModal();
-  };
-  $("#scheduleHiddenManage")?.addEventListener("click", () => openHiddenManager(scheduleSettingsSource()));
+  $("#scheduleHiddenManage")?.addEventListener("click", () => openScheduleHiddenManager(scheduleSettingsSource()));
   // 设置页的「去周表设置」：关掉设置，跳到周表并直接打开排序与筛选。
   $("#scheduleHiddenGoFilter")?.addEventListener("click", () => {
     $("#settingsModal")?.close();
@@ -714,7 +868,21 @@ function initializeSchedule() {
       if (typeof openScheduleFilters === "function") openScheduleFilters();
     }, 220);
   });
-  $("#scheduleHiddenManageFromFilter")?.addEventListener("click", () => openHiddenManager(scheduleSource()));
+  $("#scheduleHiddenManageFromFilter")?.addEventListener("click", () => openScheduleHiddenManager(scheduleSource()));
+  // 筛选弹窗里的「去周表里选」：先让弹窗退场，再进隐藏模式，两段动画不打架。
+  $("#scheduleHiddenEnterPick")?.addEventListener("click", () => {
+    closeScheduleDialogAnimated($("#scheduleFilterModal"), () => {
+      requestAnimationFrame(() => enterSchedulePickMode());
+    });
+  });
+  $("#schedulePickDone")?.addEventListener("click", () => exitSchedulePickMode());
+  $("#schedulePickManage")?.addEventListener("click", () => openScheduleHiddenManager(scheduleSource()));
+  document.addEventListener("keydown", (event) => {
+    if (!scheduleState.pickHidden || event.key !== "Escape" || event.defaultPrevented) return;
+    if (document.querySelector("dialog[open]")) return;
+    event.preventDefault();
+    exitSchedulePickMode();
+  });
   $("#scheduleHiddenSources")?.addEventListener("click", (event) => {
     const chip = event.target.closest("[data-hidden-source]");
     if (!chip) return;

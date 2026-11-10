@@ -365,7 +365,11 @@ async function renderTimeline(append = false) {
 }
 
 function switchView(view) {
-  if (view !== "schedule") stopSchedulePolling();
+  if (view !== "schedule") {
+    stopSchedulePolling();
+    // 隐藏模式是周表里的临时状态，人离开这一页就该收掉，免得下次回来还挂着。
+    if (typeof exitSchedulePickMode === "function") exitSchedulePickMode();
+  }
   if (view !== "timeline") {
     timelineAbort?.abort();
     timelineObserver?.disconnect();

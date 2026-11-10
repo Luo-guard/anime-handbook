@@ -5485,3 +5485,166 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   font: inherit; font-size: 12px; font-weight: 600;
 }
 .schedule-hidden-source.active { background: var(--green-700); border-color: transparent; color: #fff; }
+
+/* ===== 周表：隐藏番剧的新流程 =====
+   筛选弹窗里只留一个入口卡片 → 弹窗退场 → 回周表进「隐藏模式」→ 点卡片隐藏。 */
+
+/* 弹窗里的入口 */
+.schedule-hidden-cta { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.schedule-hidden-enter {
+  display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0;
+  padding: 11px 14px 11px 12px;
+  border: 1px solid rgb(var(--theme-rgb) / .18); border-radius: 14px;
+  background: linear-gradient(135deg, var(--green-50), rgba(255, 255, 255, .94));
+  color: var(--green-900); cursor: pointer; font: inherit; text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.schedule-hidden-enter:hover {
+  border-color: rgb(var(--theme-rgb) / .36);
+  box-shadow: 0 12px 26px rgb(var(--theme-rgb) / .14);
+  transform: translateY(-1px);
+}
+.schedule-hidden-enter:active { transform: translateY(0) scale(.995); }
+.schedule-hidden-enter:focus-visible { outline: 3px solid rgba(95, 143, 186, .45); outline-offset: 2px; }
+.she-icon {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 34px; height: 34px; border-radius: 11px;
+  background: var(--green-700); color: #fff;
+  box-shadow: 0 6px 14px rgb(var(--theme-rgb) / .28);
+}
+.she-icon svg { width: 18px; height: 18px; }
+.she-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.she-text strong { font-size: 13px; }
+.she-text small { color: var(--muted); font-size: 11.5px; }
+.she-arrow {
+  width: 16px; height: 16px; margin-left: auto; flex: 0 0 auto; color: var(--muted);
+  transition: transform .18s ease, color .18s ease;
+}
+.schedule-hidden-enter:hover .she-arrow { transform: translateX(3px); color: var(--green-700); }
+.schedule-hidden-cta .schedule-hidden-manage { margin-top: 0; flex: 0 0 auto; }
+
+/* 弹窗退场：稍微下沉 + 淡出，让后面的周表接得住 */
+.schedule-dialog.is-closing { animation: scheduleDialogOut .2s cubic-bezier(.4, 0, .7, .2) forwards; }
+.schedule-dialog.is-closing::backdrop { animation: scheduleBackdropOut .2s ease forwards; }
+@keyframes scheduleDialogOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(10px) scale(.985); }
+}
+@keyframes scheduleBackdropOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* 隐藏模式的底部工具条（sticky 在视口底部，跟着网格滚） */
+.schedule-pick-bar {
+  position: sticky; bottom: 14px; z-index: 24;
+  display: flex; align-items: center; gap: 13px;
+  margin: 20px 0 6px; padding: 11px 13px 11px 14px;
+  border: 1px solid rgb(var(--theme-rgb) / .18); border-radius: 16px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 18px 44px rgb(var(--theme-rgb) / .22), 0 1px 0 rgba(255, 255, 255, .7) inset;
+  backdrop-filter: blur(14px);
+  transform: translateY(14px); opacity: 0;
+  transition: transform .26s cubic-bezier(.22, .61, .36, 1), opacity .2s ease;
+}
+.schedule-pick-bar.is-in { transform: none; opacity: 1; }
+.schedule-pick-bar.is-out { transform: translateY(10px); opacity: 0; }
+.spb-badge {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 36px; height: 36px; border-radius: 12px;
+  background: #fbeceb; color: #a8433c;
+}
+.spb-badge svg { width: 18px; height: 18px; }
+.spb-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.spb-text strong { font-size: 13px; color: var(--ink); }
+.spb-text strong span { font-variant-numeric: tabular-nums; color: #a8433c; }
+.spb-text > span { color: var(--muted); font-size: 11.5px; }
+.spb-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.spb-ghost {
+  height: 34px; padding: 0 13px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--green-800);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.spb-ghost:hover { background: var(--green-50); border-color: rgb(var(--theme-rgb) / .3); }
+.spb-done {
+  height: 34px; padding: 0 18px;
+  border: 0; border-radius: 10px;
+  background: var(--green-700); color: #fff;
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 8px 18px rgb(var(--theme-rgb) / .28);
+  transition: transform .15s ease, background .15s ease;
+}
+.spb-done:hover { background: var(--green-800); transform: translateY(-1px); }
+
+/* 卡片：隐藏模式下悬停压暗封面，正中浮出「隐藏」——不跟角标抢位置 */
+#scheduleView.pick-mode .schedule-card .poster-wrap::before {
+  content: "";
+  position: absolute; inset: 0; z-index: 3;
+  background: rgba(12, 20, 16, .34);
+  opacity: 0; transition: opacity .18s ease;
+  pointer-events: none;
+}
+#scheduleView.pick-mode .schedule-card::after {
+  content: "隐藏";
+  position: absolute; left: 50%; top: 31%; z-index: 4;
+  padding: 7px 18px; border-radius: 999px;
+  background: rgba(158, 56, 50, .94); color: #fff;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .32);
+  opacity: 0; transform: translate(-50%, -50%) scale(.86);
+  transition: opacity .16s ease, transform .16s ease;
+  pointer-events: none;
+}
+#scheduleView.pick-mode .schedule-card:hover .poster-wrap::before { opacity: 1; }
+#scheduleView.pick-mode .schedule-card:hover::after { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#scheduleView.pick-mode .schedule-card:hover {
+  border-color: #cf8b84;
+  box-shadow: 0 0 0 2px rgba(194, 99, 99, .18), var(--shadow);
+}
+#scheduleView.pick-mode .schedule-card:focus-visible {
+  outline: 3px solid rgba(194, 99, 99, .5); outline-offset: 3px;
+}
+@keyframes schedulePickIn {
+  from { opacity: .45; transform: translateY(7px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+.schedule-card.pick-in {
+  animation: schedulePickIn .34s cubic-bezier(.22, .61, .36, 1) backwards;
+  animation-delay: var(--pick-delay, 0ms);
+}
+@keyframes scheduleCardHide {
+  to { opacity: 0; transform: scale(.9) translateY(-4px); filter: blur(1px); }
+}
+.schedule-card.is-hiding { pointer-events: none; animation: scheduleCardHide .2s ease forwards; }
+/* FLIP：先瞬移到旧位置，再滑回新位置，剩下的卡片就不会瞬间跳走 */
+.schedule-card.flip-moving {
+  transition: transform .42s cubic-bezier(.22, .61, .36, 1),
+              box-shadow .3s ease, border-color .3s ease !important;
+}
+@keyframes scheduleCardIn {
+  from { opacity: 0; transform: translateY(8px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+.schedule-card.flip-enter { animation: scheduleCardIn .3s cubic-bezier(.22, .61, .36, 1); }
+@keyframes scheduleNudge {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+.schedule-card.pick-nudge { animation: scheduleNudge .42s ease; }
+
+@media (max-width: 650px) {
+  .schedule-hidden-cta { flex-direction: column; align-items: stretch; }
+  .schedule-pick-bar { flex-wrap: wrap; gap: 10px; padding: 11px 12px; }
+  .spb-text { flex: 1 1 100%; order: 2; }
+  .spb-actions { order: 3; width: 100%; justify-content: flex-end; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .schedule-dialog.is-closing,
+  .schedule-card.pick-in,
+  .schedule-card.is-hiding,
+  .schedule-card.flip-enter,
+  .schedule-card.pick-nudge { animation: none !important; }
+  .schedule-pick-bar { transition: none !important; }
+}
