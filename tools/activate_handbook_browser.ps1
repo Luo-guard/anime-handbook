@@ -10,9 +10,20 @@
 
 $script:HandbookProjectRoot = Split-Path -Parent $PSScriptRoot
 
+# 探活必须走 127.0.0.1：后台只绑 IPv4，而 Windows 上 localhost 会先解析到 ::1，
+# .NET 的 Invoke-WebRequest 在 1 秒超时内等不到回退，就会把「已经启动」误判成
+# 「没起来」，脚本随即 exit 1，浏览器永远打不开。浏览地址仍用 $Url（localhost），
+# 那是为了让 NijiLucid 这类超分扩展能注入（Edge 不允许扩展进 IP 字面量源）。
+try {
+    $port = ([Uri]$Url).Port
+    $script:ProbeUrl = if ($port -gt 0) { "http://127.0.0.1:$port" } else { "http://127.0.0.1:43127" }
+} catch {
+    $script:ProbeUrl = "http://127.0.0.1:43127"
+}
+
 function Test-HandbookServer {
     try {
-        $response = Invoke-WebRequest -UseBasicParsing -Uri "$Url/api/health" -TimeoutSec 1
+        $response = Invoke-WebRequest -UseBasicParsing -Uri "$script:ProbeUrl/api/health" -TimeoutSec 2
         return $response.StatusCode -eq 200
     } catch {
         return $false
@@ -135,12 +146,14 @@ function Complete-BrowserProfileMigration {
 }
 
 function Find-EdgeExecutable {
+    # StrictMode Latest 下 $null.Source 是终止性错误：msedge.exe 不在 PATH 时
+    # Get-Command 返回 $null，旧写法会在这里直接抛异常，整个脚本随即中止——
+    # 表现就是「双击没反应、浏览器不启动」。这里逐项收拢，空值不参与。
     $command = Get-Command msedge.exe -ErrorAction SilentlyContinue
-    $paths = @(
-        $command.Source,
-        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-        "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
-    )
+    $paths = @()
+    if ($command -and $command.Source) { $paths += $command.Source }
+    $paths += "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+    $paths += "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
     foreach ($path in $paths) {
         if ($path -and (Test-Path -LiteralPath $path)) {
             return $path
