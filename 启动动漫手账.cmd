@@ -10,5 +10,5 @@ if errorlevel 1 (
   exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\activate_handbook_browser.ps1" -Url "http://127.0.0.1:43127"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\activate_handbook_browser.ps1" -Url "http://localhost:43127"
 endlocal

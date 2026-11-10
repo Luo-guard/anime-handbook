@@ -39,7 +39,7 @@ async function saveVideoFromTab(tab){
     await chrome.tabs.update(target.id,{url:destination.href,active:true});
     await chrome.windows.update(target.windowId,{focused:true});
   }else{
-    await chrome.tabs.create({url:"http://127.0.0.1:43127/"+fragment,openerTabId:tab.id});
+    await chrome.tabs.create({url:"http://localhost:43127/"+fragment,openerTabId:tab.id});
   }
   await chrome.action.setBadgeText({tabId:tab.id,text:""});
   await chrome.action.setTitle({tabId:tab.id,title:"保存当前页面到动漫手账"});

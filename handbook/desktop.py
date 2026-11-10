@@ -154,7 +154,10 @@ def _startup_repairs(database: HandbookDB, sync: SyncService) -> None:
 
 def main(*, open_browser: bool = True) -> None:
     configure_logging(DATA_ROOT)
-    url = f"http://{HOST}:{PORT}"
+    # 给浏览器用 localhost 而不是 127.0.0.1：Edge 157 起禁止扩展往 IP 字面量源注入脚本，
+    # 超分扩展（NijiLucid 等）在 127.0.0.1 上会被判 "Blocked"，换域名即可正常注入。
+    # 监听地址仍是 HOST，两个域名指向同一台本机服务。
+    url = f"http://localhost:{PORT}"
     if server_is_running():
         if open_browser:
             webbrowser.open(url)

@@ -4395,6 +4395,16 @@ dialog::backdrop {
 /* 页面内字幕：jassub 会把 canvas 插在 video 后面并绝对定位，父容器负责给参照系。 */
 .offline-player-video { position: relative; line-height: 0; }
 .offline-player-video canvas.JASSUB { z-index: 2; }
+
+/* 视频单独一层（超分扩展的隔离舱）。
+   NijiLucid 这类扩展会往 video 的父元素里插一个 z-index:2147483646 的覆盖宿主，
+   再塞 canvas 并给 video 设 opacity:0。把它关进 isolation 的层里，弹幕 canvas、
+   顶栏、控制栏这些兄弟节点就永远在它上面，不会因为对方用最大 z-index 而被压住。 */
+.pc-video-surface {
+  position: relative; z-index: 0;
+  isolation: isolate;
+  line-height: 0;
+}
 .offline-player-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 8px; }
 .offline-player-bar .offline-player-meta { margin: 0; flex: 1 1 auto; }
 .offline-subtitle-toggle { appearance: none; flex: 0 0 auto; border: 1px solid var(--line); background: transparent; color: var(--green-800); border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
@@ -4459,6 +4469,7 @@ dialog.modal { overflow-x: hidden; }
   width: 100vw; height: 100vh; background: #000;
   display: flex; align-items: center; justify-content: center;
 }
+.offline-player-video:fullscreen .pc-video-surface { width: 100%; height: 100%; }
 .offline-player-video:fullscreen video {
   width: 100%; height: 100%; max-height: none; object-fit: contain;
 }

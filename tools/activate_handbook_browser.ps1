@@ -1,5 +1,5 @@
 ﻿param(
-    [string]$Url = "http://127.0.0.1:43127",
+    [string]$Url = "http://localhost:43127",
     [int]$WaitSeconds = 8,
     [int]$DebugPort = 43128
 )

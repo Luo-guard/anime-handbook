@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261109-lib-redesign13" />
+  <link rel="stylesheet" href="/styles.css?v=20261110-sr-surface" />
   </head>
   <body>
     <div class="app-shell">
@@ -510,7 +510,9 @@
         <h2 id="offlinePlayerTitle">播放</h2>
         <p class="offline-player-source hidden" id="offlinePlayerSource"></p>
         <div class="offline-player-video" id="offlinePlayerVideoWrap">
-          <video id="offlineVideo" playsinline preload="metadata"></video>
+          <div class="pc-video-surface" id="pcVideoSurface">
+            <video id="offlineVideo" playsinline preload="metadata"></video>
+          </div>
           <div class="player-topbar" id="playerTopbar">
             <span class="player-topbar-title" id="pcStageTitle"></span>
             <span class="player-topbar-actions">
@@ -1561,8 +1563,8 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-dm-kazumi" defer></script>
-    <script src="/modules/offline.js?v=20261109-lib-redesign13" defer></script>
-    <script src="/modules/library-view.js?v=20261109-lib-redesign13" defer></script>
+    <script src="/modules/offline.js?v=20261110-sr-surface" defer></script>
+    <script src="/modules/library-view.js?v=20261110-sr-surface" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>
