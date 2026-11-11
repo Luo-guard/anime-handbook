@@ -55,6 +55,9 @@ WEBDAV_CONFIG_PATH = DATA_ROOT / "webdav.json"
 PORT = int(os.environ.get("ANIME_HANDBOOK_PORT", "43127"))
 HOST = "127.0.0.1"
 MAX_JSON_BODY_BYTES = 12 * 1024 * 1024
+# 4K 截图的 PNG 常有 10~14MB，base64 之后会顶到 20MB 上下；
+# 只给截图这一个入口放宽，其余接口仍按通用上限。
+MAX_SCREENSHOT_BODY_BYTES = 24 * 1024 * 1024
 AUTOSTART_SCRIPT_NAME = "AnimeHandbook.vbs"
 
 

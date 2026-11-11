@@ -84,14 +84,14 @@ def _reject_json_constant(value):
     raise ValueError("JSON 不允许 NaN 或 Infinity")
 
 
-def read_object(handler):
+def read_object(handler, max_bytes=None):
     if handler.headers.get("Transfer-Encoding"):
         raise ValueError("不支持分块请求")
     raw_size = handler.headers.get("Content-Length", "0")
     if not str(raw_size).isdigit():
         raise ValueError("Content-Length 无效")
     size = int(raw_size)
-    if size > MAX_JSON_BODY_BYTES:
+    if size > (max_bytes or MAX_JSON_BODY_BYTES):
         raise RequestProblem("请求内容过大", 413)
     if size == 0: return {}
     if handler.headers.get_content_type() != "application/json":

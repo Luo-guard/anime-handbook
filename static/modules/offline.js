@@ -1092,9 +1092,51 @@ function pcCanvasIsBlank(canvas) {
   }
 }
 
+// 扩展的 WebGL 画布没开 preserveDrawingBuffer：一帧合成完缓冲区就被清空，
+// 这时候 drawImage 拿到的是全透明。只有在「这一帧还没提交」的 rAF 回调里读
+// 才是真画面（实测：直接读 0 像素，放进 rAF 满屏有效像素）。
+// 后台标签页里 rAF 根本不跑，所以配一个超时兜底，别让截图卡死。
+function pcNextFrame(timeout = 220) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+    try { requestAnimationFrame(() => finish(true)); } catch (error) { finish(false); }
+    window.setTimeout(() => finish(false), timeout);
+  });
+}
+
+// 抓到超分画面就返回放大的 canvas，抓不到（没开超分/暂停/读不出）返回 null。
+// 扩展只在视频出帧时重画：暂停后画布是空的，这时只能退回原画。
+// 播放中也不是每帧都读到（刚 seek 完、切集时可能空一两帧），所以多试几帧。
+async function pcCaptureUpscaled(video, source = pcUpscaleCanvas(video)) {
+  if (!source) return null;
+  if (video.paused) return null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (await pcNextFrame(300)) {
+      try {
+        const picture = pcDrawShot(video, source);
+        if (!pcCanvasIsBlank(picture)) return picture;
+      } catch (error) {
+        // 读不出来就再等一帧
+      }
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 60));
+  }
+  // rAF 一直被节流（窗口不可见之类）时，用 createImageBitmap 再兜一次。
+  try {
+    const bitmap = await createImageBitmap(source);
+    const picture = pcDrawShot(bitmap, bitmap);
+    bitmap.close?.();
+    if (!pcCanvasIsBlank(picture)) return picture;
+  } catch (error) {
+    // 忽略：交给调用方退回原始帧
+  }
+  return null;
+}
+
 function pcDrawShot(video, source) {
-  const width = source ? source.width : video.videoWidth;
-  const height = source ? source.height : video.videoHeight;
+  const width = source ? (source.width || source.videoWidth) : video.videoWidth;
+  const height = source ? (source.height || source.videoHeight) : video.videoHeight;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -1102,20 +1144,27 @@ function pcDrawShot(video, source) {
   return canvas;
 }
 
-// 4K 截图的 PNG 可能十几兆，入库接口会拒；超过上限就等比缩到 1920 宽再编码一次。
-function pcShotBlob(canvas, maxBytes = 9 * 1024 * 1024) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) { reject(new Error("浏览器没有返回图片")); return; }
-      if (blob.size <= maxBytes || canvas.width <= 1920) { resolve(blob); return; }
-      const ratio = 1920 / canvas.width;
-      const scaled = document.createElement("canvas");
-      scaled.width = 1920;
-      scaled.height = Math.round(canvas.height * ratio);
-      scaled.getContext("2d").drawImage(canvas, 0, 0, scaled.width, scaled.height);
-      scaled.toBlob((next) => next ? resolve(next) : reject(new Error("浏览器没有返回图片")), "image/png");
-    }, "image/png");
+// 4K 的 PNG 常有 10~14MB，截图入口按 24MB 请求体放宽后能直接收；
+// 只有真的超了才按面积比例缩一档（不是一刀切回 1080p，尽量保住超分后的清晰度）。
+function pcShotBlob(canvas, maxBytes = 14 * 1024 * 1024) {
+  const encode = (source) => new Promise((resolve, reject) => {
+    source.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("浏览器没有返回图片"))), "image/png");
   });
+  return (async () => {
+    let current = canvas;
+    let blob = await encode(current);
+    for (let attempt = 0; attempt < 3 && blob.size > maxBytes && current.width > 1600; attempt += 1) {
+      const scale = Math.max(0.6, Math.sqrt((maxBytes / blob.size)) * 0.94);
+      const scaled = document.createElement("canvas");
+      scaled.width = Math.round(current.width * scale);
+      scaled.height = Math.round(current.height * scale);
+      scaled.getContext("2d").drawImage(current, 0, 0, scaled.width, scaled.height);
+      current = scaled;
+      blob = await encode(current);
+    }
+    // 带上最终尺寸：缩过图的话外面要按实际存的尺寸提示，不能报原始大小。
+    return { blob, width: current.width, height: current.height };
+  })();
 }
 
 async function pcScreenshot() {
@@ -1124,37 +1173,34 @@ async function pcScreenshot() {
     toast("视频还没准备好，先等画面出来再截图", "error");
     return;
   }
-  let canvas = null;
-  let upscaled = false;
-  try {
-    const source = pcUpscaleCanvas(video);
-    canvas = pcDrawShot(video, source);
-    upscaled = Boolean(source);
-    // 超分画布读出来是空的（WebGL 缓冲已被清）→ 退回原始帧，别截出一张透明图。
-    if (upscaled && pcCanvasIsBlank(canvas)) {
-      canvas = pcDrawShot(video, null);
-      upscaled = false;
-    }
-  } catch (error) {
-    // 画布被跨域污染之类：至少保证原分辨率能截下来。
+  const upscaleCanvas = pcUpscaleCanvas(video);
+  let canvas = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
+  let upscaled = Boolean(canvas);
+  if (!canvas) {
+    // 没开超分、或者这帧没读到内容：老老实实截原始帧，至少不会是张透明图。
     try {
       canvas = pcDrawShot(video, null);
       upscaled = false;
-    } catch (inner) {
-      toast(`截图失败：${inner.message || inner}`, "error");
+    } catch (error) {
+      toast(`截图失败：${error.message || error}`, "error");
       return;
     }
   }
   let blob;
+  let shotSize = { width: canvas.width, height: canvas.height };
   try {
-    blob = await pcShotBlob(canvas);
+    const shot = await pcShotBlob(canvas);
+    blob = shot.blob;
+    shotSize = { width: shot.width, height: shot.height };
   } catch (error) {
     toast(`截图失败：${error.message || error}`, "error");
     return;
   }
   const anime = offlineView.animeName || "动漫";
   const episode = episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
-  const sizeTag = upscaled ? `超分 ${canvas.width}×${canvas.height} · ` : "";
+  const sizeTag = upscaled ? `超分 ${shotSize.width}×${shotSize.height} · ` : "";
+  // 开着超分却没截到，只可能是暂停（扩展暂停后不再重画）：说清楚，别让人以为功能没生效。
+  const shotNote = !upscaled && upscaleCanvas && video.paused ? "（暂停时截的是原画，播放中才有超分）" : "";
   // 先进媒体库的图片库（按番名分文件夹、按模板命名）；后台不可用时退回浏览器下载。
   try {
     const data = await new Promise((resolve, reject) => {
@@ -1167,7 +1213,7 @@ async function pcScreenshot() {
       method: "POST",
       body: JSON.stringify({ anime, episode, seconds: video.currentTime, data }),
     });
-    toast(`已存入媒体库 · ${sizeTag}图片：「${result.folder}」/ ${result.name}`);
+    toast(`已存入媒体库 · ${sizeTag}图片：「${result.folder}」/ ${result.name}${shotNote}`);
   } catch (error) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1176,7 +1222,7 @@ async function pcScreenshot() {
     link.download = `${anime} ${episode} ${stamp}.png`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast(`入库失败（${error.message || error}），已改为下载到浏览器`, "error");
+    toast(`入库失败（${error.message || error}），已改为下载到浏览器${shotNote}`, "error");
   }
 }
 

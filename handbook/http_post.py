@@ -3,7 +3,7 @@ from __future__ import annotations
 from .http_context import (VideoLinks, _desktop, background_stem, base64, json, normalize_background_bytes, normalize_jump, re, safe_asset_id, save_collection, secrets, time, urlparse)
 from .http_support import validate_command_body
 from .assets import replace_background_bytes
-from .common import MAX_DETAIL_LINKS
+from .common import MAX_DETAIL_LINKS, MAX_SCREENSHOT_BODY_BYTES
 from .link_rules import RuleFetchError, cache_path, payload as rules_payload, refresh as refresh_rules
 from . import offline_config
 from . import screenshots as screenshot_tools
@@ -15,7 +15,10 @@ class PostRoutes:
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         try:
-            body = self.read_json()
+            # 4K 截图的 base64 会超过通用 12MB，只给截图入口放宽。
+            body = self.read_json(
+                MAX_SCREENSHOT_BODY_BYTES if path == "/api/offline/screenshot" else None
+            )
             validate_command_body(path, body)
             write_exempt_paths = {
                 "/api/profiles",

@@ -199,8 +199,8 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
         self.end_headers()
         self.wfile.write(body)
 
-    def read_json(self) -> dict[str, Any]:
-        return read_object(self)
+    def read_json(self, max_bytes: int | None = None) -> dict[str, Any]:
+        return read_object(self, max_bytes)
 
     def unexpected_error(self, error):
         if isinstance(error, ConnectionError):
