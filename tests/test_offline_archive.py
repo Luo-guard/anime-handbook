@@ -125,7 +125,7 @@ class ArchiveTest(unittest.TestCase):
         self.assertEqual(self.store.job(job["id"])["status"], "ready")
 
         folder = Path(files[0]["file_path"]).parent
-        self.assertEqual(folder.name, "测试番")
+        self.assertEqual(folder.name, "测试番 [bgm-99]")
         self.assertTrue((folder / "第 01 集.mp4").is_file())
         self.assertTrue((folder / "第 02 集.mp4").is_file())
         # 做种开着时不该去删原始文件。
@@ -140,6 +140,82 @@ class ArchiveTest(unittest.TestCase):
             first = len(self.store.files_for_anime(99))
             service._archive(job["id"])
         self.assertEqual(len(self.store.files_for_anime(99)), first)
+
+    def test_title_collisions_and_title_changes_keep_one_directory_per_bangumi_id(self):
+        service = OfflineService(self.db)
+        source = next(self.source_dir.glob("* - 01 *.mkv"))
+        fake = FakeClient(str(source))
+        with patch.object(OfflineService, "client", return_value=fake), patch(
+            "handbook.offline_service.time.sleep"
+        ):
+            for anime_id, title, key in (
+                (99, "同名:第二季", "0:1"),
+                (100, "同名/第二季", "0:1"),
+                (99, "改名后的第二季", "0:2"),
+            ):
+                job = self.store.create_job(
+                    anime_id=anime_id, torrent_hash=f"test-{anime_id}-{key}",
+                    torrent_name=title, episode_key=key,
+                )
+                service._archive(job["id"])
+        first = Path(self.store.file_for(99, "0:1")["file_path"])
+        other = Path(self.store.file_for(100, "0:1")["file_path"])
+        later = Path(self.store.file_for(99, "0:2")["file_path"])
+        self.assertEqual(first.parent.name, "同名 第二季 [bgm-99]")
+        self.assertEqual(other.parent.name, "同名 第二季 [bgm-100]")
+        self.assertEqual(later.parent, first.parent)
+        self.assertTrue(all(path.is_file() for path in (first, other, later)))
+
+    def test_conflict_keeps_original_media_and_subtitles(self):
+        job = self.make_job(str(self.source_dir))
+        target = self.media_root / "测试番 [bgm-99]"
+        target.mkdir(parents=True)
+        fake = FakeClient(str(self.source_dir))
+        service = OfflineService(self.db)
+        with patch.object(OfflineService, "client", return_value=fake), patch(
+            "handbook.offline_service.time.sleep"
+        ):
+            for extension in ("mp4", "ass"):
+                with self.subTest(extension=extension):
+                    existing = target / f"第 01 集.{extension}"
+                    existing.write_bytes(b"keep original bytes")
+                    service._archive_job(job["id"])
+                    self.assertEqual(existing.read_bytes(), b"keep original bytes")
+                    self.assertIn("归档冲突", self.store.job(job["id"])["error"])
+                    self.assertEqual(self.store.files_for_anime(99), [])
+                    self.assertEqual(list(target.iterdir()), [existing])
+                    existing.unlink()
+
+    def test_archive_does_not_replace_a_playable_legacy_episode(self):
+        legacy = self.media_root / "测试番" / "第 01 集.mp4"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_bytes(b"legacy episode")
+        self.store.replace_file(anime_id=99, episode_key="0:1", file_path=str(legacy))
+        job = self.make_job(str(self.source_dir))
+        service = OfflineService(self.db)
+        with patch.object(OfflineService, "client", return_value=FakeClient(str(self.source_dir))), patch(
+            "handbook.offline_service.time.sleep"
+        ):
+            service._archive_job(job["id"])
+        self.assertIn("这一集已入库", self.store.job(job["id"])["error"])
+        self.assertEqual(self.store.file_for(99, "0:1")["file_path"], str(legacy))
+        self.assertEqual(legacy.read_bytes(), b"legacy episode")
+
+    def test_archive_registration_failure_allows_retry(self):
+        source = next(self.source_dir.glob("* - 01 *.mkv"))
+        job = self.make_job(str(source))
+        service = OfflineService(self.db)
+        with patch.object(OfflineService, "client", return_value=FakeClient(str(source))), patch(
+            "handbook.offline_service.time.sleep"
+        ):
+            with patch.object(service.store, "replace_file", side_effect=OSError("write failed")):
+                service._archive_job(job["id"])
+            self.assertEqual(self.store.job(job["id"])["status"], "failed")
+            self.assertEqual(self.store.files_for_anime(99), [])
+            self.assertEqual(list((self.media_root / "测试番 [bgm-99]").iterdir()), [])
+            service._archive_job(job["id"])
+        self.assertEqual(self.store.job(job["id"])["status"], "ready")
+        self.assertTrue(Path(self.store.file_for(99, "0:1")["file_path"]).is_file())
 
     def test_cleans_source_when_seeding_disabled(self):
         offline_config.save(self.root, {"media_root": str(self.media_root), "seed_after_done": False})

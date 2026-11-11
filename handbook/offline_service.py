@@ -9,10 +9,11 @@ from __future__ import annotations
 import os
 import json
 import shutil
+import tempfile
 import threading
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 from typing import Any
 
@@ -457,6 +458,100 @@ class OfflineService:
             return media_tools.video_files(target)
         return []
 
+    def _archive_directory(self, root: Path, anime_id: int, title: str) -> Path:
+        suffix = f" [bgm-{anime_id}]"
+        name = media_tools.safe_name(title, limit=80 - len(suffix))
+        # Keep the component within the byte limit of common Unix filesystems.
+        name = name.encode("utf-8")[:254 - len(suffix)].decode("utf-8", "ignore").rstrip(" .")
+        folder_name = name + suffix
+        if PureWindowsPath(folder_name).is_reserved():
+            folder_name = "_" + folder_name
+        with _ARCHIVE_LOCK:
+            matches = [path for path in root.iterdir() if path.name.casefold().endswith(suffix)]
+            if len(matches) > 1:
+                raise OfflineError(f"媒体库里有多个 Bangumi #{anime_id} 的目录，请保留一个后重试")
+            target = matches[0] if matches else root / folder_name
+            if target.resolve() != target or (target.exists() and not target.is_dir()):
+                raise OfflineError(f"归档目录被占用：{target}")
+            if matches and any(
+                row["anime_id"] != anime_id and Path(row["file_path"]).parent.resolve() == target
+                for row in self.store.all_files()
+            ):
+                raise OfflineError(f"归档目录已有其他番剧的文件记录：{target}")
+            target.mkdir(exist_ok=True)
+            return target
+
+    @staticmethod
+    def _publish_archive_file(source: Path, destination: Path) -> None:
+        """Publish a complete file only if its destination is free."""
+        try:
+            if os.name == "nt":
+                source.rename(destination)  # Windows rename fails if the target exists.
+            else:
+                os.link(source, destination)
+        except FileExistsError as error:
+            raise OfflineError(f"归档冲突，已保留原文件：{destination}") from error
+
+    def _check_archive_targets(self, anime_id: int, key: str, video: Path, subtitle: Path) -> None:
+        existing = self.store.file_for(anime_id, key)
+        if existing and Path(existing["file_path"]).is_file():
+            raise OfflineError(f"这一集已入库，已保留原文件：{existing['file_path']}")
+        for target in (video, subtitle):
+            if os.path.lexists(target):
+                raise OfflineError(f"归档冲突，已保留原文件：{target}")
+
+    def _ingest_episode(
+        self, source: Path, target_dir: Path, label: str, anime_id: int,
+        key: str, media_id: int, *, extract_fonts: bool,
+    ) -> None:
+        video = target_dir / f"{label}.mp4"
+        subtitle = target_dir / f"{label}.ass"
+        self._check_archive_targets(anime_id, key, video, subtitle)
+        with tempfile.TemporaryDirectory(prefix=".archive-", dir=target_dir) as temporary:
+            staging = Path(temporary)
+            info = media_tools.probe(source)
+            result = media_tools.remux(source, staging / video.name, codec=info["codec"])
+            extracted = media_tools.extract_subtitle(source, staging / subtitle.name)
+            fonts = media_tools.extract_font_attachments(source, staging / "_fonts") if extract_fonts else []
+
+            with _ARCHIVE_LOCK:
+                current_root = Path(offline_config.resolved(self.config())["media_root"]).resolve()
+                if target_dir.parent != current_root:
+                    raise OfflineError("归档期间媒体库目录已切换，请重试归档")
+                if target_dir.resolve() != target_dir:
+                    raise OfflineError(f"归档期间目标目录已变更：{target_dir}")
+                published: list[Path] = []
+                try:
+                    with self.db.transaction():
+                        self._check_archive_targets(anime_id, key, video, subtitle)
+                        if extracted:
+                            self._publish_archive_file(Path(extracted), subtitle)
+                            published.append(subtitle)
+                        self._publish_archive_file(Path(result["path"]), video)
+                        published.append(video)
+                        self.store.replace_file(
+                            anime_id=anime_id, episode_key=key, file_path=str(video),
+                            file_size=result["size"], duration_ms=info["duration_ms"],
+                            media_id=media_id, subtitle_path=str(subtitle) if extracted else "",
+                        )
+                except Exception:
+                    self._rollback(published)
+                    raise
+
+                if fonts:
+                    font_dir = target_dir / "_fonts"
+                    try:
+                        font_dir.mkdir(exist_ok=True)
+                        if font_dir.resolve() != font_dir:
+                            return
+                        for font in map(Path, fonts):
+                            try:
+                                self._publish_archive_file(font, font_dir / font.name)
+                            except (OfflineError, OSError):
+                                continue  # Preserve existing fonts. Attachments are optional.
+                    except OSError:
+                        pass
+
     def _archive(self, media_id: int) -> None:
         job = self.store.job(media_id)
         if not job:
@@ -502,11 +597,10 @@ class OfflineService:
                 "文件还在下载目录（被移走或改名过就放回原处），再点「重试归档」"
             )
         anime = self.db.get_anime(anime_id) or {}
-        folder = media_tools.safe_name(
-            anime.get("display_name") or anime.get("name_cn") or anime.get("name") or job.get("torrent_name")
+        target_dir = self._archive_directory(
+            Path(paths["media_root"]).resolve(), anime_id,
+            anime.get("display_name") or anime.get("name_cn") or anime.get("name") or job.get("torrent_name"),
         )
-        target_dir = Path(paths["media_root"]) / folder
-        target_dir.mkdir(parents=True, exist_ok=True)
         # 用户明确指定的集数是权威信息，只对单文件任务生效（多文件任务一个 key
         # 会把整季都写到同一集上）。
         explicit_key = str(job.get("episode_key") or "").strip()
@@ -545,27 +639,16 @@ class OfflineService:
                 already += 1
                 continue
             try:
-                info = media_tools.probe(source)
-                result = media_tools.remux(source, target_dir / f"{label}.mp4", codec=info["codec"])
-                subtitle = media_tools.extract_subtitle(source, target_dir / f"{label}.ass")
+                self._ingest_episode(
+                    source, target_dir, label, anime_id, key, media_id, extract_fonts=not fonts_done,
+                )
             except media_tools.MediaError:
                 # 单个文件坏掉不该让整季任务失败，剩下的继续处理；但数量要记下来，
                 # 全是封装失败时不能报成「认不出集数」，那会把人引到错误的方向。
                 broken += 1
                 continue
             # 同一个字幕组的合集里每集附件都一样，抽一次就够，别重复读十几遍原片。
-            if not fonts_done:
-                media_tools.extract_font_attachments(source, target_dir / "_fonts")
-                fonts_done = True
-            self.store.replace_file(
-                anime_id=anime_id,
-                episode_key=key,
-                file_path=result["path"],
-                file_size=result["size"],
-                duration_ms=info["duration_ms"],
-                media_id=media_id,
-                subtitle_path=subtitle,
-            )
+            fonts_done = True
             made += 1
         ingested = made + already
         if not ingested:
@@ -1243,7 +1326,11 @@ class OfflineService:
             return [(row["id"], row["file_path"], row["subtitle_path"], row["media_id"]) for row in rows]
 
         try:
-            with offline_config.media_root_switch(self.asset_root, current_text, target_text), self.db.transaction():
+            with (
+                _ARCHIVE_LOCK,
+                offline_config.media_root_switch(self.asset_root, current_text, target_text),
+                self.db.transaction(),
+            ):
                 if file_locations(self.store.all_files()) != file_locations(original_files):
                     raise OfflineError("复制期间媒体库文件有变动，请重试迁移")
                 for row, destination, subtitle_path in plan:
