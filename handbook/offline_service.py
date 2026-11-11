@@ -841,12 +841,14 @@ class OfflineService:
             raise OfflineError("下载记录不存在")
         torrent_hash = str(job.get("torrent_hash") or "")
         if torrent_hash:
+            client = self.client()
             try:
-                self.client().delete([torrent_hash], delete_files=delete_files)
+                if client.torrent(torrent_hash) is not None:
+                    client.delete([torrent_hash], delete_files=delete_files)
+                    if client.torrent(torrent_hash) is not None:
+                        raise QBError("任务仍在下载器中，请稍后重试")
             except QBError as error:
-                # 任务已经不在 qB 里也照样清本地记录，否则会留一条删不掉的僵尸。
-                if "找不到" not in str(error):
-                    pass
+                raise OfflineError(f"未能确认下载器已删除任务，已保留手账记录：{error}") from error
         self.store.delete_job(int(media_id))
         return {"ok": True, "kept_files": not delete_files and keep_files}
 
@@ -1047,38 +1049,41 @@ class OfflineService:
     # ---- 迁移媒体库 ---------------------------------------------------
 
     @staticmethod
-    def _copy_file(source: Path, destination: Path) -> tuple[bool, bool]:
-        """复制一个文件并校验大小；返回 ``(成功, 是否新建)``。
-
-        「是否新建」用来做精确回滚：只删这次真的写下去的文件，不动目标目录里
-        本来就有的东西。
-        """
-        existed = destination.exists()
+    def _copy_file(source: Path, destination: Path) -> bool:
+        """Return whether a new file was created. Reuse identical copies."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        created = False
         try:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
+            with source.open("rb") as incoming:
+                try:
+                    outgoing = destination.open("xb")
+                except FileExistsError:
+                    if destination.is_symlink() or not destination.is_file() or source.samefile(destination):
+                        raise FileExistsError(f"目标路径已占用：{destination}") from None
+                    with destination.open("rb") as existing:
+                        while True:
+                            block = incoming.read(1024 * 1024)
+                            if block != existing.read(1024 * 1024):
+                                raise FileExistsError(f"目标已有内容不同的同名文件：{destination}") from None
+                            if not block:
+                                return False
+                created = True
+                with outgoing:
+                    shutil.copyfileobj(incoming, outgoing)
+            shutil.copystat(source, destination)
             if destination.stat().st_size != source.stat().st_size:
                 raise OSError("复制后大小不一致")
         except OSError:
-            if not existed:
+            if created:
                 destination.unlink(missing_ok=True)
-            return False, False
-        return True, not existed
+            raise
+        return True
 
     @staticmethod
     def _rollback(paths: list[Path]) -> None:
         for path in reversed(paths):
             try:
                 path.unlink(missing_ok=True)
-            except OSError:
-                pass
-        # 顺手清掉这次新建的空目录（rmdir 只删空目录，不会误伤别人的文件）。
-        parents = sorted(
-            {path.parent for path in paths}, key=lambda item: len(item.parts), reverse=True
-        )
-        for parent in parents:
-            try:
-                parent.rmdir()
             except OSError:
                 pass
 
@@ -1114,10 +1119,11 @@ class OfflineService:
                 continue
             for item in items:
                 destination = target_path / relative / item.name
-                ok, fresh = self._copy_file(item, destination)
-                if not ok:
+                try:
+                    fresh = self._copy_file(item, destination)
+                except OSError as error:
                     warnings.append(
-                        {"file": str(item), "reason": "字体没复制过去，字幕可能回退默认字体"}
+                        {"file": str(item), "reason": f"字体没复制过去：{error}"}
                     )
                     continue
                 count += 1
@@ -1135,16 +1141,21 @@ class OfflineService:
 
         默认不删源文件——真要删是另一个明确的开关，且放在最后一步。
         """
-        target_text = str(target_root or "").strip().replace("\\", "/").rstrip("/")
+        target_text = str(target_root or "").strip()
         if not target_text:
             raise OfflineError("请填写目标目录")
         config = self.config()
         current_text = offline_config.resolved(config)["media_root"].replace("\\", "/").rstrip("/")
-        if target_text == current_text:
-            raise OfflineError("目标目录和当前目录是同一个")
         current_path = Path(current_text)
-        target_path = Path(target_text)
         try:
+            target_path = Path(target_text).resolve()
+            if target_path == current_path.resolve():
+                raise OfflineError("目标目录和当前目录是同一个")
+            target_text = target_path.as_posix()
+            if target_text.endswith("/"):
+                raise OfflineError("请选择盘符下的一个目录作为媒体库")
+            if len(target_text) > offline_config.MAX_TEXT:
+                raise OfflineError("目标目录路径过长")
             target_path.mkdir(parents=True, exist_ok=True)
         except OSError as error:
             raise OfflineError(f"无法创建目标目录：{error}") from error
@@ -1154,7 +1165,8 @@ class OfflineService:
         # 只记「复制成功、准备改指向」的条目；真正写数据库留到全部成功之后。
         plan: list[tuple[dict[str, Any], str, str]] = []
         created: list[Path] = []
-        for row in self.store.all_files():
+        original_files = self.store.all_files()
+        for row in original_files:
             source = Path(str(row.get("file_path") or ""))
             if not source.is_file():
                 failed.append({"file": str(source), "reason": "源文件不存在"})
@@ -1165,9 +1177,10 @@ class OfflineService:
                 # 文件本来就不在媒体库里（手动挪过），平铺到目标根目录。
                 relative = Path(source.name)
             destination = target_path / relative
-            ok, fresh = self._copy_file(source, destination)
-            if not ok:
-                failed.append({"file": str(source), "reason": "复制失败或复制后大小不一致"})
+            try:
+                fresh = self._copy_file(source, destination)
+            except OSError as error:
+                failed.append({"file": str(source), "reason": str(error)})
                 continue
             if fresh:
                 created.append(destination)
@@ -1179,10 +1192,11 @@ class OfflineService:
                 except ValueError:
                     subtitle_relative = Path(subtitle.name)
                 subtitle_target = target_path / subtitle_relative
-                subtitle_ok, subtitle_fresh = self._copy_file(subtitle, subtitle_target)
-                if not subtitle_ok:
+                try:
+                    subtitle_fresh = self._copy_file(subtitle, subtitle_target)
+                except OSError as error:
                     # 只搬视频不搬字幕，删源之后字幕就成了孤儿；整条算失败更安全。
-                    failed.append({"file": str(subtitle), "reason": "字幕没复制过去"})
+                    failed.append({"file": str(subtitle), "reason": f"字幕没复制过去：{error}"})
                     continue
                 if subtitle_fresh:
                     created.append(subtitle_target)
@@ -1206,20 +1220,27 @@ class OfflineService:
 
         # 视频/字幕都齐了再搬字体；字体失败只记 warning，不影响整批成功。
         fonts_copied = self._migrate_fonts(current_path, target_path, created, warnings)
-        # 全部复制完成：一次性把数据库指向新路径，再写配置。
-        for row, destination, subtitle_path in plan:
-            self.store.replace_file(
-                anime_id=int(row["anime_id"]),
-                episode_key=str(row["episode_key"]),
-                file_path=destination,
-                file_size=int(row.get("file_size") or 0),
-                duration_ms=int(row.get("duration_ms") or 0),
-                media_id=int(row.get("media_id") or 0),
-                subtitle_path=subtitle_path,
-            )
-        config["media_root"] = target_text
-        # 只改 media_root：迁移可能跑了几十秒，这期间记住的主机/字幕组不该被旧快照冲掉。
-        offline_config.patch(self.asset_root, media_root=target_text)
+        # Ignore playback progress changes, which replace_file preserves.
+        def file_locations(rows):
+            return [(row["id"], row["file_path"], row["subtitle_path"], row["media_id"]) for row in rows]
+
+        try:
+            with offline_config.media_root_switch(self.asset_root, current_text, target_text), self.db.transaction():
+                if file_locations(self.store.all_files()) != file_locations(original_files):
+                    raise OfflineError("复制期间媒体库文件有变动，请重试迁移")
+                for row, destination, subtitle_path in plan:
+                    self.store.replace_file(
+                        anime_id=int(row["anime_id"]),
+                        episode_key=str(row["episode_key"]),
+                        file_path=destination,
+                        file_size=int(row.get("file_size") or 0),
+                        duration_ms=int(row.get("duration_ms") or 0),
+                        media_id=int(row.get("media_id") or 0),
+                        subtitle_path=subtitle_path,
+                    )
+        except Exception as error:
+            self._rollback(created)
+            raise OfflineError(f"迁移切换失败：{error}") from error
         if delete_source:
             # 删源放在最后：前面任何一步失败都不该让原文件消失。
             for row, _, _ in plan:

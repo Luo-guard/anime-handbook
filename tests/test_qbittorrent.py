@@ -113,6 +113,11 @@ class QueryTest(unittest.TestCase):
         self.assertEqual(client.torrent("abc")["progress"], 1)
         self.assertIsNone(client.torrent("none"))
 
+    def test_malformed_torrent_response_is_not_reported_as_absent(self):
+        opener = Recorder(FakeResponse(b'{"error":"unavailable"}'))
+        with self.assertRaisesRegex(QBError, "任务列表无效"):
+            Client(opener=opener).torrent("abc")
+
     def test_delete_can_keep_files(self):
         opener = Recorder(FakeResponse(b""), FakeResponse(b""))
         client = Client(opener=opener)

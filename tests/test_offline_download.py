@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from handbook import database, mikan, offline_config
-from handbook.offline_service import OfflineService
+from handbook.offline_service import OfflineError, OfflineService
+from handbook.qbittorrent import QBError
 from handbook.torrent_meta import TorrentMetaError, torrent_infohash, torrent_name
 
 # 最小合法 torrent：顶层 announce + info(name,length)
@@ -75,6 +76,39 @@ class FakeClient:
 
 
 class DownloadLookupTest(unittest.TestCase):
+    def test_delete_keeps_local_task_when_qb_is_offline(self):
+        job = self.service.store.create_job(anime_id=1, torrent_hash="abc", torrent_name="test")
+        for operation in ("torrent", "delete"):
+            with self.subTest(operation=operation), patch.object(self.service, "client") as client:
+                qb = client.return_value
+                qb.torrent.return_value = {"hash": "abc"}
+                getattr(qb, operation).side_effect = QBError("connection refused")
+                with self.assertRaisesRegex(OfflineError, "保留手账记录"):
+                    self.service.delete_job(job["id"], delete_files=True)
+                self.assertIsNotNone(self.service.store.job(job["id"]))
+
+    def test_delete_clears_only_confirmed_removed_tasks(self):
+        for already_absent in (True, False):
+            with self.subTest(already_absent=already_absent):
+                job = self.service.store.create_job(anime_id=1, torrent_hash="abc", torrent_name="test")
+                with patch.object(self.service, "client") as client:
+                    qb = client.return_value
+                    qb.torrent.side_effect = [None] if already_absent else [{"hash": "abc"}, None]
+                    self.assertTrue(self.service.delete_job(job["id"])["ok"])
+                    if already_absent:
+                        qb.delete.assert_not_called()
+                    else:
+                        qb.delete.assert_called_once_with(["abc"], delete_files=False)
+                self.assertIsNone(self.service.store.job(job["id"]))
+
+    def test_delete_keeps_local_task_if_qb_does_not_remove_it(self):
+        job = self.service.store.create_job(anime_id=1, torrent_hash="abc", torrent_name="test")
+        with patch.object(self.service, "client") as client:
+            client.return_value.torrent.return_value = {"hash": "abc"}
+            with self.assertRaisesRegex(OfflineError, "任务仍在下载器"):
+                self.service.delete_job(job["id"])
+        self.assertIsNotNone(self.service.store.job(job["id"]))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)

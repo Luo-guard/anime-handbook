@@ -12,8 +12,9 @@ import shutil
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 CONFIG_FILE = "offline.json"
 DEFAULT_QB_HOST = "127.0.0.1"
@@ -112,10 +113,11 @@ def normalize(document: Any) -> dict[str, Any]:
 
 def load(asset_root: Path) -> dict[str, Any]:
     path = config_path(asset_root)
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return normalize({})
+    with _LOCK:
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return normalize({})
     return normalize(document)
 
 
@@ -141,6 +143,26 @@ def patch(asset_root: Path, **fields: Any) -> dict[str, Any]:
         config = load(asset_root)
         config.update(fields)
         return save(asset_root, config)
+
+
+@contextmanager
+def media_root_switch(asset_root: Path, expected: str, target: str) -> Iterator[None]:
+    """Keep config readers out until the matching database transaction commits."""
+    with _LOCK:
+        previous = load(asset_root)
+        if resolved(previous)["media_root"] != expected:
+            raise ValueError("媒体库目录已被更改，请刷新后重试")
+        path = config_path(asset_root)
+        existed = path.exists()
+        patch(asset_root, media_root=target)
+        try:
+            yield
+        except BaseException:
+            if existed:
+                save(asset_root, previous)
+            else:
+                path.unlink(missing_ok=True)
+            raise
 
 
 def save_settings(asset_root: Path, document: Any) -> dict[str, Any]:

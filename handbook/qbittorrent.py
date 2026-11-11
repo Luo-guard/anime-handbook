@@ -211,9 +211,9 @@ class Client:
         if not torrent_hash:
             return None
         items = self._json("/torrents/info?" + urllib.parse.urlencode({"hashes": torrent_hash}))
-        if isinstance(items, list) and items:
-            return items[0]
-        return None
+        if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+            raise QBError("qBittorrent 返回的任务列表无效")
+        return items[0] if items else None
 
     def pause(self, torrent_hashes: list[str]) -> None:
         self._first_working(_PAUSE_PATHS, {"hashes": "|".join(torrent_hashes)})

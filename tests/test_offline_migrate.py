@@ -2,6 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from handbook import database, offline_config
 from handbook.offline import OfflineStore
@@ -143,6 +144,66 @@ class MigrateTest(unittest.TestCase):
         self.assertTrue(result["switched"])
         self.assertEqual(result["fonts"], 1)
         self.assertTrue((destination / "测试番" / "_fonts" / "方正准圆.ttf").is_file())
+
+    def test_conflicting_destination_is_preserved_and_new_copies_roll_back(self):
+        first = self.make_episode(1)
+        second = self.make_episode(2, b"new video")
+        destination = self.root / "new-media"
+        conflict = destination / Path(second["file_path"]).relative_to(self.media)
+        conflict.parent.mkdir(parents=True)
+        conflict.write_bytes(b"old video")  # Same size, different content.
+
+        result = self.service.migrate_media_root(str(destination), delete_source=True)
+
+        self.assertFalse(result["switched"])
+        self.assertIn("同名文件", result["failed"][0]["reason"])
+        self.assertEqual(conflict.read_bytes(), b"old video")
+        self.assertFalse((destination / Path(first["file_path"]).relative_to(self.media)).exists())
+        self.assertTrue(Path(first["file_path"]).is_file())
+        self.assertEqual(self.store.all_files(), [first, second])
+
+    def test_identical_destination_can_be_reused(self):
+        row = self.make_episode(1)
+        destination = self.root / "new-media"
+        video = destination / Path(row["file_path"]).relative_to(self.media)
+        video.parent.mkdir(parents=True)
+        video.write_bytes(Path(row["file_path"]).read_bytes())
+        self.assertTrue(self.service.migrate_media_root(str(destination))["switched"])
+        self.assertEqual(Path(self.store.file_for(1, "0:1")["file_path"]), video)
+
+    def test_database_failure_restores_config_and_all_paths(self):
+        first = self.make_episode(1)
+        second = self.make_episode(2)
+        destination = self.root / "new-media"
+        before = self.service.config()
+        replace_file = self.service.store.replace_file
+
+        def fail_second(**fields):
+            if fields["episode_key"] == "0:2":
+                raise OSError("模拟第二条数据库写入失败")
+            return replace_file(**fields)
+
+        with patch.object(self.service.store, "replace_file", side_effect=fail_second):
+            with self.assertRaisesRegex(OfflineError, "模拟第二条"):
+                self.service.migrate_media_root(str(destination), delete_source=True)
+
+        self.assertEqual(self.store.all_files(), [first, second])
+        self.assertEqual(self.service.config(), before)
+        self.assertEqual(list(destination.rglob("*.mp4")), [])
+        self.assertTrue(Path(first["file_path"]).is_file())
+
+    def test_config_failure_keeps_database_and_removes_copies(self):
+        row = self.make_episode(1)
+        destination = self.root / "new-media"
+        before = self.service.config()
+        with patch.object(offline_config, "save", side_effect=OSError("模拟配置写入失败")):
+            with self.assertRaisesRegex(OfflineError, "模拟配置写入失败"):
+                self.service.migrate_media_root(str(destination), delete_source=True)
+
+        self.assertEqual(self.store.all_files(), [row])
+        self.assertEqual(self.service.config(), before)
+        self.assertEqual(list(destination.rglob("*.mp4")), [])
+        self.assertTrue(Path(row["file_path"]).is_file())
 
 
 if __name__ == "__main__":
