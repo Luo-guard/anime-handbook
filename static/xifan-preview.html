@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>稀饭播放测试 · 动漫手账</title>
+  <link rel="stylesheet" href="/xifan-preview.css?v=2">
+  <script defer src="/xifan-preview.js?v=2"></script>
+</head>
+<body>
+  <main class="watch">
+    <header class="top">
+      <a class="back" href="/">‹ 动漫手账</a>
+      <span class="preview-label">播放测试</span>
+    </header>
+    <div class="heading">
+      <div>
+        <p class="provider">稀饭动漫 Next</p>
+        <h1 id="title">稀饭放映室</h1>
+        <p id="episode-title" class="episode-title">选一集，在手账里播放</p>
+      </div>
+      <a id="original" class="secondary" href="https://next.xifanacg.com/" target="_blank" rel="noopener noreferrer">打开原网页 ↗</a>
+    </div>
+    <div class="watch-grid">
+      <section class="main-player" aria-label="播放器">
+        <div class="screen">
+          <video id="video" controls playsinline preload="metadata" hidden aria-label="稀饭内置播放器"></video>
+          <div id="screen-state" class="screen-state">
+            <button id="play" class="play" type="button" aria-label="播放当前集" disabled>▶</button>
+            <p id="status" role="status" aria-live="polite">正在读取试播选集…</p>
+          </div>
+        </div>
+        <div class="player-tools">
+          <button id="previous" class="secondary" type="button" disabled>上一集</button>
+          <button id="next" class="secondary" type="button" disabled>下一集</button>
+          <label class="speed">倍速
+            <select id="speed" aria-label="播放倍速">
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+              <option value="2">2×</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <aside class="playlist" aria-labelledby="playlist-heading">
+        <div class="playlist-head">
+          <h2 id="playlist-heading">选集</h2>
+          <span id="count"></span>
+        </div>
+        <select id="source" aria-label="播放线路" hidden></select>
+        <div id="episodes" class="episodes"></div>
+      </aside>
+    </div>
+    <form id="link-form" class="link-form">
+      <label for="link">换一部番</label>
+      <input id="link" type="url" required placeholder="粘贴稀饭 Next 的番剧或播放链接" autocomplete="off">
+      <button class="primary" type="submit">载入选集</button>
+      <button id="sample" class="secondary" type="button">试播样片</button>
+    </form>
+    <p id="link-status" class="link-status" role="status" aria-live="polite"></p>
+  </main>
+</body>
+</html>

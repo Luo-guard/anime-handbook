@@ -9,6 +9,7 @@ from . import media as media_tools
 from . import offline_config
 from . import screenshots as screenshot_tools
 from . import danmaku as danmaku_tools
+from . import xifan_preview
 from .offline import OfflineStore
 from .offline_service import OfflineError, OfflineService
 
@@ -73,7 +74,9 @@ class ReadRoutes:
         path = parsed.path
         query = parse_qs(parsed.query)
         try:
-            if path == "/api/background":
+            if path.startswith(xifan_preview.PREFIX):
+                xifan_preview.serve(self, path, query)
+            elif path == "/api/background":
                 profile_id = safe_asset_id(query.get("profile", [""])[0], "default")
                 account_id = safe_asset_id(query.get("account", [""])[0], "local")
                 image = find_background_asset(account_id, profile_id, root=self.background_root) if profile_id else None
