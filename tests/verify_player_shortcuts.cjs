@@ -1,7 +1,7 @@
 // 播放器快捷键：设置界面能显示/配置，后端能保存，默认键位对齐 Kazumi。
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-const API = 'http://127.0.0.1:43127';
+const API = process.env.HANDBOOK_TEST_URL || 'http://127.0.0.1:43127';
 
 (async () => {
   const original = await (await fetch(`${API}/api/bootstrap`)).json().then((d) => d.settings.keyboard_shortcuts);

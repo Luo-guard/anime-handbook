@@ -1570,6 +1570,15 @@ h1 {
   box-shadow: 0 14px 35px rgb(var(--theme-rgb) / 0.12);
 }
 
+.quick-record-dialog .note-composer {
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+}
+.quick-record-dialog .composer-footer {
+  flex-wrap: wrap;
+}
+
 .composer-heading {
   display: flex;
   justify-content: space-between;

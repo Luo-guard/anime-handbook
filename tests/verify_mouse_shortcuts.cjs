@@ -8,6 +8,7 @@ const harness=[
   "const ORDER=['collection','schedule','timeline','statistics','ranking','settings'];",
   "const sidebarOrder=()=>ORDER;",
   "const sidebarVisibility=()=>({});",
+  "const pageVisible=id=>sidebarVisibility()[id]!==false;",
   "window.hits=[];",
   "document.querySelectorAll('[data-nav-id]').forEach(button=>button.onclick=()=>{hits.push(button.dataset.navId);state.activeView=button.dataset.navId;if(button.dataset.navId==='settings')document.querySelector('#settingsModal').showModal();});"
 ].join("\n");

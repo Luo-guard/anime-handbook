@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261111-cleanup" />
+  <link rel="stylesheet" href="/styles.css?v=20261111-quick-record" />
   </head>
   <body>
     <div class="app-shell">
@@ -172,7 +172,7 @@
             <div class="composer-heading">
               <div>
                 <p class="eyebrow">NEW THOUGHT</p>
-                <h2>记下这一刻</h2>
+              <h2 id="noteComposerTitle">记下这一刻</h2>
               </div>
               <button type="button" class="icon-button" id="closeComposer" aria-label="关闭">×</button>
             </div>
@@ -1184,7 +1184,7 @@
             <span class="background-opacity-input"><input id="rankingHoverDelayInput" type="range" min="0" max="10" step="1" /><output id="rankingHoverDelayValue">2 秒</output></span>
           </label>
           <div class="settings-section-title" data-settings-section="keyboard">快捷键</div>
-          <label class="setting-row"><span><strong>启用快捷键</strong><small>仅在手账页面生效；输入、输入法选字和弹窗编辑期间不响应。按住组合键时请一起按下。</small></span><span class="switch-row compact"><input type="checkbox" id="keyboardEnabledInput" /><span class="switch"></span></span></label>
+          <label class="setting-row"><span><strong>启用快捷键</strong><small>在手账页面生效，输入时暂停。快速写记录也可在内置播放器里使用。</small></span><span class="switch-row compact"><input type="checkbox" id="keyboardEnabledInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键或鼠标前进／后退侧键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，到达第一个或最后一个界面后不再移动。侧键一旦绑定，就不会再触发浏览器自身的前进／后退。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
           <h3 class="settings-subsection-title">单集格子手势</h3>
           <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击固定用于记录已看，不参与绑定；右键、长按、修饰键组合、双击和中键都可以自定义。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
@@ -1552,6 +1552,7 @@
       </form>
     </dialog>
     <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
+    <dialog class="modal quick-record-dialog" id="quickRecordDialog" aria-labelledby="noteComposerTitle"></dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
     <script src="/schedule.js?v=20261111-hide-notice" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
@@ -1572,15 +1573,15 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261108-search-ui" defer></script>
-    <script src="/modules/events.js?v=20261108-detail-corner" defer></script>
-    <script src="/modules/keyboard.js?v=20261109-sidebar-fix" defer></script>
+    <script src="/modules/events.js?v=20261111-quick-record" defer></script>
+    <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
     <script src="/modules/danmaku.js?v=20261108-dm-kazumi" defer></script>
-    <script src="/modules/offline.js?v=20261111-sr-shot4" defer></script>
+    <script src="/modules/offline.js?v=20261111-quick-record" defer></script>
     <script src="/modules/library-view.js?v=20261111-cleanup" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

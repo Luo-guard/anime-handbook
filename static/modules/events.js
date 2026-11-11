@@ -245,13 +245,50 @@ $("#saveAnimeComment").addEventListener("click", async () => {
 $("#cancelProgress").addEventListener("click", () => $("#progressModal").close());
 $("#saveProgress").addEventListener("click", saveProgress);
 
+const noteComposer = $("#noteComposer");
+const quickRecordDialog = $("#quickRecordDialog");
+const noteComposerHome = document.createComment("note composer home");
+noteComposer.before(noteComposerHome);
+let quickRecordSession = null;
+let noteSaving = false;
+
+function openQuickRecord() {
+  if (state.user?.read_only) return false;
+  if (quickRecordSession) return true;
+  const video = $("#offlinePlayer[open] #offlineVideo");
+  const playing = video && !video.paused && !video.ended;
+  quickRecordSession = {
+    inlineOpen: !noteComposer.classList.contains("hidden"),
+    resume: playing ? { video, source: video.currentSrc || video.src } : null,
+  };
+  quickRecordDialog.returnValue = "";
+  quickRecordDialog.append(noteComposer);
+  noteComposer.classList.remove("hidden");
+  quickRecordDialog.showModal();
+  if (playing) video.pause();
+  $("#noteContent").focus({ preventScroll: true });
+  return true;
+}
+
+quickRecordDialog.addEventListener("close", () => {
+  const session = quickRecordSession;
+  quickRecordSession = null;
+  noteComposerHome.after(noteComposer);
+  noteComposer.classList.toggle("hidden", !session?.inlineOpen || quickRecordDialog.returnValue === "saved");
+  const resume = session?.resume;
+  if (resume && $("#offlinePlayer")?.open && (resume.video.currentSrc || resume.video.src) === resume.source) {
+    resume.video.play().catch(() => {});
+  }
+});
+
 $("#writeNoteButton").addEventListener("click", () => {
   $("#noteComposer").classList.remove("hidden");
   $("#noteContent").focus();
 });
 
 $("#closeComposer").addEventListener("click", () => {
-  $("#noteComposer").classList.add("hidden");
+  if (quickRecordDialog.open) quickRecordDialog.close();
+  else noteComposer.classList.add("hidden");
 });
 
 async function createRecordTheme() {
@@ -322,8 +359,12 @@ $("#noteImageInput").addEventListener("change", async (event) => {
   await insertRecordImages(event.target, $("#noteContent"));
 });
 
-$("#noteComposer").addEventListener("submit", async (event) => {
+noteComposer.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (noteSaving) return;
+  noteSaving = true;
+  const submit = noteComposer.querySelector('button[type="submit"]');
+  submit.disabled = true;
   try {
     await api("/api/notes", {
       method: "POST",
@@ -342,11 +383,15 @@ $("#noteComposer").addEventListener("submit", async (event) => {
     $("#noteContent").value = "";
     $("#noteAnime").value = "";
     updateAssociatedAnimeLabel();
-    $("#noteComposer").classList.add("hidden");
+    if (quickRecordDialog.open) quickRecordDialog.close("saved");
+    else noteComposer.classList.add("hidden");
     toast("感想已写入时间线");
-    await renderTimeline();
+    if (state.activeView === "timeline") await renderTimeline();
   } catch (error) {
     toast(error.message, "error");
+  } finally {
+    submit.disabled = false;
+    noteSaving = false;
   }
 });
 

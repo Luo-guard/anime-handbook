@@ -44,6 +44,13 @@ class ShortcutTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalize_shortcuts(value)
 
+    def test_quick_record_key_conflicts_across_app_and_player(self):
+        binding = {"enabled": True, "keys": ["Ctrl+Shift+Enter"]}
+        self.assertEqual(normalize_shortcuts({"bindings": {"quick_record": binding}})["bindings"]["quick_record"], binding)
+        for action in ("new_record", "player_skip"):
+            with self.subTest(action=action), self.assertRaises(ValueError):
+                normalize_shortcuts({"bindings": {"quick_record": binding, action: binding}})
+
 
 if __name__ == "__main__":
     unittest.main()

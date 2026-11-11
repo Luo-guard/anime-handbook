@@ -12,6 +12,7 @@ const SHORTCUT_ACTIONS = [
   {id:"shutdown",name:"关闭本机后台（需要确认）",key:"Ctrl+Shift+q",enabled:false,desktop:true},
   {id:"search",name:"聚焦当前页面搜索",key:"/",enabled:false},
   {id:"new_record",name:"新建感想",key:"n",enabled:false},
+  {id:"quick_record",name:"快速写记录（含播放器）",key:"Ctrl+Shift+Enter",enabled:true},
   {id:"new_ranking",name:"新增排名表单",key:"Alt+n",enabled:false},
   {id:"refresh_schedule",name:"刷新周表",key:"Alt+r",enabled:false},
   {id:"filter",name:"打开当前页排序与筛选",key:"f",enabled:false},
@@ -44,14 +45,20 @@ function shortcutKeysFor(item, fallback) {
   return fallback ? [fallback] : [];
 }
 function keyboardPreferences(value=state.settings.keyboard_shortcuts) {
-  return {enabled:value?.enabled!==false,bindings:Object.fromEntries(SHORTCUT_ACTIONS.map(action=>[action.id,{enabled:typeof value?.bindings?.[action.id]?.enabled==="boolean"?value.bindings[action.id].enabled:action.enabled,keys:shortcutKeysFor(value?.bindings?.[action.id],action.key)}]))};
+  const bindings = Object.fromEntries(SHORTCUT_ACTIONS.map(action=>[action.id,{enabled:typeof value?.bindings?.[action.id]?.enabled==="boolean"?value.bindings[action.id].enabled:action.enabled,keys:shortcutKeysFor(value?.bindings?.[action.id],action.key)}]));
+  // A pre-existing custom binding keeps its key when the quick action is first introduced.
+  if (!value?.bindings?.quick_record && Object.entries(bindings).some(([id, binding]) =>
+    id !== "quick_record" && binding.enabled && binding.keys.includes(bindings.quick_record.keys[0]))) {
+    bindings.quick_record.enabled = false;
+  }
+  return {enabled:value?.enabled!==false,bindings};
 }
 function shortcutKey(event) {
   if(event.button===3 || event.button===4) return [event.ctrlKey?"Ctrl":"",event.altKey?"Alt":"",event.shiftKey?"Shift":"",event.metaKey?"Meta":"",event.button===3?"MouseBack":"MouseForward"].filter(Boolean).join("+");
   if(typeof event.key!=="string")return "";
   if(["Control","Alt","Shift","Meta","Dead","Unidentified","Process","Tab"].includes(event.key))return "";
   const key=event.key===" "?"Space":event.key.length===1?event.key.toLowerCase():event.key;
-  if(key==="+" || !((key.length===1&&/^[\x21-\x7e]$/.test(key))||["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","PageUp","PageDown","Escape","Space","Backspace","Delete"].includes(key)||/^F(?:[1-9]|1[0-2])$/.test(key)))return "";
+  if(key==="+" || !((key.length===1&&/^[\x21-\x7e]$/.test(key))||["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","PageUp","PageDown","Escape","Enter","Space","Backspace","Delete"].includes(key)||/^F(?:[1-9]|1[0-2])$/.test(key)))return "";
   return [event.ctrlKey?"Ctrl":"",event.altKey?"Alt":"",event.shiftKey?"Shift":"",event.metaKey?"Meta":"",key].filter(Boolean).join("+");
 }
 function shortcutLabel(key) {
@@ -74,12 +81,17 @@ function validateKeyboardPreferences(value) {
       bucket.set(key, action.name);
     }
   }
+  if (value.bindings.quick_record?.enabled) {
+    for (const key of value.bindings.quick_record.keys) {
+      if (used.player.has(key)) throw Error(`快捷键「${shortcutLabel(key)}」重复：快速写记录、${used.player.get(key)}`);
+    }
+  }
   return value;
 }
 const SHORTCUT_GROUPS = [
   { title: "切换界面", actions: ["collection", "library", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next"] },
   { title: "界面操作", actions: ["sidebar", "search", "filter"] },
-  { title: "记录与周表", actions: ["new_record", "new_ranking", "refresh_schedule"] },
+  { title: "记录与周表", actions: ["quick_record", "new_record", "new_ranking", "refresh_schedule"] },
   {
     title: "播放器 · 播放控制",
     hint: "只在本地播放器打开时生效",
@@ -284,6 +296,7 @@ function runShortcut(action) {
     if(!input||input.offsetParent===null)return false;input.focus();input.select();return true;
   }
   if(action.id==="new_record"){if(!navigateByShortcut("timeline"))return false;$("#writeNoteButton").click();return true;}
+  if(action.id==="quick_record")return openQuickRecord();
   if(action.id==="new_ranking"){if(!navigateByShortcut("ranking"))return false;$("#createRankingButton").click();return true;}
   if(action.id==="refresh_schedule"){if(!navigateByShortcut("schedule"))return false;$("#scheduleRefresh").click();return true;}
   if(action.id==="filter"){
@@ -291,15 +304,33 @@ function runShortcut(action) {
   }
   return false;
 }
+function shortcutIsEditing(event, action) {
+  const player = document.querySelector("#offlinePlayer[open]");
+  const isEditing = target => {
+    if (action.id === "quick_record" && target instanceof Element && player?.contains(target)
+      && target.matches('video, audio, input[type="range"], [role="slider"]')) return false;
+    return isKeyboardEditingTarget(target);
+  };
+  return isEditing(document.activeElement) || event.composedPath().some(isEditing);
+}
+
 document.addEventListener("keydown",event=>{
   if(event.defaultPrevented||event.repeat||event.isComposing||event.keyCode===229)return;
-  if(isKeyboardEditingTarget(document.activeElement)||event.composedPath().some(isKeyboardEditingTarget))return;
   const preferences=keyboardPreferences();if(!preferences.enabled)return;
   const key=shortcutKey(event);if(!key)return;
   // 只认全局（scope=app）的动作：播放器动作由播放器自己的 handler 处理，
   // 否则 ↑/↓、1/2/3 这类同键动作会在这里撞成「匹配到多个」而双双失效。
   const matches=SHORTCUT_ACTIONS.filter(action=>shortcutScope(action)==="app"&&preferences.bindings[action.id].enabled&&preferences.bindings[action.id].keys.includes(key));
   if(matches.length!==1)return;
+  if(shortcutIsEditing(event,matches[0]))return;
+  if (matches[0].id === "quick_record") {
+    if (runShortcut(matches[0])) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+    return;
+  }
+  if(document.querySelector("#quickRecordDialog[open]"))return;
   // The settings page is a dialog, but it is also a sidebar entry, so navigation
   // shortcuts stay available there. Every other open dialog still wins.
   const navigates=Boolean(matches[0].page)||matches[0].id==="previous"||matches[0].id==="next";
@@ -339,7 +370,9 @@ function handleShortcutMouse(event) {
   if(matches.length!==1)return;
   claimedShortcutMouseButtons.add(event.button);
   if(!event.defaultPrevented){event.preventDefault();event.stopPropagation();}
-  if(isKeyboardEditingTarget(input)||event.composedPath().some(isKeyboardEditingTarget))return;
+  if(shortcutIsEditing(event,matches[0]))return;
+  if(matches[0].id==="quick_record"){runShortcut(matches[0]);return;}
+  if(document.querySelector("#quickRecordDialog[open]"))return;
   const navigates=Boolean(matches[0].page)||matches[0].id==="previous"||matches[0].id==="next";
   if(document.querySelector('dialog[open]')&&!(navigates&&settingsDialogOpen()))return;
   runShortcut(matches[0]);

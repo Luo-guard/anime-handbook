@@ -1,7 +1,7 @@
 """Validation for account-specific keyboard bindings (defaults live in keyboard.js)."""
 import re
 
-APP_ACTIONS = {"collection", "library", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next", "sidebar", "shutdown", "search", "new_record", "new_ranking", "refresh_schedule", "filter"}
+APP_ACTIONS = {"collection", "library", "schedule", "timeline", "statistics", "ranking", "settings", "previous", "next", "sidebar", "shutdown", "search", "new_record", "quick_record", "new_ranking", "refresh_schedule", "filter"}
 # 播放器快捷键（与键盘模块里的 scope=player 一一对应；和全局动作各自一套命名空间，
 # 所以 Space / 1 / 2 / 3 这类同键不算冲突）。
 PLAYER_ACTIONS = {
@@ -20,7 +20,7 @@ def _valid_key(key: str) -> bool:
     base = parts[-1]
     valid_base = (
         (len(base) == 1 and base.isascii() and base.isprintable() and base not in {" ", "+"})
-        or base in {"MouseBack", "MouseForward", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Escape", "Space", "Backspace", "Delete"}
+        or base in {"MouseBack", "MouseForward", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Escape", "Enter", "Space", "Backspace", "Delete"}
         or re.fullmatch(r"F(?:[1-9]|1[0-2])", base)
     )
     return bool(valid_base) and modifiers == [m for m in ["Ctrl", "Alt", "Shift", "Meta"] if m in modifiers]
@@ -57,10 +57,14 @@ def normalize_shortcuts(value):
                 raise ValueError("快捷键按键无效")
         if item["enabled"]:
             # 全局和播放器分开查重：同一个键可以既是导航键又是播放器键。
-            bucket = used.setdefault("player" if action in PLAYER_ACTIONS else "app", set())
-            for key in keys:
-                if key in bucket:
-                    raise ValueError("启用的快捷键不能重复")
-                bucket.add(key)
+            scopes = ("app", "player") if action == "quick_record" else (
+                "player" if action in PLAYER_ACTIONS else "app",
+            )
+            for scope in scopes:
+                bucket = used.setdefault(scope, set())
+                for key in keys:
+                    if key in bucket:
+                        raise ValueError("启用的快捷键不能重复")
+                    bucket.add(key)
         result[action] = {"enabled": item["enabled"], "keys": keys}
     return {"enabled": value.get("enabled", True), "bindings": result}

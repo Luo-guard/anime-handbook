@@ -808,7 +808,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#offlinePlayerBackdrop")?.addEventListener("click", closeOfflinePlayer);
   // 非模态 dialog 按 Esc 不会自动关闭，自己补上（其它弹窗此时已收起）。
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && $("#offlinePlayer")?.open) {
+    if (event.key === "Escape" && !event.defaultPrevented && !$("#quickRecordDialog")?.open && $("#offlinePlayer")?.open) {
       // 全屏时第一下 Esc 退全屏（对齐 Kazumi 的 exitfullscreen），再按才关播放器。
       if (document.fullscreenElement) {
         event.preventDefault();
@@ -1474,7 +1474,7 @@ function pcInit() {
   // scope=player）。这里只负责把动作 id 派发到播放器函数，键位不再写死在 switch 里，
   // 用户在设置里改/禁用都能生效。
   document.addEventListener("keydown", (event) => {
-    if (!$("#offlinePlayer")?.open || pcSeeking) return;
+    if (!$("#offlinePlayer")?.open || $("#quickRecordDialog")?.open || pcSeeking) return;
     if (event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229) return;
     if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
     const actionId = pcShortcutActionFor(event);
