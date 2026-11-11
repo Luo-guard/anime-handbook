@@ -30,13 +30,10 @@ assert.equal(await p.locator('#savedLinkSection').isVisible(),true);
 assert.equal(await p.locator('#savedVideoLinks .saved-video-title').textContent(),'视频A');
 assert.equal(await p.locator('#savedLinks .saved-video-title').textContent(),'资料页');
 assert.equal(await p.locator('#savedVideoDefaultLink').isVisible(),true);
-// 点开已存条目会记一笔跳转记录（视频/链接各自带类型）。
+// 打开外部链接不计入播放器历史。
 await p.evaluate(()=>{window.__jumps=[];rows=[{id:1,kind:'video',is_default:1,title:'视频A',url:'https://www.bilibili.com/video/BV1AgHK6jE64/'},{id:9,kind:'link',title:'资料页',url:'https://example.com/wiki?q=1'}];state.progressAnime={id:1,display_name:'测试番剧'};return renderVideoLinks(1)});
 await p.evaluate(()=>{document.querySelectorAll('.saved-video-open').forEach(a=>a.addEventListener('click',event=>event.preventDefault()));document.querySelectorAll('.saved-video-open')[0].click();document.querySelectorAll('.saved-video-open')[1].click();});
-const jumps=await p.evaluate(()=>window.__jumps);
-assert.equal(jumps.length,2);
-assert.deepEqual(jumps.map(item=>[item.kind,item.anime_name,item.anime_id]),[['video','测试番剧',1],['link','测试番剧',1]]);
-assert.equal(jumps[1].url,'https://example.com/wiki?q=1');
+assert.deepEqual(await p.evaluate(()=>window.__jumps),[]);
 // Resume uses main episode identities, never total watched count or stored P.
 await p.evaluate(()=>{
   state.progressAnime={id:1,display_name:'测试番剧',episodes:[
@@ -54,7 +51,7 @@ assert.equal(new URL(await defaultUrl()).searchParams.has('t'),false);
 assert.equal(new URL(await p.locator('#savedVideoLinks .saved-video-open').getAttribute('href')).searchParams.get('p'),'17');
 assert.equal(new URL(await p.locator('#savedLinks .saved-video-open').getAttribute('href')).searchParams.get('p'),'8');
 await p.evaluate(()=>{const a=document.querySelector('#savedVideoDefaultLink');a.addEventListener('click',e=>e.preventDefault());a.click()});
-assert.equal(new URL((await p.evaluate(()=>window.__jumps)).at(-1).url).searchParams.get('p'),'17');
+assert.deepEqual(await p.evaluate(()=>window.__jumps),[]);
 await p.evaluate(()=>{state.pendingEpisodes.add('bgm:116');refreshSavedVideoTargets()});
 assert.equal(new URL(await defaultUrl()).searchParams.get('p'),'18');
 await p.evaluate(()=>{state.pendingEpisodes.delete('bgm:109');refreshSavedVideoTargets()});
@@ -82,4 +79,4 @@ await p.evaluate(()=>{state.pendingEpisodes.add('bgm:117');refreshSavedVideoTarg
 assert.equal(await defaultUrl(),'https://www.bilibili.com/bangumi/play/ss1293');
 assert.equal(await p.evaluate(()=>parseVideoCapture('#save-video='+encodeURIComponent(JSON.stringify({url:'https://www.bilibili.com/bangumi/play/ep35595',title:'official',kind:'video'}))).kind),'video');
 console.log('Bilibili resume: 16 -> P17, OP/ED exclusion, pending progress, gaps, completion, source URL and ordinary links preserved.');
-console.log('Saved video cards: theme styling, no underline, default badge, hidden list retains shortcut, merged/separate modes, no-video fallback, empty state the separate saved-links block and jump recording passed.');}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});
+console.log('Saved video cards: theme styling, no underline, default badge, hidden list retains shortcut, merged/separate modes, no-video fallback, empty state the separate saved-links block and playback-history isolation passed.');}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});

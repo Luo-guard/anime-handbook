@@ -103,18 +103,7 @@ function renderRulesMenu() {
     host.textContent = item.host;
     open.append(name, host);
     open.addEventListener("click", (event) => {
-      // 普通左键：浏览器自己开新标签（target=_blank），这里只负责记一笔并关掉弹窗；
-      // 中键与带修饰键的点击不触发 click，跳转记录一并交给浏览器默认行为。
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-      if (typeof recordJump === "function") {
-        recordJump({
-          anime_id: rulesMenuAnime?.id || null,
-          anime_name: rulesMenuAnime?.display_name || rulesMenuAnime?.name_cn || rulesMenuAnime?.name || "",
-          title: `${item.name}搜索`,
-          url: open.href,
-          kind: "link",
-        });
-      }
       $("#rulesMenuModal")?.close();
     });
 

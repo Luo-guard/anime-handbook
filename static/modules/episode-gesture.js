@@ -5,7 +5,7 @@
 // 才走绑定表。A 版（按住滑到扇区松手）与 B 版（右键弹出后再点选）共用同一套
 // 状态机，区别只在松手时有没有命中扇区、以及 keepMenu 开关。
 const EG_ACTION_LABELS = {
-  open_menu: "打开扇区", play: "播放", download: "下载", cancel_download: "取消下载",
+  open_menu: "打开扇区", play: "本地播放", online_play: "在线播放", download: "下载", cancel_download: "取消下载",
   delete: "删除", score: "评分", review: "评价", op: "OP", ed: "ED",
   open_detail: "单集详情", reveal_in_folder: "在文件夹中打开", redownload: "换源重下",
 };
@@ -18,6 +18,7 @@ const EG_COORDS = {
   top: [0, -94], bottom: [0, 94],
   top_right: [82, -54], bottom_right: [82, 54],
   top_left: [-82, -54], bottom_left: [-82, 54],
+  online: [82, 0],
 };
 const EG_DEFAULT = {
   enabled: true,
@@ -105,8 +106,15 @@ function egRenderMenu(button, config, onAction) {
   menu.style.setProperty("--quick-scale", String(scale));
   menu.style.setProperty("--quick-x", `${originX}px`);
   menu.style.setProperty("--quick-y", `${originY}px`);
-  const items = EG_SLOTS.filter((slot) => config.slots[slot]).map((slot) => {
-    const action = config.slots[slot];
+  const slots = Object.fromEntries(EG_SLOTS.map(slot => [slot, config.slots[slot]]));
+  const localSlot = EG_SLOTS.find(slot => slots[slot] === "play");
+  if (!button.classList.contains("downloaded")) {
+    EG_SLOTS.filter(slot => slots[slot] === "play").forEach(slot => delete slots[slot]);
+  }
+  if (!window.handbookOnline && window.onlinePlayback && button.dataset.episodeType === "0") {
+    slots[localSlot && !slots[localSlot] ? localSlot : "online"] = "online_play";
+  }
+  const items = Object.entries(slots).filter(([, action]) => action).map(([slot, action]) => {
     return `<span class="episode-quick-action ${slot}" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action] || action)}</span>`;
   }).join("");
   menu.innerHTML = `
@@ -316,7 +324,7 @@ const EG_UI_GESTURES = [
 
 function egActionOptions(selected, allowMenu = true) {
   return Object.entries(EG_ACTION_LABELS)
-    .filter(([id]) => allowMenu || id !== "open_menu")
+    .filter(([id]) => id !== "online_play" && (allowMenu || id !== "open_menu"))
     .map(([id, label]) => `<option value="${id}"${id === selected ? " selected" : ""}>${escapeHtml(label)}</option>`)
     .join("");
 }

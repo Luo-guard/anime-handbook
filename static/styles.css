@@ -3788,6 +3788,8 @@ dialog::backdrop {
 .jump-day:first-child { margin-top: 2px; }
 .jump-row { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 11px; color: var(--ink); text-decoration: none; }
 .jump-row:hover, .jump-row:focus-visible { background: var(--green-50); outline: none; }
+.playback-history-row { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; }
+#playbackHistoryFilters { margin: 12px 0; }
 .jump-icon { display: grid; place-items: center; flex: 0 0 30px; height: 30px; border-radius: 9px; background: var(--paper); color: var(--green-700); }
 .jump-icon svg { width: 16px; height: 16px; }
 .jump-row[data-jump-kind="video"] .jump-icon svg { fill: currentColor; stroke: none; }
@@ -4411,6 +4413,9 @@ dialog::backdrop {
 .episode-quick-action.top { left: 0; top: calc(-94px * var(--quick-scale, 1)); }
 .episode-quick-action.bottom { left: 0; top: calc(94px * var(--quick-scale, 1)); }
 .episode-quick-action.top_right { left: calc(82px * var(--quick-scale, 1)); top: calc(-54px * var(--quick-scale, 1)); }
+.episode-quick-action.online { left: calc(82px * var(--quick-scale, 1)); top: 0; }
+.episode-quick-action[data-episode-action$="play"] { text-align: center; line-height: 1.15; padding-inline: 5px; }
+.online-playback-results { display: grid; gap: 8px; margin-top: 18px; max-height: 48vh; overflow: auto; }
 .episode-quick-action.bottom_right { left: calc(82px * var(--quick-scale, 1)); top: calc(54px * var(--quick-scale, 1)); }
 .episode-quick-action.top_left { left: calc(-82px * var(--quick-scale, 1)); top: calc(-54px * var(--quick-scale, 1)); }
 .episode-quick-action.bottom_left { left: calc(-82px * var(--quick-scale, 1)); top: calc(54px * var(--quick-scale, 1)); }

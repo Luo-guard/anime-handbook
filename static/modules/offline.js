@@ -575,6 +575,11 @@ function playLocalFile(fileId) {
     ? "页面内字幕加载中（第一次约需十几秒，之后切集是即时的）…"
     : "这一集没有内封字幕。";
   pcLoadVideo(`/api/offline/stream/${file.id}.mp4`, file.resume_ms / 1000).catch(() => {});
+  const history = { kind: "local", animeId: offlineView.playingAnimeId, animeTitle: offlineView.animeName,
+    episode: episodeLabelOf(file.episode_key), fileId: Number(file.id), episodeKey: file.episode_key };
+  video.addEventListener("playing", () => window.playbackHistory?.record(history), {
+    once: true, signal: pcMediaLoad.signal,
+  });
   if (file.subtitle_path) setupSubtitleRenderer(file, video);
   openOfflinePlayerDialog();
   // 弹幕层：浮在 video 上的 canvas，不碰播放内核。

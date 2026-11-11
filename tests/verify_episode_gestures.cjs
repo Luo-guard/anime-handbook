@@ -20,7 +20,7 @@ window.calls=[];
       <main style="padding:220px 40px 40px"><div id="progressModal"><div id="episodeGrid" class="episode-grid">
         <section class="episode-group"><div class="episode-group-head"><strong>本篇</strong></div>
           <div class="episode-group-grid">
-            ${[1, 2, 3].map((n) => `<button type="button" class="episode-cell" data-episode-key="0:${n}">${String(n).padStart(2, '0')}</button>`).join('')}
+            ${[1, 2, 3].map((n) => `<button type="button" class="episode-cell${n === 1 ? ' downloaded' : ''}" data-episode-type="0" data-episode-key="0:${n}">${String(n).padStart(2, '0')}</button>`).join('')}
           </div>
         </section>
       </div></div></main>`);
@@ -138,6 +138,16 @@ window.calls=[];
     await page.locator('[data-episode-key="0:2"]').dblclick();
     assert.deepEqual(await calls(), [['action', 'play', '0:2']], 'double click runs its bound action');
     await setConfig({});
+
+    await page.evaluate(() => { window.onlinePlayback = {}; });
+    await cell.click({ button: 'right' });
+    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="play"]').textContent(), '本地播放');
+    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="online_play"]').textContent(), '在线播放');
+    await page.keyboard.press('Escape');
+    await page.locator('#episodeQuickMenu').waitFor({ state: 'detached' });
+    await page.locator('[data-episode-key="0:2"]').click({ button: 'right' });
+    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="play"]').count(), 0);
+    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="online_play"]').count(), 1);
 
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Episode gestures: six slots, click/drag selection, keep switch, modifier bindings, removable slots and double-click delay passed.');

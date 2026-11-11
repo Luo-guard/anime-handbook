@@ -1,9 +1,9 @@
-// 收藏夹工具栏的两个按钮（搜索添加番剧 / 跳转记录）：
+// 收藏夹工具栏的两个按钮（搜索添加番剧 / 历史记录）：
 // 显不显示、只显示图标还是图标＋文字，全部由设置决定。
 // 单独成文件，方便测试直接加载，也避免这些纯展示逻辑埋在收藏编辑代码里。
 const COLLECTION_TOOLBAR_BUTTONS = [
   ["#collectionSearchButton", "show_collection_add_button", "collection_add_button_icon_only", false, "搜索添加番剧"],
-  ["#jumpHistoryButton", "show_jump_history_button", "jump_history_button_icon_only", true, "跳转记录"],
+  ["#jumpHistoryButton", "show_jump_history_button", "jump_history_button_icon_only", true, "历史记录"],
 ];
 
 function applyCollectionToolbarButtons() {

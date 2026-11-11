@@ -139,13 +139,6 @@ function renderDetailLinks(anime, preferred = null) {
         anchor.href = bilibiliResumeUrl(preferred, anime);
         anchor.savedVideoItem = preferred;
         anchor.dataset.videoResumeUrl = preferred.url;
-        anchor.onclick = () => typeof recordJump === "function" && recordJump({
-          anime_id: anime?.id || null,
-          anime_name: anime?.display_name || anime?.name_cn || "",
-          title: preferred.title,
-          url: anchor.href,
-          kind: preferred.kind || "video",
-        });
       } else {
         anchor.classList.add("hidden");
       }
@@ -287,21 +280,8 @@ async function renderVideoLinks(animeId) {
         finally { button.disabled = false; }
       }));
     }
-    // 点开已存视频/链接时记一笔跳转记录，方便下次直接从这里打开。
-    const anime = state.progressAnime || {};
-    const remember = (item, url) => typeof recordJump === "function" && recordJump({
-      anime_id: animeId,
-      anime_name: anime.display_name || anime.name_cn || "",
-      title: item.title,
-      url,
-      kind: item.kind || "video",
-    });
     panel.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
       anchor.savedVideoItem = videos[index];
-      if (videos[index]) anchor.addEventListener("click", () => remember(videos[index], anchor.href));
-    });
-    linkPanel?.querySelectorAll(".saved-video-open").forEach((anchor, index) => {
-      if (links[index]) anchor.addEventListener("click", () => remember(links[index], anchor.href));
     });
   } catch(error) {
     if (version === videoLinksLoadVersion) {

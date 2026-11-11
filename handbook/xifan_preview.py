@@ -20,7 +20,7 @@ MEDIA_HOSTS = {"apn.moedot.net", "play.xfvod.pro", "bjdownload.pan.wo.cn"}
 TIMEOUT = 10
 _LOCK = threading.Lock()
 _TICKETS: dict[str, tuple[str, float]] = {}
-_KEY: tuple[str, float] = ("", 0)
+_RULE_CACHE: tuple[dict, float] = ({}, 0)
 _SLOTS = threading.BoundedSemaphore(4)
 
 
@@ -72,12 +72,12 @@ def _json_request(url: str, body: dict | None = None, key: str = ""):
         raise PreviewError("连接稀饭失败，请重试或打开原网页") from None
 
 
-def _public_key() -> str:
-    global _KEY
+def _rule() -> dict:
+    global _RULE_CACHE
     with _LOCK:
-        key, until = _KEY
-    if key and until > time.monotonic():
-        return key
+        cached, until = _RULE_CACHE
+    if cached and until > time.monotonic():
+        return cached
     rule = _json_request(RULE)
     try:
         key = rule["chapterApiConfig"]["request"]["headers"]["apikey"]
@@ -86,8 +86,35 @@ def _public_key() -> str:
     if not isinstance(key, str) or not re.fullmatch(r"sb_publishable_[A-Za-z0-9_-]{10,100}", key):
         raise PreviewError("稀饭 Next 的公开站点规则已变更")
     with _LOCK:
-        _KEY = key, time.monotonic() + 3600
-    return key
+        _RULE_CACHE = rule, time.monotonic() + 3600
+    return rule
+
+
+def _public_key() -> str:
+    return _rule()["chapterApiConfig"]["request"]["headers"]["apikey"]
+
+
+def search(title: str) -> dict:
+    title = title.strip()
+    if not title or len(title) > 200:
+        raise PreviewError("请输入有效的番剧名称", 400)
+    try:
+        request = _rule()["searchApiConfig"]["request"]
+        url, method = request["url"], request["method"]
+        key = request["headers"]["apikey"]
+    except (KeyError, TypeError):
+        raise PreviewError("KazumiRules 的稀饭搜索规则已变更") from None
+    if (url != f"{API}/rest/v1/rpc/search_animes" or method != "POST"
+            or not isinstance(key, str) or not re.fullmatch(r"sb_publishable_[A-Za-z0-9_-]{10,100}", key)):
+        raise PreviewError("KazumiRules 的稀饭搜索规则已变更")
+    result = _json_request(url, {"search_term": title, "page_number": 1, "items_per_page": 24}, key)
+    if not isinstance(result, list):
+        raise PreviewError("稀饭未返回可用的搜索结果")
+    return {"items": [
+        {"id": _id(row["id"]), "title": str(row.get("title") or "")[:180],
+         "original": str(row.get("title_original") or "")[:180]}
+        for row in result[:24] if isinstance(row, dict) and row.get("id") and row.get("title")
+    ]}
 
 
 def _id(value) -> int:
@@ -211,7 +238,9 @@ def serve(handler, path: str, query: dict) -> None:
                                 handler.headers.get("Host", ""))
             or handler.headers.get("Sec-Fetch-Site") in {"cross-site", "same-site"}):
         raise PreviewError("此播放测试仅供本机使用", 403)
-    if path == PREFIX + "catalogue":
+    if path == PREFIX + "search":
+        handler.send_json(search(query.get("title", [""])[0]))
+    elif path == PREFIX + "catalogue":
         handler.send_json(catalogue(query.get("url", [SAMPLE_URL])[0]))
     elif path == PREFIX + "play":
         values = [query.get(key, [""])[0] for key in ("anime", "episode", "source")]

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261111-online-player" />
+  <link rel="stylesheet" href="/styles.css?v=20261111-playback-history" />
   </head>
   <body>
     <div class="app-shell">
@@ -116,7 +116,7 @@
             </label>
             <div class="collection-toolbar-actions">
               <button type="button" class="secondary-button collection-add-button" id="collectionSearchButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="button-label">搜索添加番剧</span></button>
-              <button type="button" class="secondary-button collection-add-button collection-icon-button hidden" id="jumpHistoryButton" title="跳转记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.2h-4.2"/><path d="M12 8.4v4.2l2.8 1.7"/></svg><span class="button-label">跳转记录</span></button>
+              <button type="button" class="secondary-button collection-add-button collection-icon-button hidden" id="jumpHistoryButton" title="历史记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.2h-4.2"/><path d="M12 8.4v4.2l2.8 1.7"/></svg><span class="button-label">历史记录</span></button>
               <label class="switch-row compact hidden" id="collectionRatingControl">
                 <input type="checkbox" id="collectionRatingToggle" />
                 <span class="switch"></span>
@@ -321,7 +321,6 @@
                     <option value="episodes">已收集数</option>
                   </select>
                 </label>
-                <button type="button" class="lib-text-button" id="openOnlinePlayback">在线播放</button>
                 <button type="button" class="lib-icon-button" id="libRefresh" title="重新读取媒体库" aria-label="重新读取媒体库">
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4.2V9h-4.8"/></svg>
                 </button>
@@ -686,6 +685,7 @@
               <a class="anime-rating hidden" id="animeRating"></a>
               <div class="personal-rating hidden" id="personalRating"></div>
               <div class="progress-actions">
+                <button type="button" class="primary-button hidden" id="detailOnlinePlay">在线播放</button>
                 <div class="detail-actions">
                   <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
                 </div>
@@ -923,15 +923,15 @@
             <span class="switch-row compact"><input type="checkbox" id="showCollectionAddButtonInput" /><span class="switch"></span></span>
           </label>
           <label class="setting-row">
-            <span><strong>“搜索添加番剧”只显示图标</strong><small>开启后按钮只留一个“＋”，鼠标悬停显示名称；与右侧的跳转记录按钮并排更整齐。</small></span>
+            <span><strong>“搜索添加番剧”只显示图标</strong><small>开启后按钮只留一个“＋”，鼠标悬停显示名称；与右侧的历史记录按钮并排更整齐。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="collectionAddIconOnlyInput" /><span class="switch"></span></span>
           </label>
           <label class="setting-row">
-            <span><strong>显示“跳转记录”按钮</strong><small data-page-text="控制{collection}工具栏是否出现“跳转记录”按钮。">控制收藏夹工具栏是否出现“跳转记录”按钮；关掉只是藏起来，记录本身仍会继续累计。</small></span>
+            <span><strong>显示“历史记录”按钮</strong><small data-page-text="控制{collection}工具栏是否出现“历史记录”按钮。">控制收藏夹工具栏是否出现“历史记录”按钮；关掉只是藏起来，记录本身仍会继续累计。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="showJumpHistoryButtonInput" /><span class="switch"></span></span>
           </label>
           <label class="setting-row">
-            <span><strong>“跳转记录”只显示图标</strong><small>开启后按钮只留时钟图标（默认），关闭则显示“跳转记录”文字。</small></span>
+            <span><strong>“历史记录”只显示图标</strong><small>开启后按钮只留时钟图标（默认），关闭则显示“历史记录”文字。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="jumpHistoryIconOnlyInput" /><span class="switch"></span></span>
           </label>
           <label class="setting-row">
@@ -1507,14 +1507,24 @@
         <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
       </div>
     </dialog>
-    <dialog class="modal jump-history-modal" id="jumpHistoryModal">
+    <dialog class="modal" id="onlinePlaybackPicker" aria-labelledby="onlinePlaybackPickerTitle">
+      <div class="modal-frame">
+        <button type="button" class="modal-close" id="closeOnlinePlaybackPicker" aria-label="关闭">×</button>
+        <h2 id="onlinePlaybackPickerTitle">选择稀饭片源</h2>
+        <div class="online-playback-results" id="onlinePlaybackResults"></div>
+      </div>
+    </dialog>
+    <dialog class="modal jump-history-modal" id="jumpHistoryModal" aria-labelledby="playbackHistoryTitle">
       <div class="modal-frame">
         <button type="button" class="modal-close" id="jumpHistoryClose" aria-label="关闭">×</button>
         <header class="collect-search-head">
-          <p class="eyebrow">RECENT JUMPS</p>
-          <h2>跳转记录</h2>
-          <p class="collect-search-hint">最近点开过的已存视频和链接，点一下直接打开，不用再进番剧详情。同一地址只保留最新一次。</p>
+          <h2 id="playbackHistoryTitle">历史记录</h2>
         </header>
+        <div class="library-tabs" aria-label="播放记录分类" id="playbackHistoryFilters">
+          <button type="button" class="library-tab active" data-history-kind="all" aria-pressed="true">全部</button>
+          <button type="button" class="library-tab" data-history-kind="online" aria-pressed="false">在线</button>
+          <button type="button" class="library-tab" data-history-kind="local" aria-pressed="false">缓存</button>
+        </div>
         <div id="jumpHistoryList" class="jump-list"></div>
         <div class="jump-actions"><button type="button" class="secondary-button compact-button" id="clearJumpHistory">清空记录</button><p id="jumpHistoryStatus" role="status"></p></div>
       </div>
@@ -1584,10 +1594,10 @@
     <script src="/modules/presentation.js?v=20261109-sidebar-fix" defer></script>
     <script src="/modules/collection-cards.js?v=20261107-collection-added-order" defer></script>
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
-    <script src="/modules/video-links.js?v=20261111-online-player" defer></script>
-    <script src="/modules/rules-menu.js?v=20261107-rules-cache" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261107-quick-menu-scale" defer></script>
-    <script src="/modules/details.js?v=20261111-detail-airtime" defer></script>
+    <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/details.js?v=20261111-playback-history" defer></script>
     <script src="/modules/records.js?v=20261111-note-image-label" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
@@ -1599,14 +1609,14 @@
     <script src="/modules/events.js?v=20261111-quick-record" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
-    <script src="/modules/toolbar-buttons.js?v=20261102-toolbar-buttons" defer></script>
+    <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
-    <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
+    <script src="/modules/jump-history.js?v=20261111-playback-history" defer></script>
     <script src="/modules/danmaku.js?v=20261111-online-player" defer></script>
-    <script src="/modules/offline.js?v=20261111-online-player" defer></script>
-    <script src="/modules/online-playback.js?v=20261111-online-player" defer></script>
-    <script src="/modules/library-view.js?v=20261111-online-player" defer></script>
+    <script src="/modules/offline.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/online-playback.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/library-view.js?v=20261111-playback-history" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

@@ -749,7 +749,7 @@ function renderEpisodeGrid() {
               const annotations = state.episodeRecordAnnotations?.[key] || [];
               return `
                 <button type="button" class="episode-cell ${watched ? "watched" : ""}${downloaded ? " downloaded" : ""}"
-                  data-episode-key="${escapeHtml(key)}"
+                  data-episode-key="${escapeHtml(key)}" data-episode-type="${group.type}"
                   aria-pressed="${watched}"
                   title="${escapeHtml([showEpisodeTitlesOnHover() ? episodeTitle(episode) : "", downloaded ? "已下载 · 扇区可播放" : ""].filter(Boolean).join(" · "))}">
                   ${escapeHtml(episode.label)}
@@ -817,6 +817,7 @@ async function runEpisodeGestureAction(action, key, button) {
     return createEpisodeQuickRecord(episode, action);
   }
   if (action === "open_menu") return;
+  if (action === "online_play" && state.progressAnime) return window.onlinePlayback?.openAnime(state.progressAnime, key);
   if (action === "play") {
     // 必须先按当前番同步离线缓存再找文件：不 await 会读到上一部番的缓存，
     // 播错内容或误报「还没下载」。

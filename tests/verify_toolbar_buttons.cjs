@@ -23,7 +23,7 @@ const harness = [
     const visible = sel => page.locator(sel).evaluate(n => !n.classList.contains('hidden'));
     const labelShown = sel => page.locator(sel).evaluate(n => getComputedStyle(n.querySelector('.button-label')).display !== 'none');
 
-    // 结构：两个按钮都在动作区里，跳转记录紧跟在搜索添加番剧后面。
+    // 结构：两个按钮都在动作区里，历史记录紧跟在搜索添加番剧后面。
     assert.equal(await page.evaluate(() => {
       const group = document.querySelector('.collection-toolbar-actions');
       const kids = [...group.children];
@@ -31,14 +31,14 @@ const harness = [
     }), 1);
     assert.equal(await page.evaluate(() => !!document.querySelector('.search-field, .search-box-action')), false, 'search box no longer carries an inner button');
 
-    // 默认：搜索添加番剧带文字，跳转记录只有图标。
+    // 默认：搜索添加番剧带文字，历史记录只有图标。
     await page.evaluate(() => applyCollectionToolbarButtons());
     assert.equal(await visible('#collectionSearchButton'), true);
     assert.equal(await visible('#jumpHistoryButton'), true);
     assert.equal(await labelShown('#collectionSearchButton'), true);
     assert.equal(await labelShown('#jumpHistoryButton'), false);
-    assert.equal(await page.locator('#jumpHistoryButton').getAttribute('title'), '跳转记录');
-    assert.equal(await page.locator('#jumpHistoryButton').getAttribute('aria-label'), '跳转记录');
+    assert.equal(await page.locator('#jumpHistoryButton').getAttribute('title'), '历史记录');
+    assert.equal(await page.locator('#jumpHistoryButton').getAttribute('aria-label'), '历史记录');
     const iconBox = await page.locator('#jumpHistoryButton').boundingBox();
     const textBox = await page.locator('#collectionSearchButton').boundingBox();
     assert.ok(Math.abs(iconBox.width - 42) <= 1, 'icon-only button is a square 42px');

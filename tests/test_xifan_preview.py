@@ -8,6 +8,23 @@ from handbook import xifan_preview as preview
 
 
 class XifanPreviewTest(unittest.TestCase):
+    def test_search_uses_the_kazumi_rule_only_for_the_known_endpoint(self):
+        url = f"{preview.API}/rest/v1/rpc/search_animes"
+        key = "sb_publishable_" + "example" * 2
+        search_request = {"url": url, "method": "POST", "headers": {"apikey": key}}
+        rule = {"searchApiConfig": {"request": search_request}}
+        rows = [{"id": 42, "title": "Example", "title_original": "Original", "extra": "ignored"}]
+        with patch.object(preview, "_rule", return_value=rule), patch.object(preview, "_json_request", return_value=rows) as request:
+            self.assertEqual(preview.search(" Original "), {
+                "items": [{"id": 42, "title": "Example", "original": "Original"}],
+            })
+            request.assert_called_once_with(url, {"search_term": "Original", "page_number": 1, "items_per_page": 24}, key)
+            request.reset_mock()
+            search_request["url"] = "https://elsewhere.test/search"
+            with self.assertRaises(preview.PreviewError):
+                preview.search("Original")
+            request.assert_not_called()
+
     def test_only_next_title_or_episode_links_are_resolved(self):
         with patch.object(preview, "_json_request") as request:
             for url in (

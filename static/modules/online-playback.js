@@ -13,6 +13,31 @@ function onlineEpisodeLabel(episode) {
   return [episode.number ? `第 ${episode.number} 集` : "", episode.title].filter(Boolean).join(" · ") || "播放";
 }
 
+function mainPlaybackEpisode(anime, key) {
+  const episodes = (anime.episodes || []).filter(episode => Number(episode.type || 0) === 0);
+  const numberOf = value => Number(/^0:(\d+)$/.exec(episodeStorageKey(value, anime))?.[1]) || 0;
+  const numbers = episodes.map(episode => numberOf(episode.key)).filter(Boolean);
+  const first = numbers.length ? Math.min(...numbers) : 1;
+  const watched = anime.watched_episode_keys || anime.watched_episodes || [];
+  const number = key ? numberOf(key) : Math.max(first - 1, ...watched.map(numberOf)) + 1;
+  if (!number) throw new Error("该播放源暂只支持正片集数。");
+  const total = Number(anime.episode_count) || numbers.length;
+  if (!key && total > 0 && number >= first + total)
+    throw new Error("已看完手账目前收录的正片，可从单集菜单重播。");
+  return { number, first };
+}
+
+function matchOnlineEpisode(catalogue, target) {
+  for (const source of catalogue.sources) {
+    const numbers = source.episodes.map(episode => Number(episode.number)).filter(number => Number.isInteger(number) && number > 0);
+    const start = Math.min(...numbers);
+    const wanted = start === 1 ? target.number - target.first + 1 : target.number;
+    const episode = source.episodes.find(item => Number(item.number) === wanted);
+    if (episode) return { source, episode };
+  }
+  throw new Error(`稀饭暂无第 ${target.number} 集的可用线路。`);
+}
+
 window.onlinePlayback = (() => {
   let current = null;
   let lookup = null;
@@ -110,6 +135,12 @@ window.onlinePlayback = (() => {
         session.ready = true;
         setStatus("");
       }, { ...options, once: true });
+      video.addEventListener("playing", () => {
+        window.playbackHistory?.record({
+          kind: "online", animeId, animeTitle: catalogue.title, episode: onlineEpisodeLabel(episode),
+          providerId: catalogue.id, sourceId: source.id, episodeId: episode.id,
+        });
+      }, { ...options, once: true });
       video.addEventListener("error", () => fail("视频读取中断，可重试或切换线路。"), options);
       await pcLoadVideo(result.url, readResume(session));
     } catch (error) {
@@ -148,6 +179,73 @@ window.onlinePlayback = (() => {
     }
   }
 
+  function normalizeTitle(value) {
+    return value.normalize("NFKC").toLowerCase()
+      .replace(/第([一二三四五六七八九十])(?=[季期部])/g, (_, digit) => "第" + ("一二三四五六七八九十".indexOf(digit) + 1))
+      .replace(/第(\d+)[季期部]/g, "第$1季")
+      .replace(/[\p{P}\p{Z}\s]/gu, "");
+  }
+
+  async function openAnime(anime, key, button) {
+    abortLookup();
+    const controller = new AbortController();
+    lookup = controller;
+    const original = button?.textContent;
+    if (button) { button.disabled = true; button.textContent = "正在找片源…"; }
+    const { signal } = controller;
+    const stillOpen = () => !signal.aborted && $("#progressModal").open && state.progressAnime?.id === anime.id;
+    const playResult = async item => {
+      const catalogue = await request("catalogue", { url: XIFAN_SITE + "/anime/" + item.id }, signal);
+      if (!stillOpen()) return;
+      const { source, episode } = matchOnlineEpisode(catalogue, target);
+      play(catalogue, source, episode, anime.id);
+    };
+    let target;
+    try {
+      target = mainPlaybackEpisode(anime, key);
+      const titles = [...new Set([anime.name, anime.name_cn, anime.display_name].filter(Boolean))];
+      const names = new Set(titles.map(normalizeTitle));
+      const matches = new Map();
+      for (const title of titles) {
+        const result = await request("search", { title }, signal);
+        if (!stillOpen()) return;
+        for (const item of result.items) matches.set(item.id, item);
+        const exact = [...matches.values()].filter(item => [item.title, item.original].some(name => name && names.has(normalizeTitle(name))));
+        if (exact.length === 1) return await playResult(exact[0]);
+      }
+      if (!matches.size) throw new Error("稀饭没有搜到这部番。");
+      const picker = $("#onlinePlaybackResults");
+      picker.replaceChildren(...[...matches.values()].map(item => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "secondary-button";
+        option.textContent = item.title;
+        option.addEventListener("click", async () => {
+          if (!stillOpen()) return;
+          picker.closest("dialog").close();
+          try { await playResult(item); }
+          catch (error) { if (!signal.aborted) toast(error.message, "error"); }
+        }, { once: true });
+        return option;
+      }));
+      picker.closest("dialog").showModal();
+    } catch (error) {
+      if (stillOpen()) toast(errorMessage(error, "搜索片源超时，请重试。"), "error");
+    } finally {
+      if (button) { button.disabled = false; button.textContent = original; }
+    }
+  }
+
+  async function resume(entry) {
+    const catalogue = await request("catalogue", { url: `${XIFAN_SITE}/anime/${entry.providerId}/play/${entry.episodeId}` });
+    const source = catalogue.sources.find(line => line.id === entry.sourceId && line.episodes.some(item => item.id === entry.episodeId))
+      || catalogue.sources.find(line => line.episodes.some(item => item.id === entry.episodeId));
+    const episode = source?.episodes.find(item => item.id === entry.episodeId);
+    if (!episode) throw new Error("这集已不在原片源，请从番剧详情重新搜索。");
+    if (!$("#jumpHistoryModal").open) return;
+    return play(catalogue, source, episode, entry.animeId);
+  }
+
   function show(url = "") {
     const dialog = $("#onlinePlaybackDialog");
     if (dialog.open) return;
@@ -157,11 +255,12 @@ window.onlinePlayback = (() => {
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    if (window.handbookOnline) {
-      $("#openOnlinePlayback")?.classList.add("hidden");
-      return;
-    }
-    $("#openOnlinePlayback")?.addEventListener("click", () => show());
+    if (window.handbookOnline) return;
+    $("#detailOnlinePlay")?.classList.remove("hidden");
+    $("#detailOnlinePlay")?.addEventListener("click", event => {
+      if (state.progressAnime) openAnime(state.progressAnime, "", event.currentTarget);
+    });
+    $("#closeOnlinePlaybackPicker")?.addEventListener("click", () => $("#onlinePlaybackPicker").close());
     $("#onlinePlaybackForm").addEventListener("submit", event => {
       event.preventDefault();
       open($("#onlinePlaybackUrl").value.trim());
@@ -183,7 +282,11 @@ window.onlinePlayback = (() => {
       const source = catalogue.sources.find(line => line.id === Number(event.target.value));
       if (!source) return;
       const match = episode.number && source.episodes.find(item => item.number === episode.number);
-      play(catalogue, source, match || source.episodes[0], animeId);
+      if (match) play(catalogue, source, match, animeId);
+      else {
+        event.target.value = String(current.source.id);
+        toast("这条线路没有当前这一集。", "error");
+      }
     });
     const video = $("#offlineVideo");
     ["pause", "ended"].forEach(type => video.addEventListener(type, saveResume));
@@ -202,5 +305,5 @@ window.onlinePlayback = (() => {
     }
   });
 
-  return { get current() { return current; }, open, close, selectEpisode };
+  return { get current() { return current; }, open, openAnime, resume, close, selectEpisode };
 })();

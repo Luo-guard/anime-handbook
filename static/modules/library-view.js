@@ -613,7 +613,6 @@ function switchLibraryKind(kind) {
   $("#libraryImagePane")?.classList.toggle("hidden", !isImage);
   // 搜索框/刷新钮按类型换一个，别让两个搜索框同时出现。
   $("#libVideoSearchWrap")?.classList.toggle("hidden", isImage);
-  $("#openOnlinePlayback")?.classList.toggle("hidden", isImage || Boolean(window.handbookOnline));
   $("#libImageSearchWrap")?.classList.toggle("hidden", !isImage);
   $("#libSortWrap")?.classList.toggle("hidden", isImage);
   $("#libRefresh")?.classList.toggle("hidden", isImage);
