@@ -21,7 +21,7 @@
 在项目根目录、激活环境后运行：
 
 ```powershell
-python -m server.manage --data-dir .online-data create-user example_user
+python -m server.manage --data-dir .online-data create-user han
 python -m server --development --data-dir .online-data
 ```
 
@@ -31,7 +31,7 @@ python -m server --development --data-dir .online-data
 ## 迁移现有记录（选择服务器后执行）
 
 ```powershell
-python -m server.manage --data-dir .online-data import-local example_user --source "D:\动漫\动漫手账\data\handbook.db"
+python -m server.manage --data-dir .online-data import-local han --source "D:\动漫\动漫手账\data\handbook.db"
 ```
 
 只读取来源库，不启动本机同步，不修改来源。只允许导入空账号，保留记录、设置、排行和收藏，复制同级记录图片与背景。
@@ -41,7 +41,7 @@ python -m server.manage --data-dir .online-data import-local example_user --sour
 
 ## 部署步骤（供选定服务器后使用）
 
-在项目根目录运行 `python tools/package_online.py`，生成 `releases/online/anime-handbook-online-日期.zip`。该包仅含代码、页面、部署模板和 SHA256 清单，不含本机数据、凭据、APK 或测试账号。
+先在联网构建机安装 Node.js 18+（含 npm），于项目根目录运行 `node tools/prepare_subtitles.cjs`，再运行 `python tools/package_online.py`，生成 `releases/online/anime-handbook-online-日期.zip`。该包含代码、页面、部署模板、网页 ASS 所需的脚本/WASM/字体、许可声明和 SHA256 清单，不含本机数据、凭据、APK、node_modules 或测试账号。字幕资源缺失或校验失败时会拒绝打包。服务器收到完整 ZIP 后无需 Node/npm；直接从 GitHub 克隆部署也需要先执行资源准备命令。详见 [字幕资源准备说明](../../tools/subtitles/README.md)。这只补齐网页静态资源，不额外开放线上媒体库接口。
 
 1. 只上传 `app.py`、`schedule.py`、`static/`、`server/`、`deploy/online/`。
 2. 用独立低权限系统用户 `animehandbook` 运行，代码放 `/opt/animehandbook`，数据放 `/var/lib/animehandbook`。

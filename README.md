@@ -18,7 +18,7 @@
 - `handbook/`：后端业务逻辑，含收藏、周表、跳转链接规则与离线下载（蜜柑／qBittorrent／媒体处理／字幕）等模块，见 [handbook/README.md](handbook/README.md)。
 - `static/modules/`：前端模块，见 [static/modules/README.md](static/modules/README.md)。
 - `docs/`：专题文档（离线方案、Kazumi 写回、交接与加固记录等）。
-- `static/vendor/jassub/`：页面内字幕所用的 libass wasm 版与开源中文字体，本地打包、不依赖 CDN（二进制资源未随仓库分发，见下文）。
+- `static/vendor/jassub/`：页面内字幕所用的 libass wasm 版与开源中文字体，本地打包、不依赖 CDN；新安装运行 `node tools/prepare_subtitles.cjs` 生成，详见 [字幕资源准备说明](tools/subtitles/README.md)。
 
 线上版使用独立数据目录和端口，不会启动本机 Kazumi／坚果云同步。现有电脑版启动脚本和安卓版保持原用法；APK 的线上账号接入将在网站部署后进行。
 
@@ -56,7 +56,7 @@ python app.py
 - **字幕**：由 libass 的 wasm 版（jassub）在页面内渲染，ASS 特效与定位保留；优先使用 MKV 内封的字体附件，缺失时回退到打包的 Noto Sans SC。播放器带「字幕 · 开/关」。播放器保持原生 `<video>`，所以 NijiLucid 这类抓帧超分扩展仍可接管。
 - **自动追番**：在搜索结果上点「订阅」记住「关键词 + 字幕组」，之后只下这个字幕组的新集。默认关闭；首次检查只记基准不下载，一次只下最新一条，同一条种子不重复下。
 - **媒体库**：目录可在离线面板「设置」里改，并支持把已有文件迁移过去（逐个复制并校验大小，全部成功才切换目录，默认保留源文件），也会显示磁盘剩余空间。**务必把媒体库放在项目目录之外**——同步工具会推送项目内文件，几十 GB 的视频一旦进项目就可能误传，且历史记录难以清除。
-- 蜜柑域名按 `mikanime.tv` → `mikanani.kas.pub` → `mikanani.me` 自动回退，也可在设置里手动指定。页面内字幕所需的 jassub／libass 二进制资源与中文字体未随仓库分发（同步工具的扩展名与体积限制），构建方式见 CHANGELOG；资源缺失时字幕会降级提示，视频播放不受影响。第三方来源与授权见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+- 蜜柑域名按 `mikanime.tv` → `mikanani.kas.pub` → `mikanani.me` 自动回退，也可在设置里手动指定。新电脑或从 GitHub 部署时，先安装 Node.js 18+（含 npm），在项目根目录运行 `node tools/prepare_subtitles.cjs`，按锁定版本生成全部字幕脚本、WASM、字体和许可声明；之后播放无需 Node 和 CDN。离线转移可复制完整的 `static/vendor/jassub/`，部署打包会校验并包含这些资源，缺失或损坏时拒绝打包。详见 [字幕资源准备说明](tools/subtitles/README.md)。
 
 > 请遵守所在地区的法律法规，仅下载你有权获取的内容；BT 下载会做种并上传数据。
 

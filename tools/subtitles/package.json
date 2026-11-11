@@ -1,0 +1,12 @@
+{
+  "name": "anime-handbook-subtitle-assets",
+  "private": true,
+  "version": "1.0.0",
+  "engines": { "node": ">=18" },
+  "scripts": { "build": "node build.cjs", "check": "node build.cjs --check" },
+  "dependencies": {
+    "@fontsource/noto-sans-sc": "5.2.8",
+    "esbuild": "0.25.12",
+    "jassub": "2.5.35"
+  }
+}

@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 from handbook import common as app
 from server.runtime import OnlineMetadata, image_url_allowed
 from tools.package_online import build
+from test_subtitle_assets import prepare_fixture
 
 
 class StabilityTest(unittest.TestCase):
@@ -71,6 +72,7 @@ class StabilityTest(unittest.TestCase):
         self.assertFalse(list(self.root.glob('*.tmp')))
 
     def test_package_concurrency_manifest_and_failed_build_preserve_previous_archive(self):
+        prepare_fixture(self.root)
         (self.root / 'app.py').write_text('example', encoding='utf-8')
         (self.root / 'schedule.py').write_text('example', encoding='utf-8')
         with ThreadPoolExecutor(max_workers=3) as pool:
