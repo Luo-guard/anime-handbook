@@ -4382,6 +4382,11 @@ dialog::backdrop {
 }
 .offline-player-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 8px; }
 .offline-player-bar .offline-player-meta { margin: 0; flex: 1 1 auto; }
+.online-playback-field { display: block; margin: 16px 0 8px; }
+#onlinePlaybackUrl { width: 100%; }
+.online-player-options { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; }
+.online-player-options select { max-width: 100%; }
+.online-player-options a { color: var(--accent); }
 .offline-subtitle-toggle { appearance: none; flex: 0 0 auto; border: 1px solid var(--line); background: transparent; color: var(--green-800); border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .offline-subtitle-toggle:hover { background: var(--green-50); }
 .offline-subtitle-toggle.is-off { color: var(--muted); border-style: dashed; }

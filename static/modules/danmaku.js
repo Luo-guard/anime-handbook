@@ -50,7 +50,6 @@ const danmakuView = {
   episode: 0,
   source: "",
   sourceNote: "还没有加载弹幕",
-  loading: false,
   onlineCandidates: [],
 };
 
@@ -138,7 +137,7 @@ function dmShielded(text, words) {
 function dmMineItems() {
   try {
     const raw = JSON.parse(localStorage.getItem("handbook.danmaku.mine") || "{}");
-    const list = raw[String(danmakuView.fileId || 0)];
+    const list = raw[danmakuView.mineKey];
     return Array.isArray(list) ? list : [];
   } catch (error) {
     return [];
@@ -170,7 +169,7 @@ function dmSetItems(items, source, note) {
 // 发送弹幕：没有弹幕服务器，只进本机画面并存进 localStorage（换集/重启都在）。
 function dmSendMine(text) {
   const clean = String(text || "").trim().slice(0, 100);
-  if (!clean || !danmakuView.video) return false;
+  if (!clean || !danmakuView.video || !danmakuView.mineKey) return false;
   const time = Number(danmakuView.video.currentTime) || 0;
   const item = { time, mode: 1, color: "#ffffff", size: 25, text: clean, lane: -1 };
   danmakuView.items = [...danmakuView.items, item].sort((a, b) => a.time - b.time);
@@ -178,7 +177,7 @@ function dmSendMine(text) {
   dmRenderPanelStatus();
   try {
     const raw = JSON.parse(localStorage.getItem("handbook.danmaku.mine") || "{}");
-    const key = String(danmakuView.fileId || 0);
+    const key = danmakuView.mineKey;
     const list = Array.isArray(raw[key]) ? raw[key] : [];
     list.push({ time, mode: 1, color: "#ffffff", size: 25, text: clean });
     raw[key] = list.slice(-500);
@@ -369,7 +368,9 @@ async function dmProxy(apiPath, validateText) {
 }
 
 function dmMappingKey() {
-  return `${danmakuView.animeId || 0}:${danmakuView.episode || 0}`;
+  return danmakuView.animeId
+    ? `${danmakuView.animeId}:${danmakuView.episode || 0}`
+    : danmakuView.mineKey;
 }
 
 function dmEpisodeNumber(file) {
@@ -379,30 +380,37 @@ function dmEpisodeNumber(file) {
   return match ? Number(match[1]) : 0;
 }
 
-async function dmLoadOnline(episodeId) {
+let dmLoadVersion = 0;
+
+async function dmLoadOnline(episodeId, version = dmLoadVersion) {
   const text = await dmProxy(`/api/v2/comment/${encodeURIComponent(episodeId)}?format=json`,
     (text) => { try { return ((JSON.parse(text).comments) || []).length > 0; } catch (error) { return false; } });
   const items = dmParseText(text);
   if (!items.length) throw new Error("这个分集没有返回弹幕");
+  if (version !== dmLoadVersion) return false;
   dmSetItems(items, "online", `在线弹幕已加载 ${items.length} 条`);
   return items.length;
 }
 
 // 打开一集时调用：先找同目录弹幕文件，再试已经匹配过的在线分集，都没有就等用户操作。
-async function dmLoadFor(file, animeName, animeId) {
+async function dmLoadFor(file, animeName, animeId, onlineKey = "") {
+  const version = ++dmLoadVersion;
+  danmakuView.episodeContext = { file, animeName, animeId, onlineKey };
   danmakuView.fileId = Number(file?.id) || 0;
+  danmakuView.mineKey = onlineKey || String(danmakuView.fileId);
   danmakuView.animeName = String(animeName || "");
   danmakuView.animeId = Number(animeId) || 0;
   danmakuView.episode = dmEpisodeNumber(file);
   danmakuView.onlineCandidates = [];
+  document.getElementById("dmMatch")?.classList.add("hidden");
+  document.getElementById("dmUseMatch")?.classList.add("hidden");
   dmSetItems([], "", "正在找这一集的弹幕…");
   dmStart();
-  if (danmakuView.loading) return;
-  danmakuView.loading = true;
-  try {
+  if (danmakuView.fileId) {
     try {
       const response = await fetch(`/api/danmaku/local?file_id=${danmakuView.fileId}`);
       const payload = await response.json().catch(() => ({}));
+      if (version !== dmLoadVersion) return;
       const local = payload.items || [];
       if (local.length) {
         dmSetItems(local, "local", `同目录弹幕文件 · ${local.length} 条`);
@@ -411,19 +419,19 @@ async function dmLoadFor(file, animeName, animeId) {
     } catch (error) {
       console.warn("本地弹幕读取失败：", error);
     }
-    const episodeId = danmakuView.mapping[dmMappingKey()];
-    if (episodeId && danmakuView.settings.onlineBase) {
-      try {
-        await dmLoadOnline(episodeId);
-        return;
-      } catch (error) {
-        console.warn("在线弹幕加载失败：", error);
-      }
-    }
-    dmSetItems([], "", dmNoSourceNote());
-  } finally {
-    danmakuView.loading = false;
   }
+  if (version !== dmLoadVersion) return;
+  const episodeId = danmakuView.mapping[dmMappingKey()];
+  if (episodeId) {
+    try {
+      await dmLoadOnline(episodeId, version);
+      return;
+    } catch (error) {
+      console.warn("在线弹幕加载失败：", error);
+    }
+  }
+  if (version === dmLoadVersion)
+    dmSetItems([], "", onlineKey ? "可搜索在线弹幕或导入 .xml / .json" : dmNoSourceNote());
 }
 
 function dmNoSourceNote() {
@@ -435,6 +443,9 @@ function dmNoSourceNote() {
 }
 
 function dmClear() {
+  dmLoadVersion++;
+  danmakuView.mineKey = "";
+  danmakuView.episodeContext = null;
   dmStop();
   dmSetItems([], "", "还没有加载弹幕");
   danmakuView.fileId = 0;
@@ -519,6 +530,7 @@ function dmEscape(text) {
 }
 
 async function dmSearchOnline() {
+  const version = dmLoadVersion;
   const button = document.getElementById("dmOnlineSearch");
   const select = document.getElementById("dmMatch");
   if (!danmakuView.animeName) { dmSetNote("缺少番剧名称，没法搜索在线弹幕"); return; }
@@ -527,6 +539,7 @@ async function dmSearchOnline() {
   try {
     const text = await dmProxy(`/api/v2/search/episodes?anime=${encodeURIComponent(danmakuView.animeName)}`,
       (text) => { try { return ((JSON.parse(text).animes) || []).length > 0; } catch (error) { return false; } });
+    if (version !== dmLoadVersion) return;
     let payload;
     try { payload = JSON.parse(text); } catch (error) { throw new Error("弹幕服务返回的不是 JSON"); }
     const animes = Array.isArray(payload) ? payload : (payload.animes || payload.results || []);
@@ -549,7 +562,7 @@ async function dmSearchOnline() {
     dmSetNote(`搜到 ${flat.length} 个分集，选好这一集后点「用这个分集」`);
     document.getElementById("dmUseMatch")?.classList.remove("hidden");
   } catch (error) {
-    dmSetNote(`在线搜索失败：${error.message}`);
+    if (version === dmLoadVersion) dmSetNote(`在线搜索失败：${error.message}`);
   } finally {
     if (button) button.disabled = false;
   }
@@ -561,28 +574,31 @@ function dmSetNote(text) {
 }
 
 async function dmUseMatch() {
+  const version = dmLoadVersion;
   const select = document.getElementById("dmMatch");
   const id = select && select.value;
   if (!id) return;
   dmSetNote("正在拉取弹幕…");
   try {
-    await dmLoadOnline(id);
+    if (!await dmLoadOnline(id, version) || version !== dmLoadVersion) return;
     danmakuView.mapping[dmMappingKey()] = id;
     dmSaveMapping();
   } catch (error) {
-    dmSetNote(`拉弹幕失败：${error.message}`);
+    if (version === dmLoadVersion) dmSetNote(`拉弹幕失败：${error.message}`);
   }
 }
 
 function dmImportFile(file) {
   if (!file) return;
   const reader = new FileReader();
+  const version = dmLoadVersion;
   reader.onload = () => {
+    if (version !== dmLoadVersion) return;
     const items = dmParseText(String(reader.result || ""));
     if (!items.length) { dmSetNote("这个文件里没解析到弹幕（支持 B 站 XML 或弹弹play JSON）"); return; }
     dmSetItems(items, "import", `已导入 ${items.length} 条弹幕（来自 ${file.name}）`);
   };
-  reader.onerror = () => dmSetNote("弹幕文件读取失败");
+  reader.onerror = () => { if (version === dmLoadVersion) dmSetNote("弹幕文件读取失败"); };
   reader.readAsText(file, "utf-8");
 }
 
@@ -634,8 +650,8 @@ function initDanmaku() {
   document.getElementById("dmOnlineSearch")?.addEventListener("click", dmSearchOnline);
   document.getElementById("dmUseMatch")?.addEventListener("click", dmUseMatch);
   document.getElementById("dmReload")?.addEventListener("click", () => {
-    const file = window.offlineView?.playing;
-    if (file) dmLoadFor(file, danmakuView.animeName, danmakuView.animeId);
+    const context = danmakuView.episodeContext;
+    if (context) dmLoadFor(context.file, context.animeName, context.animeId, context.onlineKey);
   });
   window.addEventListener("resize", () => { if (danmakuView.W) dmResize(true); });
   // 原生 <video> 全屏时 canvas 不会跟着进去。改成让整个容器全屏，

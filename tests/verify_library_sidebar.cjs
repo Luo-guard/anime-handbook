@@ -5,11 +5,18 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
 (async () => {
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-  // 显隐是跨用例共享的状态：先固定成「始终显示」，别被上一个用例的 hide 带崩。
-  await fetch('http://127.0.0.1:43127/api/settings', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:43127' },
-    body: JSON.stringify({ library_sidebar: 'show' }),
+  // 这个测试读取本机媒体库，但显隐的测试值只留在当前浏览器页。
+  let settings;
+  await page.route('**/api/bootstrap', async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    settings = { ...payload.settings, library_sidebar: 'show' };
+    await route.fulfill({ response, json: { ...payload, settings } });
+  });
+  await page.route('**/api/settings', async (route) => {
+    if (route.request().method() !== 'PATCH') return route.continue();
+    settings = { ...settings, ...route.request().postDataJSON() };
+    await route.fulfill({ json: { settings } });
   });
   await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
   // bootstrap 拉全量数据，后台刚重启时要几秒；固定 sleep 会假失败。
@@ -145,11 +152,13 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   }));
   assert.equal(settingsTab.fields, true, '媒体库设置要全部迁进设置弹窗');
   assert.ok(settingsTab.qbHost.length > 0, `qB 地址要预填：${settingsTab.qbHost}`);
-  // 分类顺序跟着主导航：媒体库夹在番剧详情和周表之间，名字就叫「媒体库」
-  const navOrder = await page.evaluate(() => [...document.querySelectorAll('#settingsSideNav button')].map((b) => b.textContent.trim()));
-  const at = (label) => navOrder.indexOf(label);
-  assert.equal(navOrder[at('媒体库') - 1], '番剧详情', `媒体库要排在番剧详情之后：${navOrder.join(' / ')}`);
-  assert.equal(navOrder[at('媒体库') + 1], '周表', `媒体库要排在周表之前：${navOrder.join(' / ')}`);
+  const navOrder = await page.evaluate(() => ({
+    pages: [...document.querySelectorAll('.nav-item[data-view]')].map(button => button.dataset.view),
+    tabs: [...document.querySelectorAll('#settingsSideNav [data-settings-tab]')].map(button => button.dataset.settingsTab),
+  }));
+  const tabByPage = { library: 'offline', timeline: 'record' };
+  assert.deepEqual(navOrder.tabs.filter(tab => navOrder.pages.some(page => (tabByPage[page] || page) === tab)),
+    navOrder.pages.map(page => tabByPage[page] || page), '各页面的设置要跟随当前导航顺序');
   assert.equal(settingsTab.sidebarMode, 'show');
   await page.evaluate(() => {
     const select = document.querySelector('#librarySidebarMode');

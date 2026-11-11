@@ -228,12 +228,13 @@ function savedVideoRow(item) {
 
 function savedLinkRow(item) {
   const meta = [savedLinkHost(item.url), item.note].filter(Boolean).join(" · ");
+  const playable = !window.handbookOnline && window.onlinePlayback && isOnlinePlaybackLink(item.url);
   return `<article class="saved-video-row">
       <a class="saved-video-open" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
         <span class="saved-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10.6 13.4a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 1 0-5.7-5.7l-1.2 1.2"/><path d="M13.4 10.6a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 1 0 5.7 5.7l1.2-1.2"/></svg></span>
         <span class="saved-video-copy"><span class="saved-video-title">${escapeHtml(item.title)}</span>${meta ? `<span class="saved-video-meta">${escapeHtml(meta)}</span>` : ""}</span>
       </a>
-      <div class="saved-video-actions"><button type="button" class="saved-video-action" data-video-action="delete" data-video-id="${item.id}" aria-label="移除链接：${escapeHtml(item.title)}">移除</button></div>
+      <div class="saved-video-actions">${playable ? `<button type="button" class="saved-video-action" data-online-link="${escapeHtml(item.url)}">内置播放</button>` : ""}<button type="button" class="saved-video-action" data-video-action="delete" data-video-id="${item.id}" aria-label="移除链接：${escapeHtml(item.title)}">移除</button></div>
     </article>`;
 }
 
@@ -278,7 +279,14 @@ async function renderVideoLinks(animeId) {
       linkPanel.innerHTML = links.map(savedLinkRow).join("");
     }
     bindSavedActions(panel, animeId, result);
-    if (linkPanel) bindSavedActions(linkPanel, animeId, result);
+    if (linkPanel) {
+      bindSavedActions(linkPanel, animeId, result);
+      linkPanel.querySelectorAll("[data-online-link]").forEach(button => button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await window.onlinePlayback.open(button.dataset.onlineLink, animeId); }
+        finally { button.disabled = false; }
+      }));
+    }
     // 点开已存视频/链接时记一笔跳转记录，方便下次直接从这里打开。
     const anime = state.progressAnime || {};
     const remember = (item, url) => typeof recordJump === "function" && recordJump({

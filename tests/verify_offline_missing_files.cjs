@@ -129,10 +129,6 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
     const onToast = await page.evaluate(() => toasts.at(-1).text);
     assert.equal(onToast, '已订阅「A组」的新集', onToast);
 
-    // 6) 旧「设置页订阅列表」已迁到动漫库的订阅管理（文案由 verify_library_sidebar 覆盖）；
-    //    refreshSubscriptions 在宿主元素消失时直接返回，不报错。
-    await page.evaluate(async () => { await refreshSubscriptions(); });
-
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Offline missing files + subscribe wording: 缺文件不再假装能播，订阅文案不再空头承诺。');
   } finally {

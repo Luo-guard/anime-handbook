@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261111-quick-record" />
+  <link rel="stylesheet" href="/styles.css?v=20261111-online-player" />
   </head>
   <body>
     <div class="app-shell">
@@ -321,6 +321,7 @@
                     <option value="episodes">已收集数</option>
                   </select>
                 </label>
+                <button type="button" class="lib-text-button" id="openOnlinePlayback">在线播放</button>
                 <button type="button" class="lib-icon-button" id="libRefresh" title="重新读取媒体库" aria-label="重新读取媒体库">
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4.2V9h-4.8"/></svg>
                 </button>
@@ -520,6 +521,19 @@
         </section>
       </div>
     </dialog>
+    <dialog class="modal" id="onlinePlaybackDialog" aria-labelledby="onlinePlaybackTitle">
+      <form class="modal-frame" id="onlinePlaybackForm">
+        <button type="button" class="modal-close" id="onlinePlaybackClose" aria-label="关闭">×</button>
+        <h2 id="onlinePlaybackTitle">在线播放</h2>
+        <label class="online-playback-field" for="onlinePlaybackUrl">稀饭动漫 Next 链接</label>
+        <input id="onlinePlaybackUrl" type="url" placeholder="番剧详情或单集链接" required />
+        <p class="offline-player-meta" id="onlinePlaybackStatus" role="status"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" id="onlinePlaybackSample">试播样片</button>
+          <button type="submit" class="primary-button" id="onlinePlaybackSubmit">播放</button>
+        </div>
+      </form>
+    </dialog>
     <div class="offline-player-backdrop" id="offlinePlayerBackdrop" hidden></div>
     <dialog class="modal offline-player" id="offlinePlayer">
       <div class="modal-frame offline-player-frame">
@@ -618,7 +632,12 @@
           </div>
         </div>
         <div class="offline-player-bar">
-          <p class="offline-player-meta" id="offlinePlayerMeta"></p>
+          <p class="offline-player-meta" id="offlinePlayerMeta" role="status"></p>
+          <div class="online-player-options hidden" id="onlinePlayerOptions">
+            <button type="button" class="text-button" id="onlinePlayerRetry" hidden>重试播放</button>
+            <select id="onlinePlayerSource" aria-label="播放线路"></select>
+            <a id="onlinePlayerOriginal" target="_blank" rel="noopener noreferrer">打开原网页 ↗</a>
+          </div>
           <details class="pc-shortcuts">
             <summary>快捷键</summary>
             <ul id="pcShortcutHelpList"></ul>
@@ -1561,7 +1580,7 @@
     <script src="/modules/presentation.js?v=20261109-sidebar-fix" defer></script>
     <script src="/modules/collection-cards.js?v=20261107-collection-added-order" defer></script>
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
-    <script src="/modules/video-links.js?v=20261107-arrow-in-name" defer></script>
+    <script src="/modules/video-links.js?v=20261111-online-player" defer></script>
     <script src="/modules/rules-menu.js?v=20261107-rules-cache" defer></script>
     <script src="/modules/episode-gesture.js?v=20261107-quick-menu-scale" defer></script>
     <script src="/modules/details.js?v=20261109-corner" defer></script>
@@ -1580,9 +1599,10 @@
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261102-toolbar-buttons" defer></script>
-    <script src="/modules/danmaku.js?v=20261108-dm-kazumi" defer></script>
-    <script src="/modules/offline.js?v=20261111-quick-record" defer></script>
-    <script src="/modules/library-view.js?v=20261111-cleanup" defer></script>
+    <script src="/modules/danmaku.js?v=20261111-online-player" defer></script>
+    <script src="/modules/offline.js?v=20261111-online-player" defer></script>
+    <script src="/modules/online-playback.js?v=20261111-online-player" defer></script>
+    <script src="/modules/library-view.js?v=20261111-online-player" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

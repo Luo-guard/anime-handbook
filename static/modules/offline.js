@@ -11,6 +11,7 @@ const offlineView = {
   searchToken: 0,
   retryLimit: 5,
   playing: null,
+  playingAnimeId: null,
   resumeTimer: 0,
   subtitle: null,
   subtitleToken: 0,
@@ -558,19 +559,12 @@ function playLocalFile(fileId) {
     refreshOfflineLocal();
     return;
   }
+  if (window.onlinePlayback?.current) closeOfflinePlayer();
+  saveOfflineResume();
   offlineView.playing = file;
+  offlineView.playingAnimeId = offlineView.animeId;
   const video = $("#offlineVideo");
-  const stageTitle = `${offlineView.animeName || "本地文件"} · ${episodeLabelOf(file.episode_key)}`;
-  $("#offlinePlayerTitle").textContent = stageTitle;
-  const stageTitleNode = $("#pcStageTitle");
-  if (stageTitleNode) stageTitleNode.textContent = stageTitle;
-  const sourceTitle = String(file.source_title || "").trim();
-  const sourceNode = $("#offlinePlayerSource");
-  if (sourceNode) {
-    sourceNode.textContent = sourceTitle;
-    sourceNode.title = sourceTitle;
-    sourceNode.classList.toggle("hidden", !sourceTitle);
-  }
+  pcSetTitle(offlineView.animeName || "本地文件", episodeLabelOf(file.episode_key), file.source_title);
   clearSubtitleSession();
   const toggle = $("#offlineSubtitleToggle");
   toggle.classList.toggle("hidden", !file.subtitle_path);
@@ -580,13 +574,48 @@ function playLocalFile(fileId) {
   $("#offlinePlayerMeta").textContent = file.subtitle_path
     ? "页面内字幕加载中（第一次约需十几秒，之后切集是即时的）…"
     : "这一集没有内封字幕。";
-  video.src = `/api/offline/stream/${file.id}.mp4`;
+  pcLoadVideo(`/api/offline/stream/${file.id}.mp4`, file.resume_ms / 1000).catch(() => {});
   if (file.subtitle_path) setupSubtitleRenderer(file, video);
   openOfflinePlayerDialog();
+  // 弹幕层：浮在 video 上的 canvas，不碰播放内核。
+  if (typeof dmLoadFor === "function") dmLoadFor(file, offlineView.animeName, offlineView.animeId);
+  pcRefreshEpisodes();
+  window.clearInterval(offlineView.resumeTimer);
+  offlineView.resumeTimer = window.setInterval(() => saveOfflineResume(), 8000);
+}
+
+function pcSetTitle(anime, episode, source) {
+  const stageTitle = `${anime} · ${episode}`;
+  $("#offlinePlayerTitle").textContent = stageTitle;
+  const stageTitleNode = $("#pcStageTitle");
+  if (stageTitleNode) stageTitleNode.textContent = stageTitle;
+  const sourceTitle = String(source || "").trim();
+  const sourceNode = $("#offlinePlayerSource");
+  if (sourceNode) {
+    sourceNode.textContent = sourceTitle;
+    sourceNode.title = sourceTitle;
+    sourceNode.classList.toggle("hidden", !sourceTitle);
+  }
+}
+
+let pcMediaLoad;
+
+function pcResetVideo() {
+  pcMediaLoad?.abort();
+  const video = $("#offlineVideo");
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+}
+
+function pcLoadVideo(url, resumeSeconds) {
+  pcMediaLoad?.abort();
+  pcMediaLoad = new AbortController();
+  const video = $("#offlineVideo");
   video.addEventListener(
     "loadedmetadata",
     () => {
-      if (file.resume_ms > 3000) video.currentTime = file.resume_ms / 1000;
+      if (resumeSeconds > 3 && resumeSeconds < video.duration) video.currentTime = resumeSeconds;
       // 浏览器换 src 后会重置倍速/音量，这里把记忆值贴回去。
       const prefs = pcLoadPrefs();
       video.playbackRate = prefs.speed;
@@ -594,15 +623,10 @@ function playLocalFile(fileId) {
       video.muted = prefs.muted;
       pcSync();
     },
-    { once: true },
+    { once: true, signal: pcMediaLoad.signal },
   );
-  video.play().catch(() => {});
-  // 弹幕层：浮在 video 上的 canvas，不碰播放内核。同目录弹幕文件 / 已匹配的在线分集
-  // 由 dmLoadFor 自己找，找不到会在弹幕设置面板里提示，不打断播放。
-  if (typeof dmLoadFor === "function") dmLoadFor(file, offlineView.animeName, offlineView.animeId);
-  pcRefreshEpisodes();
-  window.clearInterval(offlineView.resumeTimer);
-  offlineView.resumeTimer = window.setInterval(() => saveOfflineResume(), 8000);
+  video.src = url;
+  return video.play();
 }
 
 async function saveOfflineResume() {
@@ -614,7 +638,7 @@ async function saveOfflineResume() {
   try {
     await api("/api/offline/resume", {
       method: "POST",
-      body: JSON.stringify({ anime_id: offlineView.animeId, episode_key: file.episode_key, resume_ms: ms }),
+      body: JSON.stringify({ anime_id: offlineView.playingAnimeId, episode_key: file.episode_key, resume_ms: ms }),
     });
     file.resume_ms = ms;
   } catch (error) {
@@ -623,15 +647,13 @@ async function saveOfflineResume() {
 }
 
 function closeOfflinePlayer() {
+  const wasOnline = window.onlinePlayback?.close();
   saveOfflineResume();
   clearSubtitleSession();
   if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
   if (typeof dmClear === "function") dmClear();
   window.clearInterval(offlineView.resumeTimer);
-  const video = $("#offlineVideo");
-  video.pause();
-  video.removeAttribute("src");
-  video.load();
+  pcResetVideo();
   const dialog = $("#offlinePlayer");
   if (dialog.open) dialog.close();
   const backdrop = $("#offlinePlayerBackdrop");
@@ -640,7 +662,8 @@ function closeOfflinePlayer() {
   const sourceNode = $("#offlinePlayerSource");
   if (sourceNode) { sourceNode.textContent = ""; sourceNode.title = ""; sourceNode.classList.add("hidden"); }
   offlineView.playing = null;
-  refreshOfflineLocal();
+  offlineView.playingAnimeId = null;
+  if (!wasOnline) refreshOfflineLocal();
 }
 
 async function removeLocalFile(fileId) {
@@ -820,7 +843,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   $("#offlinePlayer")?.addEventListener("close", () => {
-    if (offlineView.playing) closeOfflinePlayer();
+    if (!$("#offlinePlayer").open && (offlineView.playing || window.onlinePlayback?.current)) closeOfflinePlayer();
   });
   $("#offlineVideo")?.addEventListener("ended", () => {
     saveOfflineResume();
@@ -1016,30 +1039,38 @@ function pcToggleMenu(id) {
 }
 
 function pcStep(direction) {
-  const files = pcSortedFiles();
-  if (!offlineView.playing) return;
-  const index = files.findIndex((file) => Number(file.id) === Number(offlineView.playing.id));
+  const { files, index } = pcPlaylist();
+  if (index < 0) return;
   const target = files[index + direction];
-  if (target) playLocalFile(target.id);
+  if (target) pcSelectEpisode(target.id);
+}
+
+function pcPlaylist() {
+  const files = window.onlinePlayback?.current?.source.episodes || pcSortedFiles();
+  const id = window.onlinePlayback?.current?.episode.id ?? offlineView.playing?.id;
+  return { files, index: files.findIndex((file) => Number(file.id) === Number(id)) };
+}
+
+function pcSelectEpisode(id) {
+  if (window.onlinePlayback?.current) window.onlinePlayback.selectEpisode(id);
+  else playLocalFile(id);
 }
 
 function pcRenderPlaylist() {
   const menu = $("#pcPlaylistMenu");
   if (!menu) return;
-  const files = pcSortedFiles();
+  const { files, index } = pcPlaylist();
   menu.innerHTML = files.length
-    ? files.map((file) => {
-        const current = offlineView.playing && Number(file.id) === Number(offlineView.playing.id);
-        return `<button type="button" data-id="${file.id}" class="${current ? "active" : ""}">${current ? "● " : ""}${escapeHtml(episodeLabelOf(file.episode_key))}</button>`;
+    ? files.map((file, position) => {
+        const current = index === position;
+        const label = window.onlinePlayback?.current ? onlineEpisodeLabel(file) : episodeLabelOf(file.episode_key);
+        return `<button type="button" data-id="${file.id}" class="${current ? "active" : ""}">${current ? "● " : ""}${escapeHtml(label)}</button>`;
       }).join("")
     : '<p class="pc-menu-empty">还没有可播放的集</p>';
 }
 
 function pcRefreshEpisodes() {
-  const files = pcSortedFiles();
-  const index = offlineView.playing
-    ? files.findIndex((file) => Number(file.id) === Number(offlineView.playing.id))
-    : -1;
+  const { files, index } = pcPlaylist();
   const prev = $("#pcPrev");
   const next = $("#pcNext");
   if (prev) prev.disabled = index <= 0;
@@ -1173,6 +1204,10 @@ async function pcScreenshot() {
     toast("视频还没准备好，先等画面出来再截图", "error");
     return;
   }
+  const online = window.onlinePlayback?.current;
+  const anime = online?.catalogue.title || offlineView.animeName || "动漫";
+  const episode = online ? onlineEpisodeLabel(online.episode) : episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
+  const seconds = video.currentTime;
   const upscaleCanvas = pcUpscaleCanvas(video);
   let canvas = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
   let upscaled = Boolean(canvas);
@@ -1196,8 +1231,6 @@ async function pcScreenshot() {
     toast(`截图失败：${error.message || error}`, "error");
     return;
   }
-  const anime = offlineView.animeName || "动漫";
-  const episode = episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
   const sizeTag = upscaled ? `超分 ${shotSize.width}×${shotSize.height} · ` : "";
   // 开着超分却没截到，只可能是暂停（扩展暂停后不再重画）：说清楚，别让人以为功能没生效。
   const shotNote = !upscaled && upscaleCanvas && video.paused ? "（暂停时截的是原画，播放中才有超分）" : "";
@@ -1211,13 +1244,13 @@ async function pcScreenshot() {
     });
     const result = await api("/api/offline/screenshot", {
       method: "POST",
-      body: JSON.stringify({ anime, episode, seconds: video.currentTime, data }),
+      body: JSON.stringify({ anime, episode, seconds, data }),
     });
     toast(`已存入媒体库 · ${sizeTag}图片：「${result.folder}」/ ${result.name}${shotNote}`);
   } catch (error) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    const stamp = pcFormatTime(video.currentTime).replace(/:/g, "-");
+    const stamp = pcFormatTime(seconds).replace(/:/g, "-");
     link.href = url;
     link.download = `${anime} ${episode} ${stamp}.png`;
     link.click();
@@ -1346,7 +1379,7 @@ function pcInit() {
     const item = event.target.closest("[data-id]");
     if (!item) return;
     $("#pcPlaylistMenu")?.classList.add("hidden");
-    playLocalFile(Number(item.dataset.id));
+    pcSelectEpisode(Number(item.dataset.id));
   });
   $("#pcScreenshot")?.addEventListener("click", pcScreenshot);
   $(".pc-shortcuts")?.addEventListener("toggle", (event) => {
