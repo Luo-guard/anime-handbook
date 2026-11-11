@@ -8,6 +8,13 @@ function applyCharacterTabVisibility() {
 
 const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
+function beijingAiringSlot(timestamp) {
+  if (!(Number(timestamp) > 0)) return null;
+  const date = new Date(Number(timestamp) * 1000 + 8 * 3600 * 1000);
+  if (Number.isNaN(date.getTime())) return null;
+  return { weekday: WEEKDAY_NAMES[date.getUTCDay()], clock: date.toISOString().slice(11, 16) };
+}
+
 // 只认补不补零都行的完整日期；"2027-04" 这种只有年月的占位不能当日期用。
 function parseIsoDate(value) {
   const match = String(value || "").trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -23,12 +30,8 @@ function parseIsoDate(value) {
 //   3. 再没有就用首播日。
 // 只有确实还有没播的集时才说「更新」；已完结的番只给星期，不谎称每周还会更新。
 function animeUpdateWeekday(anime, today = new Date()) {
-  const nextAt = Number(anime?.airing?.next_at || 0);
-  if (nextAt > 0) {
-    // 时间戳按北京时间判星期：番剧凌晨档（JST 25:30）在 UTC 会落回前一天。
-    const beijing = new Date(nextAt * 1000 + 8 * 3600 * 1000);
-    return { weekday: WEEKDAY_NAMES[beijing.getUTCDay()], ongoing: true };
-  }
+  const next = beijingAiringSlot(anime?.airing?.next_at);
+  if (next) return { weekday: next.weekday, ongoing: true };
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const counts = new Array(7).fill(0);
   let dated = 0;
@@ -60,19 +63,12 @@ function animeAirClock(anime) {
   if (match && Number(match[1]) < 24 && Number(match[2]) < 60) {
     return `${match[1].padStart(2, "0")}:${match[2]}`;
   }
-  const nextAt = Number(anime?.airing?.next_at || 0);
-  if (nextAt > 0) {
-    // 按北京时间取钟点：番剧凌晨档（JST 25:30）在 UTC 会落回前一天。
-    const beijing = new Date(nextAt * 1000 + 8 * 3600 * 1000);
-    return `${String(beijing.getUTCHours()).padStart(2, "0")}:${String(beijing.getUTCMinutes()).padStart(2, "0")}`;
-  }
-  return "";
+  return beijingAiringSlot(anime?.airing?.next_at)?.clock || "";
 }
 
-// 已播集数优先用后端算好的 airing（与集数区的药丸同源），没有就按逐集日期数。
+// 長門番堂徽标用自己的日期和进度判断状态，独立于集数区的来源设置。
 function animeAiringCounts(anime, today = new Date()) {
-  const useAS = state.settings?.collection_airing_source === "as";
-  const source = useAS ? anime?.as_airing : anime?.airing;
+  const source = anime?.airing;
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   let dated = 0;
   let upcoming = 0;
@@ -90,11 +86,32 @@ function animeAiringCounts(anime, today = new Date()) {
   return { aired, total, upcoming, dated };
 }
 
+function animeScheduleBadge(anime) {
+  const airing = anime?.as_airing;
+  const next = beijingAiringSlot(airing?.next_at);
+  if (next && !airing.unavailable) {
+    return {
+      kind: "ongoing",
+      text: `${next.weekday} ${next.clock} 更新`,
+      title: `AnimeSchedule${airing.stale ? "（缓存）" : ""}下一集排期 · ${airing.next_label || next.weekday + " " + next.clock}（北京时间）`,
+    };
+  }
+  if (airing?.total > 0 && airing.aired >= airing.total) {
+    return { kind: "finished", text: "已完结", title: "按 AnimeSchedule 的播出进度判断" };
+  }
+  return {
+    kind: "unknown",
+    text: airing?.status === "loading" ? "正在读取 AS 排期" : "暂无 AS 排期",
+    title: "AnimeSchedule 暂未提供可用的下一集时间",
+  };
+}
+
 // 四态徽标：连载中 / 已完结 / 未开播 / 日期未知。
 // 文案只给「这一行独有的信息」：集数区已经有「已看 N/总」和「已播 N」药丸，
 // 首播日期也在同一行，所以徽标不再重复「已播 N/总」「全 N 集」或开播日期。
 // 完结态按你定的口径只写「已完结」，不写「已播完」。
 function animeBadgeModel(anime, today = new Date()) {
+  if (state.settings?.detail_airtime_source === "as") return animeScheduleBadge(anime);
   const info = animeUpdateWeekday(anime, today);
   const counts = animeAiringCounts(anime, today);
   const premiere = parseIsoDate(anime?.air_date);
@@ -631,6 +648,7 @@ function episodeAnnotationMarkup(annotations) {
 
 function refreshEpisodeAiringStatus() {
   if (!state.progressAnime) return;
+  renderProgressBadge(state.progressAnime);
   $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
     element.innerHTML = episodeReleaseStatus(state.progressAnime, {type: Number(element.dataset.episodeAiringType)});
   });

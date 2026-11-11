@@ -126,6 +126,7 @@ def _normalize_settings(body, settings):
         "show_collection_rating_control",
         "collection_rating_source",
         "collection_airing_source",
+        "detail_airtime_source",
         "schedule_airing_source",
         "show_collection_progress_control",
         "show_create_collection_control",
@@ -229,6 +230,9 @@ def _normalize_settings(body, settings):
             if key in {"collection_airing_source", "schedule_airing_source"}:
                 if not isinstance(value, str) or value not in {"bgm", "as"}:
                     raise ValueError("已播集数来源无效")
+            elif key == "detail_airtime_source":
+                if not isinstance(value, str) or value not in {"yuc", "as"}:
+                    raise ValueError("详情更新时间来源无效")
             elif key == "schedule_grouping":
                 value = normalize_schedule_grouping(value)
             elif key == "kazumi_read_only":

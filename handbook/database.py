@@ -667,6 +667,7 @@ class HandbookDB:
                 "sidebar_labels": {},
                 "schedule_source": "yuc",
                 "collection_airing_source": "bgm",
+                "detail_airtime_source": "yuc",
                 "schedule_airing_source": "bgm",
                 "show_schedule_source_switch": True,
                 "schedule_preferences": {},

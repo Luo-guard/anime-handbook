@@ -246,6 +246,9 @@ function renderSettingsPanels() {
   $("#showCollectionBgmRatingInput").checked = showCollectionBgmRating();
   $("#collectionRatingSourceInput").value = state.settings.collection_rating_source || "bgm";
   $("#collectionAiringSourceInput").value = state.settings.collection_airing_source || "bgm";
+  const detailAirtimeSource = $("#detailAirtimeSourceInput");
+  detailAirtimeSource.value = state.settings.detail_airtime_source || "yuc";
+  detailAirtimeSource.closest(".setting-row").classList.toggle("hidden", Boolean(window.handbookOnline));
   $("#showCollectionRatingControlInput").checked = state.settings.show_collection_rating_control !== false;
   $("#showCollectionProgressControlInput").checked = state.settings.show_collection_progress_control !== false;
   $("#showCreateCollectionControlInput").checked = state.settings.show_create_collection_control !== false;

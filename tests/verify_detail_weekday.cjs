@@ -104,6 +104,15 @@ window.Date = __FrozenDate;
       const farUpcomingDom = render({ air_date: '2027-01-08', episodes: [] }, '2027-01-08');
       const emptyDom = render({ air_date: '', episodes: [] }, '');
       const danglingDom = render({ air_date: '', episodes: ongoingEpisodes }, '');
+      const mixed = {air_date:'2026-10-02', episodes:weeks('2026-10-02', 12), air_time:{time:'21:30'},
+        as_airing:{aired:7,total:12,next_at:Date.parse('2026-11-08T16:30:00Z')/1000}};
+      state.settings.collection_airing_source = 'as';
+      const yucDom = render(mixed);
+      state.settings.collection_airing_source = 'bgm';
+      state.settings.detail_airtime_source = 'as';
+      const asDom = render(mixed);
+      const missingAS = render({...mixed,as_airing:{unavailable:true}});
+      const loadingAS = render({...mixed,as_airing:{unavailable:true,status:'loading'}});
 
       const meta = $('.progress-meta');
       const links = $('.progress-links');
@@ -116,6 +125,7 @@ window.Date = __FrozenDate;
       return {
         ongoing, finished, skewed, dirty, withNextAt, noData,
         ongoingDom, noClockDom, nextAtDom, finishedDom, upcomingDom, farUpcomingDom, emptyDom, danglingDom,
+        yucDom, asDom, missingAS, loadingAS,
         structure: {
           linksInMeta: Boolean(meta && meta.querySelector('#detailLinks')),
           linksInsideOwnRow: Boolean(links && links.querySelector('#detailLinks')),
@@ -145,6 +155,11 @@ window.Date = __FrozenDate;
     assert.equal(result.noClockDom.text, '每周日更新', `没有钟点时：${result.noClockDom.text}`);
     assert.match(result.noClockDom.title, /没有放送钟点/, '没钟点要说明，不编造');
     assert.equal(result.nextAtDom.text, '每周日 20:00 更新', `next_at 兜底钟点：${result.nextAtDom.text}`);
+    assert.equal(result.yucDom.text, '每周五 21:30 更新');
+    assert.equal(result.asDom.text, '周一 00:30 更新');
+    assert.match(result.asDom.title, /AnimeSchedule/);
+    assert.equal(result.missingAS.text, '暂无 AS 排期');
+    assert.equal(result.loadingAS.text, '正在读取 AS 排期');
 
     assert.equal(result.finishedDom.text, '已完结', `完结徽标：${result.finishedDom.text}`);
     assert.equal(result.finishedDom.kind, 'finished', '完结态要挂 finished 样式');

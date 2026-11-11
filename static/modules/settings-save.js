@@ -45,6 +45,7 @@ const HandbookSettings = (() => {
         collection_airing_source: $("#collectionAiringSourceInput").value,
         schedule_airing_source: $("#scheduleAiringSourceInput").value,
       };
+      const detailAirtimeSource = $("#detailAirtimeSourceInput").value || "yuc";
       // 只有默认展示记录真的变了，才覆盖时间线当前的临时筛选。
       const previousTimelineDefaults = JSON.stringify(Array.isArray(state.settings.timeline_default_themes) ? state.settings.timeline_default_themes : []);
       await requireScheduleSortingSupport();
@@ -69,6 +70,7 @@ const HandbookSettings = (() => {
           kazumi_conflict: $("#kazumiConflictInput").value,
           schedule_source: $("#scheduleSourceInput").value,
           ...progressSources,
+          detail_airtime_source: detailAirtimeSource,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
           schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
           top_sync_action: $("#topSyncActionInput").value,
@@ -129,6 +131,7 @@ const HandbookSettings = (() => {
       if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
       if (gestureSettings && !payload.settings.episode_gestures) throw new Error("单集手势未成功保存，请重启后台并刷新后再试。");
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
+      if ((payload.settings.detail_airtime_source || "yuc") !== detailAirtimeSource) throw new Error("后台未保存详情更新时间来源，请重启后台并刷新后重试。");
       ThemeSettingsSession.finish(true);
       state.settings = payload.settings;
       state.stats = payload.stats || state.stats;
@@ -156,6 +159,7 @@ const HandbookSettings = (() => {
       renderStats();
       renderTabs();
       renderCollection();
+      if ($("#progressModal")?.open && typeof refreshEpisodeAiringStatus === "function") refreshEpisodeAiringStatus();
       toast("设置已保存");
       if (state.activeView === "timeline") await renderTimeline();
       if (state.activeView === "schedule") renderSchedule();

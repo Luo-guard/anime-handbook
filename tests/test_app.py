@@ -343,6 +343,14 @@ class HandbookDBTest(unittest.TestCase):
                 with urlopen(base + "/api/collection-state", timeout=3) as response:
                     collection = app.json.loads(response.read())
                 self.assertEqual(collection["animes"][0]["as_airing"]["aired"], 6)
+                self.db.set_settings({"schedule_airing_source": "bgm", "detail_airtime_source": "as"})
+                with urlopen(base + "/api/animes/91", timeout=3) as response:
+                    detail = app.json.loads(response.read())["anime"]
+                self.assertEqual(detail["as_airing"]["aired"], 6)
+                with urlopen(base + "/api/airing", timeout=3) as response:
+                    progress = app.json.loads(response.read())
+                self.assertEqual(progress["animes"][0]["as_airing"]["aired"], 6)
+                self.assertNotIn("schedule_airing", progress)
         finally:
             server.shutdown()
             server.server_close()

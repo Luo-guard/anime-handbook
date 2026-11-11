@@ -55,12 +55,17 @@ class AnimeScheduleTest(unittest.TestCase):
         self.assertIsNone(compute_progress("x", []))
 
     def test_settings_independent_and_invalid_values_rejected(self):
-        pending, _, _ = normalize_settings({"collection_airing_source": "as", "schedule_airing_source": "bgm"}, {})
+        pending, _, _ = normalize_settings({
+            "collection_airing_source": "as", "schedule_airing_source": "bgm", "detail_airtime_source": "yuc",
+        }, {})
         self.assertEqual(pending["collection_airing_source"], "as")
         self.assertEqual(pending["schedule_airing_source"], "bgm")
+        self.assertEqual(pending["detail_airtime_source"], "yuc")
         for value in (None, [], {}, "other", 1):
             with self.assertRaises(ValueError):
                 normalize_settings({"schedule_airing_source": value}, {})
+            with self.assertRaises(ValueError):
+                normalize_settings({"detail_airtime_source": value}, {})
 
     def test_reads_do_not_fetch_when_unconfigured(self):
         with tempfile.TemporaryDirectory() as root, patch.dict("os.environ", {"ANIMESCHEDULE_TOKEN": ""}):

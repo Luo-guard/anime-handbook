@@ -93,7 +93,9 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
     def _with_progress(self, animes):
         self._with_airing(animes)
         settings = self.database.get_settings()
-        if any(settings.get(key) == "as" for key in ("collection_airing_source", "schedule_airing_source")):
+        if any(settings.get(key) == "as" for key in (
+            "collection_airing_source", "schedule_airing_source", "detail_airtime_source",
+        )):
             cutoff = (datetime.now(BEIJING).date() - timedelta(days=200)).isoformat()
             ids = [row["id"] for row in animes if str(row.get("air_date") or "") >= cutoff]
             progress = self.animeschedule.get_many(ids)
