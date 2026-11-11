@@ -493,11 +493,6 @@ function renderSchedule() {
   const notices = [data?.loading ? useAS ? "正在更新 AS 本周日程与条目关联，已有卡片仍可浏览…" : "正在更新季度资料，已有缓存仍可浏览…" : "", data?.error || "", ...(data?.warnings || [])].filter(Boolean);
   if (!data) notices.push(`正在读取${pageLabel("schedule")}…`);
   if (scheduleState.day === 0) notices.push("独立上线作品按日期排列；整季、分批或每周更新以平台公布为准，不推算集数。" );
-  if (scheduleState.data?.items?.length) {
-    const hiddenSets = scheduleHiddenSets();
-    const hiddenCount = scheduleState.data.items.filter((item) => scheduleItemHidden(item, hiddenSets)).length;
-    if (hiddenCount) notices.push(`已隐藏 ${hiddenCount} 部番剧（右下角「排序与筛选」→ 隐藏的番剧 可恢复）`);
-  }
   $("#scheduleNotice").textContent = notices.join(" · "); $("#scheduleNotice").hidden = !notices.length;
   $("#scheduleGrid").innerHTML = selected.slice(0, scheduleState.shown).map(scheduleCard).join("") || (data && !data.loading ? '<div class="schedule-empty"><strong>这一天，留一点空白。</strong><p>当前季度或筛选下暂无番剧，可以切换星期、季度或调整筛选。</p></div>' : "");
   if (selected.length > scheduleState.shown) $("#scheduleGrid").insertAdjacentHTML("beforeend", '<button type="button" class="secondary-button schedule-more" id="scheduleMore">继续展开本日番剧</button>');

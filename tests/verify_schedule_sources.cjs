@@ -1,11 +1,12 @@
 // 周表三来源独立排序/筛选 + 隐藏番剧 回归
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const base = process.env.HANDBOOK_TEST_URL || 'http://127.0.0.1:43127';
 
 (async () => {
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-  const original = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json().then((d) => ({
+  const original = await (await fetch(base + '/api/bootstrap')).json().then((d) => ({
     preferences: d.settings?.schedule_preferences || null,
     hidden: d.settings?.schedule_hidden || null,
     source: d.settings?.schedule_source || 'yuc',
@@ -15,12 +16,12 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     if (original.preferences !== null) body.schedule_preferences = original.preferences;
     if (original.hidden !== null) body.schedule_hidden = original.hidden;
     body.schedule_source = original.source;
-    await fetch('http://127.0.0.1:43127/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    await fetch(base + '/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   };
   try {
     // 从干净状态开始：清空嵌套偏好与隐藏列表
-    await fetch('http://127.0.0.1:43127/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedule_preferences: {}, schedule_hidden: [], schedule_source: 'yuc' }) });
-    await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await fetch(base + '/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ schedule_preferences: {}, schedule_hidden: [], schedule_source: 'yuc' }) });
+    await page.goto(base + '/', { waitUntil: 'domcontentloaded', timeout: 20000 });
     // bootstrap 会拉全量数据（2MB+），机器忙时要好几秒；等它真正初始化完再操作，
     // 否则按钮的 onclick 还没绑上，点击静默失效。
     await page.waitForFunction(() => typeof scheduleState !== 'undefined' && scheduleState.initialized === true, null, { timeout: 40000 });
@@ -38,7 +39,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     });
     await page.click('#scheduleApplyFilter');
     await page.waitForTimeout(600);
-    const saved = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json().then((d) => d.settings.schedule_preferences);
+    const saved = await (await fetch(base + '/api/bootstrap')).json().then((d) => d.settings.schedule_preferences);
     assert.equal(saved?.yuc?.schedule_sort, 'score', 'yuc 的排序要存进嵌套结构');
     assert.ok(!saved.yuc.schedule_statuses.includes(1), 'yuc 的「在看」筛选要移除');
     assert.equal(saved.kazumi, undefined, 'kazumi 不能被波及');
@@ -84,21 +85,29 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     await page.waitForFunction(() => scheduleSource() === 'yuc' && (scheduleState.data?.items || []).length > 0, null, { timeout: 40000 });
     await page.waitForTimeout(400);
     await page.evaluate(() => openScheduleFilters());
-    await page.waitForTimeout(600);
-    const hiddenId = await page.evaluate(async () => {
-      const btn = document.querySelector('#scheduleHiddenPicker [data-schedule-toggle-hidden]');
-      if (!btn) return null;
-      const id = Number(btn.dataset.scheduleToggleHidden);
-      btn.click();
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      return id;
+    await page.click('#scheduleHiddenEnterPick');
+    await page.waitForFunction(() => scheduleState.pickHidden);
+    const hiddenId = await page.evaluate(() => {
+      const item = scheduleFilteredItems().find(row => row.id > 0 && row.kind === 'weekly');
+      if (!item) return null;
+      scheduleState.day = item.weekday;
+      renderSchedule();
+      const card = [...document.querySelectorAll('#scheduleGrid [data-schedule-key]')]
+        .find(button => button.dataset.scheduleKey === item.key);
+      if (!card) return null;
+      card.click();
+      return Number(item.id);
     });
-    assert.ok(hiddenId, '筛选弹窗要能直接选中周表条目来隐藏');
-    let hiddenNow = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json().then((d) => d.settings.schedule_hidden);
+    assert.ok(hiddenId, '应能在周表隐藏模式点选条目');
+    await page.waitForFunction(id => scheduleHiddenIds('yuc').includes(id), hiddenId);
+    await page.click('#schedulePickDone');
+    assert.ok(!(await page.locator('#scheduleNotice').textContent()).includes('已隐藏'), '常驻提示不再显示隐藏数量');
+    let hiddenNow = await (await fetch(base + '/api/bootstrap')).json().then((d) => d.settings.schedule_hidden);
     assert.ok(Array.isArray(hiddenNow?.yuc) && hiddenNow.yuc.includes(hiddenId), `yuc 里要有 ${hiddenId}，实际：${JSON.stringify(hiddenNow)}`);
     assert.deepEqual(hiddenNow.kazumi, [], 'kazumi 不能被 yuc 的隐藏波及');
     assert.deepEqual(hiddenNow.as, [], 'as 不能被 yuc 的隐藏波及');
     // 管理弹窗：按来源列出，能取消隐藏
+    await page.click('#scheduleFilterButton');
     await page.click('#scheduleHiddenManageFromFilter');
     await page.waitForTimeout(400);
     assert.ok(await page.locator(`#scheduleHiddenList [data-schedule-unhide="${hiddenId}"]`).count() === 1, '管理列表要列出刚隐藏的条目');
@@ -106,7 +115,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     assert.ok(chipText.includes('1'), `来源切换按钮要显示各来源的隐藏数量：${chipText}`);
     await page.click(`#scheduleHiddenList [data-schedule-unhide="${hiddenId}"]`);
     await page.waitForTimeout(900);
-    hiddenNow = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json().then((d) => d.settings.schedule_hidden);
+    hiddenNow = await (await fetch(base + '/api/bootstrap')).json().then((d) => d.settings.schedule_hidden);
     assert.ok(!hiddenNow.yuc.includes(hiddenId), '取消隐藏要移出列表');
     await page.evaluate(() => document.querySelector('#scheduleHiddenModal').close());
 
