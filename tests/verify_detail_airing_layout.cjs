@@ -4,7 +4,7 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  const page=await browser.newPage();
  const videos=fs.readFileSync('static/modules/video-links.js','utf8');
  const resume=videos.slice(videos.indexOf('function bilibiliResumeUrl'),videos.indexOf('function renderBilibiliEntrypoints'));
- await page.setContent('<style>'+fs.readFileSync('static/styles.css','utf8')+'</style><main style="max-width:820px;margin:24px auto;background:var(--surface);padding:20px"><h2>佐佐木与文鸟小哔 第二季</h2><a id="resume" data-video-resume-url="https://www.bilibili.com/video/BV1AgHK6jE64/?p=8"></a><input id="episodeCountInput" value="12" hidden><div id="progressModal"><div id="episodeGrid" class="episode-grid"></div></div></main>');
+ await page.setContent('<style>'+fs.readFileSync('static/styles.css','utf8')+'</style><main style="max-width:820px;margin:24px auto;background:var(--surface);padding:20px"><h2>佐佐木与文鸟小哔 第二季</h2><span id="progressBadge"><span id="progressBadgeText"></span></span><a id="resume" data-video-resume-url="https://www.bilibili.com/video/BV1AgHK6jE64/?p=8"></a><input id="episodeCountInput" value="12" hidden><div id="progressModal"><div id="episodeGrid" class="episode-grid"></div></div></main>');
  await page.addScriptTag({content:`
  const $=(s,root=document)=>root.querySelector(s),$$=(s,root=document)=>[...root.querySelectorAll(s)];
  const escapeHtml=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');

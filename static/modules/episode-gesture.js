@@ -6,8 +6,8 @@
 // 状态机，区别只在松手时有没有命中扇区、以及 keepMenu 开关。
 const EG_ACTION_LABELS = {
   open_menu: "打开扇区", play: "本地播放", online_play: "在线播放", download: "下载", cancel_download: "取消下载",
-  delete: "删除", score: "评分", review: "评价", op: "OP", ed: "ED",
-  open_detail: "单集详情", reveal_in_folder: "在文件夹中打开", redownload: "换源重下",
+  delete: "删除本地文件", score: "评分", review: "评价", op: "OP", ed: "ED",
+  open_detail: "单集详情", reveal_in_folder: "查看本地文件", redownload: "查找其他片源",
 };
 const EG_SLOTS = ["top", "bottom", "top_right", "bottom_right", "top_left", "bottom_left"];
 const EG_SLOT_LABELS = {
@@ -16,10 +16,16 @@ const EG_SLOT_LABELS = {
 };
 const EG_COORDS = {
   top: [0, -94], bottom: [0, 94],
-  top_right: [82, -54], bottom_right: [82, 54],
-  top_left: [-82, -54], bottom_left: [-82, 54],
-  online: [82, 0],
+  top_right: [98, -54], bottom_right: [98, 54],
+  top_left: [-98, -54], bottom_left: [-98, 54],
+  online: [98, 0],
 };
+const EG_RECORD_SETTINGS = {
+  review: "show_episode_review_record", score: "show_episode_rating_record",
+  op: "show_oped_record", ed: "show_oped_record",
+};
+const EG_ENTRY_ACTIONS = Object.keys(EG_ACTION_LABELS)
+  .filter(action => action !== "open_menu" && !EG_RECORD_SETTINGS[action]);
 const EG_DEFAULT = {
   enabled: true,
   keep_menu_on_release: true,
@@ -34,9 +40,6 @@ const EG_DEFAULT = {
 };
 const EG_LONG_PRESS_MS = 420;
 const EG_DOUBLE_DELAY = 250;
-const EG_HIT_RADIUS = 62;
-const EG_BASE_GESTURES = ["DoubleClick", "RightClick", "LongClick", "LongRightClick", "MiddleClick"];
-const EG_MOD_PREFIXES = ["Ctrl+", "Alt+", "Shift+", "Ctrl+Shift+", "Ctrl+Alt+", "Alt+Shift+", "Ctrl+Alt+Shift+"];
 
 function episodeGestureConfig() {
   const raw = state.settings?.episode_gestures || {};
@@ -44,13 +47,13 @@ function episodeGestureConfig() {
     enabled: raw.enabled !== false,
     keepMenu: raw.keep_menu_on_release !== false,
     slots: { ...EG_DEFAULT.slots, ...(raw.slots || {}) },
-    bindings: raw.bindings && Object.keys(raw.bindings).length ? { ...raw.bindings } : { ...EG_DEFAULT.bindings },
+    bindings: { ...(raw.bindings || EG_DEFAULT.bindings) },
+    hiddenActions: new Set(raw.hidden_actions || []),
   };
 }
 
-function egGestureOptions() {
-  const list = [...EG_BASE_GESTURES, ...EG_MOD_PREFIXES.map((prefix) => prefix + "Click")];
-  return list.sort();
+function egRecordEnabled(action) {
+  return !EG_RECORD_SETTINGS[action] || state.settings?.[EG_RECORD_SETTINGS[action]] !== false;
 }
 
 function egGestureLabel(gesture) {
@@ -71,110 +74,72 @@ function egModPrefix(event) {
   return parts.length ? `${parts.join("+")}+` : "";
 }
 
-function egDoubleClickBound(config) {
-  return Object.keys(config.bindings).some((gesture) => gesture.endsWith("DoubleClick"));
-}
-
 let egRuntime = null;
 
 function egCloseMenu() {
-  const menu = document.querySelector("#episodeQuickMenu");
+  const menu = egRuntime?.menu;
   if (!menu) return;
-  menu.classList.remove("visible");
-  menu.classList.add("closing");
-  // 收起动画 180ms（transform），移除得等它跑完，否则最后一帧被截掉、看着像闪没。
-  window.setTimeout(() => menu.remove(), 200);
-  if (egRuntime) {
-    egRuntime.menu = null;
-    egRuntime.dragged = false;
-  }
+  menu.remove();
+  egRuntime.menu = null;
+  egRuntime.menuButton = null;
+  egRuntime.dragged = false;
 }
 
 function egRenderMenu(button, config, onAction) {
   egCloseMenu();
+  const slots = Object.fromEntries(EG_SLOTS.map(slot => [slot, config.slots[slot]]));
+  const localSlot = EG_SLOTS.find(slot => slots[slot] === "play");
+  for (const [slot, action] of Object.entries(slots)) {
+    if (!egRecordEnabled(action) || config.hiddenActions.has(action)
+      || (["play", "delete"].includes(action) && !button.classList.contains("downloaded"))) delete slots[slot];
+  }
+  if (!config.hiddenActions.has("online_play") && !window.handbookOnline
+    && window.onlinePlayback && button.dataset.episodeType === "0") {
+    slots[localSlot && !slots[localSlot] ? localSlot : "online"] = "online_play";
+  }
+  const entries = Object.entries(slots).filter(([, action]) => action);
+  if (!entries.length) return;
   const rect = button.getBoundingClientRect();
-  const originX = rect.left + rect.width / 2;
-  const originY = rect.top + rect.height / 2;
+  const scale = Math.min(1, (window.innerWidth - 110) / 196, (window.innerHeight - 56) / 188);
+  const fit = (axis, center, size, pad) => {
+    const offsets = entries.map(([slot]) => EG_COORDS[slot][axis] * scale);
+    return Math.max(pad - Math.min(...offsets), Math.min(center, size - pad - Math.max(...offsets)));
+  };
+  const originX = fit(0, rect.left + rect.width / 2, window.innerWidth, 55);
+  const originY = fit(1, rect.top + rect.height / 2, window.innerHeight, 28);
   const menu = document.createElement("div");
   menu.id = "episodeQuickMenu";
   menu.className = "episode-quick-menu";
-  menu.dataset.originX = String(originX);
-  menu.dataset.originY = String(originY);
-  menu.dataset.episodeKey = button.dataset.episodeKey;
-  const scale = egScaleFor(originX, originY);
-  menu.dataset.scale = String(scale);
-  menu.style.setProperty("--quick-scale", String(scale));
+  menu.setAttribute("role", "group");
+  menu.setAttribute("aria-label", "单集快捷操作");
   menu.style.setProperty("--quick-x", `${originX}px`);
   menu.style.setProperty("--quick-y", `${originY}px`);
-  const slots = Object.fromEntries(EG_SLOTS.map(slot => [slot, config.slots[slot]]));
-  const localSlot = EG_SLOTS.find(slot => slots[slot] === "play");
-  if (!button.classList.contains("downloaded")) {
-    EG_SLOTS.filter(slot => slots[slot] === "play").forEach(slot => delete slots[slot]);
-  }
-  if (!window.handbookOnline && window.onlinePlayback && button.dataset.episodeType === "0") {
-    slots[localSlot && !slots[localSlot] ? localSlot : "online"] = "online_play";
-  }
-  const items = Object.entries(slots).filter(([, action]) => action).map(([slot, action]) => {
-    return `<span class="episode-quick-action ${slot}" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action] || action)}</span>`;
+  menu.innerHTML = entries.map(([slot, action]) => {
+    const [x, y] = EG_COORDS[slot];
+    return `<button type="button" class="episode-quick-action" style="left:${x * scale}px;top:${y * scale}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action])}</button>`;
   }).join("");
-  menu.innerHTML = `
-    <span class="episode-quick-halo"></span>
-    <span class="episode-quick-trail"></span>
-    <span class="episode-quick-cursor"></span>
-    ${items}`;
   menu.addEventListener("click", (event) => {
     const item = event.target.closest("[data-episode-action]");
     if (!item || !egRuntime) return;
     event.preventDefault();
     event.stopPropagation();
-    const key = menu.dataset.episodeKey || "";
-    const cell = key ? document.querySelector(`.episode-cell[data-episode-key="${CSS.escape(key)}"]`) : null;
     egCloseMenu();
-    onAction(item.dataset.episodeAction, key, cell);
+    button.focus({ preventScroll: true });
+    if (button.isConnected) onAction(item.dataset.episodeAction, button.dataset.episodeKey, button);
   });
   $("#progressModal").append(menu);
-  requestAnimationFrame(() => menu.classList.add("visible"));
   egRuntime.menu = menu;
+  egRuntime.menuButton = button;
   return menu;
-}
-
-const EG_RADIUS_X = 82;
-const EG_RADIUS_Y = 94;
-const EG_KNOB_PAD = 26;   // 圆钮半径 24 + 2px 余量
-const EG_SCALE_MIN = 0.55;
-
-// 窄屏上集数格子贴边时，固定半径会把左上/左下圆钮顶出视口（390px 实测 left=-23）。
-// 按圆心到视口四边的余量把扇区等比缩小，最小到 0.55，宁可挤一点也不裁。
-function egScaleFor(originX, originY) {
-  const roomX = Math.min(originX, window.innerWidth - originX) - EG_KNOB_PAD;
-  const roomY = Math.min(originY, window.innerHeight - originY) - EG_KNOB_PAD;
-  return Math.max(EG_SCALE_MIN, Math.min(1, roomX / EG_RADIUS_X, roomY / EG_RADIUS_Y));
 }
 
 function egUpdateTarget(event) {
   const menu = egRuntime?.menu;
   if (!menu) return;
-  const originX = Number(menu.dataset.originX);
-  const originY = Number(menu.dataset.originY);
-  const deltaX = event.clientX - originX;
-  const deltaY = event.clientY - originY;
-  const distance = Math.min(112, Math.hypot(deltaX, deltaY));
-  menu.style.setProperty("--drag-x", `${Math.max(-110, Math.min(110, deltaX))}px`);
-  menu.style.setProperty("--drag-y", `${Math.max(-110, Math.min(110, deltaY))}px`);
-  menu.style.setProperty("--drag-distance", `${distance}px`);
-  menu.style.setProperty("--drag-angle", `${Math.atan2(deltaY, deltaX)}rad`);
-  menu.classList.toggle("dragging", distance > 10);
-  let target = "";
-  let closest = Infinity;
-  const scale = Number(menu.dataset.scale || 1);
-  menu.querySelectorAll("[data-slot]").forEach((item) => {
-    const [x, y] = (EG_COORDS[item.dataset.slot] || [0, 0]).map((value) => value * scale);
-    const next = Math.hypot(event.clientX - (originX + x), event.clientY - (originY + y));
-    if (next < closest) { closest = next; target = item.dataset.slot; }
-  });
   menu.querySelectorAll("[data-episode-action]").forEach((item) => {
-    // 命中圈跟着扇区一起缩，否则缩到 0.55 时六个圆钮都在 62px 内，点哪都算命中。
-    item.classList.toggle("active", item.dataset.slot === target && closest < EG_HIT_RADIUS * scale);
+    const rect = item.getBoundingClientRect();
+    item.classList.toggle("active", event.clientX >= rect.left && event.clientX <= rect.right
+      && event.clientY >= rect.top && event.clientY <= rect.bottom);
   });
 }
 
@@ -184,7 +149,7 @@ function installEpisodeGestures(root, options) {
   egRuntime = {
     button: null, pointerId: null, startX: 0, startY: 0, index: 0,
     pressTimer: 0, longFired: false, menu: null, dragged: false,
-    suppressClick: false, clickTimer: 0, clickButton: null,
+    clickTimer: 0, pendingClick: null,
   };
   const configOf = () => episodeGestureConfig();
   const cellOf = (target) => target instanceof Element ? target.closest(".episode-cell") : null;
@@ -194,7 +159,7 @@ function installEpisodeGestures(root, options) {
     const config = configOf();
     if (!config.enabled) return;
     const action = config.bindings[gesture];
-    if (!action) return;
+    if (!action || !egRecordEnabled(action)) return;
     if (action === "open_menu") {
       egRenderMenu(button, config, options.onAction);
       return;
@@ -204,9 +169,8 @@ function installEpisodeGestures(root, options) {
 
   root.addEventListener("pointerdown", (event) => {
     const button = cellOf(event.target);
-    if (!button || !configOf().enabled) return;
+    if (!button || !configOf().enabled || event.button > 2 || egRuntime.button) return;
     if (egRuntime.menu && !event.target.closest("#episodeQuickMenu")) egCloseMenu();
-    egRuntime.suppressClick = false;
     egRuntime.button = button;
     egRuntime.pointerId = event.pointerId;
     egRuntime.startX = event.clientX;
@@ -218,10 +182,13 @@ function installEpisodeGestures(root, options) {
     // 合成事件或触屏上 pointerId 可能已失效，捕获失败不能中断后面的长按计时。
     try { button.setPointerCapture?.(event.pointerId); } catch (_error) { /* 忽略 */ }
     window.clearTimeout(egRuntime.pressTimer);
+    const base = event.button === 2 ? "LongRightClick" : "LongClick";
+    const longGesture = egRuntime.modPrefix + base;
+    const longAction = configOf().bindings[longGesture];
+    if (event.button === 1 || !longAction || !egRecordEnabled(longAction)) return;
     egRuntime.pressTimer = window.setTimeout(() => {
       egRuntime.longFired = true;
-      const base = egRuntime.index === 2 ? "LongRightClick" : "LongClick";
-      run(egRuntime.modPrefix + base, egRuntime.button);
+      run(longGesture, button);
     }, EG_LONG_PRESS_MS);
   });
 
@@ -230,17 +197,30 @@ function installEpisodeGestures(root, options) {
   // 挂在 root 上时指针一出界就不再更新，高亮停在上一步、甚至被清空，
   // 于是正上方「播放」、正下方「下载」看起来"点了没反应"。
   document.addEventListener("pointermove", (event) => {
-    if (!egRuntime.menu) return;
+    if (!egRuntime.button) {
+      egUpdateTarget(event);
+      return;
+    }
+    if (event.pointerId !== egRuntime.pointerId) return;
     const distance = Math.hypot(event.clientX - egRuntime.startX, event.clientY - egRuntime.startY);
-    if (distance > 10) egRuntime.dragged = true;
+    if (distance > 10) {
+      egRuntime.dragged = true;
+      window.clearTimeout(egRuntime.pressTimer);
+    }
     egUpdateTarget(event);
   });
 
+  function flushClick() {
+    window.clearTimeout(egRuntime.clickTimer);
+    const pending = egRuntime.pendingClick;
+    egRuntime.pendingClick = null;
+    if (pending?.button.isConnected) pending.single();
+  }
+
   document.addEventListener("pointerup", (event) => {
     const button = egRuntime.button;
-    if (!button) return;
+    if (!button || event.pointerId !== egRuntime.pointerId) return;
     window.clearTimeout(egRuntime.pressTimer);
-    egRuntime.suppressClick = true;
     const config = configOf();
     if (egRuntime.menu) {
       egUpdateTarget(event);
@@ -256,53 +236,53 @@ function installEpisodeGestures(root, options) {
       egRuntime.button = null;
       return;
     }
-    if (egRuntime.longFired) {
-      // 长按手势在定时器里已经分发过了。
+    if (egRuntime.longFired || egRuntime.dragged || !button.isConnected) {
       egRuntime.button = null;
       return;
     }
     const base = egRuntime.index === 2 ? "RightClick" : egRuntime.index === 1 ? "MiddleClick" : "Click";
     const gesture = egRuntime.modPrefix + base;
     egRuntime.button = null;
-    if (base === "Click" && !egRuntime.modPrefix) {
-      // 裸左键单击固定切换已看；只有绑定了双击时才等 250ms 判定。
-      if (egDoubleClickBound(config)) {
-        if (egRuntime.clickTimer) {
-          window.clearTimeout(egRuntime.clickTimer);
-          egRuntime.clickTimer = 0;
-          const bound = Object.keys(config.bindings).find((item) => item === "DoubleClick" || item === egRuntime.modPrefix + "DoubleClick");
-          if (bound) options.onAction(config.bindings[bound], button.dataset.episodeKey, button);
-        } else {
-          egRuntime.clickButton = button;
-          egRuntime.clickTimer = window.setTimeout(() => {
-            egRuntime.clickTimer = 0;
-            options.onToggleWatched(egRuntime.clickButton);
-          }, EG_DOUBLE_DELAY);
-        }
+    const single = () => gesture === "Click" ? options.onToggleWatched(button) : run(gesture, button);
+    const double = egRuntime.modPrefix + "DoubleClick";
+    const doubleAction = base === "Click" && config.bindings[double];
+    if (doubleAction && egRecordEnabled(doubleAction)) {
+      if (egRuntime.pendingClick?.button === button && egRuntime.pendingClick.double === double) {
+        window.clearTimeout(egRuntime.clickTimer);
+        egRuntime.pendingClick = null;
+        run(double, button);
       } else {
-        options.onToggleWatched(button);
+        flushClick();
+        egRuntime.pendingClick = { button, double, single };
+        egRuntime.clickTimer = window.setTimeout(flushClick, EG_DOUBLE_DELAY);
       }
       return;
     }
-    run(gesture, button);
+    flushClick();
+    single();
   });
 
-  root.addEventListener("pointercancel", () => {
+  root.addEventListener("pointercancel", (event) => {
+    if (event.pointerId !== egRuntime.pointerId) return;
     window.clearTimeout(egRuntime.pressTimer);
     egCloseMenu();
     egRuntime.button = null;
   });
 
   root.addEventListener("click", (event) => {
-    if (egRuntime.suppressClick) { egRuntime.suppressClick = false; return; }
-    if (event.target.closest("#episodeQuickMenu")) return;
     const button = cellOf(event.target);
     // 键盘 Enter/Space 触发的 click 没有 pointer 事件，这里补一次已看切换。
-    if (button) options.onToggleWatched(button);
+    if (button && (!configOf().enabled || event.detail === 0)) options.onToggleWatched(button);
   });
 
   root.addEventListener("contextmenu", (event) => {
-    if (cellOf(event.target)) event.preventDefault();
+    const button = cellOf(event.target);
+    if (!button || !configOf().enabled) return;
+    event.preventDefault();
+    if (event.button === 0 && !egRuntime.button) {
+      egRenderMenu(button, configOf(), options.onAction);
+      egRuntime.menu?.querySelector("button")?.focus();
+    }
   });
 
   document.addEventListener("pointerdown", (event) => {
@@ -311,8 +291,22 @@ function installEpisodeGestures(root, options) {
   }, true);
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && egRuntime.menu) egCloseMenu();
+    if (event.key === "Escape" && egRuntime.menu) {
+      event.preventDefault();
+      const button = egRuntime.menuButton;
+      egCloseMenu();
+      button?.focus({ preventScroll: true });
+    }
   });
+  $("#progressModal").addEventListener("close", () => {
+    egCloseMenu();
+    window.clearTimeout(egRuntime.pressTimer);
+    window.clearTimeout(egRuntime.clickTimer);
+    egRuntime.pendingClick = null;
+    egRuntime.button = null;
+  });
+  $("#progressModal").addEventListener("scroll", () => egCloseMenu(), { capture: true, passive: true });
+  window.addEventListener("resize", () => egCloseMenu());
 }
 
 // ---- 设置界面：扇区六格 + 手势绑定表 ------------------------------------
@@ -351,23 +345,29 @@ function readEpisodeGestureSettings() {
     keep_menu_on_release: $("#episodeGestureKeepMenuInput").checked,
     slots,
     bindings,
+    hidden_actions: $$("[data-eg-entry]").filter(input => !input.checked).map(input => input.dataset.egEntry),
   };
 }
 
-function renderEpisodeGestureSettings() {
+function renderEpisodeGestureSettings(config = episodeGestureConfig()) {
   const enabled = $("#episodeGestureEnabledInput");
   if (!enabled) return;
-  const config = episodeGestureConfig();
   enabled.checked = config.enabled;
   $("#episodeGestureKeepMenuInput").checked = config.keepMenu;
   $("#episodeGestureSlots").innerHTML = EG_SLOTS.map((slot) => `
-    <label class="eg-row"><span>${escapeHtml(EG_SLOT_LABELS[slot])}</span>
+    <label class="eg-slot eg-slot-${slot}"><span>${escapeHtml(EG_SLOT_LABELS[slot])}</span>
       <select data-eg-slot="${slot}" aria-label="${escapeHtml(EG_SLOT_LABELS[slot])}的动作">
-        <option value="">（空）</option>
+        <option value="">留空</option>
         ${egActionOptions(config.slots[slot], false)}
       </select>
     </label>`).join("");
-  $("#episodeGestureBindings").innerHTML = EG_UI_GESTURES.map((gesture) => `
+  $("#episodeGestureEntries").innerHTML = EG_ENTRY_ACTIONS.map(action => `
+    <label class="switch-row compact">
+      <input type="checkbox" data-eg-entry="${action}"${config.hiddenActions.has(action) ? "" : " checked"} />
+      <span class="switch"></span><span>显示${escapeHtml(EG_ACTION_LABELS[action])}</span>
+    </label>`).join("");
+  const gestures = [...new Set([...EG_UI_GESTURES, ...Object.keys(config.bindings)])];
+  $("#episodeGestureBindings").innerHTML = gestures.map((gesture) => `
     <label class="eg-row"><span>${escapeHtml(egGestureLabel(gesture))}</span>
       <select data-eg-gesture="${gesture}" aria-label="${escapeHtml(egGestureLabel(gesture))}的动作">
         <option value="">未绑定</option>
@@ -390,8 +390,7 @@ function renderEpisodeGestureSettings() {
   };
   $$("[data-eg-slot],[data-eg-gesture]").forEach((select) => select.addEventListener("change", refresh));
   $("#resetEpisodeGestures").onclick = () => {
-    state.settings.episode_gestures = JSON.parse(JSON.stringify(EG_DEFAULT));
-    renderEpisodeGestureSettings();
+    renderEpisodeGestureSettings({ ...EG_DEFAULT, keepMenu: EG_DEFAULT.keep_menu_on_release, hiddenActions: new Set() });
   };
   refresh();
 }

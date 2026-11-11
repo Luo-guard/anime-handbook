@@ -149,6 +149,25 @@ window.calls=[];
     assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="play"]').count(), 0);
     assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="online_play"]').count(), 1);
 
+    await page.evaluate(() => Object.assign(state.settings, {
+      show_episode_review_record: false, show_episode_rating_record: false, show_oped_record: false,
+    }));
+    await setConfig({ hidden_actions: ['download', 'online_play'] });
+    await page.setViewportSize({ width: 390, height: 640 });
+    await cell.click({ button: 'right' });
+    assert.deepEqual(await page.locator('#episodeQuickMenu button').evaluateAll(nodes =>
+      nodes.map(node => node.dataset.episodeAction)), ['play']);
+    const bounds = await page.locator('#episodeQuickMenu button').boundingBox();
+    assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 390);
+    await page.keyboard.press('Escape');
+    await setConfig({ bindings: { DoubleClick: 'play', 'Ctrl+DoubleClick': 'open_detail' } });
+    await cell.click();
+    await page.locator('[data-episode-key="0:2"]').click();
+    await page.waitForTimeout(280);
+    assert.deepEqual(await calls(), [['toggle', '0:1'], ['toggle', '0:2']]);
+    await cell.dblclick({ modifiers: ['Control'] });
+    assert.deepEqual(await calls(), [['action', 'open_detail', '0:1']]);
+
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Episode gestures: six slots, click/drag selection, keep switch, modifier bindings, removable slots and double-click delay passed.');
   } finally {

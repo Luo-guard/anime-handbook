@@ -77,8 +77,16 @@ class GestureNormalizeTests(unittest.TestCase):
     def test_empty_string_unbinds_a_default(self):
         """真要解绑就显式传空字符串 —— 缺键不再是「解绑」的意思。"""
         value = eg.normalize({"bindings": {"RightClick": ""}})
-        self.assertNotIn("RightClick", value["bindings"])
+        self.assertEqual(value["bindings"]["RightClick"], "")
         self.assertEqual(value["bindings"]["LongClick"], "open_menu")
+        self.assertEqual(eg.normalize(value), value)
+
+    def test_hidden_actions_are_validated_and_preserved(self):
+        value = eg.normalize({"hidden_actions": ["play", "online_play", "play"]})
+        self.assertEqual(value["hidden_actions"], ["online_play", "play"])
+        self.assertEqual(eg.normalize(value), value)
+        with self.assertRaises(ValueError):
+            eg.normalize({"hidden_actions": ["unknown"]})
 
     def test_double_click_flag(self):
         self.assertTrue(eg.double_click_bound(eg.normalize({"bindings": {"Ctrl+DoubleClick": "play"}})))

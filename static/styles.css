@@ -2121,115 +2121,43 @@ input[type="number"] {
   z-index: 1000;
   left: var(--quick-x);
   top: var(--quick-y);
-  width: 1px;
-  height: 1px;
   pointer-events: none;
 }
-
-/* 轻量版：--accent 补齐后这里的实心装饰全部生效过一次，六个圆钮变成
-   实心带重阴影的按钮，比原来的「文字浮空」重太多。只留一圈极淡光晕当
-   「菜单已展开」的暗示。 */
-.episode-quick-halo {
-  position: absolute;
-  width: 64px;
-  height: 64px;
-  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
-  border-radius: 50%;
-  transform: translate(-50%, -50%) scale(.65);
-  background: color-mix(in srgb, var(--accent) 5%, transparent);
-  opacity: 0;
-  transition: opacity 160ms ease, transform 220ms cubic-bezier(.2,.9,.2,1);
-}
-
-.episode-quick-menu.visible .episode-quick-halo {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.episode-quick-trail {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--drag-distance, 0px);
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 42%, transparent));
-  box-shadow: none;
-  opacity: 0;
-  transform: translateY(-50%) rotate(var(--drag-angle, 0rad));
-  transform-origin: left center;
-  transition: width 70ms ease-out, transform 70ms ease-out, opacity 120ms ease;
-}
-
-.episode-quick-cursor {
-  position: absolute;
-  left: var(--drag-x, 0px);
-  top: var(--drag-y, 0px);
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(.55);
-  transition: left 70ms ease-out, top 70ms ease-out, opacity 120ms ease, transform 120ms ease;
-}
-
-.episode-quick-menu.dragging .episode-quick-trail,
-.episode-quick-menu.dragging .episode-quick-cursor {
-  opacity: 1;
-}
-
-.episode-quick-menu.dragging .episode-quick-cursor { transform: translate(-50%, -50%) scale(1); }
 
 .episode-quick-action {
   position: absolute;
   display: grid;
   place-items: center;
-  transform: translate(-50%, -50%) scale(.55);
-  opacity: 0;
-  transition: transform 180ms cubic-bezier(.2,.9,.2,1), opacity 130ms ease, background 120ms ease;
+  width: 100px;
+  min-height: 44px;
+  padding: 3px 6px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 5px 16px rgb(0 0 0 / 14%);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
 }
 
-/* Compatibility guard for a menu created by a previously cached script. */
-.episode-quick-tip { display: none !important; }
-
-.episode-quick-action {
-  width: 48px;
-  height: 48px;
-  /* 轻盈但不散：底淡到几乎和弹窗同色，只留一圈极细的主题色边把文字收住。
-     完全透明会让六个动作字直接压在集数/评论文字上，反而更乱；
-     早先的 76% surface + 重阴影又太像一排实心按钮。 */
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  border-radius: 50%;
-  color: var(--green-900);
-  background: color-mix(in srgb, var(--surface) 94%, var(--accent));
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 12%, transparent);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-/* 位置与出场延迟按槽位名给（top/bottom/top_right…），下面 4262 附近是唯一一份。
-   早期按动作名（score/op/ed/review）写的规则已经不匹配任何元素，别再写回来。 */
-
-.episode-quick-menu.visible .episode-quick-action { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-.episode-quick-action.active {
-  transform: translate(-50%, -50%) scale(1.18) !important;
-  color: #fff;
-  /* 选中态用主题色实心，跟整站一致；固定中性灰在换主题时会显得脏。 */
-  border-color: var(--green-700);
+.episode-quick-action:is(:hover, :focus-visible, .active) {
   background: var(--green-700);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--green-700) 34%, transparent);
+  border-color: var(--green-700);
+  color: #fff;
 }
 
-.episode-quick-menu.closing .episode-quick-action,
-.episode-quick-menu.closing .episode-quick-halo,
-.episode-quick-menu.closing .episode-quick-trail,
-.episode-quick-menu.closing .episode-quick-cursor {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(.72);
-  transition-delay: 0ms;
+.episode-quick-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .episode-quick-action { transition: none; }
 }
 
 .event-time {
@@ -4406,26 +4334,40 @@ dialog::backdrop {
 .offline-modal .offline-list { flex: 1 1 auto; min-height: 0; }
 .offline-modal .offline-settings { flex: 1 1 auto; min-height: 0; }
 
-/* 六格扇区：方位由设置里的 slots 决定，坐标固定在这里。
-   菜单本体 pointer-events:none，只有可见的扇区圆钮能接收点击（B 版点选要用）。
-   半径乘 --quick-scale：窄屏上格子贴着边，不缩的话左上/左下圆钮会被视口裁掉
-   半个（390px 实测 left=-23），缩多少由 episode-gesture.js 按到四边的余量算。 */
-.episode-quick-action.top { left: 0; top: calc(-94px * var(--quick-scale, 1)); }
-.episode-quick-action.bottom { left: 0; top: calc(94px * var(--quick-scale, 1)); }
-.episode-quick-action.top_right { left: calc(82px * var(--quick-scale, 1)); top: calc(-54px * var(--quick-scale, 1)); }
-.episode-quick-action.online { left: calc(82px * var(--quick-scale, 1)); top: 0; }
-.episode-quick-action[data-episode-action$="play"] { text-align: center; line-height: 1.15; padding-inline: 5px; }
 .online-playback-results { display: grid; gap: 8px; margin-top: 18px; max-height: 48vh; overflow: auto; }
-.episode-quick-action.bottom_right { left: calc(82px * var(--quick-scale, 1)); top: calc(54px * var(--quick-scale, 1)); }
-.episode-quick-action.top_left { left: calc(-82px * var(--quick-scale, 1)); top: calc(-54px * var(--quick-scale, 1)); }
-.episode-quick-action.bottom_left { left: calc(-82px * var(--quick-scale, 1)); top: calc(54px * var(--quick-scale, 1)); }
-.episode-quick-menu.visible .episode-quick-action { pointer-events: auto; cursor: pointer; }
-.episode-quick-menu.visible .episode-quick-action.top { transition-delay: 0ms; }
-.episode-quick-menu.visible .episode-quick-action.top_right { transition-delay: 20ms; }
-.episode-quick-menu.visible .episode-quick-action.bottom_right { transition-delay: 40ms; }
-.episode-quick-menu.visible .episode-quick-action.bottom { transition-delay: 60ms; }
-.episode-quick-menu.visible .episode-quick-action.bottom_left { transition-delay: 80ms; }
-.episode-quick-menu.visible .episode-quick-action.top_left { transition-delay: 100ms; }
+
+.eg-slot-grid {
+  display: grid;
+  grid-template-areas: ". top ." "top_left . top_right" "bottom_left . bottom_right" ". bottom .";
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+}
+.eg-slot { display: grid; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+.eg-slot select { width: 100%; min-width: 0; font-size: 13px; }
+.eg-slot-top { grid-area: top; }
+.eg-slot-bottom { grid-area: bottom; }
+.eg-slot-top_left { grid-area: top_left; }
+.eg-slot-top_right { grid-area: top_right; }
+.eg-slot-bottom_left { grid-area: bottom_left; }
+.eg-slot-bottom_right { grid-area: bottom_right; }
+
+.eg-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 178px), 1fr));
+  gap: 12px 16px;
+}
+.eg-entry-grid .switch-row { justify-content: flex-start; }
+.eg-entry-grid .switch { flex-shrink: 0; }
+
+@media (max-width: 540px) {
+  .eg-slot-grid {
+    grid-template-areas: "top bottom" "top_left top_right" "bottom_left bottom_right";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 /* 单集手势设置：两列下拉网格，和快捷键设置保持同一套密度。 */
 .eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px 16px; margin-top: 9px; }

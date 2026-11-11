@@ -685,7 +685,7 @@ async function syncEpisodeDownloadMarks(files = null) {
     cell.classList.toggle("downloaded", on);
     // 首次打开详情时格子已经渲染完、角标是异步补的，title 也要一起补；
     // 重渲染时 title 里已经带过这句话，先去掉再加，避免越积越长。
-    const base = String(cell.title || "").replace(/ · 已下载 · 扇区可播放$/, "");
+    const base = String(cell.title || "").replace(/(?:^| · )已下载 · 扇区可播放$/, "");
     cell.title = on ? [base, "已下载 · 扇区可播放"].filter(Boolean).join(" · ") : base;
   });
 }
@@ -693,6 +693,7 @@ async function syncEpisodeDownloadMarks(files = null) {
 function renderEpisodeGrid() {
   const anime = state.progressAnime;
   if (!anime) return;
+  if (typeof egCloseMenu === "function") egCloseMenu();
   $("#episodeAnnotationPopover")?.remove();
   const total = Number($("#episodeCountInput").value || 0);
   const officialEpisodes = Array.isArray(anime.episodes) ? anime.episodes : [];
@@ -817,12 +818,47 @@ async function runEpisodeGestureAction(action, key, button) {
     return createEpisodeQuickRecord(episode, action);
   }
   if (action === "open_menu") return;
+  if (action === "open_detail") {
+    const title = episode.name_cn || episode.name;
+    const dialog = document.createElement("dialog");
+    dialog.className = "modal";
+    dialog.setAttribute("aria-label", "单集详情");
+    dialog.innerHTML = `<div class="modal-card">
+      <form method="dialog"><button class="modal-close" aria-label="关闭">×</button></form>
+      <h2>${escapeHtml(episode.display_label || [episode.type_label || "本篇", episode.label].join(" "))}</h2>
+      ${title ? `<p>${escapeHtml(title)}</p>` : ""}
+      ${episodeAnnotationMarkup(state.episodeRecordAnnotations?.[key] || [])}
+    </div>`;
+    dialog.addEventListener("close", () => dialog.remove(), { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+    return;
+  }
   if (action === "online_play" && state.progressAnime) return window.onlinePlayback?.openAnime(state.progressAnime, key);
-  if (action === "play") {
+  if (action === "cancel_download" && state.progressAnime) {
+    const anime = state.progressAnime;
+    const episodeKey = episodeStorageKey(key, anime);
+    try {
+      const { jobs = [] } = await api(`/api/offline/state?anime_id=${anime.id}`);
+      if (anime !== state.progressAnime) return;
+      const job = jobs.find(item => item.episode_key
+        && episodeStorageKey(item.episode_key, anime) === episodeKey
+        && ["queued", "downloading", "paused"].includes(item.status));
+      if (job) return removeJob(job.id);
+      toast("这集没有可取消的下载任务。", "error");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+    return;
+  }
+  if (action === "play" || action === "delete") {
+    const anime = state.progressAnime;
     // 必须先按当前番同步离线缓存再找文件：不 await 会读到上一部番的缓存，
     // 播错内容或误报「还没下载」。
     const file =
       typeof localFileForEpisode === "function" ? await localFileForEpisode(key) : null;
+    if (anime !== state.progressAnime) return;
+    if (file && action === "delete") return removeLocalFile(file.id);
     if (file && typeof playLocalFile === "function") return playLocalFile(file.id);
     toast("这一集还没下载，先用「找资源」下下来", "error");
     return;
@@ -830,11 +866,10 @@ async function runEpisodeGestureAction(action, key, button) {
   if (action === "download" || action === "redownload") {
     if (typeof openOffline === "function") return openOffline();
   }
-  // 单集详情、在文件夹中打开、删除等还没做成独立面板，统一带到离线面板，
-  // 在那里能看清删的是什么、也能二次确认，不会出现「点了没反应」。
-  if (typeof openOffline === "function") openOffline();
-  if (typeof switchOfflineTab === "function") switchOfflineTab("local");
-  toast(`${EG_ACTION_LABELS[action] || action}：请在离线面板里操作这一集`, "error");
+  if (action === "reveal_in_folder" && typeof openOffline === "function") {
+    openOffline();
+    switchOfflineTab("local");
+  }
 }
 
 async function createEpisodeQuickRecord(episode, action) {

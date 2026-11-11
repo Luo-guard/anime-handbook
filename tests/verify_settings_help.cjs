@@ -71,8 +71,8 @@ const harness = [
     await button.hover();
     await page.waitForTimeout(250);
     assert.equal(await popover.isVisible(), true);
-    assert.match(await popover.innerText(), /显示单集评价入口/);
-    assert.match(await popover.innerText(), /单集快捷菜单/);
+    assert.match(await popover.innerText(), /扇区入口/);
+    assert.match(await popover.innerText(), /关闭后隐藏对应入口/);
     await page.mouse.move(10, 10);
     await page.waitForTimeout(250);
     assert.equal(await popover.isVisible(), false, 'hover leaves closes the tooltip');
@@ -96,9 +96,9 @@ const harness = [
     await page.keyboard.press('Escape');
     await page.waitForTimeout(150);
     // 点旁边的开关仍然正常。
-    await row.locator('.switch').click();
+    await toggle.locator('+ .switch').click();
     assert.equal(await toggle.isChecked(), !before);
-    await row.locator('.switch').click();
+    await toggle.locator('+ .switch').click();
 
     // Esc 只收起说明，不关掉设置面板。
     await button.click();
@@ -117,7 +117,9 @@ const harness = [
 
     // 键盘聚焦也能看到说明。
     await page.keyboard.press('Escape');
-    await page.locator('.setting-row', { hasText: '显示人物分栏' }).locator('.setting-help').focus();
+    const characterHelp = page.locator('.setting-row', { hasText: '显示人物分栏' }).locator('.setting-help');
+    await characterHelp.scrollIntoViewIfNeeded();
+    await characterHelp.focus();
     await page.waitForTimeout(200);
     assert.equal(await popover.isVisible(), true, 'focus opens the tooltip');
 

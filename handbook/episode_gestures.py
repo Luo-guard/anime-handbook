@@ -30,6 +30,8 @@ for _prefix in MODIFIER_PREFIXES[1:]:
 
 MAX_GESTURES_PER_ACTION = 4
 SLOT_KEYS = ("top", "bottom", "top_right", "bottom_right", "top_left", "bottom_left")
+HIDEABLE_ACTIONS = {"play", "online_play", "download", "cancel_download", "delete",
+                    "open_detail", "reveal_in_folder", "redownload"}
 
 DEFAULT_SLOTS = {
     "top": "play",
@@ -54,6 +56,7 @@ def defaults() -> dict:
         "keep_menu_on_release": True,
         "slots": dict(DEFAULT_SLOTS),
         "bindings": dict(DEFAULT_BINDINGS),
+        "hidden_actions": [],
     }
 
 
@@ -68,6 +71,12 @@ def normalize(value) -> dict:
         raise ValueError("单集手势开关无效")
     result["enabled"] = enabled
     result["keep_menu_on_release"] = keep
+    hidden = value.get("hidden_actions", [])
+    if not isinstance(hidden, list) or any(
+        not isinstance(action, str) or action not in HIDEABLE_ACTIONS for action in hidden
+    ):
+        raise ValueError("扇区入口设置无效")
+    result["hidden_actions"] = sorted(set(hidden))
 
     slots = value.get("slots", DEFAULT_SLOTS)
     if not isinstance(slots, dict) or set(slots) - set(SLOT_KEYS):
@@ -96,7 +105,9 @@ def normalize(value) -> dict:
         if not isinstance(gesture, str) or not isinstance(action, str):
             raise ValueError("手势绑定格式错误")
         if action == "":
-            continue  # 空值表示该手势解绑
+            if gesture in DEFAULT_BINDINGS:
+                cleaned[gesture] = ""
+            continue
         if gesture == "Click":
             raise ValueError("左键单击固定用于记录已看，不能改绑")
         if gesture not in GESTURES:
@@ -113,7 +124,8 @@ def normalize(value) -> dict:
 
 def double_click_bound(value: dict) -> bool:
     """是否绑定了双击 —— 前端据此决定是否给单击加 250ms 判定延迟。"""
-    return any(gesture.endswith("DoubleClick") for gesture in (value or {}).get("bindings", {}))
+    return any(gesture.endswith("DoubleClick") and action
+               for gesture, action in (value or {}).get("bindings", {}).items())
 
 
 def action_for_gesture(value: dict, gesture: str) -> str:

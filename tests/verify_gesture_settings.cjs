@@ -4,8 +4,8 @@ const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 
 const html = fs.readFileSync('static/index.html', 'utf8');
-const start = html.indexOf('<h3 class="settings-subsection-title">单集格子手势</h3>');
-const end = html.indexOf('<div class="settings-section-title" data-settings-section="data">数据来源</div>', start);
+const start = html.indexOf('<h3 class="settings-subsection-title">单集扇区与手势</h3>');
+const end = html.indexOf('<h3 class="settings-subsection-title">外部查询链接</h3>', start);
 assert(start > 0 && end > start, 'settings block exists');
 const block = html.slice(start, end);
 
@@ -40,6 +40,9 @@ const state={settings:{},pendingEpisodes:new Set()};
     assert.equal(value.slots.top, '', 'slot can be emptied');
     assert.equal(value.bindings.MiddleClick, 'play', 'gesture can be bound');
     assert.equal(value.keep_menu_on_release, true);
+    const onlineToggle = page.locator('[data-eg-entry="online_play"]');
+    await onlineToggle.locator('+ .switch').click();
+    assert.deepEqual((await read()).hidden_actions, ['online_play']);
 
     // 清空某个手势要显式传 ""：后端把「没提到的键」当默认值保留（审计 N18），
     // 前端以前跳过空值，等于用户解绑后默认绑定会在保存时悄悄长回来。
@@ -65,6 +68,7 @@ const state={settings:{},pendingEpisodes:new Set()};
 
     // 恢复默认
     await page.locator('#resetEpisodeGestures').click();
+    assert.equal(await onlineToggle.isChecked(), true);
     assert.equal(await page.locator('[data-eg-slot="top"]').inputValue(), 'play');
     assert.equal(await page.locator('[data-eg-gesture="RightClick"]').inputValue(), 'open_menu');
     assert.equal(await page.locator('#episodeGestureStatus').textContent(), '');

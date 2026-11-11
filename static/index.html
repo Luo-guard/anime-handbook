@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261111-playback-history" />
+  <link rel="stylesheet" href="/styles.css?v=20261111-episode-menu" />
   </head>
   <body>
     <div class="app-shell">
@@ -1012,37 +1012,29 @@
               <span class="switch"></span>
             </span>
           </label>
-          <h3 class="settings-subsection-title">单集快捷操作</h3>
-          <label class="setting-row">
-            <span>
-              <strong>显示单集评价入口</strong>
-              <small>在番剧详情的单集快捷菜单里增加「评价」：长按（或右键）某一集就能写一条单集评价，并写入看番记录。<br>关掉只会隐藏这个入口，已经写下的评价、记录主题与筛选都不会受影响。</small>
-            </span>
-            <span class="switch-row compact">
-              <input type="checkbox" id="showEpisodeReviewRecordInput" />
-              <span class="switch"></span>
-            </span>
-          </label>
-          <label class="setting-row">
-            <span>
-              <strong>显示单集评分入口</strong>
-              <small>给单集单独打分用的快捷入口，和整部番的 Bangumi 评分互不影响。<br>关闭后入口消失，已经记下的单集评分仍保留在看番记录里。</small>
-            </span>
-            <span class="switch-row compact">
-              <input type="checkbox" id="showEpisodeRatingRecordInput" />
-              <span class="switch"></span>
-            </span>
-          </label>
-          <label class="setting-row">
-            <span>
-              <strong>显示 OP/ED 记录入口</strong>
-              <small>在单集快捷菜单里增加 OP、ED 两个按钮，点一下就能记一条片头／片尾记录（内容默认填 OP 或 ED，可以自己改）。<br>关闭只收起入口，不会删除已经记录的内容。</small>
-            </span>
-            <span class="switch-row compact">
-              <input type="checkbox" id="showOpedRecordInput" />
-              <span class="switch"></span>
-            </span>
-          </label>
+          <h3 class="settings-subsection-title">单集扇区与手势</h3>
+          <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击切换已看。右键和长按等手势可在下方设置。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
+          <label class="setting-row"><span><strong>长按松手后保留扇区</strong><small>长按后滑向动作并松手可直接执行。开启后，原地松手也可继续点选。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
+          <div class="setting-row stacked">
+            <span><strong>动作布局</strong><small>选择「留空」可腾出一格。在线播放会占用空出的本地播放位，或显示在右侧。</small></span>
+            <div id="episodeGestureSlots" class="eg-slot-grid"></div>
+          </div>
+          <div class="setting-row stacked">
+            <span><strong>扇区入口</strong><small>关闭后隐藏对应入口。已保存的记录仍可在看番记录中查看。</small></span>
+            <div class="eg-entry-grid">
+              <label class="switch-row compact"><input type="checkbox" id="showEpisodeReviewRecordInput" /><span class="switch"></span><span>显示单集评价入口</span></label>
+              <label class="switch-row compact"><input type="checkbox" id="showEpisodeRatingRecordInput" /><span class="switch"></span><span>显示单集评分入口</span></label>
+              <label class="switch-row compact"><input type="checkbox" id="showOpedRecordInput" /><span class="switch"></span><span>显示 OP/ED 记录入口</span></label>
+            </div>
+            <div id="episodeGestureEntries" class="eg-entry-grid"></div>
+          </div>
+          <div class="setting-row stacked">
+            <span><strong>手势绑定</strong><small>同一个动作最多绑定 4 个手势。</small></span>
+            <div id="episodeGestureBindings" class="eg-grid"></div>
+            <p class="eg-warning" id="episodeGestureDoubleWarning" hidden>绑定左键双击后，左键单击会延迟约 0.25 秒。</p>
+            <p id="episodeGestureStatus" role="status"></p>
+            <button type="button" id="resetEpisodeGestures" class="secondary-button compact-button">恢复默认布局和手势</button>
+          </div>
           <h3 class="settings-subsection-title">外部查询链接</h3>
           <label class="setting-row">
             <span>
@@ -1209,11 +1201,6 @@
           <div class="settings-section-title" data-settings-section="keyboard">快捷键</div>
           <label class="setting-row"><span><strong>启用快捷键</strong><small>在手账页面生效，输入时暂停。快速写记录也可在内置播放器里使用。</small></span><span class="switch-row compact"><input type="checkbox" id="keyboardEnabledInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键或鼠标前进／后退侧键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，到达第一个或最后一个界面后不再移动。侧键一旦绑定，就不会再触发浏览器自身的前进／后退。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
-          <h3 class="settings-subsection-title">单集格子手势</h3>
-          <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击固定用于记录已看，不参与绑定；右键、长按、修饰键组合、双击和中键都可以自定义。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
-          <label class="setting-row"><span><strong>松手后保留菜单</strong><small>开着：长按或右键弹出扇区后，滑过去松手直接执行，不滑就留着再用左键点选。关掉：不滑松手就直接收起菜单，变成纯滑动操作。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
-          <div class="setting-row stacked"><span><strong>扇区六格</strong><small>每个方位放哪个动作，选「（空）」就是把这一格去掉。默认：上播放、下下载、右上评分、右下评价、左上 ED、左下 OP。</small></span><div id="episodeGestureSlots" class="eg-grid"></div></div>
-          <div class="setting-row stacked"><span><strong>手势与动作</strong><small>一个手势只能绑一个动作，同一个动作最多绑 4 个手势。退格等操作习惯与上面的快捷键不同：这里直接下拉选择。</small></span><div id="episodeGestureBindings" class="eg-grid"></div><p class="eg-warning" id="episodeGestureDoubleWarning" hidden>已绑定双击：单击格子记录已看会延迟约 0.25 秒才响应（这是识别双击的必要代价），所有番剧的格子都会受影响；取消双击绑定后立即恢复。</p><p id="episodeGestureStatus" role="status"></p><button type="button" id="resetEpisodeGestures" class="secondary-button compact-button">恢复默认手势</button></div>
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
           <h3 class="settings-subsection-title">自动追番</h3>
           <label class="setting-row">
@@ -1596,8 +1583,8 @@
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/details.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261111-episode-menu" defer></script>
+    <script src="/modules/details.js?v=20261111-episode-menu" defer></script>
     <script src="/modules/records.js?v=20261111-note-image-label" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
