@@ -99,6 +99,9 @@ _ARCHIVING: set[int] = set()
 _ARCHIVE_LOCK = threading.Lock()
 _AUTO_CHECK_LOCK = threading.Lock()
 _AUTO_CHECK_RUNNING = False
+# Limit failed feed retries as well as successful subscription checks.
+AUTO_CHECK_RETRY_SECONDS = 60.0
+_AUTO_CHECK_NEXT: dict[str, float] = {}
 
 
 def _release_episode(item: dict[str, Any]) -> int:
@@ -750,13 +753,23 @@ class OfflineService:
         自动追番关着的时候什么都不做；同一条订阅 6 小时内只查一次，所以即使
         前端每隔几秒轮询一次状态，也不会真的反复联网。
         """
-        if not self.config().get("auto_follow"):
+        if os.environ.get("ANIME_HANDBOOK_SANDBOX") == "1" or not self.config().get("auto_follow"):
             return
+        subscriptions = self.store.subscriptions()
+        if not any(
+            int(sub.get("enabled") or 0)
+            and (not sub.get("last_checked") or _seconds_stale(sub["last_checked"]) >= CHECK_INTERVAL_SECONDS)
+            for sub in subscriptions
+        ):
+            return
+        owner = str(self.db.path.resolve())
         global _AUTO_CHECK_RUNNING
         with _AUTO_CHECK_LOCK:
-            if _AUTO_CHECK_RUNNING:
+            now = time.monotonic()
+            if _AUTO_CHECK_RUNNING or now < _AUTO_CHECK_NEXT.get(owner, 0):
                 return
             _AUTO_CHECK_RUNNING = True
+            _AUTO_CHECK_NEXT[owner] = now + AUTO_CHECK_RETRY_SECONDS
 
         def worker() -> None:
             global _AUTO_CHECK_RUNNING
@@ -768,7 +781,12 @@ class OfflineService:
                 with _AUTO_CHECK_LOCK:
                     _AUTO_CHECK_RUNNING = False
 
-        threading.Thread(target=worker, name="handbook-offline-check", daemon=True).start()
+        try:
+            threading.Thread(target=worker, name="handbook-offline-check", daemon=True).start()
+        except Exception:
+            with _AUTO_CHECK_LOCK:
+                _AUTO_CHECK_RUNNING = False
+            raise
 
     # ---- 删除 ---------------------------------------------------------
 
@@ -1302,7 +1320,7 @@ def start_background_worker(
     *,
     interval: float = WORKER_INTERVAL_SECONDS,
 ) -> threading.Event:
-    """启动全局下载心跳：不打开页面也持续推进下载进度、归档与自动重试。
+    """启动全局下载心跳：推进订阅检查、下载进度、归档与自动重试。
 
     ``database_provider`` 在每次心跳时现取当前库——切换本地账号后，
     心跳自动跟着新账号走，不用重启。重复调用只启动一次；返回停止信号，
@@ -1317,6 +1335,12 @@ def start_background_worker(
 
     def loop() -> None:
         while not stop_event.wait(interval):
+            try:
+                service = OfflineService(database_provider())
+                service.maybe_auto_check()
+            except Exception:
+                # A feed/configuration failure must not stop existing downloads.
+                pass
             try:
                 OfflineService(database_provider()).sync_all()
             except Exception:  # noqa: BLE001 - 心跳线程不允许带异常退出
