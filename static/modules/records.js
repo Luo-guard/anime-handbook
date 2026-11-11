@@ -335,7 +335,7 @@ async function renderTimeline(append = false) {
         const content = button.dataset.eventRaw || recordTextFormat({ themes: themeNames, anime: button.dataset.eventTitle || "", episodes: button.dataset.eventEpisodes || "", content: button.dataset.eventContent || "" });
         const editor = document.createElement("form");
         editor.className = "inline-event-editor";
-        editor.innerHTML = `<textarea rows="3" required></textarea><div><label class="secondary-button compact-button note-image-button">批量插入图片<input type="file" accept="image/png,image/jpeg,image/webp" multiple data-edit-image-input /></label><button type="button" class="text-button" data-cancel-edit>取消</button><button type="submit" class="primary-button compact-button">保存修改</button></div>`;
+        editor.innerHTML = `<textarea rows="3" required></textarea><div><label class="secondary-button compact-button note-image-button">插入图片<input type="file" accept="image/png,image/jpeg,image/webp" multiple data-edit-image-input /></label><button type="button" class="text-button" data-cancel-edit>取消</button><button type="submit" class="primary-button compact-button">保存修改</button></div>`;
         $("textarea", editor).value = content;
         $(".event-content", card).append(editor);
         const textarea = $("textarea", editor);
