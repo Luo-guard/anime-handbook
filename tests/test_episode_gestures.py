@@ -83,8 +83,14 @@ class GestureNormalizeTests(unittest.TestCase):
 
     def test_hidden_actions_are_validated_and_preserved(self):
         value = eg.normalize({"hidden_actions": ["play", "online_play", "play"]})
-        self.assertEqual(value["hidden_actions"], ["online_play", "play"])
+        self.assertEqual(value["hidden_actions"], ["play"])
+        self.assertEqual(value["playback_source"], "auto")
         self.assertEqual(eg.normalize(value), value)
+        self.assertEqual(eg.normalize({"hidden_actions": ["online_play"]})["playback_source"], "local")
+        self.assertEqual(eg.normalize({"hidden_actions": ["play"]})["playback_source"], "online")
+        self.assertEqual(eg.normalize({"playback_source": "online"})["playback_source"], "online")
+        with self.assertRaises(ValueError):
+            eg.normalize({"playback_source": "unknown"})
         with self.assertRaises(ValueError):
             eg.normalize({"hidden_actions": ["unknown"]})
 

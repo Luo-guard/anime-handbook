@@ -808,6 +808,29 @@ function renderEpisodeGrid() {
 
 }
 
+async function playDetailEpisode(key = "", button = null) {
+  const anime = state.progressAnime;
+  if (!anime || button?.disabled) return;
+  const source = episodeGestureConfig().playbackSource;
+  if (button) button.disabled = true;
+  try {
+    const episodeKey = key || `0:${mainPlaybackEpisode(anime).number}`;
+    if (source !== "online") {
+      const file = await localFileForEpisode(episodeKey);
+      if (anime !== state.progressAnime || (button && !$("#progressModal").open)) return;
+      if (file) return playLocalFile(file.id);
+    }
+    if (source !== "local" && !window.handbookOnline && window.onlinePlayback) {
+      return await window.onlinePlayback.openAnime(anime, episodeKey);
+    }
+    toast(source === "online" ? "当前版本不支持在线播放。" : "这一集还没下载。", "error");
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function runEpisodeGestureAction(action, key, button) {
   const episodes = Array.isArray(state.progressAnime?.episodes) ? state.progressAnime.episodes : [];
   const episode = episodes.find((item) => String(item.key) === String(key)) || {
@@ -834,7 +857,7 @@ async function runEpisodeGestureAction(action, key, button) {
     dialog.showModal();
     return;
   }
-  if (action === "online_play" && state.progressAnime) return window.onlinePlayback?.openAnime(state.progressAnime, key);
+  if (action === "play") return playDetailEpisode(key);
   if (action === "cancel_download" && state.progressAnime) {
     const anime = state.progressAnime;
     const episodeKey = episodeStorageKey(key, anime);
@@ -851,15 +874,14 @@ async function runEpisodeGestureAction(action, key, button) {
     }
     return;
   }
-  if (action === "play" || action === "delete") {
+  if (action === "delete") {
     const anime = state.progressAnime;
     // 必须先按当前番同步离线缓存再找文件：不 await 会读到上一部番的缓存，
     // 播错内容或误报「还没下载」。
     const file =
       typeof localFileForEpisode === "function" ? await localFileForEpisode(key) : null;
     if (anime !== state.progressAnime) return;
-    if (file && action === "delete") return removeLocalFile(file.id);
-    if (file && typeof playLocalFile === "function") return playLocalFile(file.id);
+    if (file) return removeLocalFile(file.id);
     toast("这一集还没下载，先用「找资源」下下来", "error");
     return;
   }

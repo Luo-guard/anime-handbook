@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261111-episode-menu" />
+  <link rel="stylesheet" href="/styles.css?v=20261112-playback-source" />
   </head>
   <body>
     <div class="app-shell">
@@ -685,7 +685,7 @@
               <a class="anime-rating hidden" id="animeRating"></a>
               <div class="personal-rating hidden" id="personalRating"></div>
               <div class="progress-actions">
-                <button type="button" class="primary-button hidden" id="detailOnlinePlay">在线播放</button>
+                <button type="button" class="primary-button hidden" id="detailOnlinePlay">播放</button>
                 <div class="detail-actions">
                   <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
                 </div>
@@ -1013,10 +1013,18 @@
             </span>
           </label>
           <h3 class="settings-subsection-title">单集扇区与手势</h3>
+          <label class="setting-row">
+            <span><strong>播放来源</strong><small>适用于详情页和单集扇区的播放按钮。</small></span>
+            <select id="episodePlaybackSourceInput">
+              <option value="auto">优先本地，无缓存时在线播放</option>
+              <option value="local">仅本地，无缓存时提醒</option>
+              <option value="online">仅在线播放</option>
+            </select>
+          </label>
           <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击切换已看。右键和长按等手势可在下方设置。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
           <label class="setting-row"><span><strong>长按松手后保留扇区</strong><small>长按后滑向动作并松手可直接执行。开启后，原地松手也可继续点选。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked">
-            <span><strong>动作布局</strong><small>选择「留空」可腾出一格。在线播放会占用空出的本地播放位，或显示在右侧。</small></span>
+            <span><strong>动作布局</strong><small>选择「留空」可腾出一格。</small></span>
             <div id="episodeGestureSlots" class="eg-slot-grid"></div>
           </div>
           <div class="setting-row stacked">
@@ -1583,8 +1591,8 @@
     <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261111-episode-menu" defer></script>
-    <script src="/modules/details.js?v=20261111-episode-menu" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261112-playback-source" defer></script>
+    <script src="/modules/details.js?v=20261112-playback-source" defer></script>
     <script src="/modules/records.js?v=20261111-note-image-label" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
@@ -1602,7 +1610,7 @@
     <script src="/modules/jump-history.js?v=20261111-playback-history" defer></script>
     <script src="/modules/danmaku.js?v=20261111-online-player" defer></script>
     <script src="/modules/offline.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/online-playback.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/online-playback.js?v=20261112-playback-source" defer></script>
     <script src="/modules/library-view.js?v=20261111-playback-history" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

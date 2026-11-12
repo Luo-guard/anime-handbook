@@ -32,6 +32,7 @@ MAX_GESTURES_PER_ACTION = 4
 SLOT_KEYS = ("top", "bottom", "top_right", "bottom_right", "top_left", "bottom_left")
 HIDEABLE_ACTIONS = {"play", "online_play", "download", "cancel_download", "delete",
                     "open_detail", "reveal_in_folder", "redownload"}
+PLAYBACK_SOURCES = {"auto", "local", "online"}
 
 DEFAULT_SLOTS = {
     "top": "play",
@@ -57,6 +58,7 @@ def defaults() -> dict:
         "slots": dict(DEFAULT_SLOTS),
         "bindings": dict(DEFAULT_BINDINGS),
         "hidden_actions": [],
+        "playback_source": "auto",
     }
 
 
@@ -76,7 +78,19 @@ def normalize(value) -> dict:
         not isinstance(action, str) or action not in HIDEABLE_ACTIONS for action in hidden
     ):
         raise ValueError("扇区入口设置无效")
-    result["hidden_actions"] = sorted(set(hidden))
+    source = value.get("playback_source")
+    if "playback_source" not in value:
+        if "online_play" in hidden and "play" not in hidden:
+            source = "local"
+        elif "play" in hidden and "online_play" not in hidden:
+            source = "online"
+            hidden = [action for action in hidden if action != "play"]
+        else:
+            source = "auto"
+    if not isinstance(source, str) or source not in PLAYBACK_SOURCES:
+        raise ValueError("播放来源设置无效")
+    result["playback_source"] = source
+    result["hidden_actions"] = sorted(set(hidden) - {"online_play"})
 
     slots = value.get("slots", DEFAULT_SLOTS)
     if not isinstance(slots, dict) or set(slots) - set(SLOT_KEYS):

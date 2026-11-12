@@ -40,9 +40,9 @@ const state={settings:{},pendingEpisodes:new Set()};
     assert.equal(value.slots.top, '', 'slot can be emptied');
     assert.equal(value.bindings.MiddleClick, 'play', 'gesture can be bound');
     assert.equal(value.keep_menu_on_release, true);
-    const onlineToggle = page.locator('[data-eg-entry="online_play"]');
-    await onlineToggle.locator('+ .switch').click();
-    assert.deepEqual((await read()).hidden_actions, ['online_play']);
+    const playbackSource = page.locator('#episodePlaybackSourceInput');
+    await playbackSource.selectOption('online');
+    assert.equal((await read()).playback_source, 'online');
 
     // 清空某个手势要显式传 ""：后端把「没提到的键」当默认值保留（审计 N18），
     // 前端以前跳过空值，等于用户解绑后默认绑定会在保存时悄悄长回来。
@@ -68,7 +68,7 @@ const state={settings:{},pendingEpisodes:new Set()};
 
     // 恢复默认
     await page.locator('#resetEpisodeGestures').click();
-    assert.equal(await onlineToggle.isChecked(), true);
+    assert.equal(await playbackSource.inputValue(), 'auto');
     assert.equal(await page.locator('[data-eg-slot="top"]').inputValue(), 'play');
     assert.equal(await page.locator('[data-eg-gesture="RightClick"]').inputValue(), 'open_menu');
     assert.equal(await page.locator('#episodeGestureStatus').textContent(), '');

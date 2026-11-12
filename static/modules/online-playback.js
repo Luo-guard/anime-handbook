@@ -258,7 +258,7 @@ window.onlinePlayback = (() => {
     if (window.handbookOnline) return;
     $("#detailOnlinePlay")?.classList.remove("hidden");
     $("#detailOnlinePlay")?.addEventListener("click", event => {
-      if (state.progressAnime) openAnime(state.progressAnime, "", event.currentTarget);
+      playDetailEpisode("", event.currentTarget);
     });
     $("#closeOnlinePlaybackPicker")?.addEventListener("click", () => $("#onlinePlaybackPicker").close());
     $("#onlinePlaybackForm").addEventListener("submit", event => {

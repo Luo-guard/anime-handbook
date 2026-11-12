@@ -5,7 +5,7 @@
 // 才走绑定表。A 版（按住滑到扇区松手）与 B 版（右键弹出后再点选）共用同一套
 // 状态机，区别只在松手时有没有命中扇区、以及 keepMenu 开关。
 const EG_ACTION_LABELS = {
-  open_menu: "打开扇区", play: "本地播放", online_play: "在线播放", download: "下载", cancel_download: "取消下载",
+  open_menu: "打开扇区", play: "播放", download: "下载", cancel_download: "取消下载",
   delete: "删除本地文件", score: "评分", review: "评价", op: "OP", ed: "ED",
   open_detail: "单集详情", reveal_in_folder: "查看本地文件", redownload: "查找其他片源",
 };
@@ -16,9 +16,8 @@ const EG_SLOT_LABELS = {
 };
 const EG_COORDS = {
   top: [0, -94], bottom: [0, 94],
-  top_right: [98, -54], bottom_right: [98, 54],
-  top_left: [-98, -54], bottom_left: [-98, 54],
-  online: [98, 0],
+  top_right: [82, -54], bottom_right: [82, 54],
+  top_left: [-82, -54], bottom_left: [-82, 54],
 };
 const EG_RECORD_SETTINGS = {
   review: "show_episode_review_record", score: "show_episode_rating_record",
@@ -29,6 +28,7 @@ const EG_ENTRY_ACTIONS = Object.keys(EG_ACTION_LABELS)
 const EG_DEFAULT = {
   enabled: true,
   keep_menu_on_release: true,
+  playbackSource: "auto",
   slots: {
     top: "play", bottom: "download", top_right: "score",
     bottom_right: "review", top_left: "ed", bottom_left: "op",
@@ -43,12 +43,17 @@ const EG_DOUBLE_DELAY = 250;
 
 function episodeGestureConfig() {
   const raw = state.settings?.episode_gestures || {};
+  const hiddenActions = new Set(raw.hidden_actions || []);
+  const onlineHidden = hiddenActions.delete("online_play");
+  const localHidden = hiddenActions.has("play");
+  if (!raw.playback_source && localHidden && !onlineHidden) hiddenActions.delete("play");
   return {
     enabled: raw.enabled !== false,
     keepMenu: raw.keep_menu_on_release !== false,
     slots: { ...EG_DEFAULT.slots, ...(raw.slots || {}) },
     bindings: { ...(raw.bindings || EG_DEFAULT.bindings) },
-    hiddenActions: new Set(raw.hidden_actions || []),
+    playbackSource: raw.playback_source || (localHidden === onlineHidden ? "auto" : localHidden ? "online" : "local"),
+    hiddenActions,
   };
 }
 
@@ -79,7 +84,11 @@ let egRuntime = null;
 function egCloseMenu() {
   const menu = egRuntime?.menu;
   if (!menu) return;
-  menu.remove();
+  menu.removeAttribute("id");
+  menu.inert = true;
+  menu.classList.remove("visible");
+  menu.classList.add("closing");
+  setTimeout(() => menu.remove(), 200);
   egRuntime.menu = null;
   egRuntime.menuButton = null;
   egRuntime.dragged = false;
@@ -88,24 +97,19 @@ function egCloseMenu() {
 function egRenderMenu(button, config, onAction) {
   egCloseMenu();
   const slots = Object.fromEntries(EG_SLOTS.map(slot => [slot, config.slots[slot]]));
-  const localSlot = EG_SLOTS.find(slot => slots[slot] === "play");
   for (const [slot, action] of Object.entries(slots)) {
     if (!egRecordEnabled(action) || config.hiddenActions.has(action)
-      || (["play", "delete"].includes(action) && !button.classList.contains("downloaded"))) delete slots[slot];
-  }
-  if (!config.hiddenActions.has("online_play") && !window.handbookOnline
-    && window.onlinePlayback && button.dataset.episodeType === "0") {
-    slots[localSlot && !slots[localSlot] ? localSlot : "online"] = "online_play";
+      || (action === "delete" && !button.classList.contains("downloaded"))) delete slots[slot];
   }
   const entries = Object.entries(slots).filter(([, action]) => action);
   if (!entries.length) return;
   const rect = button.getBoundingClientRect();
-  const scale = Math.min(1, (window.innerWidth - 110) / 196, (window.innerHeight - 56) / 188);
+  const scale = Math.min(1, (window.innerWidth - 56) / 164, (window.innerHeight - 56) / 188);
   const fit = (axis, center, size, pad) => {
     const offsets = entries.map(([slot]) => EG_COORDS[slot][axis] * scale);
     return Math.max(pad - Math.min(...offsets), Math.min(center, size - pad - Math.max(...offsets)));
   };
-  const originX = fit(0, rect.left + rect.width / 2, window.innerWidth, 55);
+  const originX = fit(0, rect.left + rect.width / 2, window.innerWidth, 28);
   const originY = fit(1, rect.top + rect.height / 2, window.innerHeight, 28);
   const menu = document.createElement("div");
   menu.id = "episodeQuickMenu";
@@ -114,13 +118,16 @@ function egRenderMenu(button, config, onAction) {
   menu.setAttribute("aria-label", "单集快捷操作");
   menu.style.setProperty("--quick-x", `${originX}px`);
   menu.style.setProperty("--quick-y", `${originY}px`);
-  menu.innerHTML = entries.map(([slot, action]) => {
+  menu.innerHTML = '<span class="episode-quick-halo" aria-hidden="true"></span>'
+    + '<span class="episode-quick-trail" aria-hidden="true"></span>'
+    + '<span class="episode-quick-cursor" aria-hidden="true"></span>'
+    + entries.map(([slot, action]) => {
     const [x, y] = EG_COORDS[slot];
     return `<button type="button" class="episode-quick-action" style="left:${x * scale}px;top:${y * scale}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action])}</button>`;
   }).join("");
   menu.addEventListener("click", (event) => {
     const item = event.target.closest("[data-episode-action]");
-    if (!item || !egRuntime) return;
+    if (!item || egRuntime?.menu !== menu) return;
     event.preventDefault();
     event.stopPropagation();
     egCloseMenu();
@@ -130,12 +137,24 @@ function egRenderMenu(button, config, onAction) {
   $("#progressModal").append(menu);
   egRuntime.menu = menu;
   egRuntime.menuButton = button;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (egRuntime.menu === menu) menu.classList.add("visible");
+  }));
   return menu;
 }
 
 function egUpdateTarget(event) {
   const menu = egRuntime?.menu;
   if (!menu) return;
+  const dx = event.clientX - parseFloat(menu.style.getPropertyValue("--quick-x"));
+  const dy = event.clientY - parseFloat(menu.style.getPropertyValue("--quick-y"));
+  const length = Math.hypot(dx, dy);
+  const distance = Math.min(length, 112);
+  menu.style.setProperty("--drag-distance", `${distance}px`);
+  menu.style.setProperty("--drag-angle", `${Math.atan2(dy, dx)}rad`);
+  menu.style.setProperty("--drag-x", `${length ? dx * distance / length : 0}px`);
+  menu.style.setProperty("--drag-y", `${length ? dy * distance / length : 0}px`);
+  menu.classList.toggle("dragging", Boolean(egRuntime.button && egRuntime.dragged));
   menu.querySelectorAll("[data-episode-action]").forEach((item) => {
     const rect = item.getBoundingClientRect();
     item.classList.toggle("active", event.clientX >= rect.left && event.clientX <= rect.right
@@ -234,6 +253,7 @@ function installEpisodeGestures(root, options) {
       }
       // keepMenu=true 且没命中：菜单留着，等用户再点某一格。
       egRuntime.button = null;
+      egRuntime.menu?.classList.remove("dragging");
       return;
     }
     if (egRuntime.longFired || egRuntime.dragged || !button.isConnected) {
@@ -318,7 +338,7 @@ const EG_UI_GESTURES = [
 
 function egActionOptions(selected, allowMenu = true) {
   return Object.entries(EG_ACTION_LABELS)
-    .filter(([id]) => id !== "online_play" && (allowMenu || id !== "open_menu"))
+    .filter(([id]) => allowMenu || id !== "open_menu")
     .map(([id, label]) => `<option value="${id}"${id === selected ? " selected" : ""}>${escapeHtml(label)}</option>`)
     .join("");
 }
@@ -343,6 +363,7 @@ function readEpisodeGestureSettings() {
   return {
     enabled: $("#episodeGestureEnabledInput").checked,
     keep_menu_on_release: $("#episodeGestureKeepMenuInput").checked,
+    playback_source: $("#episodePlaybackSourceInput").value,
     slots,
     bindings,
     hidden_actions: $$("[data-eg-entry]").filter(input => !input.checked).map(input => input.dataset.egEntry),
@@ -354,6 +375,7 @@ function renderEpisodeGestureSettings(config = episodeGestureConfig()) {
   if (!enabled) return;
   enabled.checked = config.enabled;
   $("#episodeGestureKeepMenuInput").checked = config.keepMenu;
+  $("#episodePlaybackSourceInput").value = config.playbackSource;
   $("#episodeGestureSlots").innerHTML = EG_SLOTS.map((slot) => `
     <label class="eg-slot eg-slot-${slot}"><span>${escapeHtml(EG_SLOT_LABELS[slot])}</span>
       <select data-eg-slot="${slot}" aria-label="${escapeHtml(EG_SLOT_LABELS[slot])}的动作">

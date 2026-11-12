@@ -94,6 +94,25 @@ const harness = [
     assert.deepEqual(s4.played, []);
     assert.deepEqual(s4.calls, [], 'no request without an anime id');
 
+    const routing = await page.evaluate(async () => {
+      const online = [];
+      window.onlinePlayback = { openAnime: (anime, key) => online.push([anime.id, key]) };
+      state.progressAnime = { id: 3, display_name: '当前番剧' };
+      window.played.length = 0;
+      window.apiCalls.length = 0;
+      await playDetailEpisode('0:5');
+      await playDetailEpisode('0:6');
+      state.settings.episode_gestures = { playback_source: 'local' };
+      await playDetailEpisode('0:6');
+      const localChecks = window.apiCalls.length;
+      state.settings.episode_gestures.playback_source = 'online';
+      await playDetailEpisode('0:5');
+      return { online, played: window.played, localChecks, checksAfterOnline: window.apiCalls.length };
+    });
+    assert.deepEqual(routing, {
+      online: [[3, '0:6'], [3, '0:5']], played: [333], localChecks: 3, checksAfterOnline: 3,
+    });
+
     assert.deepEqual(errors, [], 'no page errors');
     await browser.close();
     console.log('Episode play gesture: resyncs offline cache identity, awaits a per-anime refresh, never plays another anime file with the same episode key, and degrades to a toast when there is no file.');

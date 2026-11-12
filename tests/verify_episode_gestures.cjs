@@ -141,18 +141,17 @@ window.calls=[];
 
     await page.evaluate(() => { window.onlinePlayback = {}; });
     await cell.click({ button: 'right' });
-    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="play"]').textContent(), '本地播放');
-    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="online_play"]').textContent(), '在线播放');
+    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="play"]').textContent(), '播放');
+    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action$="play"]').count(), 1);
     await page.keyboard.press('Escape');
     await page.locator('#episodeQuickMenu').waitFor({ state: 'detached' });
     await page.locator('[data-episode-key="0:2"]').click({ button: 'right' });
-    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="play"]').count(), 0);
-    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="online_play"]').count(), 1);
+    assert.equal(await page.locator('#episodeQuickMenu [data-episode-action="play"]').count(), 1);
 
     await page.evaluate(() => Object.assign(state.settings, {
       show_episode_review_record: false, show_episode_rating_record: false, show_oped_record: false,
     }));
-    await setConfig({ hidden_actions: ['download', 'online_play'] });
+    await setConfig({ hidden_actions: ['download'] });
     await page.setViewportSize({ width: 390, height: 640 });
     await cell.click({ button: 'right' });
     assert.deepEqual(await page.locator('#episodeQuickMenu button').evaluateAll(nodes =>
