@@ -892,7 +892,10 @@ function pcSavePrefs(patch) {
 function pcApplySkipUI() {
   const skip = pcLoadPrefs().skip;
   const btn = $("#pcSkipForward");
-  if (btn) btn.dataset.tip = `快进${skip}秒，长按修改时间`;
+  if (btn) {
+    btn.title = `快进 ${skip} 秒（长按修改秒数）`;
+    btn.setAttribute("aria-label", btn.title);
+  }
   const glyph = $("#pcSkipGlyphText");
   if (glyph) glyph.textContent = String(skip);
 }

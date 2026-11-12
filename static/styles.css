@@ -4837,20 +4837,6 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   background: linear-gradient(rgba(0, 0, 0, .55), transparent);
   opacity: 1; transition: opacity .25s ease;
 }
-/* 顶栏快进按钮（Kazumi 式）：悬停白色气泡提示，文案带当前秒数 */
-.pc-skip-btn { position: relative; }
-.pc-skip-btn::after {
-  content: attr(data-tip);
-  position: absolute; top: calc(100% + 2px); right: -4px;
-  padding: 5px 12px; border-radius: 8px;
-  background: rgba(250, 252, 249, .97); color: #17251d;
-  font-size: 12px; font-weight: 500; white-space: nowrap;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
-  opacity: 0; transform: translateY(-3px);
-  transition: opacity .15s ease, transform .15s ease;
-  pointer-events: none; z-index: 9;
-}
-.pc-skip-btn:hover::after, .pc-skip-btn:focus-visible::after { opacity: 1; transform: none; }
 .pc-skip-modal .modal-frame { width: min(360px, 92vw); }
 .pc-skip-input {
   width: 100%; box-sizing: border-box; height: 38px; margin-top: 4px;
