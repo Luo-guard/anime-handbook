@@ -1432,10 +1432,6 @@ function pcInit() {
     }
     $("#pcSkipModal")?.close();
   });
-  $("#pcSendFocus")?.addEventListener("click", () => {
-    pcWake();
-    $("#dmSendInput")?.focus();
-  });
   $("#dmSendButton")?.addEventListener("click", pcSendDanmaku);
   $("#dmSendInput")?.addEventListener("keydown", (event) => {
     event.stopPropagation();
