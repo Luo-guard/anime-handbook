@@ -2152,6 +2152,16 @@ input[type="number"] {
   pointer-events: auto;
   transform: translate(-50%, -50%) scale(1);
 }
+.episode-quick-close {
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1;
+}
 .episode-quick-menu.visible .episode-quick-action[data-slot="top_right"] { transition-delay: 20ms; }
 .episode-quick-menu.visible .episode-quick-action[data-slot="bottom_right"] { transition-delay: 40ms; }
 .episode-quick-menu.visible .episode-quick-action[data-slot="bottom"] { transition-delay: 60ms; }

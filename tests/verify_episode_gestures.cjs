@@ -49,6 +49,11 @@ window.calls=[];
       bottom_right: 'review', top_left: 'ed', bottom_left: 'op',
     }, 'default slot layout');
     assert.deepEqual(await calls(), [], 'opening the menu does not run an action');
+    await page.getByRole('button', { name: '关闭单集扇区' }).click();
+    await page.locator('#episodeQuickMenu').waitFor({ state: 'detached' });
+    assert.deepEqual(await calls(), [], 'closing the menu does not change watch progress');
+    assert.ok(await cell.evaluate(node => document.activeElement === node), 'focus returns to the episode');
+    await cell.click({ button: 'right' });
 
     // 3) B 版：弹出后再点某一格
     await page.locator('#episodeQuickMenu [data-slot="top"]').click();
@@ -154,9 +159,9 @@ window.calls=[];
     await setConfig({ hidden_actions: ['download'] });
     await page.setViewportSize({ width: 390, height: 640 });
     await cell.click({ button: 'right' });
-    assert.deepEqual(await page.locator('#episodeQuickMenu button').evaluateAll(nodes =>
+    assert.deepEqual(await page.locator('#episodeQuickMenu [data-episode-action]').evaluateAll(nodes =>
       nodes.map(node => node.dataset.episodeAction)), ['play']);
-    const bounds = await page.locator('#episodeQuickMenu button').boundingBox();
+    const bounds = await page.locator('#episodeQuickMenu [data-episode-action]').boundingBox();
     assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 390);
     await page.keyboard.press('Escape');
     await setConfig({ bindings: { DoubleClick: 'play', 'Ctrl+DoubleClick': 'open_detail' } });

@@ -106,7 +106,7 @@ function egRenderMenu(button, config, onAction) {
   const rect = button.getBoundingClientRect();
   const scale = Math.min(1, (window.innerWidth - 56) / 164, (window.innerHeight - 56) / 188);
   const fit = (axis, center, size, pad) => {
-    const offsets = entries.map(([slot]) => EG_COORDS[slot][axis] * scale);
+    const offsets = [0, ...entries.map(([slot]) => EG_COORDS[slot][axis] * scale)];
     return Math.max(pad - Math.min(...offsets), Math.min(center, size - pad - Math.max(...offsets)));
   };
   const originX = fit(0, rect.left + rect.width / 2, window.innerWidth, 28);
@@ -124,15 +124,18 @@ function egRenderMenu(button, config, onAction) {
     + entries.map(([slot, action]) => {
     const [x, y] = EG_COORDS[slot];
     return `<button type="button" class="episode-quick-action" style="left:${x * scale}px;top:${y * scale}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action])}</button>`;
-  }).join("");
+  }).join("")
+    + '<button type="button" class="episode-quick-action episode-quick-close" data-episode-menu-close aria-label="关闭单集扇区">×</button>';
   menu.addEventListener("click", (event) => {
-    const item = event.target.closest("[data-episode-action]");
+    const item = event.target.closest("[data-episode-action], [data-episode-menu-close]");
     if (!item || egRuntime?.menu !== menu) return;
     event.preventDefault();
     event.stopPropagation();
     egCloseMenu();
     button.focus({ preventScroll: true });
-    if (button.isConnected) onAction(item.dataset.episodeAction, button.dataset.episodeKey, button);
+    if (button.isConnected && item.dataset.episodeAction) {
+      onAction(item.dataset.episodeAction, button.dataset.episodeKey, button);
+    }
   });
   $("#progressModal").append(menu);
   egRuntime.menu = menu;
