@@ -189,7 +189,15 @@ class ReadRoutes:
             elif path == "/api/offline/library":
                 self.send_json(OfflineService(self.database).library())
             elif path == "/api/offline/screenshots":
-                self.send_json({"ok": True, **screenshot_tools.list_library(self.database.asset_root)})
+                names = None
+                if "anime_id" in query:
+                    raw = query["anime_id"][0]
+                    if not raw.isdecimal() or not 0 < int(raw) < 2**63:
+                        raise ValueError("番剧 ID 无效")
+                    with self.database.connect() as db:
+                        anime = db.execute("SELECT name_cn, name FROM anime WHERE id = ?", (int(raw),)).fetchone()
+                    names = tuple(anime) if anime else ()
+                self.send_json({"ok": True, **screenshot_tools.list_library(self.database.asset_root, anime_names=names)})
             elif path == "/api/offline/screenshot-file":
                 relative = unquote(query.get("path", [""])[0] or "")
                 target = screenshot_tools.image_path(self.database.asset_root, relative)

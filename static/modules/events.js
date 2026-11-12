@@ -312,16 +312,19 @@ setupAssociatedAnimeMenu();
 
 async function insertRecordImages(input, textarea) {
   const files = [...(input.files || [])];
+  input.value = "";
+  await insertRecordImageFiles(files, textarea);
+}
+
+async function insertRecordImageFiles(files, textarea) {
   if (!files.length) return;
   if (files.length > 9) {
     toast("一次最多插入 9 张图片", "error");
-    input.value = "";
     return;
   }
   const oversized = files.find((file) => file.size > 8 * 1024 * 1024);
   if (oversized) {
     toast(`图片「${oversized.name}」不能超过 8 MB`, "error");
-    input.value = "";
     return;
   }
   try {
@@ -344,20 +347,122 @@ async function insertRecordImages(input, textarea) {
         })();
       inserts.push(`![${file.name}](${result.url})`);
     }
+    if (!textarea.isConnected) return;
     const insert = inserts.join("\n");
     textarea.setRangeText(insert, textarea.selectionStart, textarea.selectionEnd, "end");
     textarea.focus();
     toast(files.length > 1 ? `${files.length} 张图片已插入记录` : "图片已插入记录");
   } catch (error) {
     toast(error.message, "error");
-  } finally {
-    input.value = "";
   }
 }
 
-$("#noteImageInput").addEventListener("change", async (event) => {
-  await insertRecordImages(event.target, $("#noteContent"));
-});
+function bindRecordImageInput(input, textarea, animeId, afterInsert = () => {}) {
+  let nativePicker = false;
+  input.addEventListener("change", async () => {
+    await insertRecordImages(input, textarea);
+    if (textarea.isConnected) afterInsert();
+  });
+  input.addEventListener("click", (event) => {
+    if (nativePicker || window.handbookOnline) return;
+    const id = animeId();
+    if (!id) return;
+    event.preventDefault();
+    openRecordImageFolder(id, textarea, () => {
+      if (typeof input.showPicker === "function") {
+        input.showPicker();
+      } else {
+        nativePicker = true;
+        try { input.click(); }
+        finally { nativePicker = false; }
+      }
+    }, afterInsert);
+  });
+}
+
+async function openRecordImageFolder(animeId, textarea, browse, afterInsert) {
+  const dialog = $("#recordImagePicker");
+  if (dialog.open) return;
+  const folder = $("#recordImageFolder");
+  const choices = $("#recordImageChoices");
+  const insert = $("#recordImageInsert");
+  const request = new AbortController();
+  const selection = new Set();
+  choices.replaceChildren();
+  insert.disabled = true;
+  insert.textContent = "插入";
+  folder.textContent = "正在查找番剧图片…";
+  dialog.showModal();
+  dialog.addEventListener("close", () => request.abort(), { once: true });
+  const openNative = () => {
+    browse();
+    dialog.close();
+  };
+  $("#recordImageBrowse").onclick = () => {
+    try { openNative(); }
+    catch (error) { toast(error.message, "error"); }
+  };
+  insert.onclick = async () => {
+    insert.disabled = true;
+    try {
+      const files = await Promise.all([...selection].map(async (image) => {
+        const response = await fetch(libImageUrl(image.relative), { signal: request.signal });
+        if (!response.ok) throw new Error(`无法读取「${image.name}」`);
+        const blob = await response.blob();
+        return new File([blob], image.name, { type: blob.type });
+      }));
+      dialog.close();
+      await insertRecordImageFiles(files, textarea);
+      if (textarea.isConnected) afterInsert();
+    } catch (error) {
+      if (!request.signal.aborted) {
+        toast(error.message, "error");
+        insert.disabled = false;
+      }
+    }
+  };
+  try {
+    const data = await api(`/api/offline/screenshots?anime_id=${encodeURIComponent(animeId)}`, {
+      signal: request.signal,
+    });
+    if (request.signal.aborted || !dialog.open) return;
+    const group = data.groups?.[0];
+    if (!group) {
+      folder.textContent = "图片库里没有这部番的文件夹。";
+      try { openNative(); }
+      catch { $("#recordImageBrowse").focus(); }
+      return;
+    }
+    folder.textContent = group.images.length ? group.folder : `${group.folder} · 文件夹里还没有图片`;
+    for (const image of group.images) {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "lib-image-thumb";
+      option.setAttribute("aria-pressed", "false");
+      option.title = image.name;
+      const preview = document.createElement("img");
+      preview.src = libImageUrl(image.relative);
+      preview.loading = "lazy";
+      preview.alt = image.name;
+      option.append(preview);
+      option.onclick = () => {
+        if (selection.has(image)) selection.delete(image);
+        else if (selection.size < 9) selection.add(image);
+        else return toast("一次最多插入 9 张图片", "error");
+        option.classList.toggle("is-selected", selection.has(image));
+        option.setAttribute("aria-pressed", String(selection.has(image)));
+        insert.disabled = selection.size === 0;
+        insert.textContent = selection.size ? `插入 ${selection.size} 张` : "插入";
+      };
+      choices.append(option);
+    }
+  } catch (error) {
+    if (!request.signal.aborted) folder.textContent = "暂时无法读取图片库，可以从电脑选择。";
+  }
+}
+
+bindRecordImageInput($("#noteImageInput"), $("#noteContent"),
+  () => newRecordDefaultsToOther() ? null : $("#noteAnime").value);
 
 noteComposer.addEventListener("submit", async (event) => {
   event.preventDefault();

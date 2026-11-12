@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261112-playback-source" />
+  <link rel="stylesheet" href="/styles.css?v=20261112-record-image-folder" />
   </head>
   <body>
     <div class="app-shell">
@@ -1581,6 +1581,18 @@
     </dialog>
     <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
     <dialog class="modal quick-record-dialog" id="quickRecordDialog" aria-labelledby="noteComposerTitle"></dialog>
+    <dialog class="modal record-image-picker" id="recordImagePicker" aria-labelledby="recordImagePickerTitle">
+      <form method="dialog" class="modal-frame">
+        <button class="modal-close" aria-label="关闭">×</button>
+        <h2 id="recordImagePickerTitle">插入图片</h2>
+        <p id="recordImageFolder" class="page-subtitle" role="status"></p>
+        <div id="recordImageChoices" class="lib-image-grid"></div>
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" id="recordImageBrowse">从电脑选择</button>
+          <button type="button" class="primary-button" id="recordImageInsert" disabled>插入</button>
+        </div>
+      </form>
+    </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
     <script src="/schedule.js?v=20261111-hide-notice" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
@@ -1593,7 +1605,7 @@
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261112-playback-source" defer></script>
     <script src="/modules/details.js?v=20261112-playback-source" defer></script>
-    <script src="/modules/records.js?v=20261111-note-image-label" defer></script>
+    <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
@@ -1601,7 +1613,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261111-detail-airtime" defer></script>
-    <script src="/modules/events.js?v=20261111-quick-record" defer></script>
+    <script src="/modules/events.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>

@@ -71,6 +71,17 @@ class DeleteImagesTest(unittest.TestCase):
 
         self.assertEqual(result["deleted"], [a])
 
+    def test_lists_only_the_associated_anime_folders(self):
+        related = self._image("番剧_第一季", "shot.png")
+        self._image("番剧_第二季", "other.png")
+        (self.shots / "原名").mkdir()
+
+        groups = screenshots.list_library(self.root, anime_names=("番剧:第一季", "原名"))["groups"]
+        self.assertEqual([group["folder"] for group in groups], ["番剧_第一季", "原名"])
+        self.assertEqual([image["relative"] for image in groups[0]["images"]], [related])
+        self.assertEqual(groups[1]["images"], [])
+        self.assertEqual(screenshots.list_library(self.root, anime_names=())["groups"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

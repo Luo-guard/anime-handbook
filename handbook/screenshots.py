@@ -100,14 +100,22 @@ def save_png(asset_root: Path, *, anime: str, episode: str, seconds: Any, data_u
     }
 
 
-def list_library(asset_root: Path) -> dict[str, Any]:
+def list_library(asset_root: Path, *, anime_names: tuple[str, ...] | None = None) -> dict[str, Any]:
     """按番剧文件夹分组列出截图，新图在前。"""
     base = root(asset_root)
     groups: list[dict[str, Any]] = []
     total = 0
     if base.is_dir():
-        for folder in sorted(base.iterdir(), key=lambda item: item.name):
+        if anime_names is None:
+            folders = sorted(base.iterdir(), key=lambda item: item.name)
+        else:
+            folders = [base / name for name in dict.fromkeys(
+                _safe_segment(name, "未命名番剧") for name in anime_names if name
+            )]
+        for folder in folders:
             if not folder.is_dir():
+                continue
+            if anime_names is not None and folder.resolve().parent != base.resolve():
                 continue
             images = []
             for file in folder.iterdir():
@@ -123,14 +131,14 @@ def list_library(asset_root: Path) -> dict[str, Any]:
                     "bytes": stat.st_size,
                     "mtime": int(stat.st_mtime),
                 })
-            if not images:
+            if not images and anime_names is None:
                 continue
             images.sort(key=lambda item: item["mtime"], reverse=True)
             total += len(images)
             groups.append({
                 "folder": folder.name,
                 "count": len(images),
-                "latest": images[0]["mtime"],
+                "latest": images[0]["mtime"] if images else 0,
                 "images": images,
             })
     groups.sort(key=lambda item: item["latest"], reverse=True)

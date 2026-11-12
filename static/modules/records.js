@@ -343,10 +343,8 @@ async function renderTimeline(append = false) {
         textarea.addEventListener("input", () => fitRecordEditor(textarea));
         button.classList.add("hidden");
         $("[data-cancel-edit]", editor).addEventListener("click", () => { editor.remove(); button.classList.remove("hidden"); });
-        $("[data-edit-image-input]", editor).addEventListener("change", async (event) => {
-          await insertRecordImages(event.target, textarea);
-          if (textarea.isConnected) fitRecordEditor(textarea);
-        });
+        bindRecordImageInput($("[data-edit-image-input]", editor), textarea,
+          () => parseRecordText(textarea.value).anime_id, () => fitRecordEditor(textarea));
         editor.addEventListener("submit", async (event) => {
           event.preventDefault();
           try {
