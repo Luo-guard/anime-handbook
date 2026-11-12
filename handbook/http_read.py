@@ -141,7 +141,7 @@ class ReadRoutes:
                         "SELECT id,name,name_cn,collection_type,bgm_score,bgm_rating_total FROM anime WHERE active=1"
                     )]
                 document = attach_collection(document, local)
-                if self.database.get_settings().get("schedule_airing_source") == "as":
+                if source != "as" and self.database.get_settings().get("schedule_airing_source") == "as":
                     progress = self.animeschedule.get_many([row.get("id") or row.get("local_id") for row in document["items"]])
                     for row in document["items"]:
                         value = progress.get(str(row.get("id") or row.get("local_id")))
@@ -426,10 +426,12 @@ class ReadRoutes:
                     **({"as_airing": anime["as_airing"]} if "as_airing" in anime else {})} for anime in animes]}
                 if self.database.get_settings().get("schedule_airing_source") == "as":
                     ids = [int(value) for value in query.get("ids", [""])[0].split(",")[:500] if value.isdecimal()]
-                    payload["schedule_airing"] = self.animeschedule.get_many(ids)
                     if query.get("calendar_source", [""])[0] == "as":
                         calendar = self.as_calendar.get("", week=query.get("week", [""])[0])
                         payload["calendar_airing"] = {row["key"]: row.get("as_airing") for row in calendar["items"]}
+                        payload["schedule_airing"] = {}
+                    else:
+                        payload["schedule_airing"] = self.animeschedule.get_many(ids)
                 self.send_json(payload)
             elif path == "/api/collection-state":
                 self.send_json(

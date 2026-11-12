@@ -257,9 +257,11 @@ class HandbookDBTest(unittest.TestCase):
                 with urlopen(base + "/api/schedule/cover?source=as&week=2026-W45&key=unmapped", timeout=3) as response:
                     self.assertEqual(response.read(), b"fixture")
                 self.db.set_setting("schedule_airing_source", "as")
-                with urlopen(base + "/api/airing?calendar_source=as&week=2026-W45", timeout=3) as response:
+                with urlopen(base + "/api/airing?calendar_source=as&week=2026-W45&ids=91", timeout=3) as response:
                     data = app.json.loads(response.read())
                 self.assertEqual(data["calendar_airing"]["unmapped"]["aired"], 6)
+                self.assertEqual(data["schedule_airing"], {})
+                self.assertTrue(all("titles" in call.kwargs for call in progress.return_value.get_many.call_args_list))
         finally:
             server.shutdown()
             server.server_close()
@@ -316,7 +318,7 @@ class HandbookDBTest(unittest.TestCase):
 
     def test_as_progress_selection_is_independent_and_read_only(self) -> None:
         item = sample_item(91, 1, "AS fixture")
-        item["air_date"] = app.date.today().isoformat()
+        item["air_date"] = "2020-01-01"
         self.db.import_kazumi([item])
         self.db.set_settings({"collection_airing_source": "as", "schedule_airing_source": "bgm"})
         old_database = desktop.DATABASE
@@ -327,7 +329,7 @@ class HandbookDBTest(unittest.TestCase):
         try:
             base = f"http://127.0.0.1:{server.server_address[1]}"
             with patch.object(http.RequestHandler, "animeschedule", new_callable=PropertyMock) as provider:
-                provider.return_value.get_many.side_effect = lambda ids: {
+                provider.return_value.get_many.side_effect = lambda ids, **kwargs: {
                     str(value): {"source": "as", "aired": 6, "total": 12} for value in ids
                 }
                 revision = self.db.revision

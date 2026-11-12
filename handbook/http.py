@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from .common import BACKGROUND_ROOT, DATA_ROOT, RECORD_IMAGE_ROOT, STATIC_ROOT, json_dumps, with_initial_appearance
 from .assets import prune_record_images, profile_asset_references
 from .airing import BEIJING, compute_airing
-from .animeschedule import AnimeScheduleService
+from .animeschedule import AnimeScheduleService, title_key
 from .as_calendar import ASCalendar
 from .xifan_preview import PREFIX as XIFAN_PREVIEW_PREFIX
 
@@ -96,9 +96,11 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
         if any(settings.get(key) == "as" for key in (
             "collection_airing_source", "schedule_airing_source", "detail_airtime_source",
         )):
-            cutoff = (datetime.now(BEIJING).date() - timedelta(days=200)).isoformat()
-            ids = [row["id"] for row in animes if str(row.get("air_date") or "") >= cutoff]
-            progress = self.animeschedule.get_many(ids)
+            titles = {row["id"]: {
+                key for field in ("name", "name_cn", "display_name")
+                if (key := title_key(row.get(field)))
+            } for row in animes}
+            progress = self.animeschedule.get_many(titles, titles=titles)
             for row in animes:
                 row["as_airing"] = progress.get(str(row["id"]))
         return animes

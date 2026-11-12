@@ -10,6 +10,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -26,6 +27,18 @@ ID_FIELDS = {
     "anilist_id": ("aniList", r"anilist\.co/anime/(\d+)", "anilist-ids"),
     "anidb_id": ("anidb", r"anidb\.net/anime/(\d+)", "anidb-ids"),
 }
+WEEK_TTL = 900
+UNMATCHED_TTL = 86400
+
+
+def title_key(value):
+    return "".join(char for char in unicodedata.normalize("NFKC", str(value or "")).casefold()
+                   if char.isalnum())
+
+
+def progress_weeks():
+    current = datetime.now(BEIJING)
+    return [(current + timedelta(weeks=offset)).isocalendar()[:2] for offset in (-1, 0, 1)]
 
 
 def parse_time(value):
@@ -103,6 +116,7 @@ class AnimeScheduleService:
         self.root = Path(root)
         self.lock = threading.RLock()
         self.request_lock = threading.Lock()
+        self.week_lock = threading.Lock()
         self.mapping_lock = threading.Lock()
         self.cache = self._read("progress.json", {"records": {}, "weeks": {}})
         if not isinstance(self.cache, dict):
@@ -111,7 +125,7 @@ class AnimeScheduleService:
             if not isinstance(self.cache.get(key), dict):
                 self.cache[key] = {}
         self.mapping = None
-        self.pending = set()
+        self.pending = {}
         self.inflight = set()
         self.worker = None
         self.retry_at = 0
@@ -184,10 +198,14 @@ class AnimeScheduleService:
         return self.mapping
 
     def week_rows(self, year, week, *, force=False):
+        with self.week_lock:
+            return self._week_rows(year, week, force=force)
+
+    def _week_rows(self, year, week, *, force):
         key = f"{year}-{week}"
         with self.lock:
             cached = self.cache["weeks"].get(key, {})
-        if not force and cached.get("schema") == 3 and time.time() - cached.get("fetched", 0) < 900:
+        if not force and cached.get("schema") == 3 and time.time() - cached.get("fetched", 0) < WEEK_TTL:
             return cached["rows"]
         rows = self._get("timetables/all?" + urllib.parse.urlencode({"year": year, "week": week, "tz": "Asia/Shanghai"}))
         if not isinstance(rows, list):
@@ -200,27 +218,61 @@ class AnimeScheduleService:
         return compact
 
     def _refresh_weeks(self):
-        current = datetime.now(BEIJING)
-        keys = []
-        for offset in (-1, 0, 1):
-            year, week, _ = (current + timedelta(weeks=offset)).isocalendar()
-            key = f"{year}-{week}"
-            keys.append(key)
+        weeks = progress_weeks()
+        for year, week in weeks:
             self.week_rows(year, week)
+        keys = {f"{year}-{week}" for year, week in weeks}
         with self.lock:
             self.cache["weeks"] = {key: value for key, value in self.cache["weeks"].items() if key in keys}
 
-    def refresh(self, ids):
+    def _progress_cache(self):
+        return [self.cache["weeks"].get(f"{year}-{week}", {}) for year, week in progress_weeks()]
+
+    @staticmethod
+    def _title_routes(rows):
+        index = {}
+        for row in rows:
+            if row.get("airType") not in {"raw", "sub"} or not row.get("route"):
+                continue
+            for field in ("title", "native", "romaji", "english"):
+                key = title_key(row.get(field))
+                if key:
+                    index.setdefault(key, set()).add(row["route"])
+        return index
+
+    @staticmethod
+    def _lookup_routes(titles, title_routes):
+        return sorted(set().union(*(title_routes.get(title, ()) for title in titles or ())))
+
+    @classmethod
+    def _needs_lookup(cls, record, titles, title_routes, now):
+        if record.get("route"):
+            return False
+        if titles is None:
+            # The caller already selected the schedule's visible IDs.
+            return now - record.get("fetched", 0) >= UNMATCHED_TTL
+        scheduled = cls._lookup_routes(titles, title_routes)
+        # A changed route or a new timetable match can bypass an old miss.
+        return bool(scheduled and (scheduled != record.get("lookup_routes", [])
+                                   or now - record.get("fetched", 0) >= UNMATCHED_TTL))
+
+    def refresh(self, ids, *, titles=None):
         """Worker entry point, also usable by isolated integration checks."""
-        self.ensure_mapping()
         self._refresh_weeks()
+        with self.lock:
+            weeks = self._progress_cache()
+        title_routes = self._title_routes(row for week in weeks for row in week.get("rows", []))
+        mapping = None
         for bgm_id in ids:
             key = str(bgm_id)
+            names = (titles or {}).get(bgm_id)
             with self.lock:
                 previous = self.cache["records"].get(key, {})
-            if time.time() - previous.get("fetched", 0) < 86400:
+            if not self._needs_lookup(previous, names, title_routes, time.time()):
                 continue
-            expected = self.mapping.get(key, {})
+            if mapping is None:
+                mapping = self.ensure_mapping()
+            expected = mapping.get(key, {})
             candidate = None
             if len(expected) >= 2:
                 field = next(field for field in ID_FIELDS if field in expected)
@@ -237,16 +289,17 @@ class AnimeScheduleService:
                     candidates = []
                 candidate = choose_match(expected, candidates)
             with self.lock:
+                # Calendar refresh may have linked this ID while the request was running.
+                current = self.cache["records"].get(key, {})
+                if current is not previous and current.get("route"):
+                    continue
+                confirmed = {"route": candidate["route"], "total": int(candidate.get("episodes") or 0)} if candidate else {}
                 self.cache["records"][key] = {
-                    "route": candidate["route"] if candidate else None,
-                    "total": int(candidate.get("episodes") or 0) if candidate else 0,
+                    **previous, **confirmed,
+                    "lookup_routes": self._lookup_routes(names, title_routes),
                     "fetched": time.time(), "checked": time.time(),
                 }
                 self._write("progress.json", self.cache)
-        with self.lock:
-            for bgm_id in ids:
-                self.cache["records"].setdefault(str(bgm_id), {})["checked"] = time.time()
-            self._write("progress.json", self.cache)
 
     def _run(self):
         try:
@@ -256,9 +309,9 @@ class AnimeScheduleService:
                         self.worker = None
                         return
                     ids = sorted(self.pending)[:18]
-                    self.pending.difference_update(ids)
+                    titles = {value: self.pending.pop(value) for value in ids}
                     self.inflight = set(ids)
-                self.refresh(ids)
+                self.refresh(ids, titles=titles)
                 with self.lock:
                     self.inflight.clear()
         except Exception as error:
@@ -269,24 +322,35 @@ class AnimeScheduleService:
                 self.inflight.clear()
                 self.worker = None
 
-    def get_many(self, ids):
+    def get_many(self, ids, *, titles=None):
         valid = {int(value) for value in ids if type(value) is int and value > 0}
         with self.lock:
             configured = bool(self.token())
             now = time.time()
+            weeks = self._progress_cache()
+            rows = [row for week in weeks for row in week.get("rows", [])]
+            title_routes = self._title_routes(rows) if titles is not None else {}
+            stale = any(now - week.get("fetched", 0) >= WEEK_TTL or week.get("schema") != 3 for week in weeks)
             if configured and now >= self.retry_at:
-                self.pending.update(value for value in valid - self.inflight
-                                    if now - self.cache["records"].get(str(value), {}).get("checked", 0) > 900)
+                for value in valid - self.inflight:
+                    names = titles.get(value, ()) if titles is not None else None
+                    record = self.cache["records"].get(str(value), {})
+                    if stale or self._needs_lookup(record, names, title_routes, now):
+                        if value not in self.pending or names is not None:
+                            self.pending[value] = names
                 if self.pending and self.worker is None:
                     self.worker = threading.Thread(target=self._run, name="handbook-as", daemon=True)
                     self.worker.start()
-            rows = [row for week in self.cache["weeks"].values() for row in week.get("rows", [])]
+            rows_by_route = {}
+            for row in rows:
+                rows_by_route.setdefault(row.get("route"), []).append(row)
+            latest = max((week.get("fetched", 0) for week in weeks), default=0)
             output = {}
             for value in valid:
                 record = self.cache["records"].get(str(value), {})
-                result = compute_progress(record.get("route"), rows, record.get("total", 0)) if record.get("route") else None
+                route = record.get("route")
+                result = compute_progress(route, rows_by_route.get(route, ()), record.get("total", 0)) if route else None
                 if result:
-                    latest = max((week.get("fetched", 0) for week in self.cache["weeks"].values()), default=0)
                     result["stale"] = now - latest > 6 * 3600
                 output[str(value)] = result or {"source": "as", "unavailable": True,
                     "status": "loading" if value in self.pending or value in self.inflight else "unavailable" if configured else "unconfigured"}

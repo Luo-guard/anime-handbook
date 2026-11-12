@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from handbook.animeschedule import AnimeScheduleService, choose_match, compute_progress
+from handbook.animeschedule import AnimeScheduleService, choose_match, compute_progress, progress_weeks, title_key
 from handbook.settings_service import normalize_settings
 
 
@@ -82,6 +82,7 @@ class AnimeScheduleTest(unittest.TestCase):
             service.mapping_loaded = time.time()
             with patch.object(service, "_refresh_weeks"), patch.object(service, "_get", return_value={"anime": [candidate()], "totalAmount": 1}) as get:
                 service.refresh([1])
+                service.cache["records"]["1"]["fetched"] = 0
                 service.refresh([1])
                 self.assertEqual(get.call_count, 1)
             restored = AnimeScheduleService(root)
@@ -92,12 +93,34 @@ class AnimeScheduleTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             service = AnimeScheduleService(root)
             service.cache["records"]["1"] = {"route": "correct"}
-            service.pending.add(1)
+            service.pending[1] = None
             with patch.object(service, "refresh", side_effect=TimeoutError()), patch("handbook.animeschedule.record_failure"):
                 service._run()
             self.assertGreater(service.retry_at, 0)
             self.assertEqual(service.cache["records"]["1"]["route"], "correct")
             self.assertFalse(service.inflight)
+
+    def test_collection_looks_up_only_unlinked_titles_seen_in_timetable(self):
+        with tempfile.TemporaryDirectory() as root:
+            service = AnimeScheduleService(root)
+            year, week = progress_weeks()[0]
+            service.cache["weeks"][f"{year}-{week}"] = {"rows": [
+                {"route": "correct", "native": "名探偵プリキュア！", "airType": "raw",
+                 "episodeDate": "2020-02-01T08:30:00+08:00", "episodeNumber": 41},
+                {"route": "known", "title": "Known", "airType": "raw"},
+            ]}
+            service.cache["records"]["3"] = {"route": "known", "fetched": 0}
+            service.mapping = {str(i): {"mal_id": str(i), "anilist_id": "34"} for i in range(1, 4)}
+            service.mapping_loaded = time.time()
+            names = {1: {title_key("名探偵プリキュア!")}, 2: {"finished"}, 3: {"known"}}
+            with patch.object(service, "_refresh_weeks"), patch.object(
+                service, "_get", return_value={"anime": [candidate(mal="1")]},
+            ) as get:
+                service.refresh(names, titles=names)
+                service.refresh(names, titles=names)
+            get.assert_called_once_with("anime?mal-ids=1&page=1")
+            self.assertEqual(service.get_many(names, titles=names)["1"]["aired"], 41)
+            self.assertNotIn("2", service.cache["records"])
 
 
 if __name__ == "__main__":
