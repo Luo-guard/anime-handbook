@@ -148,7 +148,6 @@ $("#sidebarReopenButton").addEventListener("click", () => setSidebarCollapsed(fa
 
 $("#episodeCountInput").addEventListener("change", renderEpisodeGrid);
 
-// 右上角 × 已移除：取消按钮、未改动时点确认、点弹窗外空白处都能关，功能重复。
 // pointerdown/up 双确认：在弹窗里按下、拖到外面松开不算点外面。
 let progressOutsidePress = null;
 $("#progressModal").addEventListener("pointerdown", (event) => {
@@ -242,7 +241,9 @@ $("#saveAnimeComment").addEventListener("click", async () => {
     toast(error.message, "error");
   }
 });
-$("#cancelProgress").addEventListener("click", () => $("#progressModal").close());
+for (const selector of ["#closeProgress", "#cancelProgress"]) {
+  $(selector).addEventListener("click", () => $("#progressModal").close());
+}
 $("#saveProgress").addEventListener("click", saveProgress);
 
 const noteComposer = $("#noteComposer");

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261112-record-image-folder" />
+  <link rel="stylesheet" href="/styles.css?v=20261112-detail-close" />
   </head>
   <body>
     <div class="app-shell">
@@ -673,7 +673,10 @@
       </form>
     </dialog>
     <dialog class="modal progress-modal" id="progressModal">
-      <button type="button" class="detail-corner-download" id="openOffline" title="我的库 · 找资源" aria-label="打开我的库与找资源"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></button>
+      <div class="detail-corner-actions">
+        <button type="button" class="modal-close" id="closeProgress" aria-label="关闭番剧详情">×</button>
+        <button type="button" class="detail-corner-download" id="openOffline" title="我的库 · 找资源" aria-label="打开我的库与找资源"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></button>
+      </div>
       <form method="dialog" class="modal-frame" id="progressForm" tabindex="-1" autofocus>
         <div class="progress-hero">
           <img id="progressCover" alt="" />
@@ -1604,7 +1607,7 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261112-playback-source" defer></script>
-    <script src="/modules/details.js?v=20261112-playback-source" defer></script>
+    <script src="/modules/details.js?v=20261112-detail-close" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
@@ -1613,7 +1616,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261111-detail-airtime" defer></script>
-    <script src="/modules/events.js?v=20261112-record-image-folder" defer></script>
+    <script src="/modules/events.js?v=20261112-detail-close" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>

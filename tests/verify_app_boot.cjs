@@ -128,6 +128,13 @@ function scriptUrls() {
     await page.waitForTimeout(150);
     assert.equal(await page.locator('#progressModal').evaluate(node => node.open), true, 'press outside + release inside must not close');
 
+    const closeButton = page.getByRole('button', { name: '关闭番剧详情' });
+    const closeBox = await closeButton.boundingBox();
+    const downloadBox = await page.locator('#openOffline').boundingBox();
+    assert.ok(closeBox.x + closeBox.width <= downloadBox.x, 'close and download buttons must not overlap');
+    await closeButton.click();
+    assert.equal(await page.locator('#progressModal').evaluate(node => node.open), false, 'the close button dismisses the detail modal');
+
     console.log('App boot smoke: real script order loads clean, boot completes, toolbar/help/empty state wired, no collection refetch without writes, detail modal closes on outside click.');
   } finally {
     await browser.close();
