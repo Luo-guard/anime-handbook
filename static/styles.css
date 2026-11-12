@@ -5497,11 +5497,30 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 .record-image-picker .lib-image-thumb { cursor: pointer; }
 .library-image-hint:empty { display: none; }
 .library-image-hint { margin: 12px 18px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.lib-image-viewer .modal-frame { width: min(1080px, 94vw); }
-.lib-image-stage { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.lib-image-viewer { width: min(1280px, calc(100vw - 28px)); }
+.lib-image-viewer .modal-frame {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  height: min(850px, calc(100dvh - 28px));
+  padding: 56px clamp(14px, 2vw, 28px) 16px;
+}
+.lib-image-viewer .modal-frame:fullscreen {
+  width: 100%;
+  height: 100%;
+}
+.lib-image-viewer .modal-actions { margin-top: 12px; }
+.lib-image-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 12px;
+  background: #0e1411;
+}
 .lib-image-stage img {
-  max-width: 100%; max-height: min(72vh, 720px); border-radius: 12px;
-  background: #0e1411; object-fit: contain;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .lib-image-nav {
   position: absolute; top: 50%; transform: translateY(-50%);

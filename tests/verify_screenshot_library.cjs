@@ -1,7 +1,7 @@
 // 截图入库 + 媒体库图片视图：保存路径/命名模板/列表/大图/删除。
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-const API = 'http://127.0.0.1:43127';
+const API = process.env.HANDBOOK_TEST_URL || 'http://127.0.0.1:43127';
 
 function tinyPng() {
   // 2x2 红点 PNG（固定字节，不依赖第三方库）
@@ -27,6 +27,11 @@ const post = (path, body) => fetch(`${API}${path}`, {
     created.push(saved.relative);
     assert.equal(saved.folder, '回归测试番', `应按番名建文件夹，实际 ${saved.folder}`);
     assert.match(saved.name, /^第07集_12-34\.png$/, `默认命名应为 {episode}_{time}，实际 ${saved.name}`);
+    res = await post('/api/offline/screenshot', { anime: '回归测试番', episode: '第07集', seconds: 754.2, data: tinyPng() });
+    assert.equal(res.status, 200);
+    const duplicate = await res.json();
+    created.push(duplicate.relative);
+    assert.equal(duplicate.name, '第07集_12-34-2.png');
 
     // 2) 自定义模板
     await post('/api/offline/settings', { ...before.config, screenshot_name_format: '{anime}·{episode}·{date}' });
@@ -63,7 +68,9 @@ const post = (path, body) => fetch(`${API}${path}`, {
     }));
     assert.equal(ui.videoHidden, true, '切到图片后视频面板要隐藏');
     assert.ok(ui.groups.includes('回归测试番'), `分组里应有测试番：${ui.groups}`);
-    await page.click('#libImageGroups .lib-image-thumb');
+    const thumb = page.getByRole('button', { name: duplicate.name, exact: false });
+    assert.equal(await thumb.locator('span').textContent(), '12:34', '重名序号不属于播放时间');
+    await thumb.click();
     await page.waitForTimeout(500);
     const viewer = await page.evaluate(() => ({
       open: document.querySelector('#libImageViewer').open,
@@ -73,6 +80,26 @@ const post = (path, body) => fetch(`${API}${path}`, {
     assert.equal(viewer.open, true, '点缩略图应打开大图');
     assert.ok(viewer.src.includes('screenshot-file'), `大图要走图片接口：${viewer.src}`);
     assert.ok((await page.evaluate(() => document.querySelector('#libImageView').naturalWidth)) > 0, '大图要真的加载出来');
+    const readFit = () => page.locator('#libImageView').evaluate((img) => {
+      const rect = img.getBoundingClientRect();
+      return getComputedStyle(img).objectFit === 'contain'
+        && rect.left >= 0 && rect.right <= innerWidth
+        && rect.top >= 0 && rect.bottom <= innerHeight;
+    });
+    assert.ok(await readFit(), '预览应在视口内完整显示图片');
+    await page.click('#libImageFullscreen');
+    await page.waitForFunction(() => document.fullscreenElement === document.querySelector('#libImageViewer .modal-frame'));
+    assert.ok(await readFit(), '全屏应在视口内完整显示图片');
+    await page.click('#libImageFullscreen');
+    await page.waitForFunction(() => !document.fullscreenElement);
+    await page.setViewportSize({ width: 390, height: 650 });
+    assert.ok(await readFit(), '窄屏也应完整显示图片');
+    await page.setViewportSize({ width: 1360, height: 860 });
+    await page.click('#libImageFullscreen');
+    await page.waitForFunction(() => Boolean(document.fullscreenElement));
+    await page.click('#libImageClose');
+    await page.waitForFunction(() => !document.fullscreenElement && !document.querySelector('#libImageViewer').open);
+    await thumb.click();
 
     // 5) 删除：大图里删一张，列表数量要少一张
     // 删除现在有二次确认，headless 里必须显式接受，否则 confirm 返回 false 会当成取消。

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-player-tooltip" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-library-full-image" />
   </head>
   <body>
     <div class="app-shell">
@@ -645,7 +645,7 @@
         </div>
       </div>
     </dialog>
-    <dialog class="modal lib-image-viewer" id="libImageViewer">
+    <dialog class="modal lib-image-viewer" id="libImageViewer" aria-label="截图预览">
       <div class="modal-frame">
         <button type="button" class="modal-close" id="libImageClose" aria-label="关闭">×</button>
         <div class="lib-image-stage">
@@ -656,7 +656,7 @@
         <p class="lib-image-caption" id="libImageCaption"></p>
         <div class="modal-actions">
           <button type="button" class="secondary-button" id="libImageDelete">删除这张</button>
-          <button type="button" class="primary-button" id="libImageDone">关闭</button>
+          <button type="button" class="primary-button" id="libImageFullscreen">全屏看图</button>
         </div>
       </div>
     </dialog>
@@ -1641,7 +1641,7 @@
     <script src="/modules/danmaku.js?v=20261111-online-player" defer></script>
     <script src="/modules/offline.js?v=20261113-player-tooltip" defer></script>
     <script src="/modules/online-playback.js?v=20261113-kazumi-playback" defer></script>
-    <script src="/modules/library-view.js?v=20261111-playback-history" defer></script>
+    <script src="/modules/library-view.js?v=20261113-library-full-image" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

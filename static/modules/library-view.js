@@ -649,11 +649,17 @@ function libImageUrl(relative) {
   return `/api/offline/screenshot-file?path=${encodeURIComponent(relative)}`;
 }
 
-function libImageTime(name) {
-  // 文件名里的时间码：第03集_06-12 → 06:12；带小时就是 01-02-03 → 01:02:03
-  const found = String(name || "").match(/(\d{2})-(\d{2})(?:-(\d{2}))?\.png$/i);
+function libImageTime(name, filenames) {
+  const found = name.match(/^(.*?[^\d-])?(\d{2,})-(\d{2})(?:-(\d+))?(?:-(\d+))?(\.png)$/i);
   if (!found) return "";
-  return found[3] ? `${found[1]}:${found[2]}:${found[3]}` : `${found[1]}:${found[2]}`;
+  const [, prefix = "", first, second, third, copy, extension] = found;
+  // 三段数字可能是时:分:秒，也可能是分:秒加重名序号。
+  const original = `${prefix}${first}-${second}${extension}`;
+  const validHours = third?.length === 2 && Number(first) > 0 && Number(third) < 60;
+  const isDuplicate = Number(third) >= 2 && filenames.has(original);
+  const hasHours = validHours && (copy || !isDuplicate);
+  if (Number(second) >= 60 || (copy && !hasHours) || (!hasHours && Number(first) >= 60)) return "";
+  return hasHours ? `${first}:${second}:${third}` : `${first}:${second}`;
 }
 
 function renderLibraryImageFolders() {
@@ -684,6 +690,7 @@ function renderLibraryImages() {
     .filter((group) => !librarySidebar.imageFolder || group.folder === librarySidebar.imageFolder)
     .map((group) => ({
       ...group,
+      filenames: new Set(group.images.map((image) => image.name)),
       images: group.images.filter((image) => !query
         || group.folder.toLocaleLowerCase().includes(query)
         || image.name.toLocaleLowerCase().includes(query)),
@@ -713,7 +720,7 @@ function renderLibraryImages() {
   host.innerHTML = groups.map((group) => {
     const thumbs = group.images.map((image) => {
       const index = flat.findIndex((row) => row.relative === image.relative);
-      const time = libImageTime(image.name);
+      const time = libImageTime(image.name, group.filenames);
       const selected = librarySidebar.imageSelected.has(image.relative);
       // 勾选泡用 <i>：<span> 被下面的时间码样式占着，会被一起改位置。
       return `<button type="button" class="lib-image-thumb${selected ? " is-selected" : ""}" data-image-index="${index}"
@@ -909,7 +916,22 @@ function initLibraryView() {
   $("#libImageNext")?.addEventListener("click", () => openLibraryImage(librarySidebar.imageIndex + 1));
   $("#libImageDelete")?.addEventListener("click", deleteLibraryImage);
   $("#libImageClose")?.addEventListener("click", () => $("#libImageViewer")?.close());
-  $("#libImageDone")?.addEventListener("click", () => $("#libImageViewer")?.close());
+  const imageFrame = $("#libImageViewer .modal-frame");
+  const imageFullscreen = $("#libImageFullscreen");
+  imageFullscreen?.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement === imageFrame) await document.exitFullscreen();
+      else await imageFrame.requestFullscreen();
+    } catch {
+      toast("无法进入或退出全屏", "error");
+    }
+  });
+  imageFrame?.addEventListener("fullscreenchange", () => {
+    imageFullscreen.textContent = document.fullscreenElement === imageFrame ? "退出全屏" : "全屏看图";
+  });
+  $("#libImageViewer")?.addEventListener("close", () => {
+    if (document.fullscreenElement === imageFrame) document.exitFullscreen().catch(() => {});
+  });
   $("#libImageViewer")?.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex - 1); }
     else if (event.key === "ArrowRight") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex + 1); }
