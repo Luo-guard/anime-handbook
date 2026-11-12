@@ -22,6 +22,7 @@ from .airing import BEIJING, compute_airing
 from .animeschedule import AnimeScheduleService, title_key
 from .as_calendar import ASCalendar
 from .xifan_preview import PREFIX as XIFAN_PREVIEW_PREFIX
+from .playback_rules import PREFIX as PLAYBACK_PREFIX
 
 
 SCHEDULE = ScheduleService(DATA_ROOT / "schedule")
@@ -235,10 +236,12 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
     def parse_request(self):
         if not super().parse_request(): return False
         if not hasattr(self.server, "runtime"):
-            if self.command == "GET" and urlparse(self.path).path.startswith(XIFAN_PREVIEW_PREFIX):
-                return True  # Preview streams do not access account data or hold an account lease.
+            path = urlparse(self.path).path
+            if ((self.command == "GET" and path.startswith((PLAYBACK_PREFIX, XIFAN_PREVIEW_PREFIX)))
+                    or (self.command == "POST" and path == PLAYBACK_PREFIX + "rules")):
+                return True  # Desktop playback does not access account data.
             desktop = _desktop()
-            switching = self.command == "POST" and urlparse(self.path).path == "/api/profiles/activate"
+            switching = self.command == "POST" and path == "/api/profiles/activate"
             self._profile_lease = desktop.PROFILE_GATE.write() if switching else desktop.PROFILE_GATE.read()
             self._profile_lease.__enter__()
             self._profile_snapshot = desktop.service_snapshot()

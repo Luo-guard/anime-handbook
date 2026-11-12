@@ -15,9 +15,14 @@ window.playbackHistory = (() => {
     localStorage.setItem(profileKey(), JSON.stringify(items));
   }
 
+  function historyKey(item) {
+    if (item.kind === "local") return `local:${item.animeId}:${item.fileId}`;
+    return `online:${item.rule || "xfdmnext"}:${item.providerId}:${item.episodeId}`;
+  }
+
   function record(item) {
-    const key = item.kind === "online" ? `online:${item.episodeId}` : `local:${item.animeId}:${item.fileId}`;
-    try { write([{ ...item, key, playedAt: Date.now() }, ...read().filter(entry => entry.key !== key)].slice(0, limit)); }
+    const key = historyKey(item);
+    try { write([{ ...item, key, playedAt: Date.now() }, ...read().filter(entry => historyKey(entry) !== key)].slice(0, limit)); }
     catch { /* 禁用浏览器存储时仍可播放。 */ }
   }
 

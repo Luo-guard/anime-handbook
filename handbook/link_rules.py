@@ -96,7 +96,7 @@ def extract_rules(payload: bytes) -> list[dict[str, Any]]:
     return links
 
 
-def fetch_rules(timeout: float = REQUEST_TIMEOUT) -> list[dict[str, Any]]:
+def fetch_archive(timeout: float = REQUEST_TIMEOUT) -> bytes:
     request = urllib.request.Request(ARCHIVE_URL, headers={"User-Agent": "AnimeHandbook/1.0"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -105,7 +105,11 @@ def fetch_rules(timeout: float = REQUEST_TIMEOUT) -> list[dict[str, Any]]:
         raise RuleFetchError(f"连不上规则仓库：{error}") from error
     if len(payload) > MAX_ARCHIVE_BYTES:
         raise RuleFetchError("规则仓库压缩包异常偏大，已跳过")
-    links = extract_rules(payload)
+    return payload
+
+
+def fetch_rules(timeout: float = REQUEST_TIMEOUT) -> list[dict[str, Any]]:
+    links = extract_rules(fetch_archive(timeout))
     if not links:
         raise RuleFetchError("规则仓库里没有可直接跳转的搜索链接")
     return links

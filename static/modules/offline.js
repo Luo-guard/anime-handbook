@@ -613,7 +613,7 @@ function pcResetVideo() {
   video.load();
 }
 
-function pcLoadVideo(url, resumeSeconds) {
+function pcPrepareVideo(resumeSeconds) {
   pcMediaLoad?.abort();
   pcMediaLoad = new AbortController();
   const video = $("#offlineVideo");
@@ -630,6 +630,11 @@ function pcLoadVideo(url, resumeSeconds) {
     },
     { once: true, signal: pcMediaLoad.signal },
   );
+  return video;
+}
+
+function pcLoadVideo(url, resumeSeconds) {
+  const video = pcPrepareVideo(resumeSeconds);
   video.src = url;
   return video.play();
 }

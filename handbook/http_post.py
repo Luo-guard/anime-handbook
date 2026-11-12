@@ -8,6 +8,7 @@ from .link_rules import RuleFetchError, cache_path, payload as rules_payload, re
 from . import offline_config
 from . import screenshots as screenshot_tools
 from . import danmaku as danmaku_tools
+from . import playback_rules, xifan_preview
 from .offline_service import OfflineError, OfflineService
 
 
@@ -16,10 +17,19 @@ class PostRoutes:
         path = urlparse(self.path).path
         try:
             # 4K 截图的 base64 会超过通用 12MB，只给截图入口放宽。
-            body = self.read_json(
-                MAX_SCREENSHOT_BODY_BYTES if path == "/api/offline/screenshot" else None
+            body = (
+                self.read_json(MAX_SCREENSHOT_BODY_BYTES)
+                if path == "/api/offline/screenshot" else self.read_json()
             )
             validate_command_body(path, body)
+            if path == playback_rules.PREFIX + "rules":
+                xifan_preview.require_local(self)
+                origin = self.headers.get("Origin")
+                if origin and origin != f"http://{self.headers.get('Host')}":
+                    self.send_error_json(403, "只能在手账页面管理播放规则")
+                    return
+                self.send_json(playback_rules.change_rule(body.get("id"), body.get("action")))
+                return
             write_exempt_paths = {
                 "/api/profiles",
                 "/api/profiles/activate",

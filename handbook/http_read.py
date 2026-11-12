@@ -10,6 +10,7 @@ from . import offline_config
 from . import screenshots as screenshot_tools
 from . import danmaku as danmaku_tools
 from . import xifan_preview
+from . import playback_rules
 from .offline import OfflineStore
 from .offline_service import OfflineError, OfflineService
 
@@ -76,6 +77,8 @@ class ReadRoutes:
         try:
             if path.startswith(xifan_preview.PREFIX):
                 xifan_preview.serve(self, path, query)
+            elif path.startswith(playback_rules.PREFIX):
+                playback_rules.serve(self, path, query)
             elif path == "/api/background":
                 profile_id = safe_asset_id(query.get("profile", [""])[0], "default")
                 account_id = safe_asset_id(query.get("account", [""])[0], "local")

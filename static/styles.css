@@ -4405,6 +4405,37 @@ dialog::backdrop {
 .offline-modal .offline-settings { flex: 1 1 auto; min-height: 0; }
 
 .online-playback-results { display: grid; gap: 8px; margin-top: 18px; max-height: 48vh; overflow: auto; }
+.online-rule-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.online-rule-toolbar label {
+  display: grid;
+  flex: 1 1 180px;
+  min-width: 0;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.online-rule-toolbar select { width: 100%; }
+.online-rule-manager { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.online-rule-manager summary { cursor: pointer; color: var(--accent); }
+.online-rule-manager .online-playback-results { max-height: min(40vh, 340px); margin-top: 8px; }
+.online-rule-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.online-rule-row small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.online-rule-actions { display: flex; flex: 0 0 auto; gap: 6px; }
 
 .eg-slot-grid {
   display: grid;

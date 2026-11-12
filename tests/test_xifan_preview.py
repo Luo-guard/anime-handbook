@@ -1,10 +1,19 @@
 """Regressions for the public URL and media relay boundaries."""
-import time
+import io
+import json
+import socket
+import tempfile
 import unittest
+import zipfile
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
-from urllib.request import Request
 
 from handbook import xifan_preview as preview
+from handbook import playback_rules as rules
+from handbook import playback_stream as streams
+from handbook.playback_network import connect_public, public_url
+from handbook.http_support import RequestProblem
 
 
 class XifanPreviewTest(unittest.TestCase):
@@ -14,15 +23,15 @@ class XifanPreviewTest(unittest.TestCase):
         search_request = {"url": url, "method": "POST", "headers": {"apikey": key}}
         rule = {"searchApiConfig": {"request": search_request}}
         rows = [{"id": 42, "title": "Example", "title_original": "Original", "extra": "ignored"}]
-        with patch.object(preview, "_rule", return_value=rule), patch.object(preview, "_json_request", return_value=rows) as request:
-            self.assertEqual(preview.search(" Original "), {
+        with patch.object(preview, "_json_request", return_value=rows) as request:
+            self.assertEqual(preview.search(" Original ", rule), {
                 "items": [{"id": 42, "title": "Example", "original": "Original"}],
             })
             request.assert_called_once_with(url, {"search_term": "Original", "page_number": 1, "items_per_page": 24}, key)
             request.reset_mock()
             search_request["url"] = "https://elsewhere.test/search"
             with self.assertRaises(preview.PreviewError):
-                preview.search("Original")
+                preview.search("Original", rule)
             request.assert_not_called()
 
     def test_only_next_title_or_episode_links_are_resolved(self):
@@ -34,25 +43,65 @@ class XifanPreviewTest(unittest.TestCase):
                 "https://next.xifanacg.com/search",
             ):
                 with self.subTest(url=url), self.assertRaises(preview.PreviewError):
-                    preview.catalogue(url)
+                    preview.catalogue(url, {})
             request.assert_not_called()
 
-    def test_media_redirect_cannot_leave_the_known_cdn(self):
-        redirect = preview._Redirect(preview.MEDIA_HOSTS)
-        source = Request("https://apn.moedot.net/sample.mp4", headers={"Range": "bytes=20-40"})
-        allowed = redirect.redirect_request(
-            source, None, 302, "", {}, "https://bjdownload.pan.wo.cn:30443/openapi/download",
-        )
-        self.assertEqual(allowed.get_header("Range"), "bytes=20-40")
-        for url in ("http://127.0.0.1/", "https://bjdownload.pan.wo.cn:1234/", "https://elsewhere.test/"):
-            with self.subTest(url=url), self.assertRaises(preview.PreviewError):
-                redirect.redirect_request(source, None, 302, "", {}, url)
+    def test_nonstandard_public_media_ports_and_private_dns(self):
+        self.assertEqual(public_url("https://example.com:8088/video.mp4")[1], 8088)
+        addresses = [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443)),
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 443)),
+        ]
+        with patch("socket.getaddrinfo", return_value=addresses), patch("socket.socket") as transport:
+            with self.assertRaises(RequestProblem):
+                connect_public("example.com", 443)
+            transport.assert_not_called()
 
-    def test_invalid_or_expired_tickets_never_fetch_media(self):
-        with patch.object(preview, "_TICKETS", {"expired": ("https://apn.moedot.net/sample.mp4", time.time() - 1)}):
-            with patch.object(preview, "build_opener") as opener:
-                for token in ("missing", "expired"):
-                    with self.subTest(token=token), self.assertRaises(preview.PreviewError) as error:
-                        preview._stream(None, token)
-                    self.assertEqual(error.exception.status, 410)
-                opener.assert_not_called()
+    def test_stream_ticket_and_hls_variants_keys_and_segments(self):
+        with patch.object(streams, "_PLAYBACKS", {}), patch.object(streams, "request_public") as fetch:
+            with self.assertRaises(RequestProblem) as missing:
+                streams.stream(None, "missing", "main")
+            self.assertEqual(missing.exception.status, 410)
+            fetch.assert_not_called()
+            issued = streams.issue("https://example.com:8088/hls/main.m3u8", "hls")
+            token = issued["url"].split("/")[-2]
+            playback = streams._PLAYBACKS[token]
+            playlist = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2000\nvariant\n#EXT-X-KEY:METHOD=AES-128,URI="key"\nseg.ts\n'
+            output = streams.rewrite_playlist(playlist, playback.url, token, playback).decode()
+            self.assertIn('#EXT-X-KEY:METHOD=AES-128,URI="/api/playback/stream/', output)
+            self.assertEqual(set(playback.resources.values()), {
+                (playback.url, "hls"), ("https://example.com:8088/hls/variant", "hls"),
+                ("https://example.com:8088/hls/key", "segment"), ("https://example.com:8088/hls/seg.ts", "segment"),
+            })
+            self.assertNotIn("example.com", output)
+
+    def test_download_gates_use_and_xpath_selects_each_line_independently(self):
+        rule = {
+            "name": "Example", "baseURL": "https://example.com/", "searchURL": "https://example.com/?q=@keyword",
+            "searchList": "//article", "searchName": "//a", "searchResult": "//a",
+            "chapterRoads": "//ul", "chapterResult": "//a",
+        }
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as zip_file:
+            zip_file.writestr("KazumiRules-main/example.json", json.dumps(rule))
+            zip_file.writestr("KazumiRules-main/disabled.json", json.dumps({**rule, "deprecated": True}))
+        remote = rules.extract_archive(archive.getvalue())
+        self.assertEqual(list(remote), ["example"])
+        with tempfile.TemporaryDirectory() as folder, patch.object(rules, "DATA_ROOT", Path(folder)), \
+                patch.object(rules, "remote_rules", return_value=remote), patch.object(rules, "_CATALOGUES", {}):
+            self.assertFalse(rules.rule_list(remote=True)["items"][0]["installed"])
+            handler = SimpleNamespace(client_address=("127.0.0.1", 1234), headers={"Host": "localhost"})
+            with patch.object(rules, "search") as search:
+                with self.assertRaises(RequestProblem) as missing:
+                    rules.serve(handler, rules.PREFIX + "search", {"rule": ["example"], "title": ["Example"]})
+                self.assertEqual(missing.exception.status, 404)
+                search.assert_not_called()
+            rules.change_rule("example", "install")
+            self.assertEqual(rules.installed_rule("example"), rule)
+            html = b'<ul><li><a href="/one">06</a></li></ul><ul><li><a href="/two">07</a></li></ul>'
+            with patch.object(rules, "_read", return_value=(html, "https://example.com/show")):
+                data = rules.catalogue("example", rule, "https://example.com/show")
+            self.assertEqual([[(ep["number"], ep["url"]) for ep in line["episodes"]] for line in data["sources"]],
+                             [[("6", "https://example.com/one")], [("7", "https://example.com/two")]])
+            rules.change_rule("example", "remove")
+            self.assertEqual(rules.rule_list()["items"], [])
