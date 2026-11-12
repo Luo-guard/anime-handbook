@@ -113,6 +113,9 @@ window.Date = __FrozenDate;
       const asDom = render(mixed);
       const missingAS = render({...mixed,as_airing:{unavailable:true}});
       const loadingAS = render({...mixed,as_airing:{unavailable:true,status:'loading'}});
+      const finishedAS = render({...mixed,as_airing:{aired:12,total:12}});
+      state.settings.hide_missing_as_schedule = false;
+      const visibleMissingAS = render({...mixed,as_airing:null});
 
       const meta = $('.progress-meta');
       const links = $('.progress-links');
@@ -125,7 +128,7 @@ window.Date = __FrozenDate;
       return {
         ongoing, finished, skewed, dirty, withNextAt, noData,
         ongoingDom, noClockDom, nextAtDom, finishedDom, upcomingDom, farUpcomingDom, emptyDom, danglingDom,
-        yucDom, asDom, missingAS, loadingAS,
+        yucDom, asDom, missingAS, loadingAS, finishedAS, visibleMissingAS,
         structure: {
           linksInMeta: Boolean(meta && meta.querySelector('#detailLinks')),
           linksInsideOwnRow: Boolean(links && links.querySelector('#detailLinks')),
@@ -159,7 +162,12 @@ window.Date = __FrozenDate;
     assert.equal(result.asDom.text, '周一 00:30 更新');
     assert.match(result.asDom.title, /AnimeSchedule/);
     assert.equal(result.missingAS.text, '暂无 AS 排期');
+    assert.equal(result.missingAS.hidden, true);
+    assert.equal(result.visibleMissingAS.hidden, false);
+    assert.equal(result.asDom.hidden, false);
+    assert.equal(result.finishedAS.hidden, false);
     assert.equal(result.loadingAS.text, '正在读取 AS 排期');
+    assert.equal(result.loadingAS.hidden, false);
 
     assert.equal(result.finishedDom.text, '已完结', `完结徽标：${result.finishedDom.text}`);
     assert.equal(result.finishedDom.kind, 'finished', '完结态要挂 finished 样式');

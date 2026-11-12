@@ -127,6 +127,7 @@ def _normalize_settings(body, settings):
         "collection_rating_source",
         "collection_airing_source",
         "detail_airtime_source",
+        "hide_missing_as_schedule",
         "schedule_airing_source",
         "show_collection_progress_control",
         "show_create_collection_control",
@@ -356,7 +357,7 @@ def _normalize_settings(body, settings):
                 value = bool(value)
             elif key in {"show_bilibili_search_button", "show_search_bgm_link", "show_saved_video_list", "merge_bilibili_links", "video_default_pinned"}:
                 value = bool(value)
-            elif key == "show_episode_titles_on_hover":
+            elif key in {"show_episode_titles_on_hover", "hide_missing_as_schedule"}:
                 value = bool(value)
             elif key == "bgm_sources":
                 value = normalize_bgm_sources(value)

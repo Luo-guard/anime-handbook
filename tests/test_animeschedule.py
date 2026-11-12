@@ -57,10 +57,12 @@ class AnimeScheduleTest(unittest.TestCase):
     def test_settings_independent_and_invalid_values_rejected(self):
         pending, _, _ = normalize_settings({
             "collection_airing_source": "as", "schedule_airing_source": "bgm", "detail_airtime_source": "yuc",
+            "hide_missing_as_schedule": False,
         }, {})
         self.assertEqual(pending["collection_airing_source"], "as")
         self.assertEqual(pending["schedule_airing_source"], "bgm")
         self.assertEqual(pending["detail_airtime_source"], "yuc")
+        self.assertIs(pending["hide_missing_as_schedule"], False)
         for value in (None, [], {}, "other", 1):
             with self.assertRaises(ValueError):
                 normalize_settings({"schedule_airing_source": value}, {})

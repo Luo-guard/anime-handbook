@@ -71,6 +71,7 @@ const HandbookSettings = (() => {
           schedule_source: $("#scheduleSourceInput").value,
           ...progressSources,
           detail_airtime_source: detailAirtimeSource,
+          hide_missing_as_schedule: $("#hideMissingAsScheduleInput").checked,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
           schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
           top_sync_action: $("#topSyncActionInput").value,

@@ -982,6 +982,10 @@
             <select id="detailAirtimeSourceInput"><option value="yuc">長門番堂</option><option value="as">AnimeSchedule</option></select>
           </label>
           <label class="setting-row">
+            <span><strong>隐藏「暂无 AS 排期」</strong><small>更新时间来源为 AnimeSchedule 时，隐藏缺少排期的提示。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="hideMissingAsScheduleInput" checked /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row">
             <span>
               <strong>显示 Bangumi 评分与排名</strong>
               <small>在单个番剧界面显示镜像同步的评分、排名与评分人数。</small>
@@ -1607,15 +1611,15 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261112-playback-source" defer></script>
-    <script src="/modules/details.js?v=20261112-detail-close" defer></script>
+    <script src="/modules/details.js?v=20261112-hide-missing-as-schedule" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261111-detail-airtime" defer></script>
+    <script src="/modules/settings.js?v=20261112-hide-missing-as-schedule" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
-    <script src="/modules/settings-save.js?v=20261111-detail-airtime" defer></script>
+    <script src="/modules/settings-save.js?v=20261112-hide-missing-as-schedule" defer></script>
     <script src="/modules/events.js?v=20261112-detail-close" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

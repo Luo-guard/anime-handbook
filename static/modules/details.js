@@ -99,9 +99,11 @@ function animeScheduleBadge(anime) {
   if (airing?.total > 0 && airing.aired >= airing.total) {
     return { kind: "finished", text: "已完结", title: "按 AnimeSchedule 的播出进度判断" };
   }
+  const loading = airing?.status === "loading";
   return {
     kind: "unknown",
-    text: airing?.status === "loading" ? "正在读取 AS 排期" : "暂无 AS 排期",
+    text: loading ? "正在读取 AS 排期" : "暂无 AS 排期",
+    missingSchedule: !loading,
     title: "AnimeSchedule 暂未提供可用的下一集时间",
   };
 }
@@ -141,6 +143,7 @@ function renderProgressBadge(anime) {
   const model = animeBadgeModel(anime);
   const badge = $("#progressBadge");
   badge.className = `update-badge ${model.kind}`;
+  badge.classList.toggle("hidden", Boolean(model.missingSchedule && state.settings?.hide_missing_as_schedule !== false));
   badge.title = model.title;
   $("#progressBadgeText").textContent = model.text;
 }

@@ -34,6 +34,10 @@ const server=http.createServer((req,res)=>{
   await page.waitForFunction(()=>!document.querySelector('#settingsModal').open);
   await page.click('#settingsButton');await page.click('[data-settings-tab="detail"]');
   await page.selectOption('#detailAirtimeSourceInput','as');
+  const hideMissingSchedule = page.locator('#hideMissingAsScheduleInput');
+  assert.equal(await hideMissingSchedule.isChecked(),true,'missing AS schedules are hidden by default');
+  await page.locator('#hideMissingAsScheduleInput + .switch').click();
+  assert.equal(await hideMissingSchedule.isChecked(),false);
   assert.equal(settings.detail_airtime_source,'yuc','detail source waits for save');
   await page.click('#saveSettings');await page.waitForFunction(()=>!document.querySelector('#settingsModal').open);
   await page.reload();await page.click('#settingsButton');await page.click('[data-settings-tab="collection"]');
@@ -42,6 +46,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#scheduleAiringSourceInput').inputValue(),'as');
   await page.click('[data-settings-tab="detail"]');
   assert.equal(await page.locator('#detailAirtimeSourceInput').inputValue(),'as');
+  assert.equal(await hideMissingSchedule.isChecked(),false,'the visibility preference survives reload');
   await page.click('[data-settings-tab="schedule"]');
   await page.setViewportSize({width:390,height:844});await page.locator('#scheduleAiringSourceInput').scrollIntoViewIfNeeded();
   const box=await page.locator('#scheduleAiringSourceInput').boundingBox();assert(box.x>=0&&box.x+box.width<=390);
