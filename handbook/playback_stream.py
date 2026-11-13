@@ -18,6 +18,7 @@ PLAYBACK_PREFIX = "/api/playback/"
 _BROWSER_SLOTS = threading.BoundedSemaphore(2)
 _STREAM_SLOTS = threading.BoundedSemaphore(16)
 _LOCK = threading.Lock()
+MAX_PLAYLIST_BYTES = 2 * 1024 * 1024
 
 
 def media_format(url, content_type=""):
@@ -119,9 +120,43 @@ def issue(url, kind, headers=None, *, expires=None):
     return {"url": f"{PLAYBACK_PREFIX}stream/{token}/main", "format": kind}
 
 
-def rewrite_playlist(data, base, token, playback):
-    if not data.startswith("#EXTM3U"):
+def _playlist_text(response):
+    data = response.read(MAX_PLAYLIST_BYTES + 1)
+    if len(data) > MAX_PLAYLIST_BYTES:
+        raise RequestProblem("HLS 列表过大", 502)
+    return data.decode("utf-8-sig")
+
+
+def _validate_playlist(lines):
+    if not lines or lines[0].strip() != "#EXTM3U":
         raise RequestProblem("片源返回了无效的 HLS 列表", 502)
+    if not any(line and (not line.startswith("#")
+                        or (line.startswith("#EXT-X-I-FRAME-STREAM-INF:") and 'URI="' in line))
+               for line in map(str.strip, lines[1:])):
+        raise RequestProblem("片源返回了空的播放列表，请切换线路或规则", 502)
+
+
+def probe_media(url, kind, headers):
+    """Verify a direct URL before handing it to the browser."""
+    probe_headers = {"User-Agent": "Mozilla/5.0", "Accept-Encoding": "identity", **headers}
+    if kind == "file":
+        probe_headers["Range"] = "bytes=0-1023"
+    try:
+        with request_public(url, headers=probe_headers) as (response, _):
+            content_type = response.headers.get_content_type()
+            if response.status not in (200, 206) or content_type in {"text/html", "application/json"}:
+                raise RequestProblem(f"片源返回 HTTP {response.status} 或非视频内容，请切换线路或规则", 502)
+            if kind == "hls":
+                _validate_playlist(_playlist_text(response).splitlines())
+            elif not response.read(1):
+                raise RequestProblem("片源返回了空的视频，请切换线路或规则", 502)
+    except (OSError, HTTPException, UnicodeError):
+        raise RequestProblem("无法读取片源，请重试或切换规则", 502) from None
+
+
+def rewrite_playlist(data, base, token, playback):
+    source_lines = data.splitlines()
+    _validate_playlist(source_lines)
 
     def register(uri, kind="segment"):
         target = urljoin(base, uri)
@@ -135,7 +170,7 @@ def rewrite_playlist(data, base, token, playback):
 
     lines = []
     variant = False
-    for line in data.splitlines():
+    for line in source_lines:
         line = line.strip()
         if line.startswith("#"):
             # Alternate playlists and initialization/key resources use URI attributes.
@@ -182,11 +217,7 @@ def stream(handler, token, resource):
             if response.status not in (200, 206) or content_type in {"text/html", "application/json"}:
                 raise RequestProblem(f"视频线路返回 HTTP {response.status} 或非视频内容", 502)
             if kind == "hls" or content_type in HLS_TYPES:
-                limit = 2 * 1024 * 1024
-                data = response.read(limit + 1)
-                if len(data) > limit:
-                    raise RequestProblem("HLS 列表过大", 502)
-                body = rewrite_playlist(data.decode("utf-8-sig"), final_url, token, playback)
+                body = rewrite_playlist(_playlist_text(response), final_url, token, playback)
                 _headers(handler, 200, "application/vnd.apple.mpegurl", str(len(body)))
                 _send_body(handler, (body,))
                 return

@@ -5,6 +5,8 @@ import socket
 import tempfile
 import unittest
 import zipfile
+from contextlib import contextmanager
+from email.message import Message
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -74,6 +76,25 @@ class XifanPreviewTest(unittest.TestCase):
                 ("https://example.com:8088/hls/key", "segment"), ("https://example.com:8088/hls/seg.ts", "segment"),
             })
             self.assertNotIn("example.com", output)
+
+    def test_media_probe_rejects_upstream_error_and_empty_hls(self):
+        url = "https://example.com/video"
+        headers = Message()
+
+        @contextmanager
+        def upstream(status, body):
+            yield SimpleNamespace(status=status, headers=headers, read=io.BytesIO(body).read), url
+
+        cases = [
+            (500, b"error", "file", "HTTP 500"),
+            (200, b"#EXTM3U\r\n", "hls", "空的播放列表"),
+        ]
+        for status, body, kind, message in cases:
+            with self.subTest(kind=kind), patch.object(streams, "request_public", return_value=upstream(status, body)):
+                with self.assertRaisesRegex(RequestProblem, message):
+                    streams.probe_media(url, kind, {})
+        with patch.object(streams, "request_public", return_value=upstream(200, b"#EXTM3U\n#EXTINF:6,\nsegment.ts\n")):
+            streams.probe_media(url, "hls", {})
 
     def test_download_gates_use_and_xpath_selects_each_line_independently(self):
         rule = {

@@ -412,7 +412,9 @@ def play(rule_id, rule, provider, source_id, episode_id):
         try:
             media, expires = xifan_preview.resolve(provider, episode_id, source_id, rule)
             headers["Referer"] = xifan_preview.SITE + "/"
-            return playback_stream.issue(media, playback_stream.media_format(media) or "file", headers, expires=expires)
+            kind = playback_stream.media_format(media) or "file"
+            playback_stream.probe_media(media, kind, headers)
+            return playback_stream.issue(media, kind, headers, expires=expires)
         except xifan_preview.PreviewError:
             pass
     if kind := playback_stream.media_format(url):
