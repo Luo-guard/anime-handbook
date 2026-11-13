@@ -22,7 +22,7 @@ const fakeRows = ['Bangumi #{id}', 'B站搜索', '已存视频', '更多站点 �
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
-  for (const viewport of [{ width: 1080, height: 720 }, { width: 1000, height: 600 }, { width: 430, height: 640 }]) {
+  for (const viewport of [{ width: 1080, height: 720 }, { width: 1000, height: 600 }, { width: 430, height: 640 }, { width: 320, height: 480 }]) {
     const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
     await page.setContent(`<style>${css}</style>${bare}`);
     await page.evaluate((rows) => {
@@ -87,5 +87,5 @@ const fakeRows = ['Bangumi #{id}', 'B站搜索', '已存视频', '更多站点 �
     await page.close();
   }
   await browser.close();
-  console.log('Settings dialogs: no horizontal scrollbar at 1080/1000/430px, hidden switches stay 1x1 and clickable.');
+  console.log('Settings dialogs: no horizontal scrollbar at 1080/1000/430/320px, hidden switches stay 1x1 and clickable.');
 })().catch((error) => { console.error(error); process.exit(1); });

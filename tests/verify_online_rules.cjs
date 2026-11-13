@@ -91,6 +91,14 @@ async function verify() {
     await page.click("#pcPlaybackRetry");
     await page.waitForFunction(() => document.querySelector("#pcPlaybackState").dataset.state === "error");
     assert.equal(plays.length, 3);
+    const skipButton = page.locator("#pcSkipForward");
+    await skipButton.hover();
+    await page.mouse.down();
+    await page.locator("#pcSkipModal[open]").waitFor();
+    await page.mouse.up();
+    await page.keyboard.press("Escape");
+    await page.locator("#pcSkipModal").waitFor({ state: "hidden" });
+    assert.ok(await page.locator("#offlinePlayer[open]").isVisible());
     await page.click("#managePlayerRules");
     await page.locator('#settingsModal[open] [data-settings-tab="playback"].active').waitFor();
     await page.keyboard.press("Escape");

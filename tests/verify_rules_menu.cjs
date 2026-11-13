@@ -89,7 +89,7 @@ async function loadLinkRules() { return linkRulesState.items; }
     await page.fill('#rulesMenuSearch', '');
     await page.evaluate(() => renderRulesMenu());
 
-    // 4) 点站点跳转：站点行是真链接（target=_blank），地址带 {title} 编码，并记一次跳转。
+    // 4) 点站点跳转：站点行是真链接（target=_blank），地址带 {title} 编码。
     const firstRow = page.locator('#rulesMenuList .rules-menu-row').first();
     const openAnchor = firstRow.locator('.rules-menu-open');
     assert.equal(await openAnchor.evaluate((node) => node.tagName), 'A', 'station row is a real anchor');
@@ -101,7 +101,7 @@ async function loadLinkRules() { return linkRulesState.items; }
     ]);
     await popup.close();
     assert.equal(await page.locator('#rulesMenuModal').evaluate((node) => node.open), false, 'jump closes the dialog');
-    assert.equal((await page.evaluate(() => window.__jumps.length)), 1);
+    assert.equal((await page.evaluate(() => window.__jumps.length)), 0, 'external links do not enter playback history');
 
     // 5) 固定：写库、回到详情页立刻多一条，按钮变成已固定。
     await page.locator('#detailLinks .detail-link-menu').click();

@@ -13,6 +13,7 @@ const slice = (marker) => {
 };
 const rulesDialog = slice('<dialog class="modal rules-dialog" id="linkRulesModal">');
 const menuDialog = slice('<dialog class="modal rules-menu-dialog" id="rulesMenuModal">');
+const skipDialog = slice('<dialog class="modal pc-skip-modal" id="pcSkipModal">');
 
 const rows = (count, cls) => Array.from({ length: count }, (_, i) => cls.replace('{i}', i + 1)).join('');
 const fill = `
@@ -49,8 +50,29 @@ const measure = (selector) => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${rulesDialog}${menuDialog}`);
+    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${rulesDialog}${menuDialog}${skipDialog}`);
     await page.addScriptTag({ content: fill });
+    for (const [width, height] of [[1536, 740], [390, 640], [320, 480], [1000, 350]]) {
+      await page.setViewportSize({ width, height });
+      for (const id of ['pcSkipModal', 'linkRulesModal', 'rulesMenuModal']) {
+        const layout = await page.evaluate(id => {
+          const dialog = document.getElementById(id);
+          dialog.showModal();
+          const frame = dialog.querySelector('.modal-frame').getBoundingClientRect();
+          const result = {
+            centerOffset: frame.left + frame.width / 2 - document.documentElement.clientWidth / 2,
+            gap: dialog.clientWidth - frame.width,
+            overflow: dialog.scrollWidth - dialog.clientWidth,
+          };
+          dialog.close();
+          return result;
+        }, id);
+        const context = `${id} @ ${width}×${height}`;
+        assert.ok(Math.abs(layout.centerOffset) <= 1, `${context}: visible frame must be centered`);
+        assert.ok(Math.abs(layout.gap) <= 1, `${context}: frame must fill the dialog`);
+        assert.equal(layout.overflow, 0, `${context}: no horizontal overflow`);
+      }
+    }
     await page.evaluate(() => {
       document.querySelector('#linkRulesModal').showModal();
       document.querySelector('#rulesMenuModal').showModal();
