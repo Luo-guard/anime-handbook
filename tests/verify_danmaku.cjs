@@ -137,6 +137,46 @@ const BILI_XML = `<i>
   assert.equal(api.proxyOk, false);
   assert.match(api.message, /官方域名|本机|局域网/);
 
+  // 通过面板搜索、确认分集并加载，匹配结果在重开该集时复用。
+  let commentRequests = 0;
+  await page.route('**/api/danmaku/proxy', async (route) => {
+    const { path } = route.request().postDataJSON();
+    const search = path.startsWith('/api/v2/search/episodes?');
+    if (search) assert.equal(new URL(path, 'http://fixture').searchParams.get('anime'), '测试别名');
+    else {
+      assert.match(path, /\/comment\/108\?/);
+      commentRequests++;
+    }
+    await route.fulfill({ json: { ok: true, text: JSON.stringify(search
+      ? { animes: [{ animeTitle: '番剧 8', episodes: [
+          { episodeId: 107, episodeTitle: '第 7 集' },
+          { episodeId: 108, episodeTitle: '第 8 话' },
+        ] }] }
+      : { comments: [{ p: '4.2,1,16777215,uid', m: '测试在线弹幕' }] }) } });
+  });
+  const loadEpisode = () => page.evaluate(() =>
+    dmLoadFor({ id: 0, episode_key: '0:8' }, '测试番剧', 9876, 'fixture:8'));
+  await loadEpisode();
+  assert.equal(await page.locator('#dmQuery').inputValue(), '测试番剧');
+  await page.locator('#dmQuery').fill('测试别名');
+  await page.locator('#dmQuery').press('Enter');
+  await page.locator('#dmMatchRow').waitFor();
+  assert.equal(await page.locator('#dmMatch').inputValue(), '108');
+  await page.locator('#dmUseMatch').click();
+  await page.getByText('在线弹幕已加载', { exact: true }).waitFor();
+  assert.equal(await page.locator('#dmCount').textContent(), '1 条');
+  await loadEpisode();
+  assert.equal(commentRequests, 2);
+  await page.unroute('**/api/danmaku/proxy');
+  await page.getByText('显示与过滤', { exact: true }).click();
+  assert.equal(await page.locator('#dmAreaValue').textContent(), '50%');
+  await page.getByText('显示与过滤', { exact: true }).click();
+  await page.locator('#dmConfigure').click();
+  await page.locator('#settingsModal[open] [data-settings-tab="playback"].active').waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'dmSourceMode');
+  await page.keyboard.press('Escape');
+  await page.locator('#settingsModal').waitFor({ state: 'hidden' });
+
   // 7) 恢复默认设置并留一张效果图
   await page.evaluate(() => {
     const video = document.querySelector('#offlineVideo');
@@ -175,11 +215,12 @@ const BILI_XML = `<i>
   assert.deepEqual(aligned.canvas, aligned.video, '弹幕 canvas 必须和视频画面严格对齐');
   // 主图：收起设置面板，只留底部按钮和铺开的弹幕
   await page.evaluate(() => document.querySelector('#danmakuPanel').classList.add('hidden'));
-  await page.screenshot({ path: 'tests/弹幕效果_播放器.png' });
   // 另一张：面板展开，展示 Kazumi 式的弹幕设置
   await page.evaluate(() => document.querySelector('#danmakuPanel').classList.remove('hidden'));
   await page.waitForTimeout(120);
-  await page.screenshot({ path: 'tests/弹幕效果_设置面板.png' });
+  const bounds = await page.locator('#danmakuPanel').boundingBox();
+  const videoBounds = await page.locator('#offlinePlayerVideoWrap').boundingBox();
+  assert.ok(bounds.y >= videoBounds.y && bounds.y + bounds.height <= videoBounds.y + videoBounds.height);
 
   // 8) 全屏路径回归：容器能进全屏（:fullscreen CSS 生效、video 占满视口）、能退出。
   //    headless 触发不了原生 video 全屏，所以「video 全屏 → 容器转接」这一步

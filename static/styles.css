@@ -4590,62 +4590,104 @@ dialog.modal { overflow-x: hidden; }
   width: 100%; height: 100%; max-height: none; object-fit: contain;
 }
 
-/* 弹幕设置面板：像 Kazumi 那样直接挂在播放器里，不另开弹窗。 */
+/* 播放器内的弹幕面板，随视频容器一起进入全屏。 */
 .danmaku-panel {
-  position: absolute; top: 12px; right: 12px; z-index: 5;
-  width: min(306px, calc(100% - 24px));
-  /* 用视口而不是视频容器算高度：没有片源 / 竖屏片源时视频区可能很矮，
-     面板不该被压成只能看见两行。容器没有 overflow:hidden，允许向下溢出。 */
-  max-height: min(72vh, 560px);
-  overflow-y: auto; box-sizing: border-box;
-  padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 12px;
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  box-shadow: 0 14px 40px rgb(0 0 0 / .28);
-  backdrop-filter: blur(8px);
-  color: var(--ink); line-height: 1.5; font-size: 12px;
-  pointer-events: auto;
+  position: absolute;
+  inset: 12px 12px auto auto;
+  z-index: 5;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(354px, calc(100% - 24px));
+  max-height: min(520px, calc(100% - 24px));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 34px rgb(0 0 0 / .28);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
 }
-.danmaku-panel.hidden, .danmaku-actions .hidden { display: none !important; }
-.danmaku-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.danmaku-panel-head strong { font-size: 13px; }
+.danmaku-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.danmaku-panel-head h3 { margin: 0; font-size: 16px; }
 .danmaku-panel-head button {
-  border: 0; background: transparent; color: var(--muted);
-  font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  cursor: pointer;
+}
+.danmaku-panel-head button:hover { background: var(--green-50); }
+.danmaku-panel-body {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px;
 }
 .danmaku-status {
-  display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
-  padding: 7px 9px; margin-bottom: 8px; border-radius: 8px;
-  background: rgb(var(--theme-rgb) / .06); color: var(--muted);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 9px;
+  background: var(--green-50);
 }
-.danmaku-status b { color: var(--green-800); font-size: 11px; white-space: nowrap; }
+.danmaku-status strong, .danmaku-status b { color: var(--green-800); }
+.danmaku-status b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.danmaku-status p { margin: 3px 0 0; color: var(--muted); overflow-wrap: anywhere; }
+.danmaku-search, .danmaku-match { display: grid; gap: 6px; margin-top: 10px; }
+.danmaku-search > div { display: flex; gap: 6px; }
+.danmaku-panel :is(input[type="search"], input[type="text"], select) {
+  min-width: 0;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.danmaku-panel .compact-button { min-height: 34px; padding: 6px 10px; white-space: nowrap; }
+.danmaku-match button { justify-self: end; }
+.danmaku-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 9px 0 3px; }
+.danmaku-actions button { padding: 4px 0; font-size: 12px; }
+.danmaku-display { border-top: 1px solid var(--line); margin-top: 8px; }
+.danmaku-display summary { padding: 10px 0 4px; cursor: pointer; font-weight: 650; }
 .danmaku-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 3px 0; min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
 }
-.danmaku-row > span:first-child { flex: 0 0 auto; color: var(--muted); }
-.danmaku-row b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.danmaku-row input[type="range"] { flex: 1 1 auto; min-width: 90px; accent-color: var(--green-700); }
-.danmaku-row input[type="checkbox"] { accent-color: var(--green-700); }
+.danmaku-row b { font-variant-numeric: tabular-nums; }
+.danmaku-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--green-700); }
 .danmaku-row.stacked { flex-direction: column; align-items: stretch; gap: 4px; }
-.danmaku-row.stacked > span:first-child { text-align: left; }
-.danmaku-inline { display: flex; gap: 16px; }
-.danmaku-panel input[type="text"], .danmaku-panel input[type="password"], .danmaku-panel select {
-  width: 100%; box-sizing: border-box; padding: 5px 8px;
-  border: 1px solid var(--line); border-radius: 7px;
-  background: var(--surface); color: var(--ink); font: inherit; font-size: 11.5px;
+.danmaku-panel :is(button, summary, input, select):focus-visible {
+  outline: 2px solid var(--green-700);
+  outline-offset: 2px;
 }
-.danmaku-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
-.danmaku-actions button, .danmaku-actions select {
-  flex: 1 1 auto; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px;
-  background: var(--green-50); color: var(--green-800); font: inherit; font-size: 11.5px;
-  cursor: pointer; white-space: nowrap;
+.danmaku-panel .switch-row input:focus-visible + .switch {
+  outline: 2px solid var(--green-700);
+  outline-offset: 2px;
 }
-.danmaku-actions button:hover { background: var(--green-100); }
-.danmaku-actions button:disabled { opacity: .55; cursor: default; }
-.danmaku-actions select { flex-basis: 100%; background: var(--surface); }
 .offline-player-bar { flex-wrap: wrap; gap: 8px; }
 @media (max-width: 480px) {
-  .danmaku-panel { top: 6px; right: 6px; width: min(270px, calc(100% - 12px)); max-height: calc(100% - 12px); }
+  .danmaku-panel {
+    inset: 6px 6px auto auto;
+    width: min(354px, calc(100% - 12px));
+    max-height: calc(100% - 12px);
+  }
 }
 
 /* 320px 档详情弹窗（审计遗留项）：浏览器给 <dialog> 的默认

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-source-picker" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-danmaku-panel" />
   </head>
   <body>
     <div class="app-shell">
@@ -598,29 +598,48 @@
             </div>
           </div>
           <canvas id="danmakuCanvas" class="danmaku-canvas" width="1" height="1" aria-hidden="true"></canvas>
-          <div class="danmaku-panel hidden" id="danmakuPanel">
+          <section class="danmaku-panel hidden" id="danmakuPanel" aria-labelledby="dmPanelTitle">
             <div class="danmaku-panel-head">
-              <strong>弹幕设置</strong>
+              <h3 id="dmPanelTitle">弹幕</h3>
               <button type="button" id="dmPanelClose" aria-label="关闭弹幕设置">×</button>
             </div>
-            <div class="danmaku-status"><span id="dmSource">还没有加载弹幕</span><b id="dmCount">0 条</b></div>
-            <label class="danmaku-row"><span>显示弹幕</span><input type="checkbox" id="dmEnabled" /></label>
-            <label class="danmaku-row"><span>字号 <b id="dmFontSizeValue">24</b></span><input type="range" id="dmFontSize" min="16" max="40" step="1" /></label>
-            <label class="danmaku-row"><span>滚动时长 <b id="dmDurationValue">8</b> 秒</span><input type="range" id="dmDuration" min="4" max="16" step="1" /></label>
-            <label class="danmaku-row"><span>不透明度 <b id="dmOpacityValue">0.92</b></span><input type="range" id="dmOpacity" min="0.3" max="1" step="0.02" /></label>
-            <label class="danmaku-row"><span>显示区域 <b id="dmAreaValue">0.5</b></span><input type="range" id="dmArea" min="0.25" max="1" step="0.25" /></label>
-            <label class="danmaku-row"><span>同屏上限 <b id="dmDensityValue">0</b></span><input type="range" id="dmDensity" min="0" max="60" step="5" /></label>
-            <label class="danmaku-row"><span>粗体 / 顶底弹幕</span><span class="danmaku-inline"><input type="checkbox" id="dmBold" /><input type="checkbox" id="dmTopBottom" /></span></label>
-            <label class="danmaku-row stacked"><span>屏蔽词（逗号分隔）</span><input type="text" id="dmShield" placeholder="剧透, 广告" /></label>
-            <div class="danmaku-actions">
-              <button type="button" id="dmImport">导入弹幕文件</button>
-              <button type="button" id="dmOnlineSearch">搜索在线弹幕</button>
-              <button type="button" id="dmReload">重新加载</button>
-              <input type="file" id="dmFile" accept=".xml,.json" hidden />
-              <select id="dmMatch" class="hidden" aria-label="选择在线分集"></select>
-              <button type="button" id="dmUseMatch" class="hidden">用这个分集</button>
+            <div class="danmaku-panel-body">
+              <div class="danmaku-status">
+                <div><strong id="dmProvider">公共弹幕源</strong><p id="dmSource" role="status">还没有加载弹幕</p></div>
+                <b id="dmCount">0 条</b>
+              </div>
+              <form class="danmaku-search" id="dmSearchForm">
+                <label for="dmQuery">按番名搜索弹幕</label>
+                <div>
+                  <input type="search" id="dmQuery" placeholder="输入番名" required />
+                  <button type="submit" class="primary-button compact-button" id="dmOnlineSearch">搜索</button>
+                </div>
+              </form>
+              <div class="danmaku-match hidden" id="dmMatchRow">
+                <label for="dmMatch">选择分集</label>
+                <select id="dmMatch"></select>
+                <button type="button" class="primary-button compact-button" id="dmUseMatch">加载这集弹幕</button>
+              </div>
+              <div class="danmaku-actions">
+                <button type="button" class="text-button" id="dmImport">导入文件</button>
+                <button type="button" class="text-button" id="dmReload">重新加载</button>
+                <button type="button" class="text-button" id="dmConfigure">配置弹幕源</button>
+                <input type="file" id="dmFile" accept=".xml,.json" hidden />
+              </div>
+              <details class="danmaku-display">
+                <summary>显示与过滤</summary>
+                <label class="danmaku-row"><span>显示弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmEnabled" /><span class="switch"></span></span></label>
+                <label class="danmaku-row"><span>字号 <b id="dmFontSizeValue">24</b></span><input type="range" id="dmFontSize" min="16" max="40" step="1" /></label>
+                <label class="danmaku-row"><span>滚动时长 <b id="dmDurationValue">8</b> 秒</span><input type="range" id="dmDuration" min="4" max="16" step="1" /></label>
+                <label class="danmaku-row"><span>不透明度 <b id="dmOpacityValue">0.92</b></span><input type="range" id="dmOpacity" min="0.3" max="1" step="0.02" /></label>
+                <label class="danmaku-row"><span>显示区域 <b id="dmAreaValue">0.5</b></span><input type="range" id="dmArea" min="0.25" max="1" step="0.25" /></label>
+                <label class="danmaku-row"><span>同屏上限 <b id="dmDensityValue">0</b></span><input type="range" id="dmDensity" min="0" max="60" step="5" /></label>
+                <label class="danmaku-row"><span>粗体弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmBold" /><span class="switch"></span></span></label>
+                <label class="danmaku-row"><span>顶底弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmTopBottom" /><span class="switch"></span></span></label>
+                <label class="danmaku-row stacked"><span>屏蔽词（逗号分隔）</span><input type="text" id="dmShield" placeholder="剧透, 广告" /></label>
+              </details>
             </div>
-          </div>
+          </section>
         </div>
         <div class="offline-player-bar">
           <p class="offline-player-meta" id="offlinePlayerMeta" role="status"></p>
@@ -1124,7 +1143,7 @@
           <label class="setting-row"><strong>顶底弹幕</strong><span class="switch-row compact"><input type="checkbox" data-dm-pref="topBottom" /><span class="switch"></span></span></label>
           <label class="setting-row"><strong>屏蔽词</strong><input type="text" data-dm-pref="shield" placeholder="用逗号分隔" /></label>
           <label class="setting-row">
-            <span><strong>在线弹幕源</strong><small>官方源凭据可在 <a href="https://dev.dandanplay.com/" target="_blank" rel="noreferrer">弹弹play 开发者中心</a>申请，只保存在当前浏览器。</small></span>
+            <span><strong>在线弹幕源</strong><small>保存后回到播放器，在弹幕面板搜索番名并选择分集。官方源凭据可在 <a href="https://dev.dandanplay.com/" target="_blank" rel="noreferrer">弹弹play 开发者中心</a>申请，只保存在当前浏览器。</small></span>
             <select id="dmSourceMode" data-dm-pref="sourceMode">
               <option value="public">公共弹幕源</option>
               <option value="dandanplay">弹弹play 官方</option>
@@ -1673,7 +1692,7 @@
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
-    <script src="/modules/danmaku.js?v=20261113-playback-settings" defer></script>
+    <script src="/modules/danmaku.js?v=20261113-danmaku-panel" defer></script>
     <script src="/modules/offline.js?v=20261113-modal-width" defer></script>
     <script src="/modules/online-playback.js?v=20261113-source-picker" defer></script>
     <script src="/modules/library-view.js?v=20261113-library-full-image" defer></script>
