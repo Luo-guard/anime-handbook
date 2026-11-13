@@ -4491,29 +4491,57 @@ dialog::backdrop {
   cursor: pointer; overflow-wrap: anywhere;
 }
 .online-source-results button:hover { background: var(--green-100); }
-.online-source :is(summary, button, input):focus-visible,
-.online-rule-filters button:focus-visible { outline: 2px solid var(--green-700); outline-offset: -2px; }
+.online-source :is(summary, button, input):focus-visible { outline: 2px solid var(--green-700); outline-offset: -2px; }
+[data-settings-group="playback"] :is(button, select, input:not([type="checkbox"])):focus-visible {
+  outline: 2px solid var(--green-700);
+  outline-offset: 2px;
+}
 .online-source-feedback { margin: 0 12px 8px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .online-source-feedback:empty { display: none; }
 .online-rule-manager.setting-row { gap: 8px; }
 .online-rule-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.online-rule-filters { display: flex; flex-wrap: wrap; gap: 4px; }
-.online-rule-filters button { padding: 7px 10px; border-radius: 8px; }
-.online-rule-filters button[aria-pressed="true"] { background: var(--green-100); color: var(--green-800); }
+.online-rule-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.online-rule-manager .compact-button { min-inline-size: 6.5em; white-space: nowrap; }
+.online-rule-manager .compact-button:disabled { opacity: .55; cursor: wait; }
+.online-rule-filters button[aria-pressed="true"] {
+  border-color: var(--active-inset);
+  background: var(--green-100);
+  color: var(--green-800);
+}
 .online-rule-credit { color: var(--muted); font-size: 12px; justify-self: start; }
 .online-rule-manager .online-playback-results { max-height: min(40vh, 340px); margin-top: 0; }
 .online-rule-manager [role="status"]:empty { display: none; }
-.settings-list [data-dm-pref]:is([type="text"], [type="url"], [type="password"]) {
-  width: min(100%, 290px);
-  min-width: 0;
-  padding: 9px 11px;
+[data-settings-group="playback"] :is(select, input:not([type="checkbox"])) {
+  min-block-size: 38px;
   border: 1px solid var(--line);
   border-radius: 10px;
+  padding: 7px 10px;
+  background: var(--surface);
   font: inherit;
+  font-size: 13px;
   color: var(--ink);
+}
+[data-settings-group="playback"] .setting-row > :is(select, input:not([type="checkbox"])) {
+  width: min(100%, 236px);
+  min-width: 0;
+}
+[data-settings-group="playback"] .inline-input {
+  position: relative;
+  width: 84px;
+  justify-content: flex-end;
+}
+[data-settings-group="playback"] .inline-input input {
+  width: 100%;
+}
+[data-settings-group="playback"] .inline-input:has(.input-unit) input { padding-right: 32px; }
+[data-settings-group="playback"] .input-unit {
+  position: absolute;
+  right: 9px;
+  pointer-events: none;
 }
 .online-rule-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -4523,7 +4551,8 @@ dialog::backdrop {
   border-radius: 10px;
 }
 .online-rule-row small { display: block; color: var(--muted); overflow-wrap: anywhere; }
-.online-rule-actions { display: flex; flex: 0 0 auto; gap: 6px; }
+.online-rule-row > :first-child { flex: 1 1 120px; min-width: 0; overflow-wrap: anywhere; }
+.online-rule-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-inline-start: auto; }
 
 .eg-slot-grid {
   display: grid;

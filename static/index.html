@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-record-image-selection" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-playback-controls" />
   </head>
   <body>
     <div class="app-shell">
@@ -1117,13 +1117,13 @@
             <span class="switch-row compact"><input type="checkbox" id="playbackResumeInput" /><span class="switch"></span></span>
           </label>
           <label class="setting-row"><strong>播放倍速</strong><select id="playbackSpeedInput"></select></label>
-          <label class="setting-row"><span><strong>快进时长</strong><small>用于播放器顶栏的快进按钮。</small></span><span class="inline-input"><input type="number" id="playbackSkipInput" min="1" max="600" step="1" /> 秒</span></label>
+          <label class="setting-row"><span><strong>快进时长</strong><small>用于播放器顶栏的快进按钮。</small></span><span class="inline-input"><input type="number" id="playbackSkipInput" min="1" max="600" step="1" /><span class="input-unit">秒</span></span></label>
           <h3 class="settings-subsection-title" id="playbackRulesHeading" tabindex="-1">在线片源</h3>
           <div class="setting-row stacked online-rule-manager">
             <div class="online-rule-tools">
               <div class="online-rule-filters" role="group" aria-label="规则列表">
-                <button type="button" class="text-button" data-rule-filter="installed" aria-pressed="true">已安装</button>
-                <button type="button" class="text-button" data-rule-filter="catalogue" aria-pressed="false">规则仓库</button>
+                <button type="button" class="secondary-button compact-button" data-rule-filter="installed" aria-pressed="true">已安装</button>
+                <button type="button" class="secondary-button compact-button" data-rule-filter="catalogue" aria-pressed="false">规则仓库</button>
               </div>
               <button type="button" class="secondary-button compact-button" id="onlineRuleCheckUpdates">检查更新</button>
             </div>
@@ -1134,8 +1134,8 @@
           </div>
           <h3 class="settings-subsection-title">弹幕</h3>
           <label class="setting-row"><strong>显示弹幕</strong><span class="switch-row compact"><input type="checkbox" data-dm-pref="enabled" /><span class="switch"></span></span></label>
-          <label class="setting-row"><strong>字号</strong><span class="inline-input"><input type="number" data-dm-pref="fontSize" min="16" max="40" step="1" /> px</span></label>
-          <label class="setting-row"><strong>滚动时长</strong><span class="inline-input"><input type="number" data-dm-pref="duration" min="4" max="16" step="1" /> 秒</span></label>
+          <label class="setting-row"><strong>字号</strong><span class="inline-input"><input type="number" data-dm-pref="fontSize" min="16" max="40" step="1" /><span class="input-unit">px</span></span></label>
+          <label class="setting-row"><strong>滚动时长</strong><span class="inline-input"><input type="number" data-dm-pref="duration" min="4" max="16" step="1" /><span class="input-unit">秒</span></span></label>
           <label class="setting-row"><strong>不透明度</strong><span class="inline-input"><input type="number" data-dm-pref="opacity" min="0.3" max="1" step="0.02" /></span></label>
           <label class="setting-row"><strong>显示区域</strong><select data-dm-pref="area"><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
           <label class="setting-row"><span><strong>同屏上限</strong><small>填 0 表示不限。</small></span><span class="inline-input"><input type="number" data-dm-pref="density" min="0" max="60" step="5" /></span></label>
