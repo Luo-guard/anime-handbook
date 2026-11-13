@@ -446,6 +446,14 @@ def play(rule_id, rule, provider, source_id, episode_id):
             return playback_stream.issue(media, kind, headers, expires=expires)
         except xifan_preview.PreviewError:
             pass
+        except RequestProblem as direct_error:
+            # The public fallback endpoint and the playback page can return different media.
+            try:
+                media, kind, browser_headers = playback_stream.resolve_in_browser(url, rule)
+                playback_stream.probe_media(media, kind, browser_headers)
+                return playback_stream.issue(media, kind, browser_headers)
+            except RequestProblem:
+                raise direct_error from None
     if kind := playback_stream.media_format(url):
         return playback_stream.issue(url, kind, headers)
     return playback_stream.issue(*playback_stream.resolve_in_browser(url, rule))

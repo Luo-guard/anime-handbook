@@ -127,6 +127,21 @@ class XifanPreviewTest(unittest.TestCase):
             rules.change_rule("example", "remove")
             self.assertEqual(rules.rule_list()["items"], [])
 
+    def test_xifan_failed_direct_stream_falls_back_to_playback_page(self):
+        page = "https://next.xifanacg.com/anime/1/play/2"
+        direct = "https://example.com/direct.mp4"
+        media = "https://example.com/browser.mp4"
+        catalogue = {"sources": [{"id": 4, "episodes": [{"id": 2, "url": page}]}]}
+        rule = {}
+        with patch.object(rules, "catalogue", return_value=catalogue), \
+                patch.object(preview, "resolve", return_value=(direct, None)), \
+                patch.object(streams, "probe_media", side_effect=[RequestProblem("HTTP 500", 502), None]), \
+                patch.object(streams, "resolve_in_browser", return_value=(media, "file", {})) as browser, \
+                patch.object(streams, "issue", return_value={"format": "file"}) as issue:
+            self.assertEqual(rules.play("xfdmnext", rule, "1", "4", "2"), {"format": "file"})
+            browser.assert_called_once_with(page, rule)
+            issue.assert_called_once_with(media, "file", {})
+
     def test_rule_update_checks_fresh_catalogue_and_cannot_downgrade(self):
         local = {
             "name": "Example", "version": "1.9", "baseURL": "https://example.com/",
