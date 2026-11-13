@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-danmaku-panel" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-record-image-selection" />
   </head>
   <body>
     <div class="app-shell">
@@ -1658,6 +1658,10 @@
         <button class="modal-close" aria-label="关闭">×</button>
         <h2 id="recordImagePickerTitle">插入图片</h2>
         <p id="recordImageFolder" class="page-subtitle" role="status"></p>
+        <div class="record-image-toolbar">
+          <span id="recordImageCount" role="status">已选 0 张</span>
+          <button type="button" class="lib-text-button" id="recordImageSelectAll" disabled>全选</button>
+        </div>
         <div id="recordImageChoices" class="lib-image-grid"></div>
         <div class="modal-actions">
           <button type="button" class="secondary-button" id="recordImageBrowse">从电脑选择</button>
@@ -1685,7 +1689,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261113-playback-settings" defer></script>
-    <script src="/modules/events.js?v=20261113-playback-settings" defer></script>
+    <script src="/modules/events.js?v=20261113-record-image-selection" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
@@ -1695,7 +1699,7 @@
     <script src="/modules/danmaku.js?v=20261113-danmaku-panel" defer></script>
     <script src="/modules/offline.js?v=20261113-modal-width" defer></script>
     <script src="/modules/online-playback.js?v=20261113-source-picker" defer></script>
-    <script src="/modules/library-view.js?v=20261113-library-full-image" defer></script>
+    <script src="/modules/library-view.js?v=20261113-record-image-selection" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

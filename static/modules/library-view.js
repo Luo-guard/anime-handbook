@@ -822,22 +822,35 @@ async function deleteSelectedImages() {
   }
 }
 
+let recordImageGallery = null;
+
+function openRecordImagePreview(images, index, folder) {
+  recordImageGallery = { images, index, folder };
+  openLibraryImage(index);
+  $("#libImageFullscreen").click();
+}
+
 function openLibraryImage(index) {
-  const flat = librarySidebar.imageFlat || [];
+  const flat = recordImageGallery?.images || librarySidebar.imageFlat || [];
   if (!flat.length) return;
   const total = flat.length;
-  librarySidebar.imageIndex = ((Number(index) || 0) + total) % total;
-  const image = flat[librarySidebar.imageIndex];
+  const current = ((Number(index) || 0) + total) % total;
+  if (recordImageGallery) recordImageGallery.index = current;
+  else librarySidebar.imageIndex = current;
+  const image = flat[current];
   $("#libImageView").src = libImageUrl(image.relative);
   $("#libImageView").alt = image.name;
-  $("#libImageCaption").textContent = `${image.folder} / ${image.name}　（${librarySidebar.imageIndex + 1} / ${total}）`;
+  const folder = recordImageGallery?.folder || image.folder;
+  $("#libImageCaption").textContent = `${folder} / ${image.name}　（${current + 1} / ${total}）`;
   $("#libImagePrev").disabled = total <= 1;
   $("#libImageNext").disabled = total <= 1;
+  $("#libImageDelete").hidden = Boolean(recordImageGallery);
   const dialog = $("#libImageViewer");
   if (dialog && !dialog.open) dialog.showModal();
 }
 
 async function deleteLibraryImage() {
+  if (recordImageGallery) return;
   const flat = librarySidebar.imageFlat || [];
   const image = flat[librarySidebar.imageIndex];
   if (!image) return;
@@ -912,8 +925,9 @@ function initLibraryView() {
     if (document.querySelector("dialog[open]")) return;
     setImageSelecting(false);
   });
-  $("#libImagePrev")?.addEventListener("click", () => openLibraryImage(librarySidebar.imageIndex - 1));
-  $("#libImageNext")?.addEventListener("click", () => openLibraryImage(librarySidebar.imageIndex + 1));
+  const stepImage = offset => openLibraryImage((recordImageGallery?.index ?? librarySidebar.imageIndex) + offset);
+  $("#libImagePrev")?.addEventListener("click", () => stepImage(-1));
+  $("#libImageNext")?.addEventListener("click", () => stepImage(1));
   $("#libImageDelete")?.addEventListener("click", deleteLibraryImage);
   $("#libImageClose")?.addEventListener("click", () => $("#libImageViewer")?.close());
   const imageFrame = $("#libImageViewer .modal-frame");
@@ -930,11 +944,12 @@ function initLibraryView() {
     imageFullscreen.textContent = document.fullscreenElement === imageFrame ? "退出全屏" : "全屏看图";
   });
   $("#libImageViewer")?.addEventListener("close", () => {
+    if (!$("#libImageViewer").open) recordImageGallery = null;
     if (document.fullscreenElement === imageFrame) document.exitFullscreen().catch(() => {});
   });
   $("#libImageViewer")?.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowLeft") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex - 1); }
-    else if (event.key === "ArrowRight") { event.preventDefault(); openLibraryImage(librarySidebar.imageIndex + 1); }
+    if (event.key === "ArrowLeft") { event.preventDefault(); stepImage(-1); }
+    else if (event.key === "ArrowRight") { event.preventDefault(); stepImage(1); }
   });
 
   $("#libSearch")?.addEventListener("input", (event) => {

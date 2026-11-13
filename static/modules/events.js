@@ -323,39 +323,47 @@ async function insertRecordImageFiles(files, textarea) {
     toast("一次最多插入 9 张图片", "error");
     return;
   }
-  const oversized = files.find((file) => file.size > 8 * 1024 * 1024);
+  const oversized = files.find(file => file.size > 8 * 1024 * 1024);
   if (oversized) {
     toast(`图片「${oversized.name}」不能超过 8 MB`, "error");
     return;
   }
   try {
-    const inserts = [];
-    for (const [index, file] of files.entries()) {
-      toast(files.length > 1 ? `正在上传图片 ${index + 1}/${files.length}` : "正在上传图片");
-      const result = window.handbookOnline
-        ? await window.handbookOnline.uploadImage("/api/record-images", file)
-        : await (async () => {
-          const data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onerror = () => reject(new Error("读取图片失败"));
-            reader.onload = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-          });
-          return api("/api/record-images", {
-            method: "POST",
-            body: JSON.stringify({ data }),
-          });
-        })();
-      inserts.push(`![${file.name}](${result.url})`);
-    }
-    if (!textarea.isConnected) return;
-    const insert = inserts.join("\n");
-    textarea.setRangeText(insert, textarea.selectionStart, textarea.selectionEnd, "end");
-    textarea.focus();
-    toast(files.length > 1 ? `${files.length} 张图片已插入记录` : "图片已插入记录");
+    await uploadRecordImageFiles(files, files.length, textarea);
   } catch (error) {
     toast(error.message, "error");
   }
+}
+
+async function uploadRecordImageFiles(files, total, textarea, { signal, onProgress = toast } = {}) {
+  const inserts = [];
+  for await (const file of files) {
+    if (file.size > 8 * 1024 * 1024) throw new Error(`图片「${file.name}」不能超过 8 MB`);
+    if (!textarea.isConnected) return;
+    onProgress(total > 1 ? `正在插入图片 ${inserts.length + 1}/${total}` : "正在插入图片");
+    const result = window.handbookOnline
+      ? await window.handbookOnline.uploadImage("/api/record-images", file)
+      : await (async () => {
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("读取图片失败"));
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+        return api("/api/record-images", {
+          method: "POST",
+          body: JSON.stringify({ data }),
+          signal,
+        });
+      })();
+    inserts.push(`![${file.name}](${result.url})`);
+  }
+  signal?.throwIfAborted();
+  if (!textarea.isConnected) return;
+  const insert = inserts.join("\n");
+  textarea.setRangeText(insert, textarea.selectionStart, textarea.selectionEnd, "end");
+  textarea.focus();
+  toast(total > 1 ? `${total} 张图片已插入记录` : "图片已插入记录");
 }
 
 function bindRecordImageInput(input, textarea, animeId, afterInsert = () => {}) {
@@ -387,11 +395,24 @@ async function openRecordImageFolder(animeId, textarea, browse, afterInsert) {
   const folder = $("#recordImageFolder");
   const choices = $("#recordImageChoices");
   const insert = $("#recordImageInsert");
+  const selectAll = $("#recordImageSelectAll");
   const request = new AbortController();
   const selection = new Set();
+  const checks = [];
+  let images = [];
+  let inserting = false;
+  let drag = null;
+  let dragged = false;
+  const updateSelection = () => {
+    checks.forEach((check, index) => check.setAttribute("aria-pressed", String(selection.has(index))));
+    $("#recordImageCount").textContent = `已选 ${selection.size} 张`;
+    selectAll.disabled = inserting || !images.length;
+    selectAll.textContent = images.length && selection.size === images.length ? "取消全选" : "全选";
+    insert.disabled = inserting || !selection.size;
+    insert.textContent = selection.size ? `插入 ${selection.size} 张` : "插入";
+  };
   choices.replaceChildren();
-  insert.disabled = true;
-  insert.textContent = "插入";
+  updateSelection();
   folder.textContent = "正在查找番剧图片…";
   dialog.showModal();
   dialog.addEventListener("close", () => request.abort(), { once: true });
@@ -400,25 +421,44 @@ async function openRecordImageFolder(animeId, textarea, browse, afterInsert) {
     dialog.close();
   };
   $("#recordImageBrowse").onclick = () => {
+    if (inserting) return;
     try { openNative(); }
     catch (error) { toast(error.message, "error"); }
   };
+  selectAll.onclick = () => {
+    if (selection.size === images.length) selection.clear();
+    else images.forEach((_, index) => selection.add(index));
+    updateSelection();
+  };
   insert.onclick = async () => {
-    insert.disabled = true;
+    inserting = true;
+    updateSelection();
     try {
-      const files = await Promise.all([...selection].map(async (image) => {
-        const response = await fetch(libImageUrl(image.relative), { signal: request.signal });
-        if (!response.ok) throw new Error(`无法读取「${image.name}」`);
-        const blob = await response.blob();
-        return new File([blob], image.name, { type: blob.type });
-      }));
+      const selectedImages = images.filter((_, index) => selection.has(index));
+      async function* readImages() {
+        for (const image of selectedImages) {
+          const response = await fetch(libImageUrl(image.relative), { signal: request.signal });
+          if (!response.ok) throw new Error(`无法读取「${image.name}」`);
+          const blob = await response.blob();
+          yield new File([blob], image.name, { type: blob.type });
+        }
+      }
+      await uploadRecordImageFiles(readImages(), selectedImages.length, textarea, {
+        signal: request.signal,
+        onProgress: message => { folder.textContent = message; },
+      });
+      if (request.signal.aborted) return;
       dialog.close();
-      await insertRecordImageFiles(files, textarea);
-      if (textarea.isConnected) afterInsert();
+      if (textarea.isConnected) {
+        textarea.focus();
+        afterInsert();
+      }
     } catch (error) {
       if (!request.signal.aborted) {
+        folder.textContent = error.message;
         toast(error.message, "error");
-        insert.disabled = false;
+        inserting = false;
+        updateSelection();
       }
     }
   };
@@ -435,27 +475,59 @@ async function openRecordImageFolder(animeId, textarea, browse, afterInsert) {
       return;
     }
     folder.textContent = group.images.length ? group.folder : `${group.folder} · 文件夹里还没有图片`;
-    for (const image of group.images) {
+    images = group.images;
+    images.forEach((image, index) => {
+      const tile = document.createElement("div");
+      tile.className = "record-image-tile";
+      tile.dataset.imageIndex = index;
       const option = document.createElement("button");
       option.type = "button";
       option.className = "lib-image-thumb";
-      option.setAttribute("aria-pressed", "false");
       option.title = image.name;
       const preview = document.createElement("img");
       preview.src = libImageUrl(image.relative);
       preview.loading = "lazy";
       preview.alt = image.name;
+      preview.draggable = false;
       option.append(preview);
-      option.onclick = () => {
-        if (selection.has(image)) selection.delete(image);
-        else if (selection.size < 9) selection.add(image);
-        else return toast("一次最多插入 9 张图片", "error");
-        option.classList.toggle("is-selected", selection.has(image));
-        option.setAttribute("aria-pressed", String(selection.has(image)));
-        insert.disabled = selection.size === 0;
-        insert.textContent = selection.size ? `插入 ${selection.size} 张` : "插入";
+      option.onclick = (event) => {
+        if (!inserting && (!dragged || !event.detail)) openRecordImagePreview(images, index, group.folder);
       };
-      choices.append(option);
+      const check = document.createElement("button");
+      check.type = "button";
+      check.className = "record-image-check";
+      check.setAttribute("aria-label", `选择 ${image.name}`);
+      check.textContent = "✓";
+      check.onclick = (event) => {
+        if (inserting || (dragged && event.detail)) return;
+        if (selection.has(index)) selection.delete(index);
+        else selection.add(index);
+        updateSelection();
+      };
+      checks.push(check);
+      tile.append(option, check);
+      choices.append(tile);
+    });
+    updateSelection();
+    choices.addEventListener("pointerdown", (event) => {
+      dragged = false;
+      if (inserting || event.pointerType !== "mouse" || event.button !== 0) return;
+      const tile = event.target.closest("[data-image-index]");
+      if (tile) drag = { id: event.pointerId, x: event.clientX, y: event.clientY, index: Number(tile.dataset.imageIndex) };
+    }, { signal: request.signal });
+    window.addEventListener("pointermove", (event) => {
+      if (inserting || !drag || event.pointerId !== drag.id || !(event.buttons & 1)) return;
+      if (!dragged && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6) return;
+      dragged = true;
+      const previousSize = selection.size;
+      const tile = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-image-index]");
+      if (tile && choices.contains(tile)) selection.add(Number(tile.dataset.imageIndex));
+      selection.add(drag.index);
+      if (selection.size !== previousSize) updateSelection();
+    }, { signal: request.signal });
+    const stopDrag = () => { drag = null; };
+    for (const type of ["pointerup", "pointercancel", "blur"]) {
+      window.addEventListener(type, stopDrag, { signal: request.signal });
     }
   } catch (error) {
     if (!request.signal.aborted) folder.textContent = "暂时无法读取图片库，可以从电脑选择。";
