@@ -139,12 +139,16 @@ const BILI_XML = `<i>
 
   // 通过面板搜索、确认分集并加载，匹配结果在重开该集时复用。
   let commentRequests = 0;
+  await page.evaluate(() => Object.assign(danmakuView.settings, {
+    sourceMode: 'dandanplay', appId: 'fixture', appSecret: String(123),
+  }));
   await page.route('**/api/danmaku/proxy', async (route) => {
     const { path } = route.request().postDataJSON();
     const search = path.startsWith('/api/v2/search/episodes?');
     if (search) assert.equal(new URL(path, 'http://fixture').searchParams.get('anime'), '测试别名');
     else {
       assert.match(path, /\/comment\/108\?/);
+      assert.equal(new URL(path, 'http://fixture').searchParams.get('withRelated'), 'true');
       commentRequests++;
     }
     await route.fulfill({ json: { ok: true, text: JSON.stringify(search
@@ -167,6 +171,9 @@ const BILI_XML = `<i>
   assert.equal(await page.locator('#dmCount').textContent(), '1 条');
   await loadEpisode();
   assert.equal(commentRequests, 2);
+  await page.evaluate(() => Object.assign(danmakuView.settings, {
+    sourceMode: 'public', appId: '', appSecret: '',
+  }));
   await page.unroute('**/api/danmaku/proxy');
   await page.getByText('显示与过滤', { exact: true }).click();
   assert.equal(await page.locator('#dmAreaValue').textContent(), '50%');

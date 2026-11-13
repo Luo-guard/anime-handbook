@@ -101,7 +101,7 @@ function dmParseText(text) {
   try { payload = JSON.parse(stripped); } catch (error) { return []; }
   const list = Array.isArray(payload)
     ? payload
-    : (payload.comments || payload.danmaku || payload.items || []);
+    : (payload?.comments || payload?.danmaku || payload?.items || []);
   if (!Array.isArray(list)) return [];
   return list.map((entry) => {
     if (!entry || typeof entry !== "object") return null;
@@ -387,8 +387,10 @@ function dmEpisodeNumber(file) {
 let dmLoadVersion = 0;
 
 async function dmLoadOnline(episodeId, version = dmLoadVersion) {
-  const text = await dmProxy(`/api/v2/comment/${encodeURIComponent(episodeId)}?format=json`,
-    (text) => { try { return ((JSON.parse(text).comments) || []).length > 0; } catch (error) { return false; } });
+  const mode = danmakuView.settings.sourceMode;
+  const related = mode === "dandanplay" ? "&withRelated=true" : "";
+  const text = await dmProxy(`/api/v2/comment/${encodeURIComponent(episodeId)}?format=json${related}`,
+    mode === "public" ? text => dmParseText(text).length > 0 : undefined);
   const items = dmParseText(text);
   if (!items.length) throw new Error("这个分集没有返回弹幕");
   if (version !== dmLoadVersion) return false;
@@ -445,7 +447,7 @@ async function dmLoadAvailable(version) {
     }
   }
   if (version === dmLoadVersion)
-    dmSetNote("这集还没有弹幕，可以搜索或导入文件。");
+    dmSetNote("这集尚未匹配在线弹幕。请搜索番名，再选择分集加载。");
 }
 
 function dmClear() {
@@ -559,7 +561,9 @@ async function dmSearchOnline() {
   dmSetNote("正在搜索在线弹幕…");
   try {
     const text = await dmProxy(`/api/v2/search/episodes?anime=${encodeURIComponent(keyword)}`,
-      (text) => { try { return ((JSON.parse(text).animes) || []).length > 0; } catch (error) { return false; } });
+      danmakuView.settings.sourceMode === "public"
+        ? (text) => { try { return ((JSON.parse(text).animes) || []).length > 0; } catch (error) { return false; } }
+        : undefined);
     if (version !== dmLoadVersion) return;
     let payload;
     try { payload = JSON.parse(text); } catch (error) { throw new Error("弹幕服务返回的不是 JSON"); }
