@@ -19,6 +19,10 @@ assert.equal(run(`scheduleProgress({kind:'weekly',local_id:1}).text`), '已播 6
 assert.equal(run(`scheduleProgress({kind:'weekly',as_airing:{aired:6,total:0}}).text`), '已播 6 集');
 assert.equal(run(`scheduleProgress({kind:'weekly',local_id:1,as_airing:{unavailable:true}}).text`), '暂无 AS 进度');
 run(`state.animes[0].as_airing=undefined`);
+assert.equal(run('episodeReleaseStatus(state.animes[0],{type:0})'), '');
+run(`state.animes[0].as_airing={unavailable:true,status:'loading'}`);
+assert(run('episodeReleaseStatus(state.animes[0],{type:0})').includes('AS 进度加载中'));
+run(`state.animes[0].as_airing={unavailable:true}; state.settings.hide_missing_as_schedule=false`);
 assert(run('episodeReleaseStatus(state.animes[0],{type:0})').includes('暂无 AS 进度'));
 assert(!run('episodeReleaseStatus(state.animes[0],{type:0})').includes('已播 5'));
 assert.equal(run('episodeReleaseStatus(state.animes[0],{type:2})'), '');

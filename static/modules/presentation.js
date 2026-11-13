@@ -47,7 +47,9 @@ function episodeReleaseStatus(anime, group) {
   const useAS = state.settings.collection_airing_source === "as";
   const airing = useAS ? anime.as_airing : anime.airing;
   if (useAS && (!airing || airing.unavailable)) {
-    return `<span class="episode-release-status" title="未匹配或暂无可用 AS 资料，不使用其他来源代替"><i></i>${airing?.status === "loading" ? "AS 进度加载中" : "暂无 AS 进度"}</span>`;
+    const loading = airing?.status === "loading";
+    if (!loading && enabledSetting("hide_missing_as_schedule")) return "";
+    return `<span class="episode-release-status" title="${loading ? "正在读取 AnimeSchedule 进度" : "未匹配或暂无可用 AS 资料，不使用其他来源代替"}"><i></i>${loading ? "AS 进度加载中" : "暂无 AS 进度"}</span>`;
   }
   if (!airing) return "";
   const aired = Math.max(0, Number(airing.aired) || 0);
