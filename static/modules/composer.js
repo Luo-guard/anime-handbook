@@ -18,12 +18,13 @@ function populateAnimeSelect() {
 }
 
 // Shared dismissal rules for custom multi-select menus.
-function setupDismissibleMenu(buttonSelector, menuSelector) {
+function setupDismissibleMenu(buttonSelector, menuSelector, onOpen) {
   const button = $(buttonSelector), menu = $(menuSelector);
   const isInside = target => target instanceof Node && (button.contains(target) || menu.contains(target));
   const setOpen = open => {
     menu.classList.toggle("hidden", !open);
     button.setAttribute("aria-expanded", String(open));
+    if (open) onOpen?.();
   };
   button.setAttribute("aria-controls", menu.id);
   setOpen(false);
@@ -47,10 +48,28 @@ function updateAssociatedAnimeLabel() {
 
 function setupAssociatedAnimeMenu() {
   const select = $("#noteAnime"), menu = $("#noteAnimeMenu"), button = $("#noteAnimeButton");
-  button.addEventListener("click", () => {
-    menu.innerHTML = [...select.options].map(option => `<button type="button" role="option" aria-selected="${option.value === select.value}" data-anime-option="${escapeHtml(option.value)}">${escapeHtml(option.textContent)}</button>`).join("");
+  const search = $("#noteAnimeSearch");
+  const list = $(".anime-association-options", menu);
+  const empty = $(".anime-association-empty", menu);
+  const normalize = value => String(value || "").normalize("NFKC").toLocaleLowerCase();
+  const render = () => {
+    const terms = normalize(search.value).trim().split(/\s+/).filter(Boolean);
+    const titles = new Map(state.animes.map(anime => [String(anime.id),
+      normalize([anime.display_name, anime.name_cn, anime.name].join(" "))]));
+    const matches = [...select.options].filter(option => !option.value
+      || terms.every(term => titles.get(option.value)?.includes(term)));
+    list.innerHTML = matches.map(option => `<button type="button" role="option" aria-selected="${option.value === select.value}" data-anime-option="${escapeHtml(option.value)}">${escapeHtml(option.textContent)}</button>`).join("");
+    list.scrollTop = 0;
+    empty.hidden = matches.length > 1 || !terms.length;
+  };
+  const dropdown = setupDismissibleMenu("#noteAnimeButton", "#noteAnimeMenu", () => {
+    search.value = "";
+    render();
+    search.focus({ preventScroll: true });
   });
-  const dropdown = setupDismissibleMenu("#noteAnimeButton", "#noteAnimeMenu");
+  search.addEventListener("input", render);
+  $("#quickRecordDialog").addEventListener("close", dropdown.close);
+  $("#closeComposer").addEventListener("click", dropdown.close);
   menu.addEventListener("click", event => {
     const option = event.target.closest("[data-anime-option]");
     if (!option) return;
@@ -60,16 +79,37 @@ function setupAssociatedAnimeMenu() {
     button.focus();
   });
   menu.addEventListener("keydown", event => {
+    if (event.isComposing) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      dropdown.close();
+      button.focus();
+      return;
+    }
+    if (event.target === search && event.key === "Enter") {
+      event.preventDefault();
+      if (search.value.trim()) list.querySelector('[data-anime-option]:not([data-anime-option=""])')?.click();
+      return;
+    }
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    if (event.target === search && ["Home", "End"].includes(event.key)) return;
     const options = [...menu.querySelectorAll("[data-anime-option]")];
     if (!options.length) return;
     event.preventDefault();
     const index = options.indexOf(document.activeElement);
-    const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+    if (index === 0 && event.key === "ArrowUp") {
+      search.focus();
+      return;
+    }
+    const next = event.key === "Home" ? 0 : event.key === "End" || (index < 0 && event.key === "ArrowUp")
+      ? options.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
     options[next].focus();
   });
   button.addEventListener("keydown", event => {
-    if (event.key === "ArrowDown") { event.preventDefault(); if (menu.classList.contains("hidden")) button.click(); menu.querySelector("[data-anime-option]")?.focus(); }
+    if (event.key === "ArrowDown") { event.preventDefault(); if (menu.classList.contains("hidden")) button.click(); else search.focus(); }
+  });
+  $(".composer-anime-picker").addEventListener("focusout", event => {
+    if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) dropdown.close();
   });
   select.addEventListener("change", updateAssociatedAnimeLabel);
 }

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-episode-menu-close" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-note-anime-search" />
   </head>
   <body>
     <div class="app-shell">
@@ -184,8 +184,12 @@
               </div>
               <label class="secondary-button compact-button note-image-button composer-tool-button">插入图片<input id="noteImageInput" type="file" accept="image/png,image/jpeg,image/webp" multiple /></label>
               <div class="composer-anime-picker">
-                <button type="button" class="secondary-button" id="noteAnimeButton" aria-haspopup="listbox">不关联动漫 ▾</button>
-                <div id="noteAnimeMenu" class="note-theme-menu anime-association-menu hidden" role="listbox" aria-label="关联动漫"></div>
+                <button type="button" class="secondary-button" id="noteAnimeButton">不关联动漫 ▾</button>
+                <div id="noteAnimeMenu" class="note-theme-menu anime-association-menu hidden">
+                  <input id="noteAnimeSearch" type="search" placeholder="搜索番剧名称" aria-label="搜索番剧名称" autocomplete="off" />
+                  <div class="anime-association-options" role="listbox" aria-label="关联动漫"></div>
+                  <p class="anime-association-empty" role="status" hidden>没有匹配的番剧</p>
+                </div>
                 <select id="noteAnime" class="hidden" aria-hidden="true" tabindex="-1">
                 <option value="">不关联动漫</option>
               </select></div>
@@ -1618,7 +1622,7 @@
     <script src="/modules/collection.js?v=20261111-cleanup" defer></script>
     <script src="/modules/presentation.js?v=20261109-sidebar-fix" defer></script>
     <script src="/modules/collection-cards.js?v=20261107-collection-added-order" defer></script>
-    <script src="/modules/composer.js?v=20261105-theme-preview" defer></script>
+    <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261113-episode-menu-close" defer></script>

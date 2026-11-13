@@ -3625,7 +3625,26 @@ dialog::backdrop {
 
 .composer-anime-picker { position: relative; width: min(310px, 100%); min-width: 0; }
 #noteAnimeButton { width: 100%; height: 42px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.anime-association-menu { box-sizing: border-box; width: 100%; min-width: 0; max-height: 280px; overflow: auto; }
+.anime-association-menu { box-sizing: border-box; width: 100%; min-width: 0; gap: 5px; }
+.anime-association-menu input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.anime-association-menu input:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.anime-association-menu .anime-association-options {
+  grid-template-columns: minmax(0, 1fr);
+  max-height: min(170px, 23dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.anime-association-empty { margin: 3px 9px 6px; color: var(--muted); font-size: 12px; }
 .anime-association-menu button { border: 0; border-radius: 7px; padding: 9px; background: transparent; text-align: left; font: inherit; color: inherit; cursor: pointer; }
 .anime-association-menu button:hover, .anime-association-menu button:focus-visible, .anime-association-menu button[aria-selected="true"] { background: var(--green-50); }
 .composer-footer.other-record-mode .composer-anime-picker { display: none; }
