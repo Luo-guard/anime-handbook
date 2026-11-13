@@ -63,11 +63,17 @@ async function verify() {
     await page.getByRole("button", { name: "下载", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#onlinePlaybackRule").value === "example");
     await page.click("#onlinePlaybackSearch");
-    await page.waitForFunction(() => document.querySelector("#offlinePlayerMeta").textContent === "Fixture stream unavailable");
+    await page.waitForFunction(() => document.querySelector("#pcPlaybackMessage").textContent === "Fixture stream unavailable");
+    assert.ok(await page.locator("#pcPlaybackRetry").isVisible());
+    const stage = await page.locator("#offlinePlayerVideoWrap").boundingBox();
+    assert.ok(Math.abs(stage.width / stage.height - 16 / 9) < 0.02, "failed video keeps a widescreen stage");
     assert.deepEqual(plays, [1, 2].map(source => ({
       rule: "example", anime: "series", source: String(source), episode: episode.id,
     })));
     assert.equal(await page.locator("#onlinePlayerSource").inputValue(), "2");
+    await page.click("#pcPlaybackRetry");
+    await page.waitForFunction(() => document.querySelector("#pcPlaybackState").dataset.state === "error");
+    assert.equal(plays.length, 3);
     await page.click("#onlinePlayerRule");
     await page.locator("#onlinePlaybackPicker[open]").waitFor();
     assert.match(await page.locator("#onlinePlaybackPickerTitle").textContent(), /第 6 集/);

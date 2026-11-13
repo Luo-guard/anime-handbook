@@ -574,7 +574,14 @@ function playLocalFile(fileId) {
   $("#offlinePlayerMeta").textContent = file.subtitle_path
     ? "页面内字幕加载中（第一次约需十几秒，之后切集是即时的）…"
     : "这一集没有内封字幕。";
-  pcLoadVideo(`/api/offline/stream/${file.id}.mp4`, file.resume_ms / 1000).catch(() => {});
+  pcSetPlaybackState("loading", "正在读取本地视频…");
+  const reportFailure = () => pcSetPlaybackState("error", "本地视频无法播放。", () => playLocalFile(file.id));
+  const loading = pcLoadVideo(`/api/offline/stream/${file.id}.mp4`, file.resume_ms / 1000);
+  const signal = pcMediaLoad.signal;
+  video.addEventListener("error", reportFailure, { once: true, signal });
+  loading.catch(error => {
+    if (!signal.aborted && error.name !== "NotAllowedError") reportFailure();
+  });
   const history = { kind: "local", animeId: offlineView.playingAnimeId, animeTitle: offlineView.animeName,
     episode: episodeLabelOf(file.episode_key), fileId: Number(file.id), episodeKey: file.episode_key };
   video.addEventListener("playing", () => window.playbackHistory?.record(history), {
@@ -605,8 +612,19 @@ function pcSetTitle(anime, episode, source) {
 
 let pcMediaLoad;
 
+function pcSetPlaybackState(state = "", message = "", retry = null) {
+  const overlay = $("#pcPlaybackState");
+  const button = $("#pcPlaybackRetry");
+  overlay.hidden = !state;
+  overlay.dataset.state = state;
+  $("#pcPlaybackMessage").textContent = message;
+  button.hidden = !retry;
+  button.onclick = retry;
+}
+
 function pcResetVideo() {
   pcMediaLoad?.abort();
+  pcSetPlaybackState();
   const video = $("#offlineVideo");
   video.pause();
   video.removeAttribute("src");
@@ -617,6 +635,12 @@ function pcPrepareVideo(resumeSeconds) {
   pcMediaLoad?.abort();
   pcMediaLoad = new AbortController();
   const video = $("#offlineVideo");
+  const options = { signal: pcMediaLoad.signal };
+  video.addEventListener("canplay", () => pcSetPlaybackState(), options);
+  video.addEventListener("playing", () => pcSetPlaybackState(), options);
+  video.addEventListener("waiting", () => {
+    if (!video.paused && $("#pcPlaybackState").hidden) pcSetPlaybackState("loading", "正在缓冲…");
+  }, options);
   video.addEventListener(
     "loadedmetadata",
     () => {

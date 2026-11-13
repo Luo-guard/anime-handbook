@@ -154,14 +154,8 @@ window.onlinePlayback = (() => {
     const session = { catalogue, source, episode, animeId, controller, context, ready: false };
     current = session;
     const video = $("#offlineVideo");
-    const status = $("#offlinePlayerMeta");
-    const retry = $("#onlinePlayerRetry");
     const selector = $("#onlinePlayerSource");
     const options = { signal: controller.signal };
-    const setStatus = (message, failed = false) => {
-      status.textContent = message;
-      retry.hidden = !failed;
-    };
     const fail = message => {
       if (current !== session || controller.signal.aborted) return;
       const tryAlternatives = tried && !session.ready;
@@ -181,7 +175,7 @@ window.onlinePlayback = (() => {
           return;
         }
       }
-      setStatus(message, true);
+      pcSetPlaybackState("error", message, () => selectEpisode(episode.id));
     };
     pcSetTitle(catalogue.title, onlineEpisodeLabel(episode), `${catalogue.ruleName} · ${source.name}`);
     $("#offlineSubtitleToggle").classList.add("hidden");
@@ -191,7 +185,8 @@ window.onlinePlayback = (() => {
     selector.replaceChildren(...catalogue.sources.map(line => new Option(line.name, line.id)));
     selector.value = String(source.id);
     selector.hidden = catalogue.sources.length < 2;
-    setStatus("正在连接视频…");
+    $("#offlinePlayerMeta").textContent = "";
+    pcSetPlaybackState("loading", "正在连接视频…");
     pcRefreshEpisodes();
     openOfflinePlayerDialog();
     const provider = catalogue.rule === "xfdmnext" ? "xifan" : catalogue.rule;
@@ -205,7 +200,6 @@ window.onlinePlayback = (() => {
         if (!video.videoWidth) return;
         clearTimeout(timer);
         session.ready = true;
-        setStatus("");
       }, options);
       video.addEventListener("playing", () => {
         if (!video.videoWidth) return;
@@ -500,7 +494,6 @@ window.onlinePlayback = (() => {
       abortLookup();
       $("#onlinePlaybackSubmit").disabled = false;
     });
-    $("#onlinePlayerRetry").addEventListener("click", () => selectEpisode(current?.episode.id));
     $("#onlinePlayerSource").addEventListener("change", event => {
       if (!current) return;
       const { catalogue, episode, animeId } = current;

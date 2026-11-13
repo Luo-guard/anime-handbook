@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-rule-updates" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-player-state" />
   </head>
   <body>
     <div class="app-shell">
@@ -547,6 +547,11 @@
           <div class="pc-video-surface" id="pcVideoSurface">
             <video id="offlineVideo" playsinline preload="metadata"></video>
           </div>
+          <div class="pc-playback-state" id="pcPlaybackState" hidden>
+            <span class="pc-playback-spinner" aria-hidden="true"></span>
+            <p id="pcPlaybackMessage" role="status"></p>
+            <button type="button" id="pcPlaybackRetry" hidden>重试播放</button>
+          </div>
           <div class="player-topbar" id="playerTopbar">
             <span class="player-topbar-title" id="pcStageTitle"></span>
             <span class="player-topbar-actions">
@@ -636,7 +641,6 @@
         <div class="offline-player-bar">
           <p class="offline-player-meta" id="offlinePlayerMeta" role="status"></p>
           <div class="online-player-options hidden" id="onlinePlayerOptions">
-            <button type="button" class="text-button" id="onlinePlayerRetry" hidden>重试播放</button>
             <select id="onlinePlayerSource" aria-label="播放线路"></select>
             <button type="button" class="text-button" id="onlinePlayerRule">切换规则</button>
             <a id="onlinePlayerOriginal" target="_blank" rel="noopener noreferrer">打开原网页 ↗</a>
@@ -1646,8 +1650,8 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261111-online-player" defer></script>
-    <script src="/modules/offline.js?v=20261113-player-tooltip" defer></script>
-    <script src="/modules/online-playback.js?v=20261113-rule-updates" defer></script>
+    <script src="/modules/offline.js?v=20261113-player-state" defer></script>
+    <script src="/modules/online-playback.js?v=20261113-player-state" defer></script>
     <script src="/modules/library-view.js?v=20261113-library-full-image" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

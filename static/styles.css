@@ -4138,7 +4138,7 @@ dialog::backdrop {
 .offline-remove:hover { border-color: #9b3434; color: #9b3434; }
 .offline-section-title { margin: 10px 8px 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .offline-player .modal-frame { width: min(960px, 96vw); }
-.offline-player-frame video { width: 100%; max-height: 72vh; border-radius: 10px; background: #000; display: block; }
+.offline-player-frame video { width: 100%; aspect-ratio: 16 / 9; max-height: 72dvh; object-fit: contain; border-radius: 10px; background: #000; display: block; }
 .offline-player-meta { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
 /* 离线面板：下载任务进度条与设置页。 */
@@ -4399,6 +4399,27 @@ dialog::backdrop {
 /* 页面内字幕：jassub 会把 canvas 插在 video 后面并绝对定位，父容器负责给参照系。 */
 .offline-player-video { position: relative; line-height: 0; }
 .offline-player-video canvas.JASSUB { z-index: 2; }
+.pc-playback-state {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 12px 8%; border-radius: 10px;
+  color: #fff; background: rgb(0 0 0 / .46);
+  line-height: 1.45; text-align: center; pointer-events: none;
+}
+.pc-playback-state[hidden] { display: none; }
+.pc-playback-state p { margin: 0; max-width: 34em; font-size: clamp(12px, 2vw, 15px); overflow-wrap: anywhere; }
+.pc-playback-spinner {
+  width: 22px; height: 22px; border: 2px solid rgb(255 255 255 / .25);
+  border-top-color: #fff; border-radius: 50%; animation: pc-playback-spin .8s linear infinite;
+}
+.pc-playback-state[data-state="error"] .pc-playback-spinner { display: none; }
+.pc-playback-state button {
+  padding: 6px 16px; border: 1px solid rgb(255 255 255 / .5); border-radius: 999px;
+  background: #242424; color: #fff; font: inherit; font-size: 13px; cursor: pointer; pointer-events: auto;
+}
+.pc-playback-state button:hover { background: #414141; }
+@keyframes pc-playback-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .pc-playback-spinner { animation: none; } }
 
 /* 视频单独一层（超分扩展的隔离舱）。
    NijiLucid 这类扩展会往 video 的父元素里插一个 z-index:2147483646 的覆盖宿主，
