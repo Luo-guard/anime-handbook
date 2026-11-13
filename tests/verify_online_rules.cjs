@@ -15,6 +15,7 @@ async function verify() {
     sources: [1, 2].map(id => ({ id, name: `Line ${id}`, episodes: [episode] })),
   };
   const plays = [];
+  const searches = [];
   let installed = false;
   let version = "1";
   let availableVersion = "1";
@@ -45,6 +46,7 @@ async function verify() {
         }] : [] });
       case "/api/playback/search":
         assert.equal(installed, true, "an uninstalled rule never searches");
+        searches.push(url.searchParams.get("title"));
         return json({ items: [{ id: "series", title: "Example anime" }] });
       case "/api/playback/catalogue":
         return json(catalogue);
@@ -67,19 +69,32 @@ async function verify() {
       window.onlinePlayback.openAnime(anime, "0:6");
     });
     await open();
-    assert.equal(await page.locator("#onlinePlaybackRule option").first().textContent(), "尚未下载规则");
+    await page.getByText("暂无已安装来源，请先下载规则。", { exact: true }).waitFor();
     await page.click("#openPlaybackRuleSettings");
     await page.locator('#settingsModal[open] [data-settings-tab="playback"].active').waitFor();
     assert.equal(await page.evaluate(() => document.activeElement.id), "playbackRulesHeading");
     await page.locator("#playbackSkipInput").fill("95");
     await page.locator('#dmSourceMode').selectOption("dandanplay");
     assert.equal(await page.locator("#dmAppSecret").isVisible(), true);
+    await page.getByRole("button", { name: "规则仓库", exact: true }).click();
+    const filter = page.locator("#onlineRuleFilter");
+    await filter.fill("missing");
+    await page.getByText("没有匹配的规则。", { exact: true }).waitFor();
+    await filter.fill("example.test");
     await page.getByRole("button", { name: "下载", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector("#onlinePlaybackRule").value === "example");
+    await page.waitForFunction(() => document.querySelector(".online-source summary")?.textContent.includes("Example"));
     await page.locator("#settingsModal .modal-close").click();
     assert.equal(await page.evaluate(() => pcLoadPrefs().skip), 80);
     assert.equal(await page.evaluate(() => danmakuView.settings.sourceMode), "public");
-    await page.click("#onlinePlaybackSearch");
+    assert.deepEqual(searches, []);
+    await page.locator(".online-source summary").click();
+    const result = page.getByRole("button", { name: "Example anime", exact: true });
+    await result.waitFor();
+    assert.deepEqual(searches, ["Example anime"]);
+    await page.getByRole("searchbox", { name: "Example的检索词" }).fill("Edited query");
+    await page.getByRole("button", { name: "检索", exact: true }).click();
+    await result.click();
+    assert.deepEqual(searches, ["Example anime", "Edited query"]);
     await page.waitForFunction(() => document.querySelector("#pcPlaybackMessage").textContent === "Fixture stream unavailable");
     assert.ok(await page.locator("#pcPlaybackRetry").isVisible());
     const stage = await page.locator("#offlinePlayerVideoWrap").boundingBox();
@@ -106,7 +121,7 @@ async function verify() {
     assert.ok(await page.locator("#offlinePlayer[open]").isVisible());
     await page.click("#onlinePlayerRule");
     await page.locator("#onlinePlaybackPicker[open]").waitFor();
-    assert.match(await page.locator("#onlinePlaybackPickerTitle").textContent(), /第 6 集/);
+    assert.match(await page.locator("#onlineSourceAnime").textContent(), /第 6 集/);
     await page.click("#openPlaybackRuleSettings");
     await page.getByRole("button", { name: "检查更新" }).click();
     const update = page.getByRole("button", { name: "更新", exact: true });
@@ -116,8 +131,8 @@ async function verify() {
     await update.waitFor({ state: "detached" });
     assert.equal(version, "2");
     await page.getByRole("button", { name: "移除", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector("#onlinePlaybackRule").value === "");
-    assert.equal(await page.locator("#onlinePlaybackSearch").isDisabled(), true);
+    await page.waitForFunction(() => !document.querySelector(".online-source"));
+    assert.match(await page.locator("#onlineRuleStatus").textContent(), /暂无已安装来源/);
     await page.locator("#episodePlaybackSourceInput").selectOption("local");
     await page.locator('label:has(#playbackResumeInput) .switch').click();
     assert.equal(await page.locator("#playbackResumeInput").isChecked(), false);

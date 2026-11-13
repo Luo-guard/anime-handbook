@@ -254,14 +254,81 @@ window.onlinePlayback = (() => {
       .replace(/[\p{P}\p{Z}\s]/gu, "");
   }
 
-  function renderInstalled(preferred = lastRule || "xfdmnext") {
-    const selector = $("#onlinePlaybackRule");
-    selector.replaceChildren(...installed.map(rule => new Option(rule.name, rule.id)));
-    if (!installed.length) selector.append(new Option("尚未下载规则", ""));
-    if (installed.some(rule => rule.id === preferred)) selector.value = preferred;
-    selector.disabled = !installed.length;
-    $("#onlinePlaybackSearch").disabled = !installed.length;
+  const sourceSearches = new Map();
+  let sourceOpening;
+
+  function clearSourceSearches() {
+    sourceOpening?.abort();
+    sourceOpening = null;
+    for (const controller of sourceSearches.values()) controller.abort();
+    sourceSearches.clear();
   }
+
+  function renderInstalled({ autoPlay = false } = {}) {
+    clearSourceSearches();
+    const list = $("#onlinePlaybackResults");
+    const status = $("#onlineRuleStatus");
+    list.replaceChildren();
+    status.textContent = installed.length ? `${installed.length} 个已安装来源` : "暂无已安装来源，请先下载规则。";
+    const preferred = installed.find(rule => rule.id === lastRule)
+      || installed.find(rule => rule.id === "xfdmnext") || installed[0];
+    const sources = preferred ? [preferred, ...installed.filter(rule => rule !== preferred)] : [];
+    for (const rule of sources) {
+      const group = document.createElement("details");
+      group.className = "online-source";
+      const summary = document.createElement("summary");
+      const title = document.createElement("strong");
+      title.textContent = rule.name;
+      const hint = document.createElement("span");
+      hint.textContent = "待检索";
+      hint.className = "online-source-status";
+      hint.setAttribute("role", "status");
+      summary.append(title, hint);
+
+      const form = document.createElement("form");
+      form.className = "online-source-search";
+      const input = document.createElement("input");
+      input.type = "search";
+      input.setAttribute("aria-label", `${rule.name}的检索词`);
+      const titles = [...new Set([selection?.anime.name_cn, selection?.anime.display_name, selection?.anime.name].filter(Boolean))];
+      input.value = titles[0] || "";
+      input.required = true;
+      const search = document.createElement("button");
+      search.type = "submit";
+      search.className = "secondary-button compact-button";
+      search.textContent = "检索";
+      form.append(input, search);
+      const results = document.createElement("div");
+      results.className = "online-source-results";
+      const feedback = document.createElement("p");
+      feedback.className = "online-source-feedback";
+      feedback.setAttribute("role", "status");
+      group.append(summary, form, feedback, results);
+      list.append(group);
+
+      const searchSource = (queries, auto) => searchRule(rule.id, queries, { hint, feedback, results, auto });
+      let searched = false;
+      group.addEventListener("toggle", () => {
+        if (group.open && !searched) {
+          searched = true;
+          searchSource(titles, false);
+        }
+      });
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        const query = input.value.trim();
+        if (query) searchSource(query === titles[0] ? titles : [query], false);
+      });
+      if (autoPlay && rule === preferred) {
+        searched = true;
+        group.open = true;
+        searchSource(titles, true);
+      }
+    }
+  }
+
+  let ruleCatalogue = [];
+  let ruleFilter = "installed";
 
   async function refreshRuleCatalogue({ fresh = false } = {}) {
     if (checkingRules) return;
@@ -269,7 +336,11 @@ window.onlinePlayback = (() => {
     const check = $("#onlineRuleCheckUpdates");
     check.disabled = true;
     const status = $("#onlineRuleManagerStatus");
-    const list = $("#onlineRuleCatalogue");
+    if (fresh) {
+      ruleFilter = "installed";
+      $("#onlineRuleFilter").value = "";
+      renderRuleCatalogue();
+    }
     status.textContent = fresh ? "正在检查规则更新…" : "正在读取 KazumiRules…";
     let rules;
     try {
@@ -286,6 +357,24 @@ window.onlinePlayback = (() => {
     } finally {
       checkingRules = false;
       check.disabled = managing;
+    }
+    ruleCatalogue = rules;
+    renderRuleCatalogue();
+  }
+
+  function renderRuleCatalogue() {
+    const list = $("#onlineRuleCatalogue");
+    const query = $("#onlineRuleFilter").value.trim().toLowerCase();
+    const rules = ruleCatalogue.filter(rule =>
+      Boolean(rule.installed) === (ruleFilter === "installed")
+      && `${rule.name} ${rule.host || ""}`.toLowerCase().includes(query));
+    for (const button of $$("[data-rule-filter]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.ruleFilter === ruleFilter));
+    }
+    if (!rules.length) {
+      list.textContent = query ? "没有匹配的规则。" : ruleFilter === "installed"
+        ? "还没有安装规则。可从规则仓库下载。" : "暂无可下载规则。";
+      return;
     }
     list.replaceChildren(...rules.map(rule => {
       const row = document.createElement("div");
@@ -325,14 +414,10 @@ window.onlinePlayback = (() => {
         method: "POST", body: JSON.stringify({ id: rule.id, action }), timeoutMs: 24000,
       });
       installed = result.items;
-      renderInstalled(action === "install" ? rule.id : $("#onlinePlaybackRule").value);
-      if (action === "remove" && selection) {
-        abortLookup();
-        $("#onlinePlaybackResults").replaceChildren();
-      }
-      $("#onlineRuleStatus").textContent = installed.length ? "" : "先下载一个规则，再搜索片源。";
+      if ($("#onlinePlaybackPicker").open) renderInstalled();
       await refreshRuleCatalogue();
-      if (action === "update") toast(`已更新 ${rule.name}`);
+      const completed = { install: "已下载", update: "已更新", remove: "已移除" };
+      toast(`${completed[action]} ${rule.name}`);
     } catch (error) {
       status.textContent = error.message;
     } finally {
@@ -342,67 +427,81 @@ window.onlinePlayback = (() => {
     }
   }
 
-  async function searchSelectedRule() {
+  async function searchRule(rule, titles, { hint, feedback, results, auto }) {
+    if (!results.isConnected) return;
     const context = selection;
-    const rule = $("#onlinePlaybackRule").value;
-    if (!context || !rule) return;
     const { anime, target } = context;
-    abortLookup();
-    const controller = new AbortController();
-    lookup = controller;
-    const { signal } = controller;
     const dialog = $("#onlinePlaybackPicker");
-    const picker = $("#onlinePlaybackResults");
-    const status = $("#onlineRuleStatus");
-    const searchButton = $("#onlinePlaybackSearch");
-    searchButton.disabled = true;
-    picker.replaceChildren();
-    status.textContent = "正在搜索片源…";
-    const stillOpen = () => !signal.aborted && dialog.open && selection === context;
-    const playResult = async item => {
-      status.textContent = "正在读取选集…";
-      const catalogue = await request("catalogue", { rule, anime: item.id }, signal);
-      if (!stillOpen()) return;
-      const { source, episode } = matchOnlineEpisode(catalogue, target);
-      catalogue.title ||= anime.display_name || item.title;
-      lastRule = rule;
-      try { localStorage.setItem("handbook:online-rule", rule); }
-      catch { /* Private browsing can deny storage. */ }
-      lookup = null;
-      dialog.close();
-      play(catalogue, source, episode, anime.id, context, new Set([source.id]));
-    };
+    const controller = new AbortController();
+    const { signal } = controller;
+    sourceSearches.get(rule)?.abort();
+    sourceSearches.set(rule, controller);
+    const isCurrent = () => !signal.aborted && dialog.open && selection === context && results.isConnected;
+    hint.textContent = "检索中…";
+    feedback.textContent = "";
+    results.replaceChildren();
+    let resultCount = 0;
+    let latestForSource;
+
+    async function playResult(item) {
+      if (!isCurrent() || (auto && sourceOpening)) return;
+      sourceOpening?.abort();
+      const opening = new AbortController();
+      sourceOpening = opening;
+      latestForSource = opening;
+      const openingSignal = AbortSignal.any([signal, opening.signal]);
+      const reading = "正在读取选集…";
+      feedback.textContent = "";
+      hint.textContent = reading;
+      try {
+        const catalogue = await request("catalogue", { rule, anime: item.id }, openingSignal);
+        if (!isCurrent() || openingSignal.aborted || $("#settingsModal").open) return;
+        const { source, episode } = matchOnlineEpisode(catalogue, target);
+        catalogue.title ||= anime.display_name || item.title;
+        lastRule = rule;
+        try { localStorage.setItem("handbook:online-rule", rule); }
+        catch { /* Playback also works without storage. */ }
+        dialog.close();
+        play(catalogue, source, episode, anime.id, context, new Set([source.id]));
+      } catch (error) {
+        if (isCurrent() && !openingSignal.aborted) {
+          hint.textContent = "无法播放";
+          feedback.textContent = errorMessage(error, "读取选集超时");
+        }
+      } finally {
+        if (sourceOpening === opening) sourceOpening = null;
+        if (isCurrent() && latestForSource === opening && hint.textContent === reading) {
+          hint.textContent = `${resultCount} 个结果`;
+        }
+      }
+    }
+
     try {
-      const titles = [...new Set([anime.name_cn, anime.display_name, anime.name].filter(Boolean))];
-      const names = new Set(titles.map(normalizeTitle));
       const matches = new Map();
+      const names = new Set(titles.map(normalizeTitle));
+      const isExact = item => [item.title, item.original].some(name => name && names.has(normalizeTitle(name)));
       for (const title of titles) {
         const result = await request("search", { rule, title }, signal);
-        if (!stillOpen()) return;
+        if (!isCurrent()) return;
         for (const item of result.items) matches.set(item.id, item);
-        const exact = [...matches.values()].filter(item => [item.title, item.original].some(name => name && names.has(normalizeTitle(name))));
-        if (exact.length === 1) return await playResult(exact[0]);
+        if ([...matches.values()].filter(isExact).length === 1) break;
       }
-      if (!matches.size) throw new Error("所选规则没有搜到这部番，可切换规则重试。");
-      status.textContent = "请选择对应的番剧。";
-      picker.replaceChildren(...[...matches.values()].map(item => {
-        const option = document.createElement("button");
-        option.type = "button";
-        option.className = "secondary-button";
-        option.textContent = item.title;
-        option.addEventListener("click", async () => {
-          if (!stillOpen()) return;
-          option.disabled = true;
-          try { await playResult(item); }
-          catch (error) { if (stillOpen()) status.textContent = error.message; }
-          finally { option.disabled = false; }
-        });
-        return option;
-      }));
+      resultCount = matches.size;
+      hint.textContent = matches.size ? `${matches.size} 个结果` : "无结果";
+      for (const item of matches.values()) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = item.title;
+        button.addEventListener("click", () => playResult(item), { signal });
+        results.append(button);
+      }
+      const exact = [...matches.values()].filter(isExact);
+      if (auto && exact.length === 1 && !$("#settingsModal").open) await playResult(exact[0]);
     } catch (error) {
-      if (stillOpen()) status.textContent = errorMessage(error, "搜索片源超时，请重试。");
-    } finally {
-      if (selection === context && (!lookup || lookup === controller)) searchButton.disabled = !installed.length;
+      if (isCurrent()) {
+        hint.textContent = "检索失败";
+        feedback.textContent = errorMessage(error, "检索超时");
+      }
     }
   }
 
@@ -411,22 +510,20 @@ window.onlinePlayback = (() => {
     try { target = mainPlaybackEpisode(anime, key); }
     catch (error) { toast(error.message, "error"); return; }
     abortLookup();
+    clearSourceSearches();
     const context = { anime, target };
     selection = context;
     const dialog = $("#onlinePlaybackPicker");
     const status = $("#onlineRuleStatus");
-    $("#onlinePlaybackPickerTitle").textContent = `在线播放 · 第 ${target.number} 集`;
+    $("#onlineSourceAnime").textContent = `${anime.display_name || anime.name_cn || anime.name} · 第 ${target.number} 集`;
     $("#onlinePlaybackResults").replaceChildren();
-    renderInstalled();
-    status.textContent = "正在读取已下载规则…";
+    status.textContent = "正在读取已安装来源…";
     if (!dialog.open) dialog.showModal();
     try {
       const result = await request("rules", {});
       if (!dialog.open || selection !== context) return;
       installed = result.items;
-      renderInstalled();
-      status.textContent = installed.length ? "" : "先下载一个规则，再搜索片源。";
-      if (installed.length && !choose) await searchSelectedRule();
+      renderInstalled({ autoPlay: !choose });
     } catch (error) {
       if (dialog.open && selection === context) status.textContent = error.message;
     }
@@ -462,10 +559,15 @@ window.onlinePlayback = (() => {
     });
     $("#closeOnlinePlaybackPicker")?.addEventListener("click", () => $("#onlinePlaybackPicker").close());
     $("#onlinePlaybackPicker").addEventListener("close", () => {
-      if (!$("#onlinePlaybackPicker").open && lookup) abortLookup();
+      if (!$("#onlinePlaybackPicker").open) clearSourceSearches();
     });
-    $("#onlinePlaybackSearch").addEventListener("click", searchSelectedRule);
-    $("#onlinePlaybackRule").addEventListener("change", searchSelectedRule);
+    $("#onlineRuleFilter").addEventListener("input", renderRuleCatalogue);
+    for (const button of $$("[data-rule-filter]")) {
+      button.addEventListener("click", () => {
+        ruleFilter = button.dataset.ruleFilter;
+        renderRuleCatalogue();
+      });
+    }
     $("#openPlaybackRuleSettings").addEventListener("click", () => openHandbookSettings("playback", "#playbackRulesHeading"));
     $("#managePlayerRules").addEventListener("click", async () => {
       if (document.fullscreenElement) await document.exitFullscreen();
