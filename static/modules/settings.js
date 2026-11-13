@@ -1063,6 +1063,13 @@ function setupSettingsTabs() {
     });
     list.replaceChildren(...groups.values());
     $$("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab)));
+    $("#goToEpisodeMouseGestures").addEventListener("click", () => {
+      resetSettingsSearch();
+      switchSettingsTab("detail");
+      const heading = $("#episodeMouseGestureHeading");
+      heading.scrollIntoView({ block: "center" });
+      heading.focus({ preventScroll: true });
+    });
     settingsGroupsInitialized = true;
   }
   syncSettingsNavigation();

@@ -1052,7 +1052,7 @@
             <div id="episodeGestureEntries" class="eg-entry-grid"></div>
           </div>
           <div class="setting-row stacked">
-            <span><strong>手势绑定</strong><small>同一个动作最多绑定 4 个手势。</small></span>
+            <span><strong id="episodeMouseGestureHeading" tabindex="-1">单集鼠标手势</strong><small>同一个动作最多绑定 4 个手势。</small></span>
             <div id="episodeGestureBindings" class="eg-grid"></div>
             <p class="eg-warning" id="episodeGestureDoubleWarning" hidden>绑定左键双击后，左键单击会延迟约 0.25 秒。</p>
             <p id="episodeGestureStatus" role="status"></p>
@@ -1223,6 +1223,10 @@
           </label>
           <div class="settings-section-title" data-settings-section="keyboard">快捷键</div>
           <label class="setting-row"><span><strong>启用快捷键</strong><small>在手账页面生效，输入时暂停。快速写记录也可在内置播放器里使用。</small></span><span class="switch-row compact"><input type="checkbox" id="keyboardEnabledInput" /><span class="switch"></span></span></label>
+          <div class="setting-row">
+            <span><strong>单集鼠标手势</strong><small>设置单集格子的右键、长按和组合点击。</small></span>
+            <button type="button" class="secondary-button compact-button" id="goToEpisodeMouseGestures">前往番剧详情设置</button>
+          </div>
           <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键或鼠标前进／后退侧键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，到达第一个或最后一个界面后不再移动。侧键一旦绑定，就不会再触发浏览器自身的前进／后退。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
           <h3 class="settings-subsection-title">自动追番</h3>
@@ -1638,7 +1642,7 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261112-hide-missing-as-schedule" defer></script>
+    <script src="/modules/settings.js?v=20261113-episode-mouse-gestures" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261112-hide-missing-as-schedule" defer></script>
