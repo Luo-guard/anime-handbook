@@ -332,7 +332,7 @@ function dmBaseCandidates() {
   return [...remembered, ...DANMAKU_PUBLIC_BASES.filter((base) => base !== s.publicBase)];
 }
 
-async function dmProxy(apiPath, validateText) {
+async function dmProxy(apiPath, validateText, signal) {
   const s = danmakuView.settings;
   const { sourceMode, appId, appSecret } = s;
   if (sourceMode === "dandanplay" && (!appId?.trim() || !appSecret?.trim())) {
@@ -345,6 +345,7 @@ async function dmProxy(apiPath, validateText) {
     try {
       const response = await fetch("/api/danmaku/proxy", {
         method: "POST",
+        signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           base,
@@ -364,6 +365,7 @@ async function dmProxy(apiPath, validateText) {
       }
       return text;
     } catch (error) {
+      signal?.throwIfAborted();
       lastError = error;
     }
   }
@@ -372,25 +374,19 @@ async function dmProxy(apiPath, validateText) {
 }
 
 function dmMappingKey() {
-  return danmakuView.animeId
-    ? `${danmakuView.animeId}:${danmakuView.episode || 0}`
-    : danmakuView.mineKey;
-}
-
-function dmEpisodeNumber(file) {
-  const parts = String(file?.episode_key || "").split(":");
-  if (parts.length === 2 && /^\d+$/.test(parts[1])) return Number(parts[1]);
-  const match = String(file?.episode_key || "").match(/(\d+)/);
-  return match ? Number(match[1]) : 0;
+  const { animeId, episode, episodeKey, mineKey } = danmakuView;
+  if (!animeId) return mineKey;
+  return /^0:[1-9]\d*$/.test(episodeKey) ? `${animeId}:${episode}` : `${animeId}:episode:${episodeKey || mineKey}`;
 }
 
 let dmLoadVersion = 0;
+let dmEpisodeLoad;
 
-async function dmLoadOnline(episodeId, version = dmLoadVersion) {
+async function dmLoadOnline(episodeId, version, signal) {
   const mode = danmakuView.settings.sourceMode;
   const related = mode === "dandanplay" ? "&withRelated=true" : "";
   const text = await dmProxy(`/api/v2/comment/${encodeURIComponent(episodeId)}?format=json${related}`,
-    mode === "public" ? text => dmParseText(text).length > 0 : undefined);
+    mode === "public" ? text => dmParseText(text).length > 0 : undefined, signal);
   const items = dmParseText(text);
   if (!items.length) throw new Error("这个分集没有返回弹幕");
   if (version !== dmLoadVersion) return false;
@@ -398,15 +394,53 @@ async function dmLoadOnline(episodeId, version = dmLoadVersion) {
   return items.length;
 }
 
-// 打开一集时调用：先找同目录弹幕文件，再试已经匹配过的在线分集，都没有就等用户操作。
+function dmUniqueEpisode(episodes, number) {
+  const ids = new Set();
+  for (const episode of episodes || []) {
+    const label = String(episode.episodeNumber || episode.episodeTitle || episode.title || "").normalize("NFKC").trim();
+    const match = label.match(/^(?:第\s*|EP\.?\s*)?(\d+)(?![\d.]|,\d)(?:\s*[集话話]|\s|:|$)/i);
+    const id = episode.episodeId || episode.id;
+    if (id && Number(match?.[1]) === number) ids.add(String(id));
+  }
+  return ids.size === 1 ? [...ids][0] : null;
+}
+
+async function dmAutoMatch(animeId, titles, number, signal) {
+  if (animeId > 0) {
+    try {
+      const text = await dmProxy(`/api/v2/bangumi/bgmtv/${animeId}`, undefined, signal);
+      const { bangumi } = JSON.parse(text);
+      if (bangumi) return dmUniqueEpisode(bangumi.episodes, number);
+    } catch (error) {
+      if (!/HTTP Error 404\b/.test(error.message)) throw error;
+    }
+  }
+  const normalize = title => String(title || "").normalize("NFKC").toLowerCase().replace(/[\s\p{P}]/gu, "");
+  const names = new Set(titles.map(normalize).filter(Boolean));
+  for (const title of titles) {
+    const text = await dmProxy(`/api/v2/search/episodes?anime=${encodeURIComponent(title)}`, undefined, signal);
+    const matches = JSON.parse(text).animes?.filter(anime => names.has(normalize(anime.animeTitle))) || [];
+    if (matches.length > 1) return null;
+    if (matches.length === 1) return dmUniqueEpisode(matches[0].episodes, number);
+  }
+  return null;
+}
+
 async function dmLoadFor(file, animeName, animeId, onlineKey = "") {
+  dmEpisodeLoad?.abort();
+  dmEpisodeLoad = new AbortController();
+  const { signal } = dmEpisodeLoad;
   const version = ++dmLoadVersion;
   danmakuView.episodeContext = { file, animeName, animeId, onlineKey };
   danmakuView.fileId = Number(file?.id) || 0;
   danmakuView.mineKey = onlineKey || String(danmakuView.fileId);
   danmakuView.animeName = String(animeName || "");
   danmakuView.animeId = Number(animeId) || 0;
-  danmakuView.episode = dmEpisodeNumber(file);
+  const anime = state.animes.find(item => Number(item.id) === danmakuView.animeId);
+  const episodeKey = episodeStorageKey(file?.episode_key, anime);
+  danmakuView.episodeKey = episodeKey;
+  danmakuView.episode = Number(/^0:([1-9]\d*)$/.exec(episodeKey)?.[1]) || 0;
+  const titles = [...new Set((anime ? [anime.name_cn, anime.name, anime.display_name] : [animeName]).filter(Boolean))];
   document.getElementById("dmQuery").value = danmakuView.animeName;
   document.getElementById("dmMatchRow").classList.add("hidden");
   document.getElementById("dmMatch").replaceChildren();
@@ -414,16 +448,16 @@ async function dmLoadFor(file, animeName, animeId, onlineKey = "") {
   dmStart();
   dmSetOnlineBusy(true);
   try {
-    await dmLoadAvailable(version);
+    await dmLoadAvailable(version, titles, signal);
   } finally {
     if (version === dmLoadVersion) dmSetOnlineBusy(false);
   }
 }
 
-async function dmLoadAvailable(version) {
+async function dmLoadAvailable(version, titles, signal) {
   if (danmakuView.fileId) {
     try {
-      const response = await fetch(`/api/danmaku/local?file_id=${danmakuView.fileId}`);
+      const response = await fetch(`/api/danmaku/local?file_id=${danmakuView.fileId}`, { signal });
       const payload = await response.json().catch(() => ({}));
       if (version !== dmLoadVersion) return;
       const local = payload.items || [];
@@ -432,6 +466,7 @@ async function dmLoadAvailable(version) {
         return;
       }
     } catch (error) {
+      if (signal.aborted) return;
       console.warn("本地弹幕读取失败：", error);
     }
   }
@@ -439,10 +474,26 @@ async function dmLoadAvailable(version) {
   const episodeId = danmakuView.mapping[dmMappingKey()];
   if (episodeId) {
     try {
-      await dmLoadOnline(episodeId, version);
+      await dmLoadOnline(episodeId, version, signal);
       return;
     } catch (error) {
       if (version === dmLoadVersion) dmSetNote(`已匹配的弹幕加载失败：${error.message}`);
+      return;
+    }
+  }
+  const { settings, animeId, episode } = danmakuView;
+  if (settings.enabled && settings.sourceMode === "dandanplay" && episode && (animeId || titles.length)) {
+    dmSetNote("正在自动匹配弹幕…");
+    try {
+      const match = await dmAutoMatch(animeId, titles, episode, signal);
+      if (version !== dmLoadVersion) return;
+      if (match && await dmLoadOnline(match, version, signal) && version === dmLoadVersion) {
+        danmakuView.mapping[dmMappingKey()] = match;
+        dmSaveMapping();
+        return;
+      }
+    } catch (error) {
+      if (version === dmLoadVersion) dmSetNote(`自动加载弹幕失败：${error.message}`);
       return;
     }
   }
@@ -452,6 +503,7 @@ async function dmLoadAvailable(version) {
 
 function dmClear() {
   dmLoadVersion++;
+  dmEpisodeLoad?.abort();
   danmakuView.mineKey = "";
   danmakuView.episodeContext = null;
   document.getElementById("dmMatchRow").classList.add("hidden");
@@ -551,6 +603,7 @@ function dmSetOnlineBusy(busy) {
 
 async function dmSearchOnline() {
   const version = dmLoadVersion;
+  const signal = dmEpisodeLoad?.signal;
   const button = document.getElementById("dmOnlineSearch");
   const select = document.getElementById("dmMatch");
   const keyword = document.getElementById("dmQuery").value.trim();
@@ -563,7 +616,7 @@ async function dmSearchOnline() {
     const text = await dmProxy(`/api/v2/search/episodes?anime=${encodeURIComponent(keyword)}`,
       danmakuView.settings.sourceMode === "public"
         ? (text) => { try { return ((JSON.parse(text).animes) || []).length > 0; } catch (error) { return false; } }
-        : undefined);
+        : undefined, signal);
     if (version !== dmLoadVersion) return;
     let payload;
     try { payload = JSON.parse(text); } catch (error) { throw new Error("弹幕服务返回的不是 JSON"); }
@@ -609,7 +662,7 @@ async function dmUseMatch() {
   dmSetOnlineBusy(true);
   dmSetNote("正在拉取弹幕…");
   try {
-    if (!await dmLoadOnline(id, version) || version !== dmLoadVersion) return;
+    if (!await dmLoadOnline(id, version, dmEpisodeLoad?.signal) || version !== dmLoadVersion) return;
     danmakuView.mapping[dmMappingKey()] = id;
     dmSaveMapping();
   } catch (error) {

@@ -190,7 +190,10 @@ window.onlinePlayback = (() => {
     pcRefreshEpisodes();
     openOfflinePlayerDialog();
     const provider = catalogue.rule === "xfdmnext" ? "xifan" : catalogue.rule;
-    dmLoadFor({ id: 0, episode_key: `0:${episode.number}` }, catalogue.title, animeId, `${provider}:${catalogue.id}:${episode.number || episode.id}`);
+    const episodeNumber = Number(episode.number);
+    const first = context?.target.first || 1;
+    const danmakuNumber = episodeNumber && onlineLineStartsAtOne(source) ? episodeNumber + first - 1 : episodeNumber;
+    dmLoadFor({ id: 0, episode_key: `0:${danmakuNumber}` }, catalogue.title, animeId, `${provider}:${catalogue.id}:${episode.number || episode.id}`);
     const timer = setTimeout(() => fail("视频加载超时，可重试或切换规则。"), 45000);
     controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
     try {

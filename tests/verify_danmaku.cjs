@@ -139,20 +139,31 @@ const BILI_XML = `<i>
 
   // 通过面板搜索、确认分集并加载，匹配结果在重开该集时复用。
   let commentRequests = 0;
+  let identityRequests = 0;
   await page.evaluate(() => Object.assign(danmakuView.settings, {
-    sourceMode: 'dandanplay', appId: 'fixture', appSecret: String(123),
+    enabled: true, sourceMode: 'dandanplay', appId: 'fixture', appSecret: String(123),
   }));
   await page.route('**/api/danmaku/proxy', async (route) => {
     const { path } = route.request().postDataJSON();
+    if (path.startsWith('/api/v2/bangumi/bgmtv/')) {
+      identityRequests++;
+      if (path.endsWith('/9878')) {
+        return route.fulfill({ json: { ok: true, text: JSON.stringify({ bangumi: null }) } });
+      }
+      const episodes = [{ episodeId: 108, episodeNumber: '08', episodeTitle: '本集标题' }];
+      if (path.endsWith('/9876')) episodes.push({ episodeId: 999, episodeNumber: '8' });
+      return route.fulfill({ json: { ok: true, text: JSON.stringify({ bangumi: { episodes } }) } });
+    }
     const search = path.startsWith('/api/v2/search/episodes?');
-    if (search) assert.equal(new URL(path, 'http://fixture').searchParams.get('anime'), '测试别名');
+    const keyword = new URL(path, 'http://fixture').searchParams.get('anime');
+    if (search) assert.ok(['测试别名', '后备番剧'].includes(keyword));
     else {
       assert.match(path, /\/comment\/108\?/);
       assert.equal(new URL(path, 'http://fixture').searchParams.get('withRelated'), 'true');
       commentRequests++;
     }
     await route.fulfill({ json: { ok: true, text: JSON.stringify(search
-      ? { animes: [{ animeTitle: '番剧 8', episodes: [
+      ? { animes: [{ animeTitle: keyword === '后备番剧' ? keyword : '番剧 8', episodes: [
           { episodeId: 107, episodeTitle: '第 7 集' },
           { episodeId: 108, episodeTitle: '第 8 话' },
         ] }] }
@@ -161,6 +172,8 @@ const BILI_XML = `<i>
   const loadEpisode = () => page.evaluate(() =>
     dmLoadFor({ id: 0, episode_key: '0:8' }, '测试番剧', 9876, 'fixture:8'));
   await loadEpisode();
+  assert.match(await page.locator('#dmSource').textContent(), /尚未匹配/);
+  assert.equal(commentRequests, 0, '分集有歧义时不下载弹幕');
   assert.equal(await page.locator('#dmQuery').inputValue(), '测试番剧');
   await page.locator('#dmQuery').fill('测试别名');
   await page.locator('#dmQuery').press('Enter');
@@ -171,6 +184,16 @@ const BILI_XML = `<i>
   assert.equal(await page.locator('#dmCount').textContent(), '1 条');
   await loadEpisode();
   assert.equal(commentRequests, 2);
+  assert.equal(identityRequests, 1, '已有手动匹配时不再查询番剧');
+  const loadAutomatic = () => page.evaluate(() =>
+    dmLoadFor({ id: 0, episode_key: '0:8' }, '自动匹配番剧', 9877, 'fixture:auto'));
+  await loadAutomatic();
+  assert.equal(await page.locator('#dmCount').textContent(), '1 条');
+  await loadAutomatic();
+  assert.equal(commentRequests, 4);
+  assert.equal(identityRequests, 2, '重开自动匹配过的分集直接加载弹幕');
+  await page.evaluate(() => dmLoadFor({ id: 0, episode_key: '0:8' }, '后备番剧', 9878, 'fixture:fallback'));
+  assert.equal(commentRequests, 5, '缺少 ID 映射时按精确番名和集数加载');
   await page.evaluate(() => Object.assign(danmakuView.settings, {
     sourceMode: 'public', appId: '', appSecret: '',
   }));

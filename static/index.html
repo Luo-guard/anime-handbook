@@ -1143,7 +1143,7 @@
           <label class="setting-row"><strong>顶底弹幕</strong><span class="switch-row compact"><input type="checkbox" data-dm-pref="topBottom" /><span class="switch"></span></span></label>
           <label class="setting-row"><strong>屏蔽词</strong><input type="text" data-dm-pref="shield" placeholder="用逗号分隔" /></label>
           <label class="setting-row">
-            <span><strong>在线弹幕源</strong><small>保存后回到播放器，在弹幕面板搜索番名并选择分集。官方源凭据可在 <a href="https://dev.dandanplay.com/" target="_blank" rel="noreferrer">弹弹play 开发者中心</a>申请，只保存在当前浏览器。</small></span>
+            <span><strong>在线弹幕源</strong><small>弹弹play 官方源会在播放正片时自动匹配弹幕。也可以在播放器里手动搜索。凭据可在 <a href="https://dev.dandanplay.com/" target="_blank" rel="noreferrer">弹弹play 开发者中心</a>申请，只保存在当前浏览器。</small></span>
             <select id="dmSourceMode" data-dm-pref="sourceMode">
               <option value="public">公共弹幕源</option>
               <option value="dandanplay">弹弹play 官方</option>
@@ -1696,9 +1696,9 @@
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
-    <script src="/modules/danmaku.js?v=20261113-danmaku-related" defer></script>
+    <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
     <script src="/modules/offline.js?v=20261113-modal-width" defer></script>
-    <script src="/modules/online-playback.js?v=20261113-source-picker" defer></script>
+    <script src="/modules/online-playback.js?v=20261113-danmaku-auto-match" defer></script>
     <script src="/modules/library-view.js?v=20261113-record-image-selection" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
