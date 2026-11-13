@@ -206,6 +206,8 @@ function renderCustomCollectionSettings() {
 }
 
 function renderSettingsPanels() {
+  $("#episodePlaybackSourceInput").value = episodeGestureConfig().playbackSource;
+  if (!window.handbookOnline) renderPlaybackSettings();
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
   $("#kazumiWritebackInput").checked=state.settings.kazumi_writeback!==false;
   $("#webdavKazumiSyncInput").checked=state.settings.webdav_kazumi_sync!==false;
@@ -1021,7 +1023,7 @@ function syncSettingsNavigation(preview = false) {
   // （收藏夹后面挂番剧详情，媒体库对应「媒体库」这一节），最后是工具类分类。
   // 之前媒体库（offline）没进这个序列，永远不会被 append，就一直留在最前面。
   const SETTINGS_TABS_BY_PAGE = {
-    collection: ["collection", "detail"],
+    collection: ["collection", "detail", "playback"],
     library: ["offline"],
     schedule: ["schedule"],
     timeline: ["record"],
@@ -1045,6 +1047,70 @@ function switchSettingsTab(tab) {
   $$(".settings-group").forEach((group) => group.classList.toggle("hidden", group.dataset.settingsGroup !== tab));
   $$("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === tab));
   $("#settingsModal").scrollTop = 0;
+  if (tab === "playback") window.onlinePlayback?.loadRuleCatalogue();
+}
+
+function showSettingsSection(tab, selector) {
+  resetSettingsSearch();
+  switchSettingsTab(tab);
+  const target = selector && $(selector);
+  target?.scrollIntoView({ block: "center" });
+  target?.focus({ preventScroll: true });
+}
+
+function updateDanmakuSourceFields() {
+  const mode = $("#dmSourceMode").value;
+  $("#dmBase").closest(".setting-row").classList.toggle("hidden", mode === "public");
+  for (const id of ["#dmAppId", "#dmAppSecret"]) {
+    $(id).closest(".setting-row").classList.toggle("hidden", mode !== "dandanplay");
+  }
+}
+
+function renderPlaybackSettings() {
+  const prefs = pcLoadPrefs();
+  $("#playbackResumeInput").checked = prefs.resume;
+  const speed = $("#playbackSpeedInput");
+  speed.replaceChildren(...PC_SPEEDS.map(rate => new Option(`${rate}×`, rate)));
+  speed.value = prefs.speed;
+  $("#playbackSkipInput").value = prefs.skip;
+  $$("[data-dm-pref]").forEach(input => {
+    const value = danmakuView.settings[input.dataset.dmPref];
+    if (input.type === "checkbox") input.checked = Boolean(value);
+    else input.value = value;
+  });
+  updateDanmakuSourceFields();
+}
+
+function readPlaybackSettings() {
+  const skip = $("#playbackSkipInput");
+  if (!skip.value || !skip.validity.valid) throw new Error("快进时长须为 1 到 600 秒的整数。");
+  const player = {
+    resume: $("#playbackResumeInput").checked,
+    speed: Number($("#playbackSpeedInput").value),
+    skip: skip.valueAsNumber,
+  };
+  const danmaku = {};
+  for (const input of $$("[data-dm-pref]")) {
+    const key = input.dataset.dmPref;
+    if (input.type === "number" && (!input.value || !input.validity.valid)) {
+      throw new Error(`请检查播放设置中的「${input.closest("label").querySelector("strong").textContent}」。`);
+    }
+    danmaku[key] = input.type === "checkbox" ? input.checked
+      : typeof DANMAKU_DEFAULTS[key] === "number" ? Number(input.value) : input.value.trim();
+  }
+  if (danmaku.sourceMode !== "public" && danmaku.onlineBase &&
+      (!$("#dmBase").validity.valid || !/^https?:\/\//i.test(danmaku.onlineBase))) {
+    throw new Error("请输入有效的 HTTP 或 HTTPS 弹幕服务地址。");
+  }
+  return { player, danmaku };
+}
+
+function applyPlaybackSettings({ player, danmaku }) {
+  pcSavePrefs(player);
+  pcApplySkipUI();
+  Object.assign(danmakuView.settings, danmaku);
+  dmSavePrefs();
+  dmSyncControls();
 }
 
 function setupSettingsTabs() {
@@ -1053,6 +1119,7 @@ function setupSettingsTabs() {
     const groups = new Map($$("[data-settings-tab]").map((button) => {
       const panel = document.createElement("section");
       panel.className = "settings-group";
+      if (button.classList.contains("desktop-only")) panel.classList.add("desktop-only");
       panel.dataset.settingsGroup = button.dataset.settingsTab;
       return [button.dataset.settingsTab, panel];
     }));
@@ -1063,13 +1130,8 @@ function setupSettingsTabs() {
     });
     list.replaceChildren(...groups.values());
     $$("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab)));
-    $("#goToEpisodeMouseGestures").addEventListener("click", () => {
-      resetSettingsSearch();
-      switchSettingsTab("detail");
-      const heading = $("#episodeMouseGestureHeading");
-      heading.scrollIntoView({ block: "center" });
-      heading.focus({ preventScroll: true });
-    });
+    $("#goToEpisodeMouseGestures").addEventListener("click", () => showSettingsSection("detail", "#episodeMouseGestureHeading"));
+    $("#dmSourceMode").addEventListener("change", updateDanmakuSourceFields);
     settingsGroupsInitialized = true;
   }
   syncSettingsNavigation();
@@ -1391,7 +1453,7 @@ function applySearchHighlight(root, tokens) {
     if (frag.childNodes.length) node.replaceWith(frag);
   }
   // 输入框的值不是文本节点，包不了 mark：给值里含关键词的输入框加提示底色。
-  for (const input of $$("input,textarea", root)) {
+  for (const input of $$("input:not([type=password]):not([data-dm-pref=appId]),textarea", root)) {
     const value = String(input.value || "").toLowerCase();
     if (value && tokens.some((token) => value.includes(token))) {
       input.classList.add("settings-hit-input");
@@ -1458,6 +1520,7 @@ function runSettingsSearch(query) {
   // 按侧栏顺序扫每个分类；行按「所属小节标题 + 行文本」匹配，多关键词全含。
   const sections = [];
   for (const head of $$("[data-settings-tab]")) {
+    if (window.handbookOnline && head.classList.contains("desktop-only")) continue;
     const tab = head.dataset.settingsTab;
     const group = $(`.settings-group[data-settings-group="${tab}"]`);
     if (!group) continue;

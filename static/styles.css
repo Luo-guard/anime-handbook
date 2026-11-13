@@ -4471,11 +4471,20 @@ dialog::backdrop {
   font-size: 13px;
 }
 .online-rule-toolbar select { width: 100%; }
-.online-rule-manager { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
-.online-rule-manager summary { cursor: pointer; color: var(--accent); }
-.online-rule-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.online-rule-manager.setting-row { gap: 8px; }
+.online-rule-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .online-rule-tools a { color: var(--green-800); font-size: 13px; }
-.online-rule-manager .online-playback-results { max-height: min(40vh, 340px); margin-top: 8px; }
+.online-rule-manager .online-playback-results { max-height: min(40vh, 340px); margin-top: 0; }
+.online-rule-manager [role="status"]:empty { display: none; }
+.settings-list [data-dm-pref]:is([type="text"], [type="url"], [type="password"]) {
+  width: min(100%, 290px);
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--ink);
+}
 .online-rule-row {
   display: flex;
   align-items: center;
@@ -4607,11 +4616,6 @@ dialog.modal { overflow-x: hidden; }
 .danmaku-actions button:hover { background: var(--green-100); }
 .danmaku-actions button:disabled { opacity: .55; cursor: default; }
 .danmaku-actions select { flex-basis: 100%; background: var(--surface); }
-.danmaku-online { border-top: 1px solid var(--line); padding-top: 7px; }
-.danmaku-online summary { cursor: pointer; color: var(--muted); font-size: 11.5px; }
-.danmaku-online input { margin-top: 5px; }
-.danmaku-online p { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
-.danmaku-online b { color: var(--green-800); }
 .offline-player-bar { flex-wrap: wrap; gap: 8px; }
 @media (max-width: 480px) {
   .danmaku-panel { top: 6px; right: 6px; width: min(270px, calc(100% - 12px)); max-height: calc(100% - 12px); }

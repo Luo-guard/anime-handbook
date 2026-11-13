@@ -28,6 +28,7 @@ const HandbookSettings = (() => {
       const scheduleLinkPayloadFinal = linkSync.schedule;
       const keyboardSettings = readKeyboardSettings();
       const gestureSettings = typeof readEpisodeGestureSettings === "function" ? readEpisodeGestureSettings() : null;
+      const playbackSettings = window.handbookOnline ? null : readPlaybackSettings();
       const keyboardChanged = JSON.stringify(keyboardSettings) !== JSON.stringify(keyboardPreferences());
       if(keyboardChanged && !(await api("/api/health")).features?.keyboard_shortcuts) throw new Error("当前后台尚不支持保存快捷键，请重启手账后台并刷新页面。");
       const scheduleSorting = readScheduleSorting("#scheduleSortingSettings");
@@ -133,6 +134,7 @@ const HandbookSettings = (() => {
       if (gestureSettings && !payload.settings.episode_gestures) throw new Error("单集手势未成功保存，请重启后台并刷新后再试。");
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
       if ((payload.settings.detail_airtime_source || "yuc") !== detailAirtimeSource) throw new Error("后台未保存详情更新时间来源，请重启后台并刷新后重试。");
+      if (playbackSettings) applyPlaybackSettings(playbackSettings);
       ThemeSettingsSession.finish(true);
       state.settings = payload.settings;
       state.stats = payload.stats || state.stats;

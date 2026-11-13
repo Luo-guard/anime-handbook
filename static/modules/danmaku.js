@@ -484,8 +484,6 @@ function dmSyncControls() {
     dmEnabled: s.enabled, dmFontSize: s.fontSize, dmDuration: s.duration,
     dmOpacity: s.opacity, dmArea: s.area, dmDensity: s.density,
     dmBold: s.bold, dmTopBottom: s.topBottom, dmShield: s.shield,
-    dmBase: s.onlineBase, dmAppId: s.appId, dmAppSecret: s.appSecret,
-    dmSourceMode: s.sourceMode,
   };
   Object.entries(values).forEach(([id, value]) => {
     const node = document.getElementById(id);
@@ -625,23 +623,6 @@ function initDanmaku() {
   dmBindSetting("dmBold", "bold");
   dmBindSetting("dmTopBottom", "topBottom");
   dmBindSetting("dmShield", "shield");
-  dmBindSetting("dmBase", "onlineBase");
-  dmBindSetting("dmAppId", "appId");
-  dmBindSetting("dmAppSecret", "appSecret");
-  dmBindSetting("dmSourceMode", "sourceMode");
-  const applySourceMode = () => {
-    const mode = danmakuView.settings.sourceMode || "public";
-    document.getElementById("dmBase")?.classList.toggle("hidden", mode === "public");
-    document.getElementById("dmOfficialFields")?.classList.toggle("hidden", mode !== "dandanplay");
-    document.querySelectorAll(".danmaku-note").forEach((node) => {
-      node.classList.toggle("hidden", node.dataset.note !== mode);
-    });
-  };
-  applySourceMode();
-  if (!initDanmaku.sourceModeBound) {
-    initDanmaku.sourceModeBound = true;
-    document.getElementById("dmSourceMode")?.addEventListener("change", applySourceMode);
-  }
   document.getElementById("dmImport")?.addEventListener("click", () => document.getElementById("dmFile")?.click());
   document.getElementById("dmFile")?.addEventListener("change", (event) => {
     dmImportFile(event.target.files?.[0]);

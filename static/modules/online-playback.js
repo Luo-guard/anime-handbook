@@ -280,6 +280,8 @@ window.onlinePlayback = (() => {
         : fresh ? (rules.some(rule => rule.installed) ? "已安装的规则暂无可用更新" : "尚未安装规则") : "";
     } catch (error) {
       rules = installed;
+      try { rules = (await request("rules", {})).items; }
+      catch { /* Keep the last known installed rules if the backend is unavailable. */ }
       status.textContent = error.message;
     } finally {
       checkingRules = false;
@@ -293,7 +295,7 @@ window.onlinePlayback = (() => {
       title.textContent = rule.name;
       const meta = document.createElement("small");
       const version = rule.update ? `${rule.version} → ${rule.available_version}` : rule.version;
-      meta.textContent = [rule.host, version].filter(Boolean).join(" · ");
+      meta.textContent = [rule.installed && "已安装", rule.host, version].filter(Boolean).join(" · ");
       copy.append(title, meta);
       const buttons = document.createElement("div");
       buttons.className = "online-rule-actions";
@@ -415,7 +417,6 @@ window.onlinePlayback = (() => {
     const status = $("#onlineRuleStatus");
     $("#onlinePlaybackPickerTitle").textContent = `在线播放 · 第 ${target.number} 集`;
     $("#onlinePlaybackResults").replaceChildren();
-    $("#onlineRuleManager").open = false;
     renderInstalled();
     status.textContent = "正在读取已下载规则…";
     if (!dialog.open) dialog.showModal();
@@ -425,8 +426,7 @@ window.onlinePlayback = (() => {
       installed = result.items;
       renderInstalled();
       status.textContent = installed.length ? "" : "先下载一个规则，再搜索片源。";
-      if (!installed.length) $("#onlineRuleManager").open = true;
-      else if (!choose) await searchSelectedRule();
+      if (installed.length && !choose) await searchSelectedRule();
     } catch (error) {
       if (dialog.open && selection === context) status.textContent = error.message;
     }
@@ -466,8 +466,10 @@ window.onlinePlayback = (() => {
     });
     $("#onlinePlaybackSearch").addEventListener("click", searchSelectedRule);
     $("#onlinePlaybackRule").addEventListener("change", searchSelectedRule);
-    $("#onlineRuleManager").addEventListener("toggle", event => {
-      if (event.currentTarget.open && !managing) refreshRuleCatalogue();
+    $("#openPlaybackRuleSettings").addEventListener("click", () => openHandbookSettings("playback", "#playbackRulesHeading"));
+    $("#managePlayerRules").addEventListener("click", async () => {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      openHandbookSettings("playback", "#playbackRulesHeading");
     });
     $("#onlineRuleCheckUpdates").addEventListener("click", () => refreshRuleCatalogue({ fresh: true }));
     $("#onlinePlayerRule").addEventListener("click", () => {
@@ -526,5 +528,11 @@ window.onlinePlayback = (() => {
     }
   });
 
-  return { get current() { return current; }, open, openAnime, resume, close, selectEpisode };
+  return {
+    get current() { return current; },
+    open, openAnime, resume, close, selectEpisode,
+    loadRuleCatalogue() {
+      if (!managing) return refreshRuleCatalogue();
+    },
+  };
 })();

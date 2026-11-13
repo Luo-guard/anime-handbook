@@ -378,7 +378,6 @@ function renderEpisodeGestureSettings(config = episodeGestureConfig()) {
   if (!enabled) return;
   enabled.checked = config.enabled;
   $("#episodeGestureKeepMenuInput").checked = config.keepMenu;
-  $("#episodePlaybackSourceInput").value = config.playbackSource;
   $("#episodeGestureSlots").innerHTML = EG_SLOTS.map((slot) => `
     <label class="eg-slot eg-slot-${slot}"><span>${escapeHtml(EG_SLOT_LABELS[slot])}</span>
       <select data-eg-slot="${slot}" aria-label="${escapeHtml(EG_SLOT_LABELS[slot])}的动作">

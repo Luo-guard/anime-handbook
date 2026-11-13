@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-player-state" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-playback-settings" />
   </head>
   <body>
     <div class="app-shell">
@@ -620,22 +620,6 @@
               <select id="dmMatch" class="hidden" aria-label="选择在线分集"></select>
               <button type="button" id="dmUseMatch" class="hidden">用这个分集</button>
             </div>
-            <details class="danmaku-online">
-              <summary>在线弹幕源</summary>
-              <select id="dmSourceMode">
-                <option value="public">公共弹幕源（免配置，默认）</option>
-                <option value="dandanplay">弹弹play 官方（免费申请一次）</option>
-                <option value="custom">自建 / 其他兼容服务</option>
-              </select>
-              <input type="text" id="dmBase" class="hidden" placeholder="服务地址，如 http://127.0.0.1:9321/87654321" />
-              <div id="dmOfficialFields" class="hidden">
-                <input type="text" id="dmAppId" placeholder="AppId（官方源必填）" />
-                <input type="password" id="dmAppSecret" placeholder="AppSecret（官方源必填）" />
-              </div>
-              <p class="danmaku-note" data-note="public">默认走社区公共弹幕源（聚合 B 站等多站弹幕，无需任何配置），连不上会自动换下一个。社区源由志愿者提供，可能间歇不可用；长期稳定请换官方源——到 <b>dev.dandanplay.com</b> 免费注册开发者、创建应用拿 AppId / AppSecret 填进上面即可，填一次永久生效。</p>
-              <p class="danmaku-note hidden" data-note="dandanplay">官方源最稳定。到 <b>dev.dandanplay.com</b> 注册开发者账号、创建应用并通过审核（个人测试免费），把 AppId / AppSecret 填进来；配置只保存在这台电脑的浏览器里。</p>
-              <p class="danmaku-note hidden" data-note="custom">填自建或第三方兼容服务的地址，例如本机 <b>http://127.0.0.1:9321/87654321</b>（danmu_api 一键部署）。</p>
-            </details>
           </div>
         </div>
         <div class="offline-player-bar">
@@ -643,6 +627,7 @@
           <div class="online-player-options hidden" id="onlinePlayerOptions">
             <select id="onlinePlayerSource" aria-label="播放线路"></select>
             <button type="button" class="text-button" id="onlinePlayerRule">切换规则</button>
+            <button type="button" class="text-button" id="managePlayerRules">管理规则</button>
             <a id="onlinePlayerOriginal" target="_blank" rel="noopener noreferrer">打开原网页 ↗</a>
           </div>
           <details class="pc-shortcuts">
@@ -772,6 +757,7 @@
 <button type="button" class="active" data-settings-tab="main">主界面设置</button>
 <button type="button" data-settings-tab="collection" data-page-label="collection">收藏夹</button>
 <button type="button" data-settings-tab="detail">番剧详情</button>
+<button type="button" class="desktop-only" data-settings-tab="playback">播放设置</button>
 <button type="button" data-settings-tab="offline" data-page-label="library">媒体库</button>
 <button type="button" data-settings-tab="schedule" data-page-label="schedule">周表</button>
 <button type="button" data-settings-tab="record" data-page-label="timeline">看番记录</button>
@@ -1028,14 +1014,6 @@
             </span>
           </label>
           <h3 class="settings-subsection-title">单集扇区与手势</h3>
-          <label class="setting-row">
-            <span><strong>播放来源</strong><small>适用于详情页和单集扇区的播放按钮。</small></span>
-            <select id="episodePlaybackSourceInput">
-              <option value="auto">优先本地，无缓存时在线播放</option>
-              <option value="local">仅本地，无缓存时提醒</option>
-              <option value="online">仅在线播放</option>
-            </select>
-          </label>
           <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击切换已看。右键和长按等手势可在下方设置。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
           <label class="setting-row"><span><strong>长按松手后保留扇区</strong><small>长按后滑向动作并松手可直接执行。开启后，原地松手也可继续点选。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked">
@@ -1105,7 +1083,53 @@
             <span><strong>默认视频置顶</strong><small>开启时标记为“默认”的视频排在列表最前；关闭后它留在原来加入的位置，其余视频顺序不变。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="videoDefaultPinnedInput" /><span class="switch"></span></span>
           </label>
-                    <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
+          <div class="settings-section-title" data-settings-section="playback">播放设置</div>
+          <h3 class="settings-subsection-title">播放偏好</h3>
+          <label class="setting-row">
+            <span><strong>播放来源</strong><small>适用于详情页和单集扇区的播放按钮。</small></span>
+            <select id="episodePlaybackSourceInput">
+              <option value="auto">优先本地，无缓存时在线播放</option>
+              <option value="local">仅本地，无缓存时提醒</option>
+              <option value="online">仅在线播放</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span><strong>从上次位置续播</strong><small>关闭后从头播放，仍会记录观看位置。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="playbackResumeInput" /><span class="switch"></span></span>
+          </label>
+          <label class="setting-row"><strong>播放倍速</strong><select id="playbackSpeedInput"></select></label>
+          <label class="setting-row"><span><strong>快进时长</strong><small>用于播放器顶栏的快进按钮。</small></span><span class="inline-input"><input type="number" id="playbackSkipInput" min="1" max="600" step="1" /> 秒</span></label>
+          <h3 class="settings-subsection-title" id="playbackRulesHeading" tabindex="-1">在线片源</h3>
+          <div class="setting-row stacked online-rule-manager">
+            <div class="online-rule-tools">
+              <a href="https://github.com/Predidit/KazumiRules" target="_blank" rel="noreferrer">KazumiRules ↗</a>
+              <button type="button" class="secondary-button compact-button" id="onlineRuleCheckUpdates">检查更新</button>
+            </div>
+            <small id="onlineRuleManagerStatus" role="status"></small>
+            <div class="online-playback-results" id="onlineRuleCatalogue"></div>
+          </div>
+          <h3 class="settings-subsection-title">弹幕</h3>
+          <label class="setting-row"><strong>显示弹幕</strong><span class="switch-row compact"><input type="checkbox" data-dm-pref="enabled" /><span class="switch"></span></span></label>
+          <label class="setting-row"><strong>字号</strong><span class="inline-input"><input type="number" data-dm-pref="fontSize" min="16" max="40" step="1" /> px</span></label>
+          <label class="setting-row"><strong>滚动时长</strong><span class="inline-input"><input type="number" data-dm-pref="duration" min="4" max="16" step="1" /> 秒</span></label>
+          <label class="setting-row"><strong>不透明度</strong><span class="inline-input"><input type="number" data-dm-pref="opacity" min="0.3" max="1" step="0.02" /></span></label>
+          <label class="setting-row"><strong>显示区域</strong><select data-dm-pref="area"><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
+          <label class="setting-row"><span><strong>同屏上限</strong><small>填 0 表示不限。</small></span><span class="inline-input"><input type="number" data-dm-pref="density" min="0" max="60" step="5" /></span></label>
+          <label class="setting-row"><strong>粗体弹幕</strong><span class="switch-row compact"><input type="checkbox" data-dm-pref="bold" /><span class="switch"></span></span></label>
+          <label class="setting-row"><strong>顶底弹幕</strong><span class="switch-row compact"><input type="checkbox" data-dm-pref="topBottom" /><span class="switch"></span></span></label>
+          <label class="setting-row"><strong>屏蔽词</strong><input type="text" data-dm-pref="shield" placeholder="用逗号分隔" /></label>
+          <label class="setting-row">
+            <span><strong>在线弹幕源</strong><small>官方源凭据可在 <a href="https://dev.dandanplay.com/" target="_blank" rel="noreferrer">弹弹play 开发者中心</a>申请，只保存在当前浏览器。</small></span>
+            <select id="dmSourceMode" data-dm-pref="sourceMode">
+              <option value="public">公共弹幕源</option>
+              <option value="dandanplay">弹弹play 官方</option>
+              <option value="custom">自建 / 其他兼容服务</option>
+            </select>
+          </label>
+          <label class="setting-row hidden"><strong>弹幕服务地址</strong><input type="url" id="dmBase" data-dm-pref="onlineBase" /></label>
+          <label class="setting-row hidden"><strong>AppId</strong><input type="text" id="dmAppId" data-dm-pref="appId" autocomplete="off" /></label>
+          <label class="setting-row hidden"><strong>AppSecret</strong><input type="password" id="dmAppSecret" data-dm-pref="appSecret" autocomplete="off" /></label>
+          <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
           <div class="setting-row"><span><strong>周表来源</strong><small>三套周表独立展示：有 C 的时间与网络上线日期来自長門番堂；Kazumi 使用 Bangumi 放送列表，不提供具体时刻；AS 按实际周次显示原声／字幕的较早放送时间。评分和评分人数来自已关联的 Bangumi / Kazumi 资料。未公布的时间保留空缺，固定按北京时间凌晨 4 点划分播出日；已关联 Bangumi ID 的条目可在详情中加入收藏。</small></span><select id="scheduleSourceInput"><option value="yuc" title="長門番堂（有C）">長門番堂</option><option value="kazumi" title="Kazumi 读取的 Bangumi 放送列表">Bangumi</option><option value="as" title="AnimeSchedule（AS）">AnimeSchedule</option></select></div>
           <div class="setting-row"><span><strong>显示来源切换按钮</strong><small>隐藏后仍可在此处选择来源。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleSourceSwitchInput"><span class="switch"></span></span></div>
           <div class="setting-row"><span><strong>配置哪一套周表</strong><small>三套周表（長門番堂 / Bangumi / AnimeSchedule）的排序与筛选<strong>相互独立</strong>；先在这里选来源，下面的设置只作用于它。</small></span><select id="scheduleSettingsSource"><option value="yuc">長門番堂（有C）</option><option value="kazumi">Bangumi</option><option value="as">AnimeSchedule</option></select></div>
@@ -1528,18 +1552,10 @@
         <div class="online-rule-toolbar">
           <label>片源规则 <select id="onlinePlaybackRule"></select></label>
           <button type="button" class="secondary-button" id="onlinePlaybackSearch">搜索</button>
+          <button type="button" class="secondary-button" id="openPlaybackRuleSettings">管理规则</button>
         </div>
         <p class="page-subtitle" id="onlineRuleStatus" role="status"></p>
         <div class="online-playback-results" id="onlinePlaybackResults"></div>
-        <details class="online-rule-manager" id="onlineRuleManager">
-          <summary>管理规则</summary>
-          <div class="online-rule-tools">
-            <a href="https://github.com/Predidit/KazumiRules" target="_blank" rel="noreferrer">KazumiRules</a>
-            <button type="button" class="secondary-button compact-button" id="onlineRuleCheckUpdates">检查更新</button>
-          </div>
-          <p class="page-subtitle" id="onlineRuleManagerStatus" role="status"></p>
-          <div class="online-playback-results" id="onlineRuleCatalogue"></div>
-        </details>
       </div>
     </dialog>
     <dialog class="modal jump-history-modal" id="jumpHistoryModal" aria-labelledby="playbackHistoryTitle">
@@ -1636,26 +1652,26 @@
     <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261113-episode-menu-close" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261113-playback-settings" defer></script>
     <script src="/modules/details.js?v=20261112-hide-missing-as-schedule" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261113-episode-mouse-gestures" defer></script>
+    <script src="/modules/settings.js?v=20261113-playback-settings" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
-    <script src="/modules/settings-save.js?v=20261112-hide-missing-as-schedule" defer></script>
-    <script src="/modules/events.js?v=20261112-detail-close" defer></script>
+    <script src="/modules/settings-save.js?v=20261113-playback-settings" defer></script>
+    <script src="/modules/events.js?v=20261113-playback-settings" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
     <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
-    <script src="/modules/danmaku.js?v=20261111-online-player" defer></script>
-    <script src="/modules/offline.js?v=20261113-player-state" defer></script>
-    <script src="/modules/online-playback.js?v=20261113-player-state" defer></script>
+    <script src="/modules/danmaku.js?v=20261113-playback-settings" defer></script>
+    <script src="/modules/offline.js?v=20261113-playback-settings" defer></script>
+    <script src="/modules/online-playback.js?v=20261113-playback-settings" defer></script>
     <script src="/modules/library-view.js?v=20261113-library-full-image" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

@@ -24,7 +24,7 @@ const BILI_XML = `<i>
     panel: Boolean(document.querySelector('#danmakuPanel')),
     controls: ['dmEnabled', 'dmFontSize', 'dmDuration', 'dmOpacity', 'dmArea', 'dmDensity',
       'dmBold', 'dmTopBottom', 'dmShield', 'dmImport', 'dmOnlineSearch', 'dmBase', 'dmAppId',
-      'dmSourceMode', 'dmOfficialFields'].every(
+      'dmSourceMode', 'dmAppSecret'].every(
       (id) => Boolean(document.getElementById(id))),
     canvasPointer: getComputedStyle(document.querySelector('#danmakuCanvas')).pointerEvents,
     videoTag: document.querySelector('#offlineVideo').tagName,
@@ -203,40 +203,28 @@ const BILI_XML = `<i>
     assert.equal(await page.evaluate(() => Boolean(document.fullscreenElement)), false, '要能退出全屏');
   }
 
-  // 8) 弹幕源三选一：公共源模式默认隐藏凭证字段；切换到官方显示；逐候选记忆
+  // 8) 播放设置里的弹幕源：公共源隐藏地址和凭据，官方源显示。
   const sourceMode = await page.evaluate(() => {
+    renderPlaybackSettings();
     const mode = document.querySelector('#dmSourceMode');
-    const official = document.querySelector('#dmOfficialFields');
-    const base = document.querySelector('#dmBase');
-    const notes = [...document.querySelectorAll('.danmaku-note')];
-    const visibleNotes = notes.filter((n) => !n.classList.contains('hidden')).map((n) => n.dataset.note);
+    const official = document.querySelector('#dmAppSecret').closest('.setting-row');
+    const base = document.querySelector('#dmBase').closest('.setting-row');
     const results = {
       defaultMode: mode.value,
       publicHidesBase: base.classList.contains('hidden'),
       publicHidesOfficial: official.classList.contains('hidden'),
-      publicNoteVisible: visibleNotes.join(','),
     };
     mode.value = 'dandanplay';
-    mode.dispatchEvent(new Event('change', { bubbles: true }));
+    updateDanmakuSourceFields();
     results.officialShowsBase = !base.classList.contains('hidden');
     results.officialShowsFields = !official.classList.contains('hidden');
-    // 多候选记忆：第一个源挂、第二个成功 → publicBase 记住第二个
-    const realFetch = window.fetch;
-    window.fetch = async (url, options) => {
-      const body = JSON.parse(options.body);
-      if (body.base === 'https://api.danmu.icu') return new Response(JSON.stringify({ ok: false, error: 'down' }), { status: 502 });
-      return realFetch(url, options);
-    };
-    window.DANMAKU_TEST = true;
-    window.fetch = realFetch;
     mode.value = 'public';
-    mode.dispatchEvent(new Event('change', { bubbles: true }));
+    updateDanmakuSourceFields();
     return results;
   });
   assert.equal(sourceMode.defaultMode, 'public', '默认要选公共源（免配置）');
   assert.equal(sourceMode.publicHidesBase, true, '公共模式不出现地址输入框');
   assert.equal(sourceMode.publicHidesOfficial, true, '公共模式不出现凭证字段');
-  assert.equal(sourceMode.publicNoteVisible, 'public', '说明文案跟模式走');
   assert.equal(sourceMode.officialShowsFields, true, '官方模式要出现 AppId/AppSecret');
 
   console.log('verify_danmaku: OK', JSON.stringify({ painted: render.painted, shield: shield.count }));

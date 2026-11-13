@@ -644,9 +644,9 @@ function pcPrepareVideo(resumeSeconds) {
   video.addEventListener(
     "loadedmetadata",
     () => {
-      if (resumeSeconds > 3 && resumeSeconds < video.duration) video.currentTime = resumeSeconds;
       // 浏览器换 src 后会重置倍速/音量，这里把记忆值贴回去。
       const prefs = pcLoadPrefs();
+      if (prefs.resume && resumeSeconds > 3 && resumeSeconds < video.duration) video.currentTime = resumeSeconds;
       video.playbackRate = prefs.speed;
       video.volume = prefs.volume;
       video.muted = prefs.muted;
@@ -865,7 +865,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#offlinePlayerBackdrop")?.addEventListener("click", closeOfflinePlayer);
   // 非模态 dialog 按 Esc 不会自动关闭，自己补上（其它弹窗此时已收起）。
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !event.defaultPrevented && !$("#quickRecordDialog")?.open && $("#offlinePlayer")?.open) {
+    if (event.key === "Escape" && !event.defaultPrevented && !$("#settingsModal")?.open && !$("#quickRecordDialog")?.open && $("#offlinePlayer")?.open) {
       // 全屏时第一下 Esc 退全屏（对齐 Kazumi 的 exitfullscreen），再按才关播放器。
       if (document.fullscreenElement) {
         event.preventDefault();
@@ -898,11 +898,12 @@ function pcLoadPrefs() {
       speed: PC_SPEEDS.includes(Number(raw.speed)) ? Number(raw.speed) : 1,
       volume: Number.isFinite(Number(raw.volume)) ? Math.min(1, Math.max(0, Number(raw.volume))) : 1,
       muted: raw.muted === true,
+      resume: raw.resume !== false,
       // 顶栏快进按钮一次跳的秒数（Kazumi buttonSkipTime），默认 80
       skip: Number.isFinite(skip) && skip > 0 ? Math.min(600, skip) : 80,
     };
   } catch (error) {
-    return { speed: 1, volume: 1, muted: false, skip: 80 };
+    return { speed: 1, volume: 1, muted: false, resume: true, skip: 80 };
   }
 }
 
@@ -1540,7 +1541,7 @@ function pcInit() {
   // scope=player）。这里只负责把动作 id 派发到播放器函数，键位不再写死在 switch 里，
   // 用户在设置里改/禁用都能生效。
   document.addEventListener("keydown", (event) => {
-    if (!$("#offlinePlayer")?.open || $("#quickRecordDialog")?.open || pcSeeking) return;
+    if (!$("#offlinePlayer")?.open || $("#settingsModal")?.open || $("#quickRecordDialog")?.open || pcSeeking) return;
     if (event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229) return;
     if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
     const actionId = pcShortcutActionFor(event);

@@ -501,8 +501,19 @@ noteComposer.addEventListener("submit", async (event) => {
   }
 });
 
-$("#settingsButton").addEventListener("click", () => {
-  if(ThemeSettingsSession.suspended){ThemeSettingsSession.resume();return;}
+function openHandbookSettings(tab = "main", target) {
+  const modal = $("#settingsModal");
+  if (!modal.open) {
+    if (ThemeSettingsSession.suspended) ThemeSettingsSession.resume();
+    else {
+      prepareHandbookSettings();
+      modal.showModal();
+    }
+  }
+  showSettingsSection(tab, target);
+}
+
+function prepareHandbookSettings() {
   ThemeSettingsSession.begin();
   $("#dayStartInput").value = state.settings.day_start_hour;
   $("#showEpisodeBalanceInput").checked = state.settings.show_episode_balance !== false;
@@ -520,7 +531,11 @@ $("#settingsButton").addEventListener("click", () => {
   initSettingsSearch();
   initAutoFollowSetting();
   initAutoOpenOfflineSetting();
-  $("#settingsModal").showModal();
+}
+
+$("#settingsButton").addEventListener("click", () => {
+  if (ThemeSettingsSession.suspended) ThemeSettingsSession.resume();
+  else openHandbookSettings();
 });
 
 async function refreshSharingSettings() {

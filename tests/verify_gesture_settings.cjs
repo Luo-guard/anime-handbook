@@ -7,7 +7,8 @@ const html = fs.readFileSync('static/index.html', 'utf8');
 const start = html.indexOf('<h3 class="settings-subsection-title">单集扇区与手势</h3>');
 const end = html.indexOf('<h3 class="settings-subsection-title">外部查询链接</h3>', start);
 assert(start > 0 && end > start, 'settings block exists');
-const block = html.slice(start, end);
+const playbackSourceControl = html.match(/<select id="episodePlaybackSourceInput">[\s\S]*?<\/select>/)[0];
+const block = html.slice(start, end) + playbackSourceControl;
 
 const setup = `
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -68,7 +69,7 @@ const state={settings:{},pendingEpisodes:new Set()};
 
     // 恢复默认
     await page.locator('#resetEpisodeGestures').click();
-    assert.equal(await playbackSource.inputValue(), 'auto');
+    assert.equal(await playbackSource.inputValue(), 'online', 'gesture reset preserves the separate playback preference');
     assert.equal(await page.locator('[data-eg-slot="top"]').inputValue(), 'play');
     assert.equal(await page.locator('[data-eg-gesture="RightClick"]').inputValue(), 'open_menu');
     assert.equal(await page.locator('#episodeGestureStatus').textContent(), '');
