@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261113-note-anime-search" />
+  <link rel="stylesheet" href="/styles.css?v=20261113-rule-updates" />
   </head>
   <body>
     <div class="app-shell">
@@ -1525,7 +1525,10 @@
         <div class="online-playback-results" id="onlinePlaybackResults"></div>
         <details class="online-rule-manager" id="onlineRuleManager">
           <summary>管理规则</summary>
-          <p class="page-subtitle">从 <a href="https://github.com/Predidit/KazumiRules" target="_blank" rel="noreferrer">KazumiRules</a> 下载后即可使用。</p>
+          <div class="online-rule-tools">
+            <a href="https://github.com/Predidit/KazumiRules" target="_blank" rel="noreferrer">KazumiRules</a>
+            <button type="button" class="secondary-button compact-button" id="onlineRuleCheckUpdates">检查更新</button>
+          </div>
           <p class="page-subtitle" id="onlineRuleManagerStatus" role="status"></p>
           <div class="online-playback-results" id="onlineRuleCatalogue"></div>
         </details>
@@ -1644,7 +1647,7 @@
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261111-online-player" defer></script>
     <script src="/modules/offline.js?v=20261113-player-tooltip" defer></script>
-    <script src="/modules/online-playback.js?v=20261113-kazumi-playback" defer></script>
+    <script src="/modules/online-playback.js?v=20261113-rule-updates" defer></script>
     <script src="/modules/library-view.js?v=20261113-library-full-image" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

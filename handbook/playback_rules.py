@@ -71,10 +71,10 @@ def extract_archive(raw):
     return rules
 
 
-def remote_rules():
+def remote_rules(*, refresh=False):
     global _REMOTE, _REMOTE_EXPIRES
     with _CATALOGUE_LOCK:
-        if _REMOTE and time.monotonic() < _REMOTE_EXPIRES:
+        if not refresh and _REMOTE and time.monotonic() < _REMOTE_EXPIRES:
             return _REMOTE
         try:
             rules = extract_archive(link_rules.fetch_archive(timeout=12))
@@ -102,47 +102,76 @@ def installed_rule(rule_id):
     return rule
 
 
-def rule_list(remote=False):
+def _newer_rule(local, remote):
+    versions = []
+    for rule in (local, remote):
+        version = str(rule.get("version") or "").strip()
+        if not re.fullmatch(r"[vV]?[0-9]{1,9}(?:\.[0-9]{1,9}){0,7}", version):
+            return False
+        parts = [int(part) for part in version.lstrip("vV").split(".")]
+        versions.append(tuple(parts + [0] * (8 - len(parts))))
+    return versions[1] > versions[0]
+
+
+def rule_list(remote=False, *, refresh=False):
     installed = {}
     for path in rule_folder().glob("*.json"):
         try:
             installed[path.stem] = installed_rule(path.stem)
         except RequestProblem:
             continue
-    rules = {**installed, **remote_rules()} if remote else installed
+    available = (remote_rules(refresh=True) if refresh else remote_rules()) if remote else {}
+    rules = {**available, **installed}
     return {"items": [
         {"id": rule_id, "name": "稀饭动漫 Next" if rule_id == "xfdmnext" else str(rule.get("name") or rule_id),
          "host": urlsplit(rule["baseURL"]).hostname, "version": str(rule.get("version", "")),
+         "available_version": str(available.get(rule_id, {}).get("version", "")),
          "installed": rule_id in installed,
-         "update": rule_id in installed and installed[rule_id].get("version") != rule.get("version")}
-        for rule_id, rule in sorted(rules.items())
+         "update": rule_id in installed and rule_id in available and _newer_rule(rule, available[rule_id])}
+        for rule_id, rule in sorted(rules.items(), key=lambda pair: (pair[0] not in installed, pair[0]))
     ]}
 
 
 def change_rule(rule_id, action):
     path = rule_path(rule_id)
-    if action == "install":
+    rule = None
+    if action in ("install", "update"):
         rule = remote_rules().get(rule_id)
         if not rule:
             raise RequestProblem("该规则已不在兼容规则目录中", 404)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = None
-        try:
-            with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as file:
-                temporary = Path(file.name)
-                file.write(json.dumps(rule, ensure_ascii=False).encode("utf-8"))
-            temporary.replace(path)
-        finally:
-            if temporary:
-                temporary.unlink(missing_ok=True)
-    elif action == "remove":
-        path.unlink(missing_ok=True)
-    else:
+    elif action != "remove":
         raise RequestProblem("规则操作无效")
     with _LOCK:
+        if action == "remove":
+            path.unlink(missing_ok=True)
+        else:
+            try:
+                local = installed_rule(rule_id)
+            except RequestProblem as error:
+                if action == "update" or error.status != 404:
+                    raise
+                local = None
+            if local is not None and not _newer_rule(local, rule):
+                if action == "update":
+                    raise RequestProblem("当前规则已是最新版本")
+                return rule_list()
+            _write_rule(path, rule)
         for key in [key for key in _CATALOGUES if key[0] == rule_id]:
             del _CATALOGUES[key]
     return rule_list()
+
+
+def _write_rule(path, rule):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as file:
+            temporary = Path(file.name)
+            file.write(json.dumps(rule, ensure_ascii=False).encode("utf-8"))
+        temporary.replace(path)
+    finally:
+        if temporary:
+            temporary.unlink(missing_ok=True)
 
 
 def _read(url, headers, *, method="GET", body=None):
@@ -371,7 +400,7 @@ def _html_roads(rule, provider):
 def catalogue(rule_id, rule, provider):
     if not provider or len(provider) > 2000:
         raise RequestProblem("片源编号无效")
-    key = (rule_id, provider)
+    key = (rule_id, provider, str(rule.get("version", "")))
     with _LOCK:
         cached, expiry = _CATALOGUES.get(key, (None, 0))
     if cached and time.monotonic() < expiry:
@@ -430,7 +459,7 @@ def serve(handler, path, query):
         return query.get(key, [""])[0]
 
     if route == "rules":
-        return handler.send_json(rule_list(remote=arg("remote") == "1"))
+        return handler.send_json(rule_list(remote=arg("remote") == "1", refresh=arg("refresh") == "1"))
     if match := re.fullmatch(r"stream/([\w-]{32})/(main|[a-f0-9]{32})", route, re.ASCII):
         return playback_stream.stream(handler, *match.groups())
     if route not in {"search", "catalogue", "play"}:

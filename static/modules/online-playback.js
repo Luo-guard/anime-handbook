@@ -49,6 +49,7 @@ window.onlinePlayback = (() => {
   let lastRule = "";
   let hlsLibrary;
   let managing = false;
+  let checkingRules = false;
 
   try { lastRule = localStorage.getItem("handbook:online-rule") || ""; }
   catch { /* Private browsing can deny storage. */ }
@@ -268,17 +269,27 @@ window.onlinePlayback = (() => {
     $("#onlinePlaybackSearch").disabled = !installed.length;
   }
 
-  async function refreshRuleCatalogue() {
+  async function refreshRuleCatalogue({ fresh = false } = {}) {
+    if (checkingRules) return;
+    checkingRules = true;
+    const check = $("#onlineRuleCheckUpdates");
+    check.disabled = true;
     const status = $("#onlineRuleManagerStatus");
     const list = $("#onlineRuleCatalogue");
-    status.textContent = "正在读取 KazumiRules…";
+    status.textContent = fresh ? "正在检查规则更新…" : "正在读取 KazumiRules…";
     let rules;
     try {
-      rules = (await request("rules", { remote: "1" })).items;
-      status.textContent = "";
+      const query = fresh ? { remote: "1", refresh: "1" } : { remote: "1" };
+      rules = (await request("rules", query)).items;
+      const count = rules.filter(rule => rule.update).length;
+      status.textContent = count ? `${count} 条规则可更新`
+        : fresh ? (rules.some(rule => rule.installed) ? "已安装的规则暂无可用更新" : "尚未安装规则") : "";
     } catch (error) {
       rules = installed;
       status.textContent = error.message;
+    } finally {
+      checkingRules = false;
+      check.disabled = managing;
     }
     list.replaceChildren(...rules.map(rule => {
       const row = document.createElement("div");
@@ -287,12 +298,13 @@ window.onlinePlayback = (() => {
       const title = document.createElement("strong");
       title.textContent = rule.name;
       const meta = document.createElement("small");
-      meta.textContent = [rule.host, rule.version].filter(Boolean).join(" · ");
+      const version = rule.update ? `${rule.version} → ${rule.available_version}` : rule.version;
+      meta.textContent = [rule.host, version].filter(Boolean).join(" · ");
       copy.append(title, meta);
       const buttons = document.createElement("div");
       buttons.className = "online-rule-actions";
       const actions = rule.installed ? [["移除", "remove"]] : [["下载", "install"]];
-      if (rule.update) actions.unshift(["更新", "install"]);
+      if (rule.update) actions.unshift(["更新", "update"]);
       for (const [label, action] of actions) {
         const button = document.createElement("button");
         button.type = "button";
@@ -307,27 +319,30 @@ window.onlinePlayback = (() => {
   }
 
   async function manageRule(rule, action, button) {
-    if (managing) return;
+    if (managing || checkingRules) return;
     managing = true;
     button.disabled = true;
+    $("#onlineRuleCheckUpdates").disabled = true;
     const status = $("#onlineRuleManagerStatus");
     try {
       const result = await api("/api/playback/rules", {
         method: "POST", body: JSON.stringify({ id: rule.id, action }), timeoutMs: 24000,
       });
       installed = result.items;
-      renderInstalled(action === "install" ? rule.id : lastRule);
+      renderInstalled(action === "install" ? rule.id : $("#onlinePlaybackRule").value);
       if (action === "remove" && selection) {
         abortLookup();
         $("#onlinePlaybackResults").replaceChildren();
       }
       $("#onlineRuleStatus").textContent = installed.length ? "" : "先下载一个规则，再搜索片源。";
       await refreshRuleCatalogue();
+      if (action === "update") toast(`已更新 ${rule.name}`);
     } catch (error) {
       status.textContent = error.message;
     } finally {
       button.disabled = false;
       managing = false;
+      $("#onlineRuleCheckUpdates").disabled = checkingRules;
     }
   }
 
@@ -458,8 +473,9 @@ window.onlinePlayback = (() => {
     $("#onlinePlaybackSearch").addEventListener("click", searchSelectedRule);
     $("#onlinePlaybackRule").addEventListener("change", searchSelectedRule);
     $("#onlineRuleManager").addEventListener("toggle", event => {
-      if (event.currentTarget.open) refreshRuleCatalogue();
+      if (event.currentTarget.open && !managing) refreshRuleCatalogue();
     });
+    $("#onlineRuleCheckUpdates").addEventListener("click", () => refreshRuleCatalogue({ fresh: true }));
     $("#onlinePlayerRule").addEventListener("click", () => {
       const context = current?.context;
       if (!context) return;

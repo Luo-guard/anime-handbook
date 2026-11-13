@@ -4452,6 +4452,8 @@ dialog::backdrop {
 .online-rule-toolbar select { width: 100%; }
 .online-rule-manager { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
 .online-rule-manager summary { cursor: pointer; color: var(--accent); }
+.online-rule-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.online-rule-tools a { color: var(--green-800); font-size: 13px; }
 .online-rule-manager .online-playback-results { max-height: min(40vh, 340px); margin-top: 8px; }
 .online-rule-row {
   display: flex;

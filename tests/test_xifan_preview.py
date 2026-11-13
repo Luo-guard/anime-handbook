@@ -126,3 +126,25 @@ class XifanPreviewTest(unittest.TestCase):
                              [[("6", "https://example.com/one")], [("7", "https://example.com/two")]])
             rules.change_rule("example", "remove")
             self.assertEqual(rules.rule_list()["items"], [])
+
+    def test_rule_update_checks_fresh_catalogue_and_cannot_downgrade(self):
+        local = {
+            "name": "Example", "version": "1.9", "baseURL": "https://example.com/",
+            "searchURL": "https://example.com/?q=@keyword", "searchList": "//article",
+            "searchName": "//a", "searchResult": "//a", "chapterRoads": "//ul", "chapterResult": "//a",
+        }
+        newer = {**local, "version": "1.10"}
+        with tempfile.TemporaryDirectory() as folder, patch.object(rules, "DATA_ROOT", Path(folder)), \
+                patch.object(rules, "remote_rules", return_value={"example": local}) as remote, \
+                patch.object(rules, "_CATALOGUES", {}):
+            rules.change_rule("example", "install")
+            remote.return_value = {"example": newer}
+            row = rules.rule_list(remote=True, refresh=True)["items"][0]
+            remote.assert_called_with(refresh=True)
+            self.assertEqual((row["version"], row["available_version"], row["update"]), ("1.9", "1.10", True))
+            rules.change_rule("example", "update")
+            remote.return_value = {"example": local}
+            self.assertFalse(rules.rule_list(remote=True)["items"][0]["update"])
+            with self.assertRaises(RequestProblem):
+                rules.change_rule("example", "update")
+            self.assertEqual(rules.installed_rule("example"), newer)

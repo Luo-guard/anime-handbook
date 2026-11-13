@@ -14,6 +14,8 @@ async function verify() {
   };
   const plays = [];
   let installed = false;
+  let version = "1";
+  let availableVersion = "1";
   await page.route("http://handbook.test/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -22,8 +24,16 @@ async function verify() {
       case "/api/bootstrap":
         return json({ settings: {}, stats: {}, sync: {}, animes: [], custom_collections: [] });
       case "/api/playback/rules":
-        if (request.method() === "POST") installed = request.postDataJSON().action === "install";
-        return json({ items: installed || url.searchParams.has("remote") ? [{ ...metadata, installed }] : [] });
+        if (request.method() === "POST") {
+          const { action } = request.postDataJSON();
+          installed = action !== "remove";
+          if (action === "update") version = availableVersion;
+        }
+        if (url.searchParams.get("refresh") === "1") availableVersion = "2";
+        return json({ items: installed || url.searchParams.has("remote") ? [{
+          ...metadata, installed, version, available_version: availableVersion,
+          update: installed && version !== availableVersion,
+        }] : [] });
       case "/api/playback/search":
         assert.equal(installed, true, "an uninstalled rule never searches");
         return json({ items: [{ id: "series", title: "Example anime" }] });
@@ -62,6 +72,13 @@ async function verify() {
     await page.locator("#onlinePlaybackPicker[open]").waitFor();
     assert.match(await page.locator("#onlinePlaybackPickerTitle").textContent(), /第 6 集/);
     await page.locator("#onlineRuleManager summary").click();
+    await page.getByRole("button", { name: "检查更新" }).click();
+    const update = page.getByRole("button", { name: "更新", exact: true });
+    await update.waitFor();
+    assert.match(await page.locator("#onlineRuleCatalogue small").textContent(), /1 → 2/);
+    await update.click();
+    await update.waitFor({ state: "detached" });
+    assert.equal(version, "2");
     await page.getByRole("button", { name: "移除", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#onlinePlaybackRule").value === "");
     assert.equal(await page.locator("#onlinePlaybackSearch").isDisabled(), true);
