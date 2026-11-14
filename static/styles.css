@@ -6174,13 +6174,12 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern .anime-comment-tools .comment-trigger:hover { background: var(--green-50); }
 .detail-modern .anime-comment-list { margin-top: 6px; }
 .detail-modern .anime-comment-list > .muted-line { margin: 0; }
-.detail-record-buttons { display: flex; gap: 10px; margin-left: auto; }
+.detail-record-buttons { display: flex; gap: 5px; margin-left: auto; }
 .detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 16px; }
 .detail-modern.detail-non-episodes:not(.detail-record-pending) #detailRecordFooter,
 .detail-modern.detail-non-episodes #detailCreditActions { display: none; }
-.detail-modern .detail-record-buttons { gap: 5px; }
-.detail-modern .detail-record-buttons > button { min-height: 36px; padding: 6px 11px; border-radius: 10px; font-size: 13px; }
-.detail-modern #cancelProgress { border-color: transparent; background: transparent; transition: opacity 160ms ease; }
+.detail-record-buttons > button { min-height: 36px; padding: 6px 11px; border-radius: 10px; font-size: 13px; }
+#cancelProgress { border-color: transparent; background: transparent; transition: opacity 160ms ease; }
 .detail-credit-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
 .modern-detail-menu { position: static; }
 .modern-detail-menu > summary {
@@ -6352,10 +6351,10 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 
 .detail-modern:not(.detail-record-pending) #cancelProgress { visibility: hidden; opacity: 0; }
-.detail-modern #saveProgress:disabled { background: var(--green-50); color: var(--muted); border-color: var(--line); opacity: 1; }
-.detail-modern #saveProgress { transition: background-color 160ms ease, color 160ms ease; }
+#saveProgress:disabled { background: var(--green-50); color: var(--muted); border-color: var(--line); opacity: 1; }
+#saveProgress { transition: background-color 160ms ease, color 160ms ease; }
 @media (prefers-reduced-motion: reduce) {
-  .detail-modern :is(#saveProgress, #cancelProgress) { transition: none; }
+  :is(#saveProgress, #cancelProgress) { transition: none; }
 }
 
 .detail-modern .progress-hero-info .anime-rating { margin-top: 0; color: var(--detail-hero-muted); font-size: 13px; }
@@ -6370,6 +6369,6 @@ body.schedule-picking [data-floating-view="schedule"] {
   .detail-modern .progress-meta { flex-flow: row wrap; align-items: center; }
   .detail-modern .episode-group-grid { --episode-min: 36px; --episode-gap: 6px; }
   .detail-modern .episode-cell { min-height: 36px; }
-  .detail-modern .detail-record-buttons > button { padding-inline: 7px; }
+  .detail-record-buttons > button { padding-inline: 7px; }
   .detail-credit-actions { gap: 4px; }
 }
