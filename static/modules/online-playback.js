@@ -9,20 +9,30 @@ function isOnlinePlaybackLink(value) {
   } catch { return false; }
 }
 
-function onlineEpisodeLabel(episode) {
-  return [episode.number ? `第 ${episode.number} 集` : "", episode.title].filter(Boolean).join(" · ") || "播放";
+function onlineEpisodeLabel(session, episode = session.episode) {
+  const { animeId, context, source } = session;
+  const number = onlineLocalEpisodeNumber(episode, source, context?.target.first);
+  if (!number) return "播放";
+  const label = `第 ${number} 集`;
+  const anime = state.progressAnime?.id === animeId ? state.progressAnime
+    : state.animes.find(item => item.id === animeId) || context?.anime;
+  const localEpisode = anime?.episodes?.find(item => episodeStorageKey(item.key, anime) === `0:${number}`);
+  const name = [localEpisode?.name_cn, localEpisode?.name].map(value => String(value || "").trim())
+    .find(value => value && value !== String(number) && value.replace(/\s/g, "") !== `第${number}集`);
+  return name ? `${label} · ${name}` : label;
 }
 
-function mainPlaybackEpisode(anime, key) {
+function mainPlaybackEpisode(anime, key, { providerEpisode, source } = {}) {
   const episodes = (anime.episodes || []).filter(episode => Number(episode.type || 0) === 0);
   const numberOf = value => Number(/^0:(\d+)$/.exec(episodeStorageKey(value, anime))?.[1]) || 0;
   const numbers = episodes.map(episode => numberOf(episode.key)).filter(Boolean);
   const first = numbers.length ? Math.min(...numbers) : 1;
   const watched = anime.watched_episode_keys || anime.watched_episodes || [];
-  const number = key ? numberOf(key) : Math.max(first - 1, ...watched.map(numberOf)) + 1;
+  const number = providerEpisode ? onlineLocalEpisodeNumber(providerEpisode, source, first)
+    : key ? numberOf(key) : Math.max(first - 1, ...watched.map(numberOf)) + 1;
   if (!number) throw new Error("该播放源暂只支持正片集数。");
   const total = Number(anime.episode_count) || numbers.length;
-  if (!key && total > 0 && number >= first + total)
+  if (!key && !providerEpisode && total > 0 && number >= first + total)
     throw new Error("已看完手账目前收录的正片，可从单集菜单重播。");
   return { number, first };
 }
@@ -30,6 +40,13 @@ function mainPlaybackEpisode(anime, key) {
 function onlineLineStartsAtOne(source) {
   const numbers = source.episodes.map(episode => Number(episode.number)).filter(number => Number.isInteger(number) && number > 0);
   return Math.min(...numbers) === 1;
+}
+
+function onlineLocalEpisodeNumber(episode, source, first = 1) {
+  const number = Number(episode.number);
+  return Number.isFinite(number) && number > 0
+    ? number + (first > 1 && onlineLineStartsAtOne(source) ? first - 1 : 0)
+    : 0;
 }
 
 function matchOnlineEpisode(catalogue, target) {
@@ -141,7 +158,7 @@ window.onlinePlayback = (() => {
   function selectEpisode(id) {
     if (!current) return;
     const { catalogue, source, animeId } = current;
-    const episode = source.episodes.find(item => item.id === id);
+    const episode = source.episodes.find(item => String(item.id) === String(id));
     if (episode) play(catalogue, source, episode, animeId);
   }
 
@@ -165,7 +182,7 @@ window.onlinePlayback = (() => {
       controller.abort();
       pcResetVideo();
       if (tryAlternatives) {
-        const number = Number(episode.number) + (onlineLineStartsAtOne(source) ? context.target.first - 1 : 0);
+        const number = onlineLocalEpisodeNumber(episode, source, context.target.first);
         const alternatives = { sources: catalogue.sources.filter(line => !tried.has(line.id)) };
         let next;
         try { next = matchOnlineEpisode(alternatives, { ...context.target, number }); }
@@ -178,7 +195,7 @@ window.onlinePlayback = (() => {
       }
       pcSetPlaybackState("error", message, () => selectEpisode(episode.id));
     };
-    pcSetTitle(catalogue.title, onlineEpisodeLabel(episode), `${catalogue.ruleName} · ${source.name}`);
+    pcSetTitle(catalogue.title, onlineEpisodeLabel(session), `${catalogue.ruleName} · ${source.name}`);
     $("#offlineSubtitleToggle").classList.add("hidden");
     $("#onlinePlayerOptions").classList.remove("hidden");
     $("#onlinePlayerOriginal").href = episode.url;
@@ -191,9 +208,7 @@ window.onlinePlayback = (() => {
     pcRefreshEpisodes();
     openOfflinePlayerDialog();
     const provider = catalogue.rule === "xfdmnext" ? "xifan" : catalogue.rule;
-    const episodeNumber = Number(episode.number);
-    const first = context?.target.first || 1;
-    const danmakuNumber = episodeNumber && onlineLineStartsAtOne(source) ? episodeNumber + first - 1 : episodeNumber;
+    const danmakuNumber = onlineLocalEpisodeNumber(episode, source, context?.target.first);
     dmLoadFor({ id: 0, episode_key: `0:${danmakuNumber}` }, catalogue.title, animeId, `${provider}:${catalogue.id}:${episode.number || episode.id}`);
     const timer = setTimeout(() => fail("视频加载超时，可重试或切换规则。"), 45000);
     controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
@@ -208,7 +223,7 @@ window.onlinePlayback = (() => {
       video.addEventListener("playing", () => {
         if (!video.videoWidth) return;
         window.playbackHistory?.record({
-          kind: "online", animeId, animeTitle: catalogue.title, episode: onlineEpisodeLabel(episode),
+          kind: "online", animeId, animeTitle: catalogue.title, episode: onlineEpisodeLabel(session),
           rule: catalogue.rule, providerId: catalogue.id, sourceId: source.id, episodeId: episode.id,
         });
       }, { ...options, once: true });
@@ -237,7 +252,11 @@ window.onlinePlayback = (() => {
         || catalogue.sources[0];
       const episode = source.episodes.find(item => String(item.id) === selected) || source.episodes[0];
       status.textContent = "";
-      play(catalogue, source, episode, animeId);
+      const anime = animeId ? state.progressAnime : null;
+      const context = anime && onlineLocalEpisodeNumber(episode, source)
+        ? { anime, target: mainPlaybackEpisode(anime, "", { providerEpisode: episode, source }) }
+        : null;
+      play(catalogue, source, episode, animeId, context);
     } catch (error) {
       if (controller.signal.aborted) return;
       const message = errorMessage(error, "读取选集超时，请重试。");
@@ -603,7 +622,9 @@ window.onlinePlayback = (() => {
     if (!$("#jumpHistoryModal").open) return;
     catalogue.title ||= entry.animeTitle;
     const anime = state.animes.find(item => item.id === entry.animeId);
-    const context = anime && Number(episode.number) ? { anime, target: mainPlaybackEpisode(anime, `0:${episode.number}`) } : null;
+    const context = anime && onlineLocalEpisodeNumber(episode, source)
+      ? { anime, target: mainPlaybackEpisode(anime, "", { providerEpisode: episode, source }) }
+      : null;
     return play(catalogue, source, episode, entry.animeId, context);
   }
 
@@ -670,10 +691,8 @@ window.onlinePlayback = (() => {
     $("#onlinePlayerRule").addEventListener("click", () => {
       const context = current?.context;
       if (!context) return;
-      const number = Number(current.episode.number);
-      const episodeNumber = number
-        ? number + (onlineLineStartsAtOne(current.source) ? context.target.first - 1 : 0)
-        : context.target.number;
+      const episodeNumber = onlineLocalEpisodeNumber(current.episode, current.source, context.target.first)
+        || context.target.number;
       closeOfflinePlayer();
       openAnime(context.anime, `0:${episodeNumber}`, null, { choose: true });
     });
@@ -697,7 +716,7 @@ window.onlinePlayback = (() => {
       const source = catalogue.sources.find(line => line.id === Number(event.target.value));
       if (!source) return;
       const first = current.context?.target.first || 1;
-      const number = Number(episode.number) + (onlineLineStartsAtOne(current.source) ? first - 1 : 0);
+      const number = onlineLocalEpisodeNumber(episode, current.source, first);
       const wanted = onlineLineStartsAtOne(source) ? number - first + 1 : number;
       const match = episode.number && source.episodes.find(item => Number(item.number) === wanted);
       if (match) play(catalogue, source, match, animeId);

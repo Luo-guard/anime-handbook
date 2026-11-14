@@ -9,10 +9,14 @@ async function verify() {
   const pageErrors = [];
   page.on("pageerror", error => pageErrors.push(error.message));
   const metadata = { id: "example", name: "Example", host: "example.test", version: "1" };
-  const episode = { id: "episode-six", url: "https://example.test/episode-six", number: "6" };
+  const episode = { id: "episode-six", url: "https://example.test/episode-six", number: "1", title: "1" };
+  const nextEpisode = { id: "episode-seven", url: "https://example.test/episode-seven", number: "2", title: "provider name" };
   const catalogue = {
     id: "series", rule: "example", ruleName: "Example", title: "Example anime",
-    sources: [1, 2].map(id => ({ id, name: `Line ${id}`, episodes: [episode] })),
+    sources: [
+      { id: 1, name: "Line 1", episodes: [episode, nextEpisode] },
+      { id: 2, name: "Line 2", episodes: [{ ...episode, number: "6" }, { ...nextEpisode, number: "7" }] },
+    ],
   };
   const plays = [];
   const searches = [];
@@ -63,7 +67,10 @@ async function verify() {
     await page.goto("http://handbook.test/");
     const open = () => page.evaluate(() => {
       const name = "Example anime";
-      const anime = { id: 321, name, display_name: name, episode_count: 12 };
+      const anime = { id: 321, name, display_name: name, episode_count: 12, episodes: [
+        { key: "bgm:1234", sort: 6, type: 0, name_cn: "对等关系", name: "Local original title" },
+        { key: "0:7", sort: 7, type: 0, name: "第 7 集" },
+      ] };
       state.progressAnime = anime;
       if (!$("#progressModal").open) $("#progressModal").showModal();
       window.onlinePlayback.openAnime(anime, "0:6");
@@ -103,9 +110,35 @@ async function verify() {
       rule: "example", anime: "series", source: String(source), episode: episode.id,
     })));
     assert.equal(await page.locator("#onlinePlayerSource").inputValue(), "2");
+    assert.equal(await page.locator("#offlinePlayerTitle").textContent(), "Example anime · 第 6 集 · 对等关系");
+    assert.equal(await page.locator("#pcStageTitle").textContent(), "Example anime · 第 6 集 · 对等关系");
+    const episodeLabels = page.locator("#pcPlaylistMenu button");
+    assert.deepEqual(await episodeLabels.allTextContents(), ["● 第 6 集 · 对等关系", "第 7 集"]);
     await page.click("#pcPlaybackRetry");
     await page.waitForFunction(() => document.querySelector("#pcPlaybackState").dataset.state === "error");
     assert.equal(plays.length, 3);
+    await page.selectOption("#onlinePlayerSource", "1");
+    await page.waitForFunction(() => document.querySelector("#pcPlaybackState").dataset.state === "error");
+    assert.deepEqual(await episodeLabels.allTextContents(), ["● 第 6 集 · 对等关系", "第 7 集"]);
+    await page.click("#pcPlaylist");
+    await episodeLabels.nth(1).click();
+    await page.waitForFunction(() => document.querySelector("#pcPlaybackState").dataset.state === "error");
+    assert.equal(plays.at(-1).episode, nextEpisode.id);
+    assert.equal(await page.locator("#offlinePlayerTitle").textContent(), "Example anime · 第 7 集");
+    await page.click("#pcPlaylist");
+    await episodeLabels.nth(0).click();
+    await page.waitForFunction(() => document.querySelector("#pcPlaybackState").dataset.state === "error");
+    await page.evaluate(async () => {
+      closeOfflinePlayer();
+      state.animes = [state.progressAnime];
+      $("#jumpHistoryModal").showModal();
+      await window.onlinePlayback.resume({
+        rule: "example", providerId: "series", sourceId: 1, episodeId: "episode-six", animeId: 321,
+      });
+      $("#jumpHistoryModal").close();
+    });
+    assert.deepEqual(await episodeLabels.allTextContents(), ["● 第 6 集 · 对等关系", "第 7 集"]);
+    assert.equal(await page.locator("#offlinePlayerTitle").textContent(), "Example anime · 第 6 集 · 对等关系");
     const skipButton = page.locator("#pcSkipForward");
     await skipButton.hover();
     await page.mouse.down();

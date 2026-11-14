@@ -1087,7 +1087,7 @@ function pcStep(direction) {
 function pcPlaylist() {
   const files = window.onlinePlayback?.current?.source.episodes || pcSortedFiles();
   const id = window.onlinePlayback?.current?.episode.id ?? offlineView.playing?.id;
-  return { files, index: files.findIndex((file) => Number(file.id) === Number(id)) };
+  return { files, index: files.findIndex((file) => String(file.id) === String(id)) };
 }
 
 function pcSelectEpisode(id) {
@@ -1098,12 +1098,13 @@ function pcSelectEpisode(id) {
 function pcRenderPlaylist() {
   const menu = $("#pcPlaylistMenu");
   if (!menu) return;
+  const online = window.onlinePlayback?.current;
   const { files, index } = pcPlaylist();
   menu.innerHTML = files.length
     ? files.map((file, position) => {
         const current = index === position;
-        const label = window.onlinePlayback?.current ? onlineEpisodeLabel(file) : episodeLabelOf(file.episode_key);
-        return `<button type="button" data-id="${file.id}" class="${current ? "active" : ""}">${current ? "● " : ""}${escapeHtml(label)}</button>`;
+        const label = online ? onlineEpisodeLabel(online, file) : episodeLabelOf(file.episode_key);
+        return `<button type="button" data-id="${escapeHtml(String(file.id))}" class="${current ? "active" : ""}">${current ? "● " : ""}${escapeHtml(label)}</button>`;
       }).join("")
     : '<p class="pc-menu-empty">还没有可播放的集</p>';
 }
@@ -1245,7 +1246,7 @@ async function pcScreenshot() {
   }
   const online = window.onlinePlayback?.current;
   const anime = online?.catalogue.title || offlineView.animeName || "动漫";
-  const episode = online ? onlineEpisodeLabel(online.episode) : episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
+  const episode = online ? onlineEpisodeLabel(online) : episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
   const seconds = video.currentTime;
   const upscaleCanvas = pcUpscaleCanvas(video);
   let canvas = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
@@ -1418,7 +1419,7 @@ function pcInit() {
     const item = event.target.closest("[data-id]");
     if (!item) return;
     $("#pcPlaylistMenu")?.classList.add("hidden");
-    pcSelectEpisode(Number(item.dataset.id));
+    pcSelectEpisode(window.onlinePlayback?.current ? item.dataset.id : Number(item.dataset.id));
   });
   $("#pcScreenshot")?.addEventListener("click", pcScreenshot);
   $(".pc-shortcuts")?.addEventListener("toggle", (event) => {
