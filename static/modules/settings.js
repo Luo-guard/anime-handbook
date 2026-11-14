@@ -471,13 +471,30 @@ function currentBgmSource() {
 function renderBgmSourceControls() {
   const sources = bgmSources();
   const current = currentBgmSource();
-  const select = $("#bgmSourceInput");
-  select.innerHTML = sources.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
-  select.value = current.id;
-  $("#bgmSourceNameInput").value = current.name || "";
-  $("#bgmSourceSiteInput").value = current.site_base || "";
-  $("#bgmSourceApiInput").value = current.api_base || "";
-  $("#deleteBgmSourceButton").disabled = sources.length <= 1;
+  $("#bgmSourceGrid").innerHTML = sources.map(source => {
+    const active = source.id === current.id;
+    const id = escapeHtml(source.id);
+    return `<article class="theme-card bgm-source-card${active ? " is-active" : ""}">
+      <button type="button" class="theme-card-main" data-bgm-pick="${id}" aria-pressed="${active}">
+        <span class="bgm-source-card-title"><strong>${escapeHtml(source.name)}</strong>${active ? '<span class="bgm-source-active">使用中</span>' : ""}</span>
+        <span class="bgm-source-address"><span>站点</span><span>${escapeHtml(source.site_base)}</span></span>
+        <span class="bgm-source-address"><span>API</span><span>${escapeHtml(source.api_base)}</span></span>
+      </button>
+      <div class="theme-card-actions"><button type="button" class="text-button" data-bgm-edit="${id}" aria-label="编辑 ${escapeHtml(source.name)}">编辑</button></div>
+    </article>`;
+  }).join("") + '<button type="button" class="theme-card theme-card-new bgm-source-new" id="newBgmSourceButton"><span class="theme-card-plus" aria-hidden="true">＋</span><strong>新增站点</strong></button>';
+}
+
+function openBgmSourceEditor(source) {
+  const form = $("#bgmSourceForm");
+  form.dataset.sourceId = source?.id || "";
+  $("#bgmSourceTitle").textContent = source ? "编辑站点" : "新增站点";
+  $("#bgmSourceNameInput").value = source?.name || "";
+  $("#bgmSourceSiteInput").value = source?.site_base || "";
+  $("#bgmSourceApiInput").value = source?.api_base || "";
+  $("#deleteBgmSourceButton").hidden = !source || bgmSources().length <= 1;
+  $("#bgmSourceError").hidden = true;
+  $("#bgmSourceModal").showModal();
 }
 
 function readBgmSourceForm(sourceId = "") {

@@ -824,58 +824,76 @@ $("#sharedProfileList").addEventListener("change", async (event) => {
   } catch (error) { toast(error.message, "error"); }
 });
 
-$("#bgmSourceInput").addEventListener("change", (event) => {
-  const source = bgmSources().find((item) => item.id === event.target.value);
-  if (!source) return;
-  event.target.dataset.newSource = "";
-  $("#bgmSourceNameInput").value = source.name || "";
-  $("#bgmSourceSiteInput").value = source.site_base || "";
-  $("#bgmSourceApiInput").value = source.api_base || "";
-});
+const bgmSourceGrid = $("#bgmSourceGrid");
+const bgmSourceForm = $("#bgmSourceForm");
+const bgmSourceModal = $("#bgmSourceModal");
 
-$("#newBgmSourceButton").addEventListener("click", () => {
-  $("#bgmSourceInput").dataset.newSource = "true";
-  $("#bgmSourceNameInput").value = "";
-  $("#bgmSourceSiteInput").value = "https://bgm.tv";
-  $("#bgmSourceApiInput").value = "https://api.bgm.tv";
-  $("#bgmSourceNameInput").focus();
-});
-
-$("#saveBgmSourceButton").addEventListener("click", async () => {
+bgmSourceGrid.addEventListener("click", async event => {
+  if (bgmSourceGrid.inert) return;
+  const edit = event.target.closest("[data-bgm-edit]");
+  if (edit) {
+    openBgmSourceEditor(bgmSources().find(source => source.id === edit.dataset.bgmEdit));
+    return;
+  }
+  if (event.target.closest("#newBgmSourceButton")) {
+    openBgmSourceEditor();
+    return;
+  }
+  const pick = event.target.closest("[data-bgm-pick]");
+  if (!pick || pick.dataset.bgmPick === currentBgmSource().id) return;
+  bgmSourceGrid.inert = true;
   try {
-    const select = $("#bgmSourceInput");
-    const isNew = select.dataset.newSource === "true";
-    const sourceId = isNew ? `source_${Date.now()}` : select.value;
-    const source = readBgmSourceForm(sourceId);
-    const sources = bgmSources();
-    const nextSources = isNew
-      ? [...sources, source]
-      : sources.map((item) => item.id === sourceId ? source : item);
-    await saveBgmSources(nextSources, isNew ? sourceId : currentBgmSource().id);
-    delete select.dataset.newSource;
-    toast(isNew ? "Bangumi 站点已新增并切换" : "Bangumi 站点已更新");
-  } catch (error) { toast(error.message, "error"); }
+    await saveBgmSources(bgmSources(), pick.dataset.bgmPick);
+    toast("已切换 Bangumi 站点");
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    bgmSourceGrid.inert = false;
+    bgmSourceGrid.querySelector('[data-bgm-pick][aria-pressed="true"]')?.focus();
+  }
 });
 
-$("#activateBgmSourceButton").addEventListener("click", async () => {
-  try {
-    await saveBgmSources(bgmSources(), $("#bgmSourceInput").value);
-    toast("已切换 Bangumi 站点；之后的同步会使用新 API");
-  } catch (error) { toast(error.message, "error"); }
-});
-
-$("#deleteBgmSourceButton").addEventListener("click", async () => {
-  const id = $("#bgmSourceInput").value;
+async function submitBgmSourceEditor(remove = false) {
+  if (bgmSourceForm.inert) return;
+  const id = bgmSourceForm.dataset.sourceId;
   const sources = bgmSources();
-  if (sources.length <= 1) { toast("请至少保留一个 Bangumi 站点", "error"); return; }
-  const source = sources.find((item) => item.id === id);
-  if (!source || !confirm(`删除站点“${source.name}”？`)) return;
+  const activeId = currentBgmSource().id;
+  const errorBox = $("#bgmSourceError");
+  if (remove) {
+    const source = sources.find(item => item.id === id);
+    if (!source || sources.length <= 1 || !confirm(`删除站点「${source.name}」？`)) return;
+  }
+  bgmSourceForm.inert = true;
+  errorBox.hidden = true;
   try {
-    const nextSources = sources.filter((item) => item.id !== id);
-    const activeId = currentBgmSource().id === id ? nextSources[0].id : currentBgmSource().id;
-    await saveBgmSources(nextSources, activeId);
-    toast("Bangumi 站点已删除");
-  } catch (error) { toast(error.message, "error"); }
+    if (remove) {
+      const remaining = sources.filter(item => item.id !== id);
+      await saveBgmSources(remaining, activeId === id ? remaining[0].id : activeId);
+    } else {
+      const source = readBgmSourceForm(id || `source_${Date.now()}`);
+      const next = id ? sources.map(item => item.id === id ? source : item) : [...sources, source];
+      await saveBgmSources(next, activeId);
+    }
+    bgmSourceModal.close();
+    bgmSourceGrid.querySelector('[data-bgm-pick][aria-pressed="true"]')?.focus();
+    toast(remove ? "站点已删除" : "站点已保存");
+  } catch (error) {
+    errorBox.textContent = error.message || "站点保存失败";
+    errorBox.hidden = false;
+  } finally {
+    bgmSourceForm.inert = false;
+  }
+}
+
+bgmSourceForm.addEventListener("submit", event => {
+  event.preventDefault();
+  submitBgmSourceEditor();
+});
+$("#deleteBgmSourceButton").addEventListener("click", () => submitBgmSourceEditor(true));
+$("#closeBgmSourceButton").addEventListener("click", () => bgmSourceModal.close());
+$("#cancelBgmSourceButton").addEventListener("click", () => bgmSourceModal.close());
+bgmSourceModal.addEventListener("cancel", event => {
+  if (bgmSourceForm.inert) event.preventDefault();
 });
 
 // 主题卡片：点卡片切换；编辑/删除是卡片内的独立按钮，不会顺带切换。

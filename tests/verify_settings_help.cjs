@@ -55,6 +55,7 @@ const harness = [
     await page.waitForTimeout(150);
 
     // 站点编辑器的字段级说明也收起。
+    await page.locator('#bgmSourceModal').evaluate(dialog => dialog.showModal());
     const siteLabel = page.locator('.bgm-source-editor label', { has: page.locator('#bgmSourceSiteInput') });
     assert.equal(await siteLabel.locator('small').isVisible(), false, 'field hint is collapsed');
     await siteLabel.locator('.setting-help').click();
@@ -62,6 +63,7 @@ const harness = [
     assert.match(await popover.innerText(), /用于打开番剧详情页/, 'field help carries its hint');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(150);
+    await page.locator('#bgmSourceModal').evaluate(dialog => dialog.close());
 
     // 运行时状态不是说明，必须继续可见。
     assert.equal(await page.locator('#launchAtLoginHint').isVisible(), true, 'launch binding status stays visible');

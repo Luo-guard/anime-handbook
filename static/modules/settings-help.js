@@ -67,7 +67,7 @@ function openSettingHelp(button, pinned) {
 function scheduleSettingHelpClose(delay = 180) {
   clearTimeout(settingHelpTimer);
   settingHelpTimer = setTimeout(() => {
-    if (!settingHelpPinned) closeSettingHelp();
+    if (!settingHelpPinned && document.activeElement !== settingHelpButton) closeSettingHelp();
   }, delay);
 }
 
@@ -137,7 +137,7 @@ function appendSettingHelp(anchor, title, sources) {
     if (!settingHelpPinned) openSettingHelp(button, false);
   });
   button.addEventListener("pointerleave", () => {
-    if (!settingHelpPinned) scheduleSettingHelpClose();
+    if (!settingHelpPinned && document.activeElement !== button) scheduleSettingHelpClose();
   });
   button.addEventListener("focus", () => {
     if (!settingHelpPinned) openSettingHelp(button, false);
@@ -165,7 +165,7 @@ function setupSettingHelp() {
     appendSettingHelp(title, title, [...heading.querySelectorAll(":scope > span > small")]);
   });
   // Bangumi 站点编辑器：站点地址/API 地址各自的小字。
-  $$("#settingsModal .bgm-source-editor > label").forEach((label) => {
+  $$("#bgmSourceModal .bgm-source-editor > label").forEach((label) => {
     const title = label.querySelector(":scope > span");
     if (!title) return;
     appendSettingHelp(title, title, [...label.querySelectorAll(":scope > small")]);

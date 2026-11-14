@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-classic-play-icon" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-bgm-source-cards" />
   </head>
   <body>
     <div class="app-shell">
@@ -1328,33 +1328,9 @@
           <div class="setting-row stacked">
             <span>
               <strong>Bangumi 站点与镜像</strong>
-              <small>当前默认使用 Bangumi 官方站点。站点地址用于详情页跳转；API 地址用于同步评分、剧集与人物资料。新增的镜像会保存在本地，可随时切换。</small>
+              <small>点选站点即可切换。站点地址用于详情页跳转，API 地址用于同步评分、剧集与人物资料。</small>
             </span>
-            <div class="theme-profile-controls bgm-source-controls">
-              <select id="bgmSourceInput" aria-label="当前 Bangumi 站点"></select>
-              <button type="button" class="secondary-button compact-button" id="activateBgmSourceButton">切换到此站点</button>
-              <button type="button" class="secondary-button compact-button" id="newBgmSourceButton">新增站点</button>
-              <button type="button" class="text-button danger" id="deleteBgmSourceButton">删除站点</button>
-            </div>
-            <div class="bgm-source-editor" role="group" aria-label="站点资料">
-              <label class="bgm-source-name" for="bgmSourceNameInput">
-                <span>站点名称</span>
-                <input id="bgmSourceNameInput" type="text" maxlength="50" placeholder="例如：Bangumi 官方" />
-              </label>
-              <label for="bgmSourceSiteInput">
-                <span>站点地址</span>
-                <input id="bgmSourceSiteInput" type="url" placeholder="https://bgm.tv" spellcheck="false" />
-                <small>用于打开番剧详情页</small>
-              </label>
-              <label for="bgmSourceApiInput">
-                <span>API 地址</span>
-                <input id="bgmSourceApiInput" type="url" placeholder="https://api.bgm.tv" spellcheck="false" />
-                <small>用于获取评分、剧集与人物资料</small>
-              </label>
-              <div class="bgm-source-editor-actions">
-                <button type="button" class="secondary-button compact-button" id="saveBgmSourceButton">保存站点</button>
-              </div>
-            </div>
+            <div class="bgm-source-grid" id="bgmSourceGrid"></div>
           </div>
           <h3 class="settings-subsection-title">本机数据位置</h3>
           <div class="setting-row">
@@ -1497,6 +1473,34 @@
       </form>
     </dialog>
 
+    <dialog class="modal bgm-source-modal" id="bgmSourceModal" aria-labelledby="bgmSourceTitle">
+      <form class="modal-frame" id="bgmSourceForm">
+        <button type="button" class="modal-close" id="closeBgmSourceButton" aria-label="关闭站点编辑">×</button>
+        <h2 id="bgmSourceTitle">新增站点</h2>
+        <div class="bgm-source-editor">
+          <label for="bgmSourceNameInput">
+            <span>站点名称</span>
+            <input id="bgmSourceNameInput" type="text" maxlength="50" required autofocus />
+          </label>
+          <label for="bgmSourceSiteInput">
+            <span>站点地址</span>
+            <input id="bgmSourceSiteInput" type="url" placeholder="https://bgm.tv" spellcheck="false" required />
+            <small>用于打开番剧详情页</small>
+          </label>
+          <label for="bgmSourceApiInput">
+            <span>API 地址</span>
+            <input id="bgmSourceApiInput" type="url" placeholder="https://api.bgm.tv" spellcheck="false" required />
+            <small>用于获取评分、剧集与人物资料</small>
+          </label>
+        </div>
+        <p class="bgm-source-error" id="bgmSourceError" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button type="button" class="text-button danger" id="deleteBgmSourceButton" hidden>删除站点</button>
+          <button type="button" class="secondary-button" id="cancelBgmSourceButton">取消</button>
+          <button type="submit" class="primary-button" id="saveBgmSourceButton">保存站点</button>
+        </div>
+      </form>
+    </dialog>
     <dialog class="modal theme-editor-modal" id="themeEditorModal">
       <form class="modal-frame theme-editor-frame" id="themeEditorForm">
         <button type="button" class="modal-close" id="themeEditorClose" aria-label="关闭">×</button>
@@ -1744,11 +1748,11 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261114-classic-record-setting" defer></script>
+    <script src="/modules/settings.js?v=20261114-bgm-source-cards" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
-    <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
+    <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
     <script src="/modules/settings-save.js?v=20261114-classic-record-setting" defer></script>
-    <script src="/modules/events.js?v=20261114-detail-layout" defer></script>
+    <script src="/modules/events.js?v=20261114-bgm-source-cards" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
