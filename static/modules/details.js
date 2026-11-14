@@ -281,9 +281,8 @@ function modernDetailAiring(anime, count) {
   const kind = animeBadgeModel(anime).kind;
   const total = Number(airing?.total) || Number(anime.episode_count) || count;
   const aired = Number(airing?.aired ?? NaN);
-  const finished = kind === "finished" || (!airing?.unavailable && (
-    airing?.show_status === "finished" || (Number(airing?.total) > 0 && aired >= total)
-  ));
+  const finished = kind === "finished" || airing?.show_status === "finished"
+    || (!airing?.unavailable && Number(airing?.total) > 0 && aired >= total);
   return {
     kind, finished, useAS,
     count: finished && total > 0 ? total

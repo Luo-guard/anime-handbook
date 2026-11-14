@@ -32,5 +32,22 @@ const {chromium}=require('C:/Users/han/.cache/codex-runtimes/codex-primary-runti
  await page.setViewportSize({width:920,height:620});await page.screenshot({path:path.join(os.tmpdir(),'handbook-detail-airing-layout.png')});
  await page.evaluate(()=>{state.progressAnime.airing=undefined;refreshEpisodeAiringStatus()});
  assert.equal(await page.locator('.episode-airing-info').isVisible(),false);
+ const asStatus = (layout, showStatus, status, hideMissing = false) => page.evaluate(
+  ({layout, showStatus, status, hideMissing}) => {
+   $("#progressModal").classList.toggle("detail-modern", layout === "modern");
+   Object.assign(state.settings, {
+    detail_airtime_source: "yuc", collection_airing_source: "as", hide_missing_as_schedule: hideMissing,
+   });
+   state.progressAnime.as_airing = {show_status: showStatus, status, unavailable: true};
+   refreshEpisodeAiringStatus();
+   return $(".episode-airing-info").textContent;
+  }, {layout, showStatus, status, hideMissing});
+ for (const status of ['loading', 'unavailable']) {
+  assert.equal(await asStatus('classic', 'finished', status), '');
+  assert.equal(await asStatus('modern', 'finished', status), '已播 12 集按完结状态和正片总集数显示');
+ }
+ assert.equal(await asStatus('classic', 'ongoing', 'loading'), 'AS 进度加载中');
+ assert.equal(await asStatus('classic', 'ongoing', 'unavailable'), 'AS 已播集数缺失');
+ assert.equal(await asStatus('classic', 'ongoing', 'unavailable', true), '');
  console.log('Detail airing layout: early-style pill only (no next-episode footnote) at 920/390/320px, no overlay, no overflow, watch selection preserved, live text refresh and empty-row collapse passed.');
 }finally{await browser.close()}})().catch(error=>{console.error(error);process.exit(1)});

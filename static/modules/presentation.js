@@ -46,6 +46,7 @@ function episodeReleaseStatus(anime, group) {
   if (Number(group.type) !== 0) return "";
   const useAS = state.settings.collection_airing_source === "as";
   const airing = useAS ? anime.as_airing : anime.airing;
+  if (useAS && airing?.show_status === "finished") return "";
   if (useAS && (!airing || airing.unavailable)) {
     const loading = airing?.status === "loading";
     if (!loading && enabledSetting("hide_missing_as_schedule")) return "";
