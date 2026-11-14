@@ -6324,6 +6324,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-group-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell {
   display: inline-flex; gap: 5px; align-items: center; width: auto; min-height: 34px;
+  aspect-ratio: auto;
   padding: 4px 6px; background: transparent; border-color: transparent; box-shadow: none;
 }
 .detail-compact-credits :is(.detail-credit-check, .detail-credit-prefix) { display: inline-block; }
@@ -6428,8 +6429,6 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 .detail-modern .episode-group-meta { flex-wrap: wrap; gap: 4px 10px; }
 .detail-modern .episode-cell {
-  aspect-ratio: auto;
-  min-height: 42px;
   background: transparent;
   color: var(--muted);
   border-color: var(--detail-line);
@@ -6488,6 +6487,5 @@ body.schedule-picking [data-floating-view="schedule"] {
   .detail-modern .progress-hero { align-items: start; padding-top: 20px; }
   .detail-modern .progress-meta { flex-flow: row wrap; align-items: center; }
   .detail-modern .episode-group-grid { --episode-min: 36px; --episode-gap: 6px; }
-  .detail-modern .episode-cell { min-height: 36px; }
   .detail-credit-actions { gap: 4px; }
 }
