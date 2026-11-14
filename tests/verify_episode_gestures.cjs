@@ -114,11 +114,11 @@ window.calls=[];
     assert.equal(await page.locator('#episodeQuickMenu').count(), 0, 'menu closes when keep switch is off');
     await setConfig({});
 
-    // 6) 绑定表：Ctrl+左键 / Alt+左键；带修饰键的单击不能再切换已看
+    // 6) 单集详情已移除，旧绑定不会触发动作；Alt+左键仍可定位文件。
     await page.keyboard.down('Control');
     await cell.click();
     await page.keyboard.up('Control');
-    assert.deepEqual(await calls(), [['action', 'open_detail', '0:1']], 'Ctrl+Click runs its bound action');
+    assert.deepEqual(await calls(), [], 'Ctrl+Click no longer opens the removed episode detail');
     await page.keyboard.down('Alt');
     await cell.click();
     await page.keyboard.up('Alt');
@@ -164,13 +164,13 @@ window.calls=[];
     const bounds = await page.locator('#episodeQuickMenu [data-episode-action]').boundingBox();
     assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 390);
     await page.keyboard.press('Escape');
-    await setConfig({ bindings: { DoubleClick: 'play', 'Ctrl+DoubleClick': 'open_detail' } });
+    await setConfig({ bindings: { DoubleClick: 'play', 'Ctrl+DoubleClick': 'reveal_in_folder' } });
     await cell.click();
     await page.locator('[data-episode-key="0:2"]').click();
     await page.waitForTimeout(280);
     assert.deepEqual(await calls(), [['toggle', '0:1'], ['toggle', '0:2']]);
     await cell.dblclick({ modifiers: ['Control'] });
-    assert.deepEqual(await calls(), [['action', 'open_detail', '0:1']]);
+    assert.deepEqual(await calls(), [['action', 'reveal_in_folder', '0:1']]);
 
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Episode gestures: six slots, click/drag selection, keep switch, modifier bindings, removable slots and double-click delay passed.');

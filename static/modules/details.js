@@ -274,11 +274,13 @@ function refreshModernDetailHeader() {
   const modern = dialog?.classList.contains("detail-modern") && anime;
   if (!$("#modernTitleTools")) return;
   const play = $("#detailOnlinePlay");
+  let nextEpisode = 0;
   if (play) {
     play.textContent = "播放";
     if (modern && typeof mainPlaybackEpisode === "function") {
       try {
-        play.textContent = `继续播放 · 第 ${String(mainPlaybackEpisode(anime).number).padStart(2, "0")} 集`;
+        nextEpisode = mainPlaybackEpisode(anime).number;
+        play.textContent = `继续播放 · 第 ${String(nextEpisode).padStart(2, "0")} 集`;
       } catch { /* The player provides the reason when opened. */ }
     }
   }
@@ -286,6 +288,18 @@ function refreshModernDetailHeader() {
     $("#modernTitleTools").classList.add("hidden");
     return;
   }
+  const airing = state.settings.collection_airing_source === "as" ? anime.as_airing : anime.airing;
+  const { kind } = animeBadgeModel(anime);
+  const knownAired = airing?.aired == null ? NaN : Number(airing.aired);
+  const aired = kind === "finished" ? null : kind === "upcoming" ? 0
+    : !airing?.unavailable && Number.isFinite(knownAired) ? knownAired : null;
+  const mainCells = $$('#episodeGrid [data-episode-type="0"]', dialog);
+  mainCells.forEach((cell, index) => {
+    const key = episodeStorageKey(cell.dataset.episodeKey, anime);
+    const unreleased = aired !== null && index >= aired;
+    cell.classList.toggle("unreleased", unreleased);
+    cell.classList.toggle("next-to-play", key === `0:${nextEpisode}` && nextEpisode > 0);
+  });
   const original = anime.name && anime.name !== anime.display_name ? anime.name : "";
   const row = $("#modernTitleTools");
   const subtitle = $("#modernOriginalTitle");
@@ -930,6 +944,7 @@ function renderEpisodeGrid() {
       `).join("")
     : `<div class="empty-state"><p>暂未取得章节。</p></div>`;
   updateDetailRecordActions();
+  if ($("#progressModal").classList.contains("detail-modern")) refreshModernDetailHeader();
   // 标注气泡仍按格子绑定；所有点击/长按/右键交给 episode-gesture.js 的委托，
   // 扇区格数与绑定表都由设置驱动，这里不再散着写事件。
   $$(".episode-cell", $("#episodeGrid")).forEach((button) => {
