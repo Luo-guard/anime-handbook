@@ -371,39 +371,26 @@ function collectionAddedAt(anime) {
   return kazumi || added;
 }
 
-// 「最新一集」= 已经播出的剧集里 airdate 最大的那一天（不是首播日期，也不是
-// 下一集时间）。数据全在 bootstrap 下发的 anime.episodes 里，每条都带 airdate，
-// 所以排序完全在本地算，不多发任何请求，也不写库。
-// Bangumi 会把未播出的排期集也列出来（甚至出现 '2099' 这种占位），必须按
-// 「今天」过滤，否则排期很远的番会顶到最前面。
-function localDayIso() {
-  const now = new Date();
-  const pad = (value) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
+// 沿用详情的已播来源。AS 的近期缓存没有可用进度时，再用 Bangumi。
+function latestAiredAt(anime, today, source = state.settings.collection_airing_source) {
+  const progress = source === "as" ? anime.as_airing : null;
+  if (progress?.latest_aired_at) return progress.latest_aired_at;
+  if (progress?.show_status === "upcoming" || progress?.aired === 0) return "";
+  if (anime.airing?.latest_aired_at !== undefined) return anime.airing.latest_aired_at;
 
-// '2026-07-04' / '2026-07' / '2026' 三种写法都归一到可比的大小；其它形状当没有。
-function normalizeAirdate(value) {
-  const text = String(value || "").trim();
-  if (!/^\d{4}(?:-\d{2}){0,2}$/.test(text)) return "";
-  if (text.length === 4) return `${text}-01-01`;
-  if (text.length === 7) return `${text}-01`;
-  return text;
-}
-
-function latestAiredAt(anime, todayIso) {
-  const episodes = Array.isArray(anime?.episodes) ? anime.episodes : [];
+  // 旧快照和没有放送钟点的早期条目按逐集日期回退。只有日期时，次日才算已播。
   let latest = "";
-  for (const episode of episodes) {
-    const date = normalizeAirdate(episode && episode.airdate);
-    if (!date || date > todayIso) continue;
-    if (date > latest) latest = date;
+  for (const episode of anime.episodes || []) {
+    if (Number(episode.type ?? 0) !== 0) continue;
+    const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(episode.airdate || "").replaceAll("\u200b", "").trim());
+    if (!match) continue;
+    const [, year, month, day] = match;
+    const date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    const instant = new Date(`${date}T00:00:00Z`);
+    if (!Number.isFinite(instant.getTime()) || instant.toISOString().slice(0, 10) !== date) continue;
+    if (date < today && date > latest) latest = date;
   }
-  if (latest) return latest;
-  // 没有逐集日期（老数据 / episode_count 生成的占位集）时退回首播日期：
-  // 至少让它在时间轴上有个位置，而不是全部沉到最底部。
-  const premiere = normalizeAirdate(anime?.air_date);
-  return premiere && premiere <= todayIso ? premiere : "";
+  return latest;
 }
 
 function collectionComparator() {
@@ -420,7 +407,7 @@ function collectionComparator() {
   // 「最近有什么动静」类的时间键；方向箭头仍然可以翻过来。
   // 算出来的日期按每部番缓存一次，避免比较器被调用 O(n log n) 次就重扫一遍剧集。
   if (mode === "latest") {
-    const todayIso = localDayIso();
+    const todayIso = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
     const newestFirst = collectionSortDirection() !== "desc";
     const cache = new Map();
     const value = (anime) => {

@@ -107,6 +107,7 @@ def compute_airing(anime: dict[str, Any], item: dict[str, Any], now: datetime | 
     numbered.sort(key=lambda pair: pair[0])
     total = max(total, max(index for index, _ in numbered))
     aired = 0
+    latest_aired_at = ""
     next_episode: tuple[int, dict[str, Any], datetime | date, str] | None = None
     precision = "minute"
     valid = 0
@@ -122,6 +123,7 @@ def compute_airing(anime: dict[str, Any], item: dict[str, Any], now: datetime | 
             reached = at <= current
         if reached:
             aired = max(aired, index)
+            latest_aired_at = max(latest_aired_at, at.isoformat())
         elif next_episode is None:
             next_episode = (index, episode, at, level)
 
@@ -130,6 +132,7 @@ def compute_airing(anime: dict[str, Any], item: dict[str, Any], now: datetime | 
 
     result: dict[str, Any] = {
         "aired": aired,
+        "latest_aired_at": latest_aired_at,
         "total": total,
         "precision": precision,
         "next_at": None,

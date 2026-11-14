@@ -1,7 +1,6 @@
 // 回归：收藏夹「最新一集」排序。
-// 数据全部来自 bootstrap 已经下发的 anime.episodes（每条带 airdate），
-// 这里验证取值规则本身：只算已播出的、未来排期不算、没有逐集日期退回首播、
-// 一个日期都没有的排在最后（两个方向都最后）、方向可翻。
+// 使用现有已播进度，旧数据可回退到完整的正片播出日期。
+// 没有可靠播出日期的番在两个方向都排最后。
 const fs = require('fs');
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
@@ -37,6 +36,7 @@ function episodeTotal(a){return (a.episodes||[]).length;}
       content: harness + fs.readFileSync('static/modules/collection.js', 'utf8'),
     });
 
+    await page.clock.setFixedTime(new Date("2026-11-14T19:00:00+08:00"));
     const result = await page.evaluate(() => {
       const ep = (sort, airdate, type = 0) => ({ key: `bgm:${sort}`, type, sort, airdate, label: String(sort), display_label: `本篇 ${sort}` });
       const anime = (id, name, episodes, extra = {}) => ({
@@ -54,7 +54,7 @@ function episodeTotal(a){return (a.episodes||[]).length;}
         // 正在播：已播到 10-03，后面还有到 2027 的排期集（排期不算）
         anime(1, '正在播', [ep(11, '2026-09-12'), ep(12, '2026-09-19'), ep(13, '2026-09-26'), ep(14, '2026-10-03'), ep(15, '2027-02-06')]),
         // 完结：最后一集在 2026-06-20
-        anime(2, '已完结', [ep(1, '2026-04-05'), ep(12, '2026-06-20')]),
+        anime(2, '已完结', [ep(1, '2026-04-05'), ep(12, '2026-06-20'), ep(1, '2026-11-01', 1)]),
         // 只有首播日期、没有逐集日期
         anime(3, '只有首播', [], { air_date: '2026-08-01', episode_count: 12 }),
         // 一个日期都没有
@@ -73,7 +73,25 @@ function episodeTotal(a){return (a.episodes||[]).length;}
 
       // 取值本身
       state.settings.collection_sort_modes = { '1': 'latest' };
-      const today = localDayIso();
+      const today = '2026-11-14';
+      const timed = anime(15, '同日较晚', [ep(6, today)], {
+        airing: { latest_aired_at: '2026-11-13T22:00:00+08:00' },
+        as_airing: { latest_aired_at: `${today}T18:00:00+08:00` },
+      });
+      const timedEarlier = anime(16, '同日较早', [], {
+        as_airing: { latest_aired_at: `${today}T17:00:00+08:00` },
+      });
+      state.settings.collection_airing_source = 'as';
+      const timing = {
+        as: latestAiredAt(timed, today),
+        bgm: latestAiredAt(timed, today, 'bgm'),
+        sameDay: order([timedEarlier, timed], 'latest', 'asc'),
+        missingAs: latestAiredAt({ ...timed, as_airing: { unavailable: true } }, today),
+        upcomingAs: latestAiredAt({ ...timed, as_airing: { show_status: 'upcoming' } }, today),
+        todayNoClock: latestAiredAt(anime(17, '今天', [ep(6, today)]), today),
+        invalidDate: latestAiredAt(anime(18, '无效日期', [ep(1, '2026-02-30')]), today),
+      };
+      state.settings.collection_airing_source = 'bgm';
       const values = Object.fromEntries(items.map((item) => [item.display_name, latestAiredAt(item, today)]));
 
       // 未来日期不能被当成「最新一集」
@@ -102,7 +120,7 @@ function episodeTotal(a){return (a.episodes||[]).length;}
       const customSpans = customBox > menuBox - 12;
 
       return {
-        有日期_最新在前, 有日期_最早在前, 平手, values, future, airdateOrder, sortedMs,
+        有日期_最新在前, 有日期_最早在前, 平手, values, future, airdateOrder, sortedMs, timing,
         rows: document.querySelectorAll('#collectionSortPickerMenu > div').length,
         label: row ? row.querySelector('span').textContent : '',
         tip: row ? row.getAttribute('title') : '',
@@ -113,17 +131,26 @@ function episodeTotal(a){return (a.episodes||[]).length;}
     assert.deepEqual(result.values, {
       '正在播': '2026-10-03',
       '已完结': '2026-06-20',
-      '只有首播': '2026-08-01',
+      '只有首播': '',
       '没有日期': '',
       '未开播': '',
-      '只有年月': '2026-05-01',
+      '只有年月': '',
     }, `latestAiredAt: ${JSON.stringify(result.values)}`);
 
+    assert.deepEqual(result.timing, {
+      as: '2026-11-14T18:00:00+08:00',
+      bgm: '2026-11-13T22:00:00+08:00',
+      sameDay: ['同日较晚', '同日较早'],
+      missingAs: '2026-11-13T22:00:00+08:00',
+      upcomingAs: '',
+      todayNoClock: '',
+      invalidDate: '',
+    });
     assert.equal(result.future, '', '全是未来排期时不能算成最新一集');
 
-    assert.deepEqual(result.有日期_最新在前, ['正在播', '只有首播', '已完结', '只有年月', '没有日期', '未开播'],
+    assert.deepEqual(result.有日期_最新在前, ['正在播', '已完结', '没有日期', '未开播', '只有年月', '只有首播'],
       `最新在前: ${JSON.stringify(result.有日期_最新在前)}`);
-    assert.deepEqual(result.有日期_最早在前, ['只有年月', '已完结', '只有首播', '正在播', '没有日期', '未开播'],
+    assert.deepEqual(result.有日期_最早在前, ['已完结', '正在播', '没有日期', '未开播', '只有年月', '只有首播'],
       `最早在前: ${JSON.stringify(result.有日期_最早在前)}`);
 
     assert.deepEqual(result.平手, ['A番', 'B番'], '同日按名称排');

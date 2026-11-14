@@ -39,6 +39,7 @@ class AnimeScheduleTest(unittest.TestCase):
         result = compute_progress("show", rows, 12, now)
         self.assertEqual((result["aired"], result["total"], result["next_episode"]), (6, 12, 7))
         self.assertEqual(result["next_label"], "11/09 21:01")
+        self.assertEqual(result["latest_aired_at"], "2026-11-02T21:00:00+08:00")
         self.assertIsNone(compute_progress("show", rows[1:2], 12, now))
 
     def test_raw_sub_same_episode_earliest_time_and_batch_number(self):

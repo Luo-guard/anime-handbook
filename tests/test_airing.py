@@ -45,11 +45,13 @@ class AiringTest(unittest.TestCase):
             data, slot(), now=datetime(2026, 10, 5, 23, 0, tzinfo=BEIJING)
         )
         self.assertEqual(before["aired"], 0)
+        self.assertEqual(before["latest_aired_at"], "")
         self.assertEqual(before["next_label"], "10/06 00:30")
         after = airing.compute_airing(
             data, slot(), now=datetime(2026, 10, 6, 0, 31, tzinfo=BEIJING)
         )
         self.assertEqual(after["aired"], 1)
+        self.assertEqual(after["latest_aired_at"], "2026-10-06T00:30:00+08:00")
         self.assertEqual(after["next_label"], "10/13 00:30")
 
     def test_date_only_waits_until_the_day_ends(self):
@@ -64,6 +66,7 @@ class AiringTest(unittest.TestCase):
             data, item, now=datetime(2026, 10, 6, 0, 5, tzinfo=BEIJING)
         )
         self.assertEqual(next_day["aired"], 1)
+        self.assertEqual(next_day["latest_aired_at"], "2026-10-05")
         self.assertIn("时刻待公布", next_day["next_label"])
 
     def test_weekday_mismatch_degrades_to_date(self):

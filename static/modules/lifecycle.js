@@ -160,6 +160,7 @@ async function refreshAiringProgress() {
     }
     if (!changed) return;
     if (state.activeView === "schedule") renderSchedule();
+    if (state.activeView === "collection" && collectionSortMode() === "latest") renderCollection();
     if (state.progressAnime && $("#progressModal")?.open) {
       const anime = collection.find((item) => item.id === state.progressAnime.id);
       if (anime) {

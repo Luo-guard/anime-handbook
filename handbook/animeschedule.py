@@ -100,10 +100,12 @@ def compute_progress(route, rows, total=0, now=None):
     # A future event alone does not prove its preceding episodes have aired.
     if not reached and min(events) > 1:
         return None
+    latest = max((events[number] for number in reached), default=None)
     future = sorted((at, number) for number, at in events.items() if at > current and number > aired)
     at, number = future[0] if future else (None, None)
     return {
         "aired": aired, "total": total, "precision": "minute", "source": "as",
+        "latest_aired_at": latest.astimezone(BEIJING).isoformat() if latest else "",
         "next_at": int(at.timestamp()) if at else None,
         "next_episode": number,
         "next_label": at.astimezone(BEIJING).strftime("%m/%d %H:%M") if at else "",

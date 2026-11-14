@@ -1,14 +1,15 @@
 const fs = require('fs'), vm = require('vm'), assert = require('node:assert/strict');
 const state = {settings:{},animes:[{id:1,airing:{aired:1,total:12}}],activeView:'schedule'};
 state.progressAnime = {...state.animes[0]};
-let requests=0, scheduleRenders=0, detailRenders=0, timer, interval;
+let requests=0, scheduleRenders=0, collectionRenders=0, detailRenders=0, timer, interval;
 let respond = async () => ({animes:[{id:1,airing:{aired:2,total:12}}]});
 const handlers={};
 const ctx=vm.createContext({state,console,Map,JSON,URLSearchParams,
  document:{hidden:false,addEventListener:(name,fn)=>handlers[name]=fn},
  window:{addEventListener:(name,fn)=>handlers[name]=fn},
  $:()=>({open:true}),api:async()=>{requests++;return respond();},
- renderSchedule:()=>scheduleRenders++,refreshEpisodeAiringStatus:()=>detailRenders++,
+ renderSchedule:()=>scheduleRenders++,renderCollection:()=>collectionRenders++,
+ collectionSortMode:()=>state.settings.sortMode,refreshEpisodeAiringStatus:()=>detailRenders++,
  clearInterval:()=>{},setInterval:(fn,ms)=>{timer=fn;interval=ms;return 1;}
 });
 vm.runInContext(fs.readFileSync('static/modules/lifecycle.js','utf8'),ctx);
@@ -34,5 +35,13 @@ const run=source=>vm.runInContext(source,ctx);
  await timer();assert.equal(ctx.scheduleState.data.items[0].as_airing.aired,7,'AS route progress refreshes without a Bangumi ID');
  respond=async()=>({animes:[],schedule_airing:{}});
  await timer();assert.equal(ctx.scheduleState.data.items[0].as_airing.aired,7,'missing ID response does not erase direct AS progress');
+ state.activeView='collection';
+ state.settings.sortMode='latest';
+ respond=async()=>({animes:[{id:1,airing:{aired:10,total:12,latest_aired_at:'2026-11-14'}}]});
+ await timer();assert.equal(collectionRenders,1,'changed airing time updates latest order');
+ await timer();assert.equal(collectionRenders,1,'unchanged airing time does not rebuild the collection');
+ state.settings.sortMode='name';
+ respond=async()=>({animes:[{id:1,airing:{aired:11,total:12,latest_aired_at:'2026-11-15'}}]});
+ await timer();assert.equal(collectionRenders,1,'other sort modes do not rebuild on airing refresh');
  console.log('Airing refresh: minute timer, unchanged-data guard, hidden page, concurrent requests, profile changes, offline retention and focus retry passed.');
 })().catch(error=>{console.error(error);process.exit(1)});
