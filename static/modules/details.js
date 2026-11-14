@@ -885,33 +885,88 @@ async function createEpisodeQuickRecord(episode, action) {
   };
   const definition = definitions[action];
   if (!definition) return;
-  const content = window.prompt(definition.prompt, definition.initial || "");
-  if (content === null) return;
-  const text = content.trim();
-  if (!text) {
-    toast(action === "score" ? "单集评分不能为空" : "记录内容不能为空", "error");
-    return;
-  }
   const theme = recordThemes().find((item) => item.id === definition.id) || { id: definition.id, name: definition.label };
   const episodeLabel = episode.display_label || `${episode.type_label || "本篇"} ${episode.label}`;
-  try {
-    await api("/api/notes", {
-      method: "POST",
-      body: JSON.stringify({
-        content: text,
-        anime_id: anime.id,
-        theme: definition.id,
-        themes: [definition.id],
-        episode_keys: [episode.key],
-        raw_directives: recordTextFormat({ themes: [theme.name], anime: anime.display_name, episodes: episodeLabel, content: text }),
-      }),
-    });
-    await renderTimeline();
-    await refreshEpisodeRecordAnnotations(anime.id);
-    toast(`${definition.label}已写入时间线`);
-  } catch (error) {
-    toast(error.message, "error");
-  }
+  const dialog = document.createElement("dialog");
+  dialog.className = "episode-record-dialog";
+  dialog.setAttribute("aria-labelledby", "episodeRecordTitle");
+  dialog.innerHTML = `
+    <form method="dialog">
+      <header class="episode-record-header">
+        <h2 id="episodeRecordTitle">${escapeHtml(definition.label)}</h2>
+        <p>${escapeHtml(episodeLabel)}</p>
+        <button type="button" class="episode-record-close" aria-label="关闭">×</button>
+      </header>
+      <div class="episode-record-body">
+        <label for="episodeRecordContent">${escapeHtml(definition.prompt)}</label>
+        ${action === "score"
+          ? '<input id="episodeRecordContent" type="text" required autofocus />'
+          : '<textarea id="episodeRecordContent" rows="4" required autofocus></textarea>'}
+        <p class="episode-record-error" role="alert" hidden></p>
+      </div>
+      <footer class="episode-record-footer">
+        <button type="button" class="secondary-button" data-cancel-record>取消</button>
+        <button type="submit" class="primary-button">保存</button>
+      </footer>
+    </form>`;
+  const field = dialog.querySelector("#episodeRecordContent");
+  const error = dialog.querySelector(".episode-record-error");
+  const form = dialog.querySelector("form");
+  const submit = form.querySelector('button[type="submit"]');
+  const closeButtons = dialog.querySelectorAll('button[type="button"]');
+  field.value = definition.initial || "";
+  for (const button of closeButtons) button.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("cancel", (event) => {
+    if (submit.disabled) event.preventDefault();
+  });
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const text = field.value.trim();
+    if (!text) {
+      error.textContent = action === "score" ? "单集评分不能为空" : "记录内容不能为空";
+      error.hidden = false;
+      field.focus();
+      return;
+    }
+    error.hidden = true;
+    submit.disabled = true;
+    field.readOnly = true;
+    for (const button of closeButtons) button.disabled = true;
+    try {
+      await api("/api/notes", {
+        method: "POST",
+        body: JSON.stringify({
+          content: text,
+          anime_id: anime.id,
+          theme: definition.id,
+          themes: [definition.id],
+          episode_keys: [episode.key],
+          raw_directives: recordTextFormat({ themes: [theme.name], anime: anime.display_name, episodes: episodeLabel, content: text }),
+        }),
+      });
+    } catch (requestError) {
+      error.textContent = requestError.message;
+      error.hidden = false;
+      submit.disabled = false;
+      field.readOnly = false;
+      for (const button of closeButtons) button.disabled = false;
+      field.focus();
+      return;
+    }
+    dialog.close();
+    try {
+      await renderTimeline();
+      await refreshEpisodeRecordAnnotations(anime.id);
+      toast(`${definition.label}已写入时间线`);
+    } catch (refreshError) {
+      toast(`记录已保存，刷新显示失败：${refreshError.message}`, "error");
+    }
+  });
+  document.body.append(dialog);
+  dialog.showModal();
+  field.select();
 }
 
 async function saveProgress() {

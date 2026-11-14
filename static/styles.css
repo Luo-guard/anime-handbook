@@ -5931,3 +5931,61 @@ body.schedule-picking [data-floating-view="schedule"] {
   .schedule-card.pick-nudge { animation: none !important; }
   .schedule-pick-bar { transition: none !important; }
 }
+
+.episode-record-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(430px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgb(24 18 32 / .32);
+}
+.episode-record-dialog[open] { animation: episode-record-in 160ms ease-out; }
+.episode-record-dialog::backdrop { background: rgb(23 19 30 / .44); }
+.episode-record-header {
+  position: relative;
+  padding: 18px 56px 16px 22px;
+  background: color-mix(in srgb, var(--green-950) 72%, #20212a);
+  color: white;
+}
+.episode-record-header h2 { margin: 0; font-size: 20px; line-height: 1.4; }
+.episode-record-header p { margin: 4px 0 0; color: var(--green-100); font-size: 13px; }
+.episode-record-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / .12);
+  color: white;
+  font-size: 20px;
+}
+.episode-record-close:hover { background: rgb(255 255 255 / .22); }
+.episode-record-close:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+.episode-record-body { display: grid; gap: 8px; padding: 20px 22px; }
+.episode-record-body label { color: var(--muted); font-size: 13px; }
+.episode-record-body :is(input, textarea) {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--green-50);
+  color: var(--ink);
+}
+.episode-record-body textarea { resize: vertical; }
+.episode-record-error { margin: 0; color: var(--danger); font-size: 13px; }
+.episode-record-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--line); }
+.episode-record-footer button { min-height: 38px; padding: 6px 14px; }
+@keyframes episode-record-in { from { opacity: 0; transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) {
+  .episode-record-dialog[open] { animation: none; }
+}
