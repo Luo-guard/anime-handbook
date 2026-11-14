@@ -6161,12 +6161,21 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern .detail-corner-actions .modal-close { margin: 12px 14px 0 0; width: 34px; height: 34px; background: rgb(255 255 255 / .13); color: white; }
 .detail-modern .detail-tabs { margin-top: 4px; border-color: var(--detail-line); }
 .detail-modern .detail-tab { padding: 10px 2px; font-size: 14px; }
-.detail-modern #overviewDetailPanel { min-height: 230px; }
+.detail-modern #overviewDetailPanel { min-height: 220px; }
 .detail-modern .anime-comments {
-  margin-top: 18px;
+  margin-top: 20px;
   padding-top: 14px;
   border-top: 1px solid var(--detail-line);
 }
+.detail-modern .anime-comments-heading { margin-bottom: 6px; }
+.detail-modern .anime-comment-tools { display: flex; align-items: center; gap: 4px; }
+.detail-modern .anime-comment-tools .comment-trigger {
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.detail-modern .anime-comment-tools .comment-trigger:hover { background: var(--green-50); }
+.detail-modern .anime-comment-list { margin-top: 6px; }
+.detail-modern .anime-comment-list > .muted-line { margin: 0; }
 .detail-record-buttons { display: flex; gap: 10px; margin-left: auto; }
 .detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--detail-line); }
 .detail-modern.detail-non-episodes:not(.detail-record-pending) #detailRecordFooter,
@@ -6294,10 +6303,16 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 
 .detail-modern #episodeGrid { max-height: none; overflow: visible; padding: 14px 0 0; }
-.detail-modern .episode-group-grid { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); }
+.detail-modern .episode-group-grid {
+  --episode-gap: 8px;
+  --episode-min: 40px;
+  grid-template-columns: repeat(auto-fill, minmax(max(var(--episode-min), calc((100% - 11 * var(--episode-gap)) / 12)), 1fr));
+  gap: var(--episode-gap);
+}
+.detail-modern .episode-group-meta { flex-wrap: wrap; gap: 4px 10px; }
 .detail-modern .episode-cell {
   aspect-ratio: auto;
-  min-height: 38px;
+  min-height: 42px;
   background: transparent;
   color: var(--muted);
   border-color: var(--detail-line);
@@ -6305,6 +6320,8 @@ body.schedule-picking [data-floating-view="schedule"] {
   font-variant-numeric: tabular-nums;
   box-shadow: none;
 }
+.detail-modern .episode-cell:hover { background: var(--green-50); border-color: var(--active-inset); }
+.detail-modern .episode-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .detail-modern .episode-cell.watched {
   background: var(--green-100);
   color: var(--green-950);
@@ -6353,8 +6370,8 @@ body.schedule-picking [data-floating-view="schedule"] {
   .detail-modern #overviewDetailPanel { min-height: 0; }
   .detail-modern .progress-hero { align-items: start; padding-top: 20px; }
   .detail-modern .progress-meta { flex-flow: row wrap; align-items: center; }
-  .detail-modern .episode-group-grid { grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 6px; }
-  .detail-modern .episode-cell { min-height: 34px; }
+  .detail-modern .episode-group-grid { --episode-min: 36px; --episode-gap: 6px; }
+  .detail-modern .episode-cell { min-height: 36px; }
   .detail-modern .detail-record-buttons > button { padding-inline: 7px; }
   .detail-credit-actions { gap: 4px; }
 }
