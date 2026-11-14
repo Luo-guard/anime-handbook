@@ -32,4 +32,33 @@ run(`state.settings.hide_missing_as_schedule=true`);
 assert.equal(run('episodeReleaseStatus(state.animes[0],{type:0})'), '');
 const html=fs.readFileSync('static/index.html','utf8');
 for (const id of ['collectionAiringSourceInput','scheduleAiringSourceInput']) assert(html.includes(`id="${id}"`));
+const scheduleSection = html.slice(html.indexOf('data-settings-section="schedule"'), html.indexOf('data-settings-section="record"'));
+assert.match(scheduleSection, /周表共用设置[\s\S]+scheduleAiringSourceInput[\s\S]+按周表来源配置[\s\S]+scheduleSettingsSource/);
+run(`
+  const controls = new Map();
+  const control = selector => {
+    if (!controls.has(selector)) controls.set(selector, {
+      addEventListener(type, handler) { this[type] = handler; },
+    });
+    return controls.get(selector);
+  };
+  $ = control;
+  document.addEventListener = () => {};
+  const CATEGORIES = [];
+  const renderedSources = [];
+  renderScheduleSorting = (selector, options, source) => renderedSources.push(source);
+  renderScheduleHiddenSettings = () => {};
+  state.settings.schedule_airing_source = 'bgm';
+  initializeSchedule();
+  renderScheduleSettings();
+  control('#scheduleAiringSourceInput').value = 'as';
+  for (const source of ['kazumi', 'as', 'yuc']) {
+    control('#scheduleSettingsSource').change({ target: { value: source } });
+  }
+`);
+assert.deepEqual([...run('renderedSources')], ['yuc', 'kazumi', 'as', 'yuc']);
+assert.equal(run("control('#scheduleAiringSourceInput').value"), 'as');
+assert.equal(run('state.settings.schedule_airing_source'), 'bgm');
+run('renderScheduleSettings()');
+assert.equal(run("control('#scheduleAiringSourceInput').value"), 'bgm');
 console.log('AS progress: independent sources, cached values, missing metadata, no silent BGM fallback.');

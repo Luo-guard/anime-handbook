@@ -619,23 +619,27 @@ async function saveScheduleHiddenTitles(titles, source = scheduleSource()) {
 }
 
 function renderScheduleSettings() {
+  $("#scheduleSourceInput").value = scheduleSource();
+  $("#scheduleAiringSourceInput").value = state.settings.schedule_airing_source || "bgm";
+  $("#scheduleSourceSwitchInput").checked = state.settings.show_schedule_source_switch !== false;
+  const visibility = scheduleCardVisibility();
+  $("#scheduleCardFieldInputs").innerHTML = scheduleCardFieldOptions.map(([key, label, description]) =>
+    `<label class="setting-row"><span><strong>${label}</strong><small>${description}</small></span><span class="switch-row compact"><input type="checkbox" data-schedule-field="${key}" ${visibility[key] ? "checked" : ""} /><span class="switch"></span></span></label>`).join("");
+  renderScheduleSourceSettings();
+  // 这些行是动态生成的，重新挂一次说明问号。
+  if (typeof setupSettingHelp === "function") setupSettingHelp();
+}
+
+function renderScheduleSourceSettings() {
   const settingsSource = scheduleSettingsSource();
   const settingsPrefs = schedulePreferences(settingsSource);
   const selector = $("#scheduleSettingsSource");
   if (selector && selector.value !== settingsSource) selector.value = settingsSource;
-  $("#scheduleSourceInput").value = scheduleSource();
-  $("#scheduleAiringSourceInput").value = state.settings.schedule_airing_source || "bgm";
-  $("#scheduleSourceSwitchInput").checked = state.settings.show_schedule_source_switch !== false;
   renderScheduleSorting("#scheduleSortingSettings", null, settingsSource);
   $("#scheduleStatusInputs").innerHTML = scheduleStatusMarkup(settingsPrefs.statuses, "scheduleSettingsStatus");
   $("#scheduleOriginInputs").innerHTML = scheduleOriginMarkup(settingsPrefs.origins, "scheduleSettingsOrigin");
   $("#scheduleUncollectedInput").checked = settingsPrefs.uncollected;
   renderScheduleHiddenSettings();
-  const visibility = scheduleCardVisibility();
-  $("#scheduleCardFieldInputs").innerHTML = scheduleCardFieldOptions.map(([key, label, description]) =>
-    `<label class="setting-row"><span><strong>${label}</strong><small>${description}</small></span><span class="switch-row compact"><input type="checkbox" data-schedule-field="${key}" ${visibility[key] ? "checked" : ""} /><span class="switch"></span></span></label>`).join("");
-  // 这些行是动态生成的，重新挂一次说明问号。
-  if (typeof setupSettingHelp === "function") setupSettingHelp();
 }
 
 // 筛选弹窗里的小字说明收进问号（和设置页同一套 interaction）：标题旁的问号讲
@@ -893,7 +897,7 @@ function initializeSchedule() {
   $("#scheduleFilterButton").onclick = openScheduleFilters;
   $("#scheduleSettingsSource")?.addEventListener("change", (event) => {
     scheduleSettingsSourceValue = event.target.value;
-    renderScheduleSettings();
+    renderScheduleSourceSettings();
   });
   // 两处入口共用同一个管理弹窗，各自带上自己的来源：设置页跟「配置哪一套周表」，
   // 筛选弹窗跟当前正在看的周表。
