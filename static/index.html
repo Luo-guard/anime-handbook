@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-episode-wheel" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-detail-review" />
   </head>
   <body>
     <div class="app-shell">
@@ -684,7 +684,7 @@
         </div>
       </form>
     </dialog>
-    <dialog class="modal progress-modal" id="progressModal">
+    <dialog class="modal progress-modal" id="progressModal" aria-labelledby="progressTitle">
       <div class="detail-corner-actions">
         <button type="button" class="modal-close" id="closeProgress" aria-label="关闭番剧详情">×</button>
         <button type="button" class="detail-corner-download" id="openOffline" title="我的库 · 找资源" aria-label="打开我的库与找资源"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></button>
@@ -727,11 +727,11 @@
           <details class="saved-video-links hidden" id="savedLinkSection"><summary class="saved-video-heading"><span>已存链接</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedLinks"></div></details>
         </div>
         <div class="detail-tabs" role="tablist" aria-label="番剧详情分栏">
-          <button type="button" class="detail-tab active" data-detail-tab="overview" role="tab" aria-selected="true">概览</button>
-          <button type="button" class="detail-tab" data-detail-tab="characters" id="charactersDetailTab" role="tab" aria-selected="false">人物</button>
-          <button type="button" class="detail-tab hidden" data-detail-tab="comments" id="commentsDetailTab" role="tab" aria-selected="false">评论</button>
+          <button type="button" class="detail-tab active" data-detail-tab="overview" id="overviewDetailTab" role="tab" aria-selected="true" aria-controls="overviewDetailPanel">概览</button>
+          <button type="button" class="detail-tab" data-detail-tab="characters" id="charactersDetailTab" role="tab" aria-selected="false" aria-controls="charactersDetailPanel">人物</button>
+          <button type="button" class="detail-tab hidden" data-detail-tab="comments" id="commentsDetailTab" role="tab" aria-selected="false" aria-controls="overviewDetailPanel">评论</button>
         </div>
-        <section class="detail-panel" id="overviewDetailPanel">
+        <section class="detail-panel" id="overviewDetailPanel" role="tabpanel" aria-labelledby="overviewDetailTab">
         <div class="episode-grid" id="episodeGrid"></div>
         <section class="age-related hidden" id="ageRelatedSection">
           <div class="age-related-heading">
@@ -757,7 +757,7 @@
           <div class="anime-comment-list" id="animeCommentList"></div>
         </section>
         </section>
-        <section class="detail-panel hidden" id="charactersDetailPanel">
+        <section class="detail-panel hidden" id="charactersDetailPanel" role="tabpanel" aria-labelledby="charactersDetailTab">
           <div class="characters-heading"><div><h3>人物</h3><p id="charactersStatus" role="status" aria-live="polite">首次打开时从 Bangumi 获取，并保存到本地。</p></div><button type="button" class="secondary-button compact-button" id="refreshCharacters">刷新人物</button></div>
           <div class="character-grid" id="characterGrid"></div>
           <div class="empty-state hidden" id="charactersEmpty"><p>点击人物分栏后加载角色资料。</p></div>
@@ -1739,7 +1739,7 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261114-episode-wheel" defer></script>
-    <script src="/modules/details.js?v=20261114-detail-preview-match" defer></script>
+    <script src="/modules/details.js?v=20261114-detail-review" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>

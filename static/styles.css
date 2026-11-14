@@ -6186,6 +6186,17 @@ body.schedule-picking [data-floating-view="schedule"] {
   color: var(--ink); background: var(--surface); box-shadow: var(--shadow);
 }
 .modern-detail-menu-body > * + * { margin-top: 8px; }
+.modern-detail-menu-body > .detail-action {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  text-align: left;
+}
+.modern-detail-menu-body .progress-links { padding-inline: 11px; }
+.modern-detail-menu-body .saved-sections:has(.saved-video-links:not(.hidden)) {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-group-head { display: none; }
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-group-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell {
