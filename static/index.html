@@ -919,10 +919,6 @@
             <select id="collectionRatingSourceInput"><option value="bgm">BGM 评分</option><option value="personal">个人评分</option></select>
           </label>
           <label class="setting-row">
-            <span><strong>已播集数来源</strong><small>用于收藏夹番剧的播出进度，不改变已看记录。AS 未匹配时不使用 BGM 代替。</small></span>
-            <select id="collectionAiringSourceInput"><option value="bgm">BGM / Bangumi</option><option value="as">AS / AnimeSchedule</option></select>
-          </label>
-          <label class="setting-row">
             <span><strong>显示“显示评分”开关</strong><small data-page-text="控制{collection}工具栏中是否出现“显示评分”开关。">控制收藏夹工具栏中是否出现“显示评分”开关。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="showCollectionRatingControlInput" /><span class="switch"></span></span>
           </label>
@@ -993,6 +989,10 @@
           <label class="setting-row">
             <span><strong>播出状态与更新时间来源</strong><small>决定详情顶部的播出状态和更新时间。長門番堂方案结合 Bangumi 的日期资料，AS 使用 AnimeSchedule 的状态和排期。</small></span>
             <select id="detailAirtimeSourceInput"><option value="yuc">長門番堂 / Bangumi</option><option value="as">AnimeSchedule（AS）</option></select>
+          </label>
+          <label class="setting-row">
+            <span><strong>已播集数来源</strong><small>决定详情「本篇」右侧的已播集数。顶部播出状态和周表卡片的已播集数分别设置，个人已看进度来自你的观看记录。</small></span>
+            <select id="collectionAiringSourceInput"><option value="bgm">BGM / Bangumi</option><option value="as">AS / AnimeSchedule</option></select>
           </label>
           <label class="setting-row">
             <span><strong>隐藏放送数据缺失提示</strong><small>开启时收起 BGM、長門番堂和 AS 的缺失提示。关闭后可看到具体来源和缺少哪项数据。已知的播出状态、更新时间和已播集数仍会显示。</small></span>
