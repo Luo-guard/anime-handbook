@@ -115,6 +115,30 @@ class ASCalendarTest(unittest.TestCase):
             self.assertFalse(cal.jobs)
             self.assertIn("2026-W45", cal.errors)
 
+    def test_schedule_cache_expires_after_six_hours_and_can_be_refreshed(self):
+        key = "2026-W45"
+        now = 1_800_000_000
+        with tempfile.TemporaryDirectory() as root:
+            service = AnimeScheduleService(root)
+            for age, force, expected in ((21599, False, False), (21600, False, True), (60, True, True)):
+                with self.subTest(age=age, force=force):
+                    cal = ASCalendar(service)
+                    cal._write(key + ".json", {**build_calendar(key, [event()]), "fetched_at": now - age})
+                    service.cache["weeks"]["2026-45"] = {"schema": 3, "fetched": now - age, "rows": [event()]}
+                    with patch("handbook.as_calendar.time.time", return_value=now), \
+                            patch("handbook.as_calendar.threading.Thread") as worker, \
+                            patch.object(service, "token", return_value="fixture"), \
+                            patch.object(service, "_get", return_value=[event()]) as request:
+                        result = cal.get("202610", week=key, refresh=force)
+                        self.assertEqual(len(result["items"]), 1)
+                        self.assertEqual(result["loading"], expected)
+                        if expected:
+                            self.assertEqual(worker.call_args.kwargs["args"], (key, force))
+                        else:
+                            worker.assert_not_called()
+                        service.week_rows(2026, 45, force=force)
+                        self.assertEqual(request.call_count, int(expected))
+
     def test_image_path_blocks_arbitrary_hosts_traversal_and_queries(self):
         self.assertEqual(image_path("anime/jpg/default/a.jpg"), "anime/jpg/default/a.jpg")
         for value in ("https://evil.test/a.jpg", "anime/../../token.txt", "anime/jpg/a.jpg?x=1", "anime/jpg/a.svg"):

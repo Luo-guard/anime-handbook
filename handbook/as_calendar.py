@@ -11,7 +11,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 
-from .animeschedule import BEIJING, ID_FIELDS, choose_match, compute_progress, external_ids, parse_time
+from .animeschedule import BEIJING, ID_FIELDS, WEEK_TTL, choose_match, compute_progress, external_ids, parse_time
 from .observability import record_failure
 
 
@@ -239,7 +239,7 @@ class ASCalendar:
         cached = self._read(key + ".json", None)
         configured = bool(self.service.token())
         with self.lock:
-            stale = not cached or cached.get("schema_version") != 1 or time.time() - cached.get("fetched_at", 0) > 900
+            stale = not cached or cached.get("schema_version") != 1 or time.time() - cached.get("fetched_at", 0) >= WEEK_TTL
             retry_delay = 600 if key in self.errors else 60
             if configured and (refresh or stale) and key not in self.jobs and not self.jobs and time.time() - self.attempts.get(key, 0) > retry_delay:
                 self.jobs.add(key)

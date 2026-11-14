@@ -27,7 +27,7 @@ ID_FIELDS = {
     "anilist_id": ("aniList", r"anilist\.co/anime/(\d+)", "anilist-ids"),
     "anidb_id": ("anidb", r"anidb\.net/anime/(\d+)", "anidb-ids"),
 }
-WEEK_TTL = 900
+WEEK_TTL = 6 * 3600
 UNMATCHED_TTL = 86400
 
 
@@ -391,7 +391,7 @@ class AnimeScheduleService:
                 route = record.get("route")
                 result = compute_progress(route, rows_by_route.get(route, ()), record.get("total", 0)) if route else None
                 if result:
-                    result["stale"] = now - latest > 6 * 3600
+                    result["stale"] = now - latest >= WEEK_TTL
                 payload = result or {"source": "as", "unavailable": True,
                     "status": "loading" if value in self.pending or value in self.inflight else "unavailable" if configured else "unconfigured"}
                 if record.get("show_status"):
