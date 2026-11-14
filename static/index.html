@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-detail-polish" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-detail-preview-match" />
   </head>
   <body>
     <div class="app-shell">
@@ -698,6 +698,7 @@
               <p id="modernOriginalTitle"></p>
               <button type="button" class="text-button" id="modernFullTitle">完整番名</button>
             </div>
+            <div class="modern-detail-facts hidden" id="modernDetailFacts"><span id="modernDetailEpisodeTotal"></span></div>
             <p class="progress-meta"><span id="progressAirDate"></span><span id="progressBadge" class="update-badge hidden"><i class="update-badge-dot" aria-hidden="true"></i><span id="progressBadgeText"></span></span></p>
             <p class="progress-links"><span id="detailLinks" class="detail-links"></span></p>
             <div class="progress-info-row">
@@ -713,6 +714,7 @@
                   <summary aria-label="番剧更多操作">⋯</summary>
                   <div class="modern-detail-menu-body">
                     <button type="button" class="detail-action" id="modernFindResources">找资源</button>
+                    <button type="button" class="detail-action" id="modernRateAnime">我的评分</button>
                   </div>
                 </details>
               </div>
@@ -760,9 +762,12 @@
           <div class="character-grid" id="characterGrid"></div>
           <div class="empty-state hidden" id="charactersEmpty"><p>点击人物分栏后加载角色资料。</p></div>
         </section>
-        <div class="modal-actions">
-          <button type="button" class="secondary-button" id="cancelProgress">取消</button>
-          <button type="button" class="primary-button" id="saveProgress">确认记录</button>
+        <div class="modal-actions" id="detailRecordFooter">
+          <div class="detail-credit-actions hidden" id="detailCreditActions" role="group" aria-label="片头与片尾"></div>
+          <div class="detail-record-buttons">
+            <button type="button" class="secondary-button" id="cancelProgress">取消</button>
+            <button type="button" class="primary-button" id="saveProgress">确认记录</button>
+          </div>
         </div>
       </form>
     </dialog>
@@ -1734,7 +1739,7 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261114-detail-layout" defer></script>
-    <script src="/modules/details.js?v=20261114-detail-polish" defer></script>
+    <script src="/modules/details.js?v=20261114-detail-preview-match" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>

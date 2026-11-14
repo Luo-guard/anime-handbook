@@ -6078,7 +6078,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 .detail-modern #progressForm {
   --detail-gutter: clamp(16px, 4vw, 34px);
-  --detail-hero: color-mix(in srgb, #24212d 88%, var(--accent));
+  --detail-hero: color-mix(in srgb, var(--green-950) 72%, #20212a);
   --detail-hero-muted: color-mix(in srgb, #e7e3ee 83%, var(--detail-hero));
   --detail-hero-edge: rgb(255 255 255 / .19);
   --detail-line: color-mix(in srgb, var(--surface) 83%, var(--accent));
@@ -6102,7 +6102,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
-  margin: 0 32px 4px 0;
+  margin: 0 37px 4px 0;
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  font-weight: 700;
+  letter-spacing: .025em;
   font-size: clamp(21px, 3.5vw, 35px);
   line-height: 1.22;
 }
@@ -6112,10 +6115,19 @@ body.schedule-picking [data-floating-view="schedule"] {
 #detailFullTitleDialog .episode-record-body { overflow-wrap: anywhere; }
 #detailFullTitleOriginal { margin: 0; color: var(--muted); }
 .detail-modern .progress-hero-info .progress-info-row { display: contents; }
-.detail-modern .progress-hero-info .anime-rating { order: -2; }
 .detail-modern .progress-hero-info h2 { order: -4; }
 .detail-modern .modern-title-tools { order: -3; }
-.detail-modern .personal-rating { order: -1; }
+.modern-detail-facts {
+  order: -2;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 11px;
+  color: var(--detail-hero-muted);
+  font-size: 13px;
+}
+.modern-detail-facts > :empty { display: none; }
 .detail-modern .progress-meta { color: #fff; margin-top: 6px; }
 .detail-modern .progress-meta #progressAirDate { color: var(--detail-hero-muted); }
 .detail-modern .update-badge { white-space: normal; }
@@ -6136,6 +6148,8 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 .detail-modern #detailOnlinePlay { padding: 8px 11px; background: var(--green-100); border-color: var(--green-100); color: var(--green-950); }
 .detail-modern #detailOnlinePlay::before { content: "▶" / ""; margin-right: 7px; font-size: 10px; }
+.detail-modern #detailOnlinePlay[aria-disabled="true"] { opacity: .65; cursor: default; }
+.detail-modern #detailOnlinePlay[aria-disabled="true"]::before { content: none; }
 .detail-modern .collect-detail-row .collect-trigger {
   background: rgb(255 255 255 / .09);
   color: #fff;
@@ -6151,8 +6165,14 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern .detail-panel { min-height: 0; }
 .detail-modern .anime-comments { margin-top: 15px; }
 .detail-modern .detail-show-comments :is(#episodeGrid, #ageRelatedSection) { display: none; }
-.detail-modern .modal-actions { margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--detail-line); }
-.detail-modern .modal-actions > button { min-height: 36px; padding: 6px 11px; border-radius: 10px; font-size: 13px; }
+.detail-record-buttons { display: flex; gap: 10px; margin-left: auto; }
+.detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--detail-line); }
+.detail-modern.detail-non-episodes:not(.detail-record-pending) #detailRecordFooter,
+.detail-modern.detail-non-episodes #detailCreditActions { display: none; }
+.detail-modern .detail-record-buttons { gap: 5px; }
+.detail-modern .detail-record-buttons > button { min-height: 36px; padding: 6px 11px; border-radius: 10px; font-size: 13px; }
+.detail-modern #cancelProgress { border-color: transparent; background: transparent; transition: opacity 160ms ease; }
+.detail-credit-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
 .modern-detail-menu { position: static; }
 .modern-detail-menu > summary {
   display: grid; place-items: center; min-width: 39px; cursor: pointer;
@@ -6166,7 +6186,6 @@ body.schedule-picking [data-floating-view="schedule"] {
   color: var(--ink); background: var(--surface); box-shadow: var(--shadow);
 }
 .modern-detail-menu-body > * + * { margin-top: 8px; }
-.detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) { display: inline-block; margin: 6px 14px 0 0; }
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-group-head { display: none; }
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-group-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell {
@@ -6224,33 +6243,35 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 .detail-modern .episode-cell.downloaded::after { width: 5px; height: 5px; background: var(--accent); box-shadow: none; }
 .detail-modern .progress-hero-info { align-self: center; }
-.detail-modern .anime-rating, .detail-modern .personal-rating { align-self: flex-start; }
-.detail-modern .episode-release-status { white-space: normal; background: transparent; border: 0; padding: 0; }
-.detail-modern .episode-release-status i {
-  width: 0; height: 0;
-  border-radius: 0;
-  border-block: 4px solid transparent;
-  border-left: 6px solid currentColor;
-  background: none;
-  box-shadow: none;
+.detail-modern .episode-release-status { white-space: normal; }
+.detail-release-info { position: relative; color: var(--green-950); }
+.detail-release-info summary { cursor: pointer; font-size: 12px; font-weight: 700; text-align: right; }
+.detail-release-info p {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 4px);
+  right: 0;
+  width: max-content;
+  max-width: min(200px, 70vw);
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--detail-line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
-.detail-modern:not(.detail-record-pending) #cancelProgress { visibility: hidden; }
+.detail-modern:not(.detail-record-pending) #cancelProgress { visibility: hidden; opacity: 0; }
 .detail-modern #saveProgress:disabled { background: var(--green-50); color: var(--muted); border-color: var(--line); opacity: 1; }
 .detail-modern #saveProgress { transition: background-color 160ms ease, color 160ms ease; }
 @media (prefers-reduced-motion: reduce) {
-  .detail-modern #saveProgress { transition: none; }
+  .detail-modern :is(#saveProgress, #cancelProgress) { transition: none; }
 }
 
-.detail-modern .progress-hero-info .anime-rating { margin-top: 10px; color: var(--detail-hero-muted); }
+.detail-modern .progress-hero-info .anime-rating { margin-top: 0; color: var(--detail-hero-muted); font-size: 13px; }
 .detail-modern .progress-hero-info .rating-score { color: var(--green-100); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
 .detail-modern .progress-hero-info .rating-score::before { content: "Bangumi "; }
-.detail-modern .progress-hero-info .personal-rating { color: var(--green-100); }
-.detail-modern.detail-compact-credits #episodeGrid:not(.hidden) { display: block; }
-.detail-modern.detail-compact-credits .episode-group + .episode-group { margin-top: 14px; }
-.detail-modern.detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) {
-  vertical-align: top; max-width: 100%;
-}
+.detail-modern .progress-hero-info .personal-rating { margin: 0; color: var(--green-100); font: inherit; font-weight: 700; }
 .detail-modern [data-detail-tab]:focus-visible,
 .modern-detail-menu > summary:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 @media (max-width: 480px) {
@@ -6258,4 +6279,6 @@ body.schedule-picking [data-floating-view="schedule"] {
   .detail-modern .progress-meta { flex-flow: row wrap; align-items: center; }
   .detail-modern .episode-group-grid { grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 6px; }
   .detail-modern .episode-cell { min-height: 34px; }
+  .detail-modern .detail-record-buttons > button { padding-inline: 7px; }
+  .detail-credit-actions { gap: 4px; }
 }

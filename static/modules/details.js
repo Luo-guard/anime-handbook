@@ -228,14 +228,19 @@ function applyDetailLayout() {
   switchDetailTab(!activeTab || (!modern && activeTab === "comments") ? "overview" : activeTab);
 
   const menu = $(".modern-detail-menu-body", dialog);
-  for (const selector of [".progress-links", "#openAgeRelated", "#detailSavedSections"]) {
+  const facts = $("#modernDetailFacts");
+  facts.classList.toggle("hidden", !modern);
+  for (const [selector, destination] of [
+    [".progress-links", menu], ["#openAgeRelated", menu], ["#detailSavedSections", menu],
+    ["#animeRating", facts], ["#personalRating", facts],
+  ]) {
     const node = $(selector, dialog);
     if (!detailLayoutHomes.has(node)) {
       const home = document.createComment("classic detail position");
       node.before(home);
       detailLayoutHomes.set(node, home);
     }
-    if (modern) menu.append(node);
+    if (modern) destination.append(node);
     else detailLayoutHomes.get(node).after(node);
   }
 
@@ -275,12 +280,27 @@ function refreshModernDetailHeader() {
   if (!$("#modernTitleTools")) return;
   const play = $("#detailOnlinePlay");
   let nextEpisode = 0;
+  const airing = state.settings.collection_airing_source === "as" ? anime?.as_airing : anime?.airing;
+  const kind = modern ? animeBadgeModel(anime).kind : "";
+  const knownAired = airing?.aired == null ? NaN : Number(airing.aired);
+  const aired = kind === "finished" ? null : kind === "upcoming" ? 0
+    : !airing?.unavailable && Number.isFinite(knownAired) ? knownAired : null;
+  const mainCells = $$('#episodeGrid [data-episode-type="0"]', dialog);
   if (play) {
     play.textContent = "播放";
+    play.removeAttribute("aria-disabled");
     if (modern && typeof mainPlaybackEpisode === "function") {
       try {
-        nextEpisode = mainPlaybackEpisode(anime).number;
-        play.textContent = `继续播放 · 第 ${String(nextEpisode).padStart(2, "0")} 集`;
+        const target = mainPlaybackEpisode(anime);
+        nextEpisode = target.number;
+        const title = `第 ${String(nextEpisode).padStart(2, "0")} 集`;
+        const future = aired !== null && nextEpisode - target.first >= aired;
+        if (kind === "upcoming" || future) {
+          play.textContent = kind === "upcoming" ? "开播后可播放" : `${title}未播出`;
+          play.setAttribute("aria-disabled", "true");
+        } else {
+          play.textContent = `${(anime.watched_episode_keys || anime.watched_episodes || []).length ? "继续播放" : "播放"} · ${title}`;
+        }
       } catch { /* The player provides the reason when opened. */ }
     }
   }
@@ -288,17 +308,13 @@ function refreshModernDetailHeader() {
     $("#modernTitleTools").classList.add("hidden");
     return;
   }
-  const airing = state.settings.collection_airing_source === "as" ? anime.as_airing : anime.airing;
-  const { kind } = animeBadgeModel(anime);
-  const knownAired = airing?.aired == null ? NaN : Number(airing.aired);
-  const aired = kind === "finished" ? null : kind === "upcoming" ? 0
-    : !airing?.unavailable && Number.isFinite(knownAired) ? knownAired : null;
-  const mainCells = $$('#episodeGrid [data-episode-type="0"]', dialog);
+  const count = Number(anime.episode_count) || mainCells.length;
+  $("#modernDetailEpisodeTotal").textContent = count > 0 ? `全 ${count} 集` : "";
   mainCells.forEach((cell, index) => {
     const key = episodeStorageKey(cell.dataset.episodeKey, anime);
     const unreleased = aired !== null && index >= aired;
     cell.classList.toggle("unreleased", unreleased);
-    cell.classList.toggle("next-to-play", key === `0:${nextEpisode}` && nextEpisode > 0);
+    cell.classList.toggle("next-to-play", kind !== "upcoming" && key === `0:${nextEpisode}` && nextEpisode > 0);
   });
   const original = anime.name && anime.name !== anime.display_name ? anime.name : "";
   const row = $("#modernTitleTools");
@@ -317,18 +333,21 @@ function refreshModernDetailHeader() {
 }
 
 function detailEpisodeReleaseStatus(anime, group) {
-  if (Number(group.type) === 0 && $("#progressModal").classList.contains("detail-modern")) {
-    const badge = animeBadgeModel(anime);
-    const useAS = state.settings.collection_airing_source === "as";
-    const airing = useAS ? anime.as_airing : anime.airing;
-    const finished = badge.kind === "finished" || airing?.show_status === "finished"
-      || (Number(airing?.total) > 0 && Number(airing.aired) >= Number(airing.total));
-    const total = Number(airing?.total) || Number(anime.episode_count) || Number(group.count);
-    if (finished && total > 0) {
-      return `<span class="episode-release-status" title="按完结状态和正片总集数显示"><i></i>已播 ${total} 集</span>`;
-    }
+  if (Number(group.type) !== 0 || !$("#progressModal").classList.contains("detail-modern")) {
+    return episodeReleaseStatus(anime, group);
   }
-  return episodeReleaseStatus(anime, group);
+  const useAS = state.settings.collection_airing_source === "as";
+  const airing = useAS ? anime.as_airing : anime.airing;
+  const total = Number(airing?.total) || Number(anime.episode_count) || Number(group.count);
+  const finished = animeBadgeModel(anime).kind === "finished" || airing?.show_status === "finished"
+    || (Number(airing?.total) > 0 && Number(airing.aired) >= Number(airing.total));
+  const count = finished && total ? total : Number(airing?.aired ?? NaN);
+  if (!Number.isFinite(count) || (!finished && (airing?.unavailable || (!useAS && !Number(airing?.total))))) {
+    return episodeReleaseStatus(anime, group);
+  }
+  const note = finished ? "按完结状态和正片总集数显示"
+    : useAS ? "来自 AnimeSchedule 放送计划" : "按 Bangumi 逐集播出资料计算";
+  return `<details class="detail-release-info"><summary>已播 ${count} 集</summary><p>${note}</p></details>`;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -344,6 +363,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#modernFindResources")?.addEventListener("click", () => {
     $("#modernDetailMenu").open = false;
     $("#openOffline").click();
+  });
+  $("#modernRateAnime")?.addEventListener("click", () => {
+    $("#modernDetailMenu").open = false;
+    $("#openAnimeRating").click();
   });
   $("#openAgeRelated")?.addEventListener("click", () => {
     if (!dialog.classList.contains("detail-modern")) return;
@@ -437,6 +460,7 @@ function switchDetailTab(tab) {
   const isCharacters = tab === "characters";
   const modern = $("#progressModal").classList.contains("detail-modern");
   const isComments = modern && tab === "comments";
+  $("#progressModal").classList.toggle("detail-non-episodes", modern && (isCharacters || isComments));
   $("#overviewDetailPanel").classList.toggle("hidden", isCharacters);
   $("#episodeGrid").classList.toggle("hidden", isComments);
   const comments = $(".anime-comments", $("#overviewDetailPanel"));
@@ -943,11 +967,18 @@ function renderEpisodeGrid() {
         </section>
       `).join("")
     : `<div class="empty-state"><p>暂未取得章节。</p></div>`;
+  const creditActions = $("#detailCreditActions");
+  if (creditActions) {
+    const compact = $("#progressModal").classList.contains("detail-compact-credits");
+    const credits = compact ? $$('#episodeGrid :is([data-detail-episode-group="2"], [data-detail-episode-group="3"])') : [];
+    creditActions.replaceChildren(...credits);
+    creditActions.classList.toggle("hidden", credits.length === 0);
+  }
   updateDetailRecordActions();
   if ($("#progressModal").classList.contains("detail-modern")) refreshModernDetailHeader();
   // 标注气泡仍按格子绑定；所有点击/长按/右键交给 episode-gesture.js 的委托，
   // 扇区格数与绑定表都由设置驱动，这里不再散着写事件。
-  $$(".episode-cell", $("#episodeGrid")).forEach((button) => {
+  $$(".episode-cell", $("#progressModal")).forEach((button) => {
     const annotations = state.episodeRecordAnnotations?.[String(button.dataset.episodeKey)] || [];
     if (!annotations.length) return;
     const close = () => $("#episodeAnnotationPopover")?.remove();
@@ -972,7 +1003,7 @@ function renderEpisodeGrid() {
   });
 
   if (typeof installEpisodeGestures !== "function") return;
-  installEpisodeGestures($("#episodeGrid"), {
+  installEpisodeGestures($("#progressForm") || $("#episodeGrid"), {
     onToggleWatched: (button) => {
       const key = String(button.dataset.episodeKey);
       if (state.pendingEpisodes.has(key)) state.pendingEpisodes.delete(key);
@@ -994,7 +1025,7 @@ function renderEpisodeGrid() {
 
 async function playDetailEpisode(key = "", button = null) {
   const anime = state.progressAnime;
-  if (!anime || button?.disabled) return;
+  if (!anime || button?.disabled || button?.getAttribute("aria-disabled") === "true") return;
   const source = episodeGestureConfig().playbackSource;
   if (button) button.disabled = true;
   try {
