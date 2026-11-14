@@ -486,7 +486,7 @@ async function libCheckSubs() {
   const status = $("#libSubsStatus");
   if (status) status.textContent = "正在检查全部订阅…";
   try {
-    const data = await api("/api/offline/check", { method: "POST", body: JSON.stringify({ force: true }) });
+    const data = await api("/api/offline/check", { method: "POST", timeoutMs: 120000, body: JSON.stringify({ force: true }) });
     if (status) {
       status.textContent = data.skipped
         ? `没跑：${data.reason || "订阅新集自动下载未开启"}（打开上面的开关后用「立即检查」手动跑一次）`
@@ -558,6 +558,7 @@ async function libDownload(button) {
   try {
     await api("/api/offline/download", {
       method: "POST",
+      timeoutMs: 60000,
       body: JSON.stringify({
         anime_id: animeId,
         torrent_url: button.dataset.url,

@@ -219,6 +219,7 @@ async function startOfflineDownload(index) {
   try {
     await api("/api/offline/download", {
       method: "POST",
+      timeoutMs: 60000,
       body: JSON.stringify({
         anime_id: offlineView.animeId,
         torrent_url: item.torrent_url,
@@ -1747,6 +1748,7 @@ async function checkSubscriptions() {
   try {
     const data = await api("/api/offline/check", {
       method: "POST",
+      timeoutMs: 120000,
       body: JSON.stringify({ force: true }),
     });
     const downloaded = Number(data.downloaded || 0);

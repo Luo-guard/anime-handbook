@@ -8,10 +8,17 @@
 from __future__ import annotations
 
 import json
+import ipaddress
+import os
+import shutil
+import subprocess
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
 from typing import Any, Callable
 
 DEFAULT_BASE = "http://127.0.0.1:8080"
@@ -19,6 +26,9 @@ API_PREFIX = "/api/v2"
 USER_AGENT = "AnimeHandbook/1.0 (+local)"
 DEFAULT_TIMEOUT = 12.0
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+STARTUP_TIMEOUT = 10.0
+_STARTUP_LOCK = threading.Lock()
+_STARTUP_RETRY_AT: dict[str, float] = {}
 
 # qB 5.0 把 pause/resume 改名为 stop/start，两套并行存在；按顺序试探。
 _PAUSE_PATHS = ("/torrents/stop", "/torrents/pause")
@@ -27,6 +37,45 @@ _RESUME_PATHS = ("/torrents/start", "/torrents/resume")
 
 class QBError(RuntimeError):
     """qBittorrent 不可用或拒绝了请求；调用方把它转成可读提示。"""
+
+
+class QBConnectionError(QBError):
+    """无法连接 Web UI。"""
+
+
+def _loopback(base: str) -> bool:
+    host = urllib.parse.urlsplit(base).hostname
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _windows_executable() -> Path | None:
+    import winreg
+
+    locations = []
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for key, value in (
+            (r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\qbittorrent.exe", ""),
+            (r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\qBittorrent", "InstallLocation"),
+        ):
+            for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+                try:
+                    with winreg.OpenKey(root, key, 0, winreg.KEY_READ | view) as handle:
+                        raw, _ = winreg.QueryValueEx(handle, value)
+                    path = Path(os.path.expandvars(str(raw).strip().strip('"')))
+                    locations.append(path / "qbittorrent.exe" if value else path)
+                except OSError:
+                    continue
+    for variable in ("ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"):
+        if root_dir := os.environ.get(variable):
+            locations.append(Path(root_dir) / "qBittorrent" / "qbittorrent.exe")
+    if found := shutil.which("qbittorrent.exe"):
+        locations.append(Path(found))
+    return next((path for path in locations if path.is_absolute() and path.is_file()), None)
 
 
 def build_multipart(
@@ -67,7 +116,12 @@ class Client:
     ) -> None:
         self.base = str(base or DEFAULT_BASE).rstrip("/")
         self.timeout = timeout
-        self._opener = urllib.request.urlopen if opener is None else opener
+        if opener is not None:
+            self._opener = opener
+        elif _loopback(self.base):
+            self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
+        else:
+            self._opener = urllib.request.urlopen
 
     # ---- 传输层 -------------------------------------------------------
 
@@ -78,6 +132,7 @@ class Client:
         data: bytes | None = None,
         headers: dict[str, str] | None = None,
         method: str = "GET",
+        timeout: float | None = None,
     ) -> bytes:
         request = urllib.request.Request(
             self.base + API_PREFIX + path,
@@ -86,7 +141,7 @@ class Client:
             method=method,
         )
         try:
-            with self._opener(request, timeout=self.timeout) as response:
+            with self._opener(request, timeout=self.timeout if timeout is None else timeout) as response:
                 return response.read(MAX_RESPONSE_BYTES)
         except urllib.error.HTTPError as error:
             detail = ""
@@ -101,6 +156,8 @@ class Client:
                 ) from error
             raise QBError(f"qBittorrent 返回 {error.code}：{detail or error.reason}") from error
         except (urllib.error.URLError, OSError, TimeoutError) as error:
+            if isinstance(getattr(error, "reason", error), (ConnectionRefusedError, TimeoutError)):
+                raise QBConnectionError(f"连不上 qBittorrent（{self.base}）：{error}") from error
             raise QBError(f"连不上 qBittorrent（{self.base}）：{error}") from error
 
     def _json(self, path: str) -> Any:
@@ -140,6 +197,38 @@ class Client:
 
     def version(self) -> str:
         return self._request("/app/version").decode("utf-8", "replace").strip()
+
+    def ensure_running(self) -> None:
+        if os.name != "nt" or not _loopback(self.base) or os.environ.get("ANIME_HANDBOOK_SANDBOX") == "1":
+            return
+        with _STARTUP_LOCK:
+            try:
+                self._request("/app/version", timeout=2.0)
+                return
+            except QBConnectionError:
+                pass
+            if time.monotonic() < _STARTUP_RETRY_AT.get(self.base, 0):
+                raise QBError(f"qBittorrent Web UI 未就绪，请检查是否启用并监听 {self.base}。")
+            executable = _windows_executable()
+            if executable is None:
+                raise QBError("找不到 qBittorrent，请手动启动客户端并确认已启用 Web UI。")
+            startup = subprocess.STARTUPINFO()
+            startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startup.wShowWindow = 7  # SW_SHOWMINNOACTIVE
+            try:
+                subprocess.Popen([str(executable)], cwd=executable.parent, startupinfo=startup)
+            except OSError as error:
+                raise QBError(f"无法启动 qBittorrent：{error}") from error
+            deadline = time.monotonic() + STARTUP_TIMEOUT
+            _STARTUP_RETRY_AT[self.base] = deadline + 30
+            while time.monotonic() < deadline:
+                try:
+                    self._request("/app/version", timeout=1.0)
+                    _STARTUP_RETRY_AT.pop(self.base, None)
+                    return
+                except QBConnectionError:
+                    time.sleep(0.35)
+            raise QBError(f"已尝试启动 qBittorrent，Web UI 未就绪。请检查是否启用并监听 {self.base}。")
 
     def alive(self) -> bool:
         try:

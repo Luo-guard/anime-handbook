@@ -44,6 +44,9 @@ class TorrentMetaTest(unittest.TestCase):
 
 
 class FakeClient:
+    def ensure_running(self):
+        pass
+
     """前几次查询故意返回空，模拟 qB 刚 add 完还没注册完。"""
 
     def __init__(self, missing_times: int = 2, preexisting: bool = False, reject_add: bool = False):

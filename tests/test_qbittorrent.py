@@ -3,8 +3,11 @@
 全部用假 opener，不连真实客户端。
 """
 import io
+import os
 import unittest
 import urllib.error
+from pathlib import Path
+from unittest.mock import patch
 
 from handbook.qbittorrent import Client, QBError, build_multipart, normalise_base
 
@@ -39,6 +42,37 @@ class Recorder:
         if isinstance(result, Exception):
             raise result
         return result
+
+
+@unittest.skipUnless(os.name == "nt", "Windows qBittorrent startup")
+class StartupTest(unittest.TestCase):
+    def test_starts_once_on_connection_refused_and_waits_for_web_ui(self):
+        refused = urllib.error.URLError(ConnectionRefusedError())
+        opener = Recorder(refused, refused, FakeResponse(b"v5.1.0"))
+        client = Client(opener=opener)
+        with patch("handbook.qbittorrent._windows_executable", return_value=Path("C:/qBittorrent/qbittorrent.exe")), \
+                patch("handbook.qbittorrent.subprocess.Popen") as launch, \
+                patch("handbook.qbittorrent.time.sleep"):
+            client.ensure_running()
+        launch.assert_called_once()
+        self.assertEqual(len(opener.requests), 3)
+
+    def test_leaves_running_and_remote_clients_alone(self):
+        local = Recorder(FakeResponse(b"v5.1.0"))
+        remote = Recorder()
+        with patch("handbook.qbittorrent.subprocess.Popen") as launch:
+            Client(opener=local).ensure_running()
+            Client("http://192.0.2.1:8080", opener=remote).ensure_running()
+        launch.assert_not_called()
+        self.assertEqual(len(local.requests), 1)
+        self.assertEqual(remote.requests, [])
+
+    def test_web_ui_auth_error_does_not_launch(self):
+        opener = Recorder(http_error(403, b"Forbidden"))
+        with patch("handbook.qbittorrent.subprocess.Popen") as launch:
+            with self.assertRaisesRegex(QBError, "身份验证"):
+                Client(opener=opener).ensure_running()
+        launch.assert_not_called()
 
 
 class MultipartTest(unittest.TestCase):

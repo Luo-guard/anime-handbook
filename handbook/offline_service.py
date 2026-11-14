@@ -201,6 +201,7 @@ class OfflineService:
         display_name = torrent_name(payload) or str(title or "")
         tag = "hb" + uuid.uuid4().hex[:10]
         client = self.client(config)
+        client.ensure_running()
 
         # 同一个种子已经在 qB 里时不要重复提交：qB 会直接回 "Fails."，
         # 之前把它当成失败，用户就会反复点、反复报错。
