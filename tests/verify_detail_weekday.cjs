@@ -116,6 +116,13 @@ window.Date = __FrozenDate;
       const finishedAS = render({...mixed,as_airing:{aired:12,total:12}});
       state.settings.hide_missing_as_schedule = false;
       const visibleMissingAS = render({...mixed,as_airing:null});
+      const noTimeAS = render({...mixed,as_airing:{show_status:'ongoing'}});
+      state.settings.hide_missing_as_schedule = true;
+      const hiddenTimeAS = render({...mixed,as_airing:{show_status:'ongoing'}});
+      state.settings.hide_missing_as_schedule = false;
+      state.settings.detail_airtime_source = 'yuc';
+      const visibleMissingBgm = render({air_date:'',episodes:[]}, '');
+      const visibleMissingYucTime = render({air_date:'2026-10-04',episodes:ongoingEpisodes});
 
       const meta = $('.progress-meta');
       const links = $('.progress-links');
@@ -128,7 +135,7 @@ window.Date = __FrozenDate;
       return {
         ongoing, finished, skewed, dirty, withNextAt, noData,
         ongoingDom, noClockDom, nextAtDom, finishedDom, upcomingDom, farUpcomingDom, emptyDom, danglingDom,
-        yucDom, asDom, missingAS, loadingAS, finishedAS, visibleMissingAS,
+        yucDom, asDom, missingAS, loadingAS, finishedAS, visibleMissingAS, noTimeAS, hiddenTimeAS, visibleMissingBgm, visibleMissingYucTime,
         structure: {
           linksInMeta: Boolean(meta && meta.querySelector('#detailLinks')),
           linksInsideOwnRow: Boolean(links && links.querySelector('#detailLinks')),
@@ -161,9 +168,15 @@ window.Date = __FrozenDate;
     assert.equal(result.yucDom.text, '每周五 21:30 更新');
     assert.equal(result.asDom.text, '周一 00:30 更新');
     assert.match(result.asDom.title, /AnimeSchedule/);
-    assert.equal(result.missingAS.text, '暂无 AS 排期');
+    assert.equal(result.missingAS.text, 'AS 排期数据缺失');
     assert.equal(result.missingAS.hidden, true);
     assert.equal(result.visibleMissingAS.hidden, false);
+    assert.equal(result.noTimeAS.text, '连载中 · AS 更新时间缺失');
+    assert.equal(result.hiddenTimeAS.text, '连载中');
+    assert.equal(result.hiddenTimeAS.hidden, false);
+    assert.equal(result.emptyDom.hidden, true);
+    assert.equal(result.visibleMissingBgm.hidden, false);
+    assert.equal(result.visibleMissingYucTime.text, '每周日更新 · 長門番堂更新时间缺失');
     assert.equal(result.asDom.hidden, false);
     assert.equal(result.finishedAS.hidden, false);
     assert.equal(result.loadingAS.text, '正在读取 AS 排期');
@@ -179,7 +192,7 @@ window.Date = __FrozenDate;
     assert.ok(!result.upcomingDom.text.includes('已播 0'), '未开播不显示「已播 0/N」');
     assert.equal(result.farUpcomingDom.text, '未开播', `较远的首播也统一写「未开播」：${result.farUpcomingDom.text}`);
 
-    assert.equal(result.emptyDom.text, '日期未知', `无日期徽标：${result.emptyDom.text}`);
+    assert.equal(result.emptyDom.text, 'BGM 播出日期缺失', `无日期徽标：${result.emptyDom.text}`);
     assert.equal(result.emptyDom.kind, 'unknown', '无日期要挂 unknown 样式');
     assert.equal(result.danglingDom.text, '每周日更新', '没有首播日但集日期齐全时仍正常显示');
     assert.notEqual(result.ongoingDom.bg, result.finishedDom.bg, '连载与完结的底色要不同');

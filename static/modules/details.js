@@ -103,12 +103,15 @@ function animeScheduleBadge(anime) {
     };
   }
   if (airing?.show_status === "ongoing") {
-    return { kind: "ongoing", text: "连载中", title: "AnimeSchedule 标记为连载中，暂无可用的下一集时间" };
+    return {
+      kind: "ongoing", text: "连载中", missingTime: "AS 更新时间缺失",
+      title: "AnimeSchedule 标记为连载中，当前没有可用的下一集时间",
+    };
   }
   const loading = airing?.status === "loading";
   return {
     kind: "unknown",
-    text: loading ? "正在读取 AS 排期" : "暂无 AS 排期",
+    text: loading ? "正在读取 AS 排期" : "AS 排期数据缺失",
     missingSchedule: !loading,
     title: "AnimeSchedule 暂未提供可用的下一集时间",
   };
@@ -127,7 +130,10 @@ function animeBadgeModel(anime, today = new Date()) {
   const weekday = info ? `每${info.weekday}` : "";
 
   if (!premiere && !counts.dated && !info) {
-    return { kind: "unknown", text: "日期未知", title: "条目和逐集资料里都没有播出日期" };
+    return {
+      kind: "unknown", text: "BGM 播出日期缺失", missingSchedule: true,
+      title: "Bangumi 条目和逐集资料都缺少播出日期，无法判断播出状态",
+    };
   }
   if (premiere && premiere > todayStart && counts.aired === 0) {
     return { kind: "upcoming", text: "未开播", title: "首播日期还没到；具体日期就在旁边" };
@@ -136,7 +142,8 @@ function animeBadgeModel(anime, today = new Date()) {
     const clock = animeAirClock(anime);
     return {
       kind: "ongoing",
-      text: `${weekday}${clock ? ` ${clock} ` : ""}更新`,
+      text: clock ? `${weekday} ${clock} 更新` : (weekday ? `${weekday}更新` : "连载中"),
+      missingTime: clock ? "" : "長門番堂更新时间缺失",
       title: clock
         ? "星期按逐集放送日期推算，钟点来自当季周表的北京时间放送时刻"
         : "星期按逐集放送日期推算；这份资料没有放送钟点",
@@ -149,9 +156,11 @@ function renderProgressBadge(anime) {
   const model = animeBadgeModel(anime);
   const badge = $("#progressBadge");
   badge.className = `update-badge ${model.kind}`;
-  badge.classList.toggle("hidden", Boolean(model.missingSchedule && state.settings?.hide_missing_as_schedule !== false));
+  const hideMissing = state.settings?.hide_missing_as_schedule !== false;
+  badge.classList.toggle("hidden", Boolean(model.missingSchedule && hideMissing));
   badge.title = model.title;
-  $("#progressBadgeText").textContent = model.text;
+  $("#progressBadgeText").textContent = model.missingTime && !hideMissing
+    ? `${model.text} · ${model.missingTime}` : model.text;
 }
 
 // 评分行整行跳 Bangumi：和上面的 Bangumi 外链共用同一个链接模板与

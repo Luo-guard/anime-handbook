@@ -49,13 +49,15 @@ function episodeReleaseStatus(anime, group) {
   if (useAS && (!airing || airing.unavailable)) {
     const loading = airing?.status === "loading";
     if (!loading && enabledSetting("hide_missing_as_schedule")) return "";
-    return `<span class="episode-release-status" title="${loading ? "正在读取 AnimeSchedule 进度" : "未匹配或暂无可用 AS 资料，不使用其他来源代替"}"><i></i>${loading ? "AS 进度加载中" : "暂无 AS 进度"}</span>`;
+    return `<span class="episode-release-status" title="${loading ? "正在读取 AnimeSchedule 进度" : "未匹配或暂无可用 AS 资料，不使用其他来源代替"}"><i></i>${loading ? "AS 进度加载中" : "AS 已播集数缺失"}</span>`;
   }
-  if (!airing) return "";
+  if (!useAS && !Number(airing?.total)) {
+    if (enabledSetting("hide_missing_as_schedule")) return "";
+    return '<span class="episode-release-status" title="缺少可用于计算已播集数的 Bangumi 逐集放送资料"><i></i>BGM 已播集数缺失</span>';
+  }
   const aired = Math.max(0, Number(airing.aired) || 0);
   const knownTotal = Number(airing.total) || (useAS ? Number(anime.episode_count) : 0);
   const total = useAS && aired > knownTotal ? 0 : knownTotal;
-  if (!useAS && !total) return "";
   // 口径（2026-11-07 定）：完结番不显示进度药丸，也不标「已播完」。
   // 集数格子本来就是齐的，多一个「已播完」只是噪音；别把这行当成 bug 改回去。
   if (total && aired >= total) return "";

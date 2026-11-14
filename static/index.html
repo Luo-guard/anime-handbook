@@ -989,15 +989,16 @@
             <div class="auto-open-offline-list" id="autoOpenOfflineCollections"></div>
           </div>
           <div class="settings-section-title" data-settings-section="detail">番剧详情</div>
-<h3 class="settings-subsection-title">评分与资料</h3>
+          <h3 class="settings-subsection-title">放送信息</h3>
           <label class="setting-row">
-            <span><strong>更新时间来源</strong><small>控制详情顶部的更新时间。AS 显示下一集排期，时间统一换算为北京时间。</small></span>
-            <select id="detailAirtimeSourceInput"><option value="yuc">長門番堂</option><option value="as">AnimeSchedule</option></select>
+            <span><strong>播出状态与更新时间来源</strong><small>决定详情顶部的播出状态和更新时间。長門番堂方案结合 Bangumi 的日期资料，AS 使用 AnimeSchedule 的状态和排期。</small></span>
+            <select id="detailAirtimeSourceInput"><option value="yuc">長門番堂 / Bangumi</option><option value="as">AnimeSchedule（AS）</option></select>
           </label>
           <label class="setting-row">
-            <span><strong>隐藏 AS 缺失提示</strong><small>同时隐藏番剧详情中的「暂无 AS 排期」和「暂无 AS 进度」。</small></span>
+            <span><strong>隐藏放送数据缺失提示</strong><small>开启时收起 BGM、長門番堂和 AS 的缺失提示。关闭后可看到具体来源和缺少哪项数据。已知的播出状态、更新时间和已播集数仍会显示。</small></span>
             <span class="switch-row compact"><input type="checkbox" id="hideMissingAsScheduleInput" checked /><span class="switch"></span></span>
           </label>
+          <h3 class="settings-subsection-title">评分与资料</h3>
           <label class="setting-row">
             <span>
               <strong>显示 Bangumi 评分与排名</strong>
@@ -1695,13 +1696,13 @@
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
     <script src="/modules/collection.js?v=20261111-cleanup" defer></script>
-    <script src="/modules/presentation.js?v=20261113-as-missing-hints" defer></script>
+    <script src="/modules/presentation.js?v=20261114-airing-missing" defer></script>
     <script src="/modules/collection-cards.js?v=20261107-collection-added-order" defer></script>
     <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261113-playback-settings" defer></script>
-    <script src="/modules/details.js?v=20261114-as-show-status" defer></script>
+    <script src="/modules/details.js?v=20261114-airing-missing" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
