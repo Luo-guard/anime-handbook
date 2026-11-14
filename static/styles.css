@@ -6163,9 +6163,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern .detail-tab { padding: 10px 2px; font-size: 14px; }
 .detail-modern #overviewDetailPanel { min-height: 220px; }
 .detail-modern .anime-comments {
-  margin-top: 20px;
-  padding-top: 14px;
-  border-top: 1px solid var(--detail-line);
+  margin-top: 24px;
 }
 .detail-modern .anime-comments-heading { margin-bottom: 6px; }
 .detail-modern .anime-comment-tools { display: flex; align-items: center; gap: 4px; }
@@ -6177,7 +6175,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern .anime-comment-list { margin-top: 6px; }
 .detail-modern .anime-comment-list > .muted-line { margin: 0; }
 .detail-record-buttons { display: flex; gap: 10px; margin-left: auto; }
-.detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--detail-line); }
+.detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 16px; }
 .detail-modern.detail-non-episodes:not(.detail-record-pending) #detailRecordFooter,
 .detail-modern.detail-non-episodes #detailCreditActions { display: none; }
 .detail-modern .detail-record-buttons { gap: 5px; }
