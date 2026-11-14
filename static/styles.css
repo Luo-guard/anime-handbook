@@ -3141,13 +3141,47 @@ dialog::backdrop {
 .setting-row small.setting-help-source { display: none; }
 
 .setting-row.airing-source-guide { display: block; }
-.airing-source-guide summary { cursor: pointer; color: var(--green-900); }
-.airing-source-guide summary strong { display: inline; }
-.airing-source-guide dl { margin: 12px 0; }
-.airing-source-guide dl > div { padding-block: 10px; border-top: 1px solid var(--line); }
-.airing-source-guide dt { font-weight: 650; }
-.airing-source-guide dd { margin: 4px 0 0; color: var(--muted); font-size: .875rem; line-height: 1.6; }
-.airing-source-guide-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.airing-source-guide > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.airing-source-guide > summary::-webkit-details-marker { display: none; }
+.airing-source-guide > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; border-radius: 4px; }
+.airing-source-guide-label { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.airing-source-guide-label > span { color: var(--muted); font-size: 12px; }
+.airing-source-guide-chevron {
+  flex: 0 0 8px;
+  height: 8px;
+  margin-inline: 5px;
+  border: solid var(--green-700);
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-2px) rotate(45deg);
+}
+.airing-source-guide[open] .airing-source-guide-chevron { transform: translateY(2px) rotate(225deg); }
+.airing-source-guide-body {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--green-50);
+}
+.airing-source-guide dl { display: grid; gap: 10px; margin: 0; }
+.airing-source-guide dl > div {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 3px 12px;
+}
+.airing-source-guide dt { font-size: 13px; font-weight: 650; color: var(--ink); }
+.airing-source-guide dd { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.airing-source-guide-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 -4px -6px; }
+.airing-source-guide-actions .text-button { min-width: 0; max-width: 100%; padding: 6px; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+.airing-source-guide-actions .text-button:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .airing-source-guide dl > div { grid-template-columns: minmax(0, 1fr); }
+}
 
 #settingsModal .setting-help-source { display: none; }
 /* 说明收进问号后正文默认藏起来；周表筛选弹窗也用同一套（不在 #settingsModal 里）。 */

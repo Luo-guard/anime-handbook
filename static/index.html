@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-bgm-source-cards" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-airing-source-guide" />
   </head>
   <body>
     <div class="app-shell">
@@ -1312,16 +1312,21 @@
           <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键或鼠标前进／后退侧键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，到达第一个或最后一个界面后不再移动。侧键一旦绑定，就不会再触发浏览器自身的前进／后退。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
           <details class="setting-row airing-source-guide">
-            <summary><strong>周表与番剧详情的数据说明</strong></summary>
-            <dl>
-              <div><dt>周表</dt><dd>可看長門番堂、Bangumi 或 AnimeSchedule（AS）。Bangumi 周表按星期展示。刷新周表时会重新读取当前来源的数据。</dd></div>
-              <div><dt>详情顶部的播出状态与更新时间</dt><dd>長門番堂方案结合 Bangumi 的播出日期和長門番堂的钟点。AS 使用作品状态与下集排期，打开详情时按需补查状态并缓存。</dd></div>
-              <div><dt>已播集数</dt><dd>周表卡片和番剧详情分别选择来源。BGM 按逐集播出日期计算，AS 按缓存的放送计划计算。</dd></div>
-              <div><dt>个人已看进度</dt><dd>来自你在手账里保存的观看记录。</dd></div>
-            </dl>
-            <div class="airing-source-guide-actions">
-              <button type="button" class="secondary-button compact-button" id="goToScheduleAiringSettings">前往周表设置</button>
-              <button type="button" class="secondary-button compact-button" id="goToDetailAiringSettings">前往番剧详情设置</button>
+            <summary>
+              <span class="airing-source-guide-label"><strong>周表与番剧详情</strong><span>查看数据来源与更新方式</span></span>
+              <span class="airing-source-guide-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="airing-source-guide-body">
+              <dl>
+                <div><dt>周表</dt><dd>可选長門番堂、Bangumi 或 AnimeSchedule（AS）。刷新时重新读取所选来源，Bangumi 周表按星期展示。</dd></div>
+                <div><dt>播出状态与更新时间</dt><dd>長門番堂方案结合 Bangumi 的播出日期和長門番堂的放送时间。AS 使用条目状态与下集排期，打开详情时按需补查。</dd></div>
+                <div><dt>已播集数</dt><dd>周表卡片和番剧详情可分别选来源。Bangumi 按逐集日期计算，AS 按放送计划计算，周表缓存有效期为 15 分钟。</dd></div>
+                <div><dt>个人已看进度</dt><dd>确认记录后更新，数据来自手账里保存的观看记录。</dd></div>
+              </dl>
+              <div class="airing-source-guide-actions">
+                <button type="button" class="text-button" id="goToScheduleAiringSettings">周表设置</button>
+                <button type="button" class="text-button" id="goToDetailAiringSettings">番剧详情设置</button>
+              </div>
             </div>
           </details>
           <h3 class="settings-subsection-title">Bangumi 资料来源</h3>
