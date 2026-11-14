@@ -29,7 +29,7 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
     const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}<div>${settingsBlock}</div>`);
+    await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}<div>${settingsBlock}<input type="checkbox" id="libAutoFollow"></div>`);
     await page.addScriptTag({ content: setup + fs.readFileSync('static/modules/offline.js', 'utf8') });
     await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
 
@@ -78,7 +78,7 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
       $('#offlineMediaRoot').value = 'D:/new-media';
     });
     await page.evaluate(() => migrateMediaRoot());
-    const failedText = await page.locator('#offlineSettingsStatus').textContent();
+    const failedText = await page.locator('#offlineMigrationStatus').textContent();
     assert.match(failedText, /迁移没有执行/, failedText);
     assert.match(failedText, /字幕没复制过去/, failedText);
     assert.match(failedText, /媒体库仍是原目录/, failedText);
@@ -86,7 +86,9 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
 
     // 4) 迁移成功：报出集数与字体数量。
     await page.evaluate(() => {
-      window.api = async () => ({
+      window.api = async (url) => url === '/api/offline/settings' ? {
+        paths: { media_root: 'D:/new-media', download_root: 'D:/new-media/_incoming' },
+      } : ({
         ok: true,
         copied: 3,
         attempted: 3,
@@ -99,10 +101,11 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
       });
     });
     await page.evaluate(() => migrateMediaRoot());
-    const okText = await page.locator('#offlineSettingsStatus').textContent();
+    const okText = await page.locator('#offlineMigrationStatus').textContent();
     assert.match(okText, /已迁移 3 集/, okText);
     assert.match(okText, /字体 4 个/, okText);
     assert.match(okText, /目录已切换/, okText);
+    assert.match(await page.locator('#offlineDownloadHint').textContent(), /D:\/new-media\/_incoming/);
 
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Offline episode labels: specials get their own label, migration reports what actually happened.');

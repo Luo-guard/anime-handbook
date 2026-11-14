@@ -1662,6 +1662,12 @@ async function saveSubscriptionAutoDownload(event) {
   }
 }
 
+function renderOfflineDirectoryHints(paths = {}) {
+  $("#offlineMediaHint").textContent = paths.media_root ? `当前目录：${paths.media_root}` : "";
+  $("#offlineDownloadHint").textContent = paths.download_root ? `当前目录：${paths.download_root}` : "";
+  $("#offlineScreenshotHint").textContent = paths.screenshot_root ? `当前目录：${paths.screenshot_root}` : "";
+}
+
 async function loadOfflineSettings() {
   const status = "#offlineSettingsStatus";
   offlineStatus(status, "读取设置…");
@@ -1680,10 +1686,8 @@ async function loadOfflineSettings() {
     if (!subscriptionAutoDownloadSaving && revision === subscriptionAutoDownloadRevision) {
       syncSubscriptionAutoDownload(config.auto_follow === true);
     }
-    const paths = data.paths || {};
-    $("#offlineMediaRoot").placeholder = data.default_media_root || "";
-    $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
-    if ($("#offlineScreenshotHint")) $("#offlineScreenshotHint").textContent = `截图实际保存到：${paths.screenshot_root || "?"}`;
+    $("#offlineMediaRoot").placeholder = data.default_media_root || "留空使用默认目录";
+    renderOfflineDirectoryHints(data.paths);
     const writable = data.writable || {};
     const room = writable.free_gb ? `，剩余 ${writable.free_gb} GB` : "";
     offlineStatus(
@@ -1713,12 +1717,10 @@ async function saveOfflineSettings() {
         seed_after_done: $("#offlineSeedAfter").checked,
       }),
     });
-    const paths = data.paths || {};
-    $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
-    if ($("#offlineScreenshotHint")) $("#offlineScreenshotHint").textContent = `截图实际保存到：${paths.screenshot_root || "?"}`;
+    renderOfflineDirectoryHints(data.paths);
     const writable = data.writable || {};
     offlineStatus(status, writable.ok ? "已保存，目录可写" : writable.error || "已保存，但目录不可写", !writable.ok);
-    toast("离线设置已保存");
+    toast("媒体库设置已保存");
   } catch (error) {
     offlineStatus(status, error.message || "保存失败", true);
     toast(error.message || "保存失败", "error");
@@ -1779,8 +1781,8 @@ async function migrateMediaRoot() {
     return;
   }
   if (!window.confirm(`把已入库的文件复制到\n${target}\n\n复制并逐个校验大小，全部成功才切换目录；原文件保留不删。`)) return;
-  const status = "#offlineSettingsStatus";
-  offlineStatus(status, "正在复制…文件多的时候会慢一会儿");
+  const status = "#offlineMigrationStatus";
+  offlineStatus(status, "正在复制和校验文件…");
   try {
     const data = await api("/api/offline/migrate", {
       method: "POST",
@@ -1801,6 +1803,8 @@ async function migrateMediaRoot() {
       );
       toast(`迁移完成：${data.copied} 集`);
       refreshOfflineLocal();
+      const settings = await api("/api/offline/settings").catch(() => null);
+      if (settings?.paths) renderOfflineDirectoryHints(settings.paths);
     }
   } catch (error) {
     offlineStatus(status, error.message || "迁移失败", true);

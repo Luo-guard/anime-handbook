@@ -1594,6 +1594,14 @@ function runSettingsSearch(query) {
       settingsSearchState.moved.push({ parent: item.node.parentElement, node: item.node, next: item.node.nextSibling });
       section.append(item.node);
     }
+    if (tab === "offline") {
+      section.classList.add("offline-search-section");
+      const actions = $(".offline-settings-actions", group);
+      if (actions) {
+        settingsSearchState.moved.push({ parent: actions.parentElement, node: actions, next: actions.nextSibling });
+        section.append(actions);
+      }
+    }
     sections.push(section);
   }
 

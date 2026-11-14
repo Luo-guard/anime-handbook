@@ -4222,26 +4222,98 @@ dialog::backdrop {
 .offline-row-task { align-items: flex-start; }
 .offline-bar { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 6px 0 5px; }
 .offline-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--green-700); transition: width .3s ease; }
-.offline-settings { display: flex; flex-direction: column; gap: 13px; overflow: auto; padding: 2px 2px 8px; }
-.offline-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
-.offline-field > span { font-weight: 600; color: var(--ink); font-size: 12.5px; }
-.offline-field input { padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
-.offline-field input:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
-.offline-field small { font-size: 11px; line-height: 1.6; }
-.offline-field-row { display: flex; gap: 10px; }
-.offline-field-row .offline-field { flex: 1 1 auto; min-width: 0; }
-.offline-field-row .offline-field-small { flex: 0 0 110px; }
-.offline-switch { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; line-height: 1.5; }
-.offline-switch input { margin: 3px 0 0; accent-color: var(--green-700); flex: 0 0 auto; }
-.offline-switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
-.offline-settings-actions { display: flex; gap: 12px; align-items: center; margin-top: 2px; }
-/* 媒体库设置用表单流承载，分组标题沿用其他分类的小标题排版，但去掉整行色块。 */
-.offline-settings > .settings-subsection-title {
-  margin: 12px 0 -2px; padding: 0 2px 7px;
-  background: transparent; border-bottom: 1px solid var(--line);
-  letter-spacing: .06em;
+.offline-settings { --offline-settings-inset: 17px; padding-bottom: 0; }
+.settings-search-section.offline-search-section { --offline-settings-inset: 17px; }
+#settingsModal .offline-field,
+#settingsModal .offline-switch {
+  min-width: 0;
+  padding: 12px var(--offline-settings-inset);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
 }
-.offline-settings > .settings-subsection-title:first-child { margin-top: 0; }
+#settingsModal .offline-field { display: grid; gap: 6px; }
+#settingsModal .offline-field + .offline-field,
+#settingsModal .offline-switch { border-top: 1px solid var(--line); }
+#settingsModal .offline-field-row .offline-field { padding: 0; border: 0; }
+#settingsModal .offline-field input,
+#settingsModal .offline-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 400;
+}
+#settingsModal .offline-field input {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgb(255 255 255 / .85);
+  color: var(--ink);
+}
+#settingsModal .offline-field :is(input, select):focus-visible {
+  outline: 2px solid var(--active-inset);
+  outline-offset: 1px;
+}
+#settingsModal .offline-choice,
+#settingsModal .offline-switch {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+#settingsModal .offline-choice select { width: auto; max-width: 100%; }
+#settingsModal .offline-switch { cursor: pointer; }
+#settingsModal .settings-subsection-title + .offline-switch { border-top: 0; }
+#settingsModal .offline-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(64px, 88px);
+  gap: 10px;
+  padding: 12px var(--offline-settings-inset) 0;
+}
+#settingsModal .offline-settings small,
+#settingsModal .offline-search-section small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+#settingsModal :is(.offline-choice, .offline-switch) small { margin-top: 4px; }
+.offline-name-tokens { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: 1px 0 4px; }
+.offline-name-tokens code { padding: 1px 4px; border-radius: 4px; color: var(--green-800); background: var(--green-50); }
+.offline-setting-tools {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  margin: 0 var(--offline-settings-inset);
+  padding: 5px 0 14px;
+}
+.offline-setting-tools > div { display: flex; flex-wrap: wrap; gap: 0 12px; }
+.offline-setting-tools .text-button { padding: 4px 0; font-size: 12px; }
+.offline-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 13px var(--offline-settings-inset);
+  border-top: 1px solid var(--line);
+  background: var(--green-50);
+}
+.offline-setting-tools .offline-status,
+.offline-settings-actions .offline-status { margin: 3px 0 0; overflow-wrap: anywhere; }
+.offline-setting-tools .offline-status:empty { margin: 0; min-height: 0; }
+.offline-settings-actions .primary-button { margin-inline-start: auto; }
+.settings-modal:not(.settings-searching):has([data-settings-tab="offline"].active) > .modal-frame > .modal-actions,
+.settings-modal.settings-searching:has(.offline-search-section:only-child) > .modal-frame > .modal-actions { display: none; }
+
+@media (max-width: 520px) {
+  #settingsModal .offline-choice { grid-template-columns: minmax(0, 1fr); }
+  #settingsModal .offline-choice select { width: 100%; }
+}
 
 .offline-subscribe { appearance: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 9px; padding: 6px 11px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .offline-subscribe:hover { border-color: var(--green-700); color: var(--green-700); background: var(--green-50); }
