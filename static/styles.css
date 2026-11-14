@@ -5694,8 +5694,76 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   padding: 56px clamp(14px, 2vw, 28px) 16px;
 }
 .lib-image-viewer .modal-frame:fullscreen {
-  width: 100%;
-  height: 100%;
+  --image-control-inset: clamp(8px, 2vw, 24px);
+  grid-template-rows: minmax(0, 1fr);
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+}
+.lib-image-viewer .modal-frame:fullscreen .lib-image-stage {
+  border-radius: 0;
+  background: #000;
+}
+.lib-image-viewer .modal-frame:fullscreen .modal-actions {
+  position: absolute;
+  z-index: 2;
+  top: var(--image-control-inset);
+  right: calc(var(--image-control-inset) + 52px);
+  margin: 0;
+}
+.lib-image-viewer .modal-frame:fullscreen #libImageClose {
+  top: var(--image-control-inset);
+  right: var(--image-control-inset);
+  width: 44px;
+  height: 44px;
+}
+.lib-image-viewer .modal-frame:fullscreen #libImageFullscreen {
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+.lib-image-viewer .modal-frame:fullscreen #libImageDelete { display: none; }
+.lib-image-viewer .modal-frame:fullscreen .lib-image-caption {
+  position: absolute;
+  bottom: var(--image-control-inset);
+  left: var(--image-control-inset);
+  max-width: calc(100% - 2 * var(--image-control-inset));
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  pointer-events: none;
+}
+.lib-image-viewer .modal-frame:fullscreen :is(#libImageClose, #libImageFullscreen, .lib-image-nav, .lib-image-caption) {
+  border: 1px solid rgb(255 255 255 / .24);
+  background: rgb(20 22 25 / .82);
+  color: #fff;
+  transition: opacity .18s ease;
+}
+.lib-image-viewer .modal-frame:fullscreen :is(#libImageClose, #libImageFullscreen, .lib-image-nav):hover {
+  background: #303238;
+}
+.lib-image-viewer .modal-frame:fullscreen .lib-image-nav {
+  width: 44px;
+  height: 44px;
+}
+.lib-image-viewer .modal-frame:fullscreen .lib-image-nav.prev { left: var(--image-control-inset); }
+.lib-image-viewer .modal-frame:fullscreen .lib-image-nav.next { right: var(--image-control-inset); }
+.lib-image-viewer .modal-frame:fullscreen .lib-image-nav:disabled { visibility: hidden; }
+.lib-image-viewer .modal-frame:fullscreen button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.lib-image-viewer .modal-frame:fullscreen.controls-idle:not(:has(button:hover, button:focus-visible)) {
+  cursor: none;
+}
+.lib-image-viewer .modal-frame:fullscreen.controls-idle:not(:has(button:hover, button:focus-visible)) :is(#libImageClose, #libImageFullscreen, .lib-image-nav, .lib-image-caption) {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lib-image-viewer .modal-frame:fullscreen :is(#libImageClose, #libImageFullscreen, .lib-image-nav, .lib-image-caption) {
+    transition: none;
+  }
 }
 .lib-image-viewer .modal-actions { margin-top: 12px; }
 #libImageDelete[hidden] { display: none; }

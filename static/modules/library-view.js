@@ -931,9 +931,20 @@ function initLibraryView() {
   $("#libImagePrev")?.addEventListener("click", () => stepImage(-1));
   $("#libImageNext")?.addEventListener("click", () => stepImage(1));
   $("#libImageDelete")?.addEventListener("click", deleteLibraryImage);
-  $("#libImageClose")?.addEventListener("click", () => $("#libImageViewer")?.close());
-  const imageFrame = $("#libImageViewer .modal-frame");
+  const imageViewer = $("#libImageViewer");
+  const imageFrame = imageViewer.querySelector(".modal-frame");
   const imageFullscreen = $("#libImageFullscreen");
+  let imageControlsTimer;
+  const revealImageControls = () => {
+    clearTimeout(imageControlsTimer);
+    imageFrame.classList.remove("controls-idle");
+    if (document.fullscreenElement === imageFrame) {
+      imageControlsTimer = setTimeout(() => imageFrame.classList.add("controls-idle"), 2500);
+    }
+  };
+  $("#libImageClose")?.addEventListener("click", () => imageViewer.close());
+  imageFrame.addEventListener("pointermove", revealImageControls);
+  imageFrame.addEventListener("pointerdown", revealImageControls);
   imageFullscreen?.addEventListener("click", async () => {
     try {
       if (document.fullscreenElement === imageFrame) await document.exitFullscreen();
@@ -943,13 +954,17 @@ function initLibraryView() {
     }
   });
   imageFrame?.addEventListener("fullscreenchange", () => {
+    revealImageControls();
     imageFullscreen.textContent = document.fullscreenElement === imageFrame ? "退出全屏" : "全屏看图";
   });
-  $("#libImageViewer")?.addEventListener("close", () => {
-    if (!$("#libImageViewer").open) recordImageGallery = null;
+  imageViewer.addEventListener("close", () => {
+    if (imageViewer.open) return;
+    recordImageGallery = null;
+    clearTimeout(imageControlsTimer);
     if (document.fullscreenElement === imageFrame) document.exitFullscreen().catch(() => {});
   });
-  $("#libImageViewer")?.addEventListener("keydown", (event) => {
+  imageViewer.addEventListener("keydown", (event) => {
+    revealImageControls();
     if (event.key === "ArrowLeft") { event.preventDefault(); stepImage(-1); }
     else if (event.key === "ArrowRight") { event.preventDefault(); stepImage(1); }
   });
