@@ -1131,6 +1131,8 @@ function setupSettingsTabs() {
     list.replaceChildren(...groups.values());
     $$("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab)));
     $("#goToEpisodeMouseGestures").addEventListener("click", () => showSettingsSection("detail", "#episodeMouseGestureHeading"));
+    $("#goToScheduleAiringSettings").addEventListener("click", () => showSettingsSection("schedule", "#scheduleAiringSettingsHeading"));
+    $("#goToDetailAiringSettings").addEventListener("click", () => showSettingsSection("detail", "#detailAiringSettingsHeading"));
     $("#dmSourceMode").addEventListener("change", updateDanmakuSourceFields);
     settingsGroupsInitialized = true;
   }

@@ -3115,6 +3115,16 @@ dialog::backdrop {
 
 /* 说明文字默认收起，只保留标题右侧的问号；内容仍在 DOM 里，供弹层读取。 */
 .setting-row small.setting-help-source { display: none; }
+
+.setting-row.airing-source-guide { display: block; }
+.airing-source-guide summary { cursor: pointer; color: var(--green-900); }
+.airing-source-guide summary strong { display: inline; }
+.airing-source-guide dl { margin: 12px 0; }
+.airing-source-guide dl > div { padding-block: 10px; border-top: 1px solid var(--line); }
+.airing-source-guide dt { font-weight: 650; }
+.airing-source-guide dd { margin: 4px 0 0; color: var(--muted); font-size: .875rem; line-height: 1.6; }
+.airing-source-guide-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 #settingsModal .setting-help-source { display: none; }
 /* 说明收进问号后正文默认藏起来；周表筛选弹窗也用同一套（不在 #settingsModal 里）。 */
 .setting-help-source { display: none; }

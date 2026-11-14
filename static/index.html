@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-episode-record" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-source-guide" />
   </head>
   <body>
     <div class="app-shell">
@@ -985,7 +985,7 @@
             <div class="auto-open-offline-list" id="autoOpenOfflineCollections"></div>
           </div>
           <div class="settings-section-title" data-settings-section="detail">番剧详情</div>
-          <h3 class="settings-subsection-title">放送信息</h3>
+          <h3 class="settings-subsection-title" id="detailAiringSettingsHeading" tabindex="-1">放送信息</h3>
           <label class="setting-row">
             <span><strong>播出状态与更新时间来源</strong><small>决定详情顶部的播出状态和更新时间。長門番堂方案结合 Bangumi 的日期资料，AS 使用 AnimeSchedule 的状态和排期。</small></span>
             <select id="detailAirtimeSourceInput"><option value="yuc">長門番堂 / Bangumi</option><option value="as">AnimeSchedule（AS）</option></select>
@@ -1159,7 +1159,7 @@
           <label class="setting-row hidden"><strong>AppId</strong><input type="text" id="dmAppId" data-dm-pref="appId" autocomplete="off" /></label>
           <label class="setting-row hidden"><strong>AppSecret</strong><input type="password" id="dmAppSecret" data-dm-pref="appSecret" autocomplete="off" /></label>
           <div class="settings-section-title" data-settings-section="schedule" data-page-label="schedule">周表</div>
-          <h3 class="settings-subsection-title">周表共用设置</h3>
+          <h3 class="settings-subsection-title" id="scheduleAiringSettingsHeading" tabindex="-1">周表共用设置</h3>
           <div class="setting-row"><span><strong>周表来源</strong><small>三套周表独立展示：有 C 的时间与网络上线日期来自長門番堂；Kazumi 使用 Bangumi 放送列表，不提供具体时刻；AS 按实际周次显示原声／字幕的较早放送时间。评分和评分人数来自已关联的 Bangumi / Kazumi 资料。未公布的时间保留空缺，固定按北京时间凌晨 4 点划分播出日；已关联 Bangumi ID 的条目可在详情中加入收藏。</small></span><select id="scheduleSourceInput"><option value="yuc" title="長門番堂（有C）">長門番堂</option><option value="kazumi" title="Kazumi 读取的 Bangumi 放送列表">Bangumi</option><option value="as" title="AnimeSchedule（AS）">AnimeSchedule</option></select></div>
           <div class="setting-row"><span><strong>显示来源切换按钮</strong><small>隐藏后仍可在此处选择来源。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleSourceSwitchInput"><span class="switch"></span></span></div>
           <label class="setting-row">
@@ -1284,6 +1284,19 @@
           </div>
           <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键或鼠标前进／后退侧键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，到达第一个或最后一个界面后不再移动。侧键一旦绑定，就不会再触发浏览器自身的前进／后退。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
+          <details class="setting-row airing-source-guide">
+            <summary><strong>周表与番剧详情的数据说明</strong></summary>
+            <dl>
+              <div><dt>周表</dt><dd>可看長門番堂、Bangumi 或 AnimeSchedule（AS）。Bangumi 周表按星期展示。刷新周表时会重新读取当前来源的数据。</dd></div>
+              <div><dt>详情顶部的播出状态与更新时间</dt><dd>長門番堂方案结合 Bangumi 的播出日期和長門番堂的钟点。AS 使用作品状态与下集排期，打开详情时按需补查状态并缓存。</dd></div>
+              <div><dt>已播集数</dt><dd>周表卡片和番剧详情分别选择来源。BGM 按逐集播出日期计算，AS 按缓存的放送计划计算。</dd></div>
+              <div><dt>个人已看进度</dt><dd>来自你在手账里保存的观看记录。</dd></div>
+            </dl>
+            <div class="airing-source-guide-actions">
+              <button type="button" class="secondary-button compact-button" id="goToScheduleAiringSettings">前往周表设置</button>
+              <button type="button" class="secondary-button compact-button" id="goToDetailAiringSettings">前往番剧详情设置</button>
+            </div>
+          </details>
           <h3 class="settings-subsection-title">Bangumi 资料来源</h3>
           <div class="setting-row stacked">
             <span>
@@ -1704,7 +1717,7 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261114-subscription-switch" defer></script>
+    <script src="/modules/settings.js?v=20261114-source-guide" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261113-playback-settings" defer></script>
