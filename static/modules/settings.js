@@ -208,12 +208,14 @@ function renderCustomCollectionSettings() {
 function updateDetailLayoutSettings() {
   const modern = $("#detailLayoutInput").value === "modern";
   $$("[data-modern-detail-setting]").forEach(row => row.classList.toggle("hidden", !modern));
+  $$("[data-classic-detail-setting]").forEach(row => row.classList.toggle("hidden", modern));
 }
 
 function renderSettingsPanels() {
   $("#detailLayoutInput").value = state.settings.detail_layout || "classic";
   $("#detailModernOriginalTitleInput").checked = state.settings.detail_modern_original_title !== false;
   $("#detailModernCompactCreditsInput").checked = state.settings.detail_modern_compact_credits !== false;
+  $("#detailClassicRecordOnChangeInput").checked = state.settings.detail_classic_record_on_change === true;
   updateDetailLayoutSettings();
   $("#episodePlaybackSourceInput").value = episodeGestureConfig().playbackSource;
   if (!window.handbookOnline) renderPlaybackSettings();
