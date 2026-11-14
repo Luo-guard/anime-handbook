@@ -461,6 +461,8 @@ function scheduleCard(item) {
 }
 
 function renderSchedule() {
+  $("#scheduleGrid").dataset.columns = state.settings.schedule_grid_columns || 0;
+  $("#scheduleGrid").style.setProperty("--card-columns", Number(state.settings.schedule_grid_columns) || 1);
   $("#scheduleSourceSwitch").hidden = state.settings.show_schedule_source_switch === false;
   $("#scheduleSourceSwitch").value = scheduleSource();
   if (!scheduleState.season) return;

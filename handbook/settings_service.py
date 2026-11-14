@@ -162,6 +162,8 @@ def _normalize_settings(body, settings):
         "show_all_collection_tab",
         "builtin_collection_order",
         "collection_home",
+        "collection_grid_columns",
+        "schedule_grid_columns",
         "collection_sort_modes",
         "collection_sort_directions",
         "new_record_defaults_to_other",
@@ -392,6 +394,9 @@ def _normalize_settings(body, settings):
                     raise ValueError("收藏夹顺序格式错误")
                 ordered = [int(item) for item in value if int(item) in CATEGORY_NAMES]
                 value = ordered + [item for item in CATEGORY_NAMES if item not in ordered]
+            elif key in {"collection_grid_columns", "schedule_grid_columns"}:
+                if type(value) is not int or (value != 0 and not 2 <= value <= 10):
+                    raise ValueError("每行番剧数须为自动或 2–10")
             elif key == "collection_home":
                 value = str(value)
                 if value != "all" and not re.fullmatch(

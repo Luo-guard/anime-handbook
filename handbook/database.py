@@ -598,6 +598,8 @@ class HandbookDB:
                 "show_all_collection_tab": True,
                 "builtin_collection_order": [1, 2, 3, 4, 5],
                 "collection_home": "builtin:1",
+                "collection_grid_columns": 0,
+                "schedule_grid_columns": 0,
                 "collection_sort_modes": {},
                 "collection_sort_directions": {},
                 # Anime ids that moved from Kazumi's "watching" list to

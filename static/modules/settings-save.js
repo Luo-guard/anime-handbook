@@ -84,6 +84,8 @@ const HandbookSettings = (() => {
           schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
           top_sync_action: $("#topSyncActionInput").value,
           collection_home: $("#collectionHomeInput").value,
+          collection_grid_columns: Number($("#collectionGridColumnsInput").value),
+          schedule_grid_columns: Number($("#scheduleGridColumnsInput").value),
           show_all_collection_tab: $("#showAllCollectionTabInput").checked,
           builtin_collection_order: builtinCollectionOrder(),
           sidebar_visibility: Object.fromEntries($$(".sidebar-visibility-check").map((input) => [input.dataset.sidebarId, input.checked])),

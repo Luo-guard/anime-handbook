@@ -212,6 +212,8 @@ function updateDetailLayoutSettings() {
 }
 
 function renderSettingsPanels() {
+  $("#collectionGridColumnsInput").value = String(state.settings.collection_grid_columns || 0);
+  $("#scheduleGridColumnsInput").value = String(state.settings.schedule_grid_columns || 0);
   $("#detailLayoutInput").value = state.settings.detail_layout || "classic";
   $("#detailModernOriginalTitleInput").checked = state.settings.detail_modern_original_title !== false;
   $("#detailModernCompactCreditsInput").checked = state.settings.detail_modern_compact_credits !== false;

@@ -128,6 +128,8 @@ const HandbookCollectionGrid = (() => {
 function renderCollection() {
   ensureVisibleCollection();
   const items = filteredAnimes();
+  $("#animeGrid").dataset.columns = state.settings.collection_grid_columns || 0;
+  $("#animeGrid").style.setProperty("--card-columns", Number(state.settings.collection_grid_columns) || 1);
   HandbookCollectionGrid.update($("#animeGrid"), items);
   $("#animeGrid").classList.toggle("custom-sort-mode", collectionSortMode() === "custom");
   $("#animeGrid").classList.toggle("hidden", items.length === 0);
