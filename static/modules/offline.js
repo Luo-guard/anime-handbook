@@ -1479,35 +1479,46 @@ function pcInit() {
   });
 
   // 进度条：点按/拖动跳转；悬停显示时间。
-  const seekTo = (event) => {
+  const tooltip = $("#pcTooltip");
+  const hideSeekPreview = () => { tooltip.hidden = true; };
+  const updateSeekPreview = (event, seek = false) => {
     const rect = bar.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    if (Number.isFinite(video.duration)) video.currentTime = ratio * video.duration;
+    if (!rect.width || !Number.isFinite(video.duration) || video.duration <= 0) {
+      hideSeekPreview();
+      return;
+    }
+    const offset = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
+    const seconds = offset / rect.width * video.duration;
+    if (seek) video.currentTime = seconds;
+    const label = pcFormatTime(seconds);
+    if (tooltip.textContent !== label) tooltip.textContent = label;
+    tooltip.hidden = false;
+    const edge = Math.min(rect.width / 2, tooltip.offsetWidth / 2);
+    bar.style.setProperty("--pc-hover-x", `${offset}px`);
+    bar.style.setProperty("--pc-preview-x", `${Math.min(rect.width - edge, Math.max(edge, offset))}px`);
   };
   bar.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
     pcSeeking = true;
     bar.setPointerCapture(event.pointerId);
-    seekTo(event);
+    updateSeekPreview(event, true);
   });
-  bar.addEventListener("pointermove", (event) => {
-    if (pcSeeking) seekTo(event);
-    const rect = bar.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    const tooltip = $("#pcTooltip");
-    if (tooltip && Number.isFinite(video.duration)) {
-      tooltip.hidden = false;
-      tooltip.textContent = pcFormatTime(ratio * video.duration);
-      tooltip.style.left = `${Math.min(96, Math.max(2, ratio * 100))}%`;
-    }
-  });
+  bar.addEventListener("pointermove", (event) => updateSeekPreview(event, pcSeeking));
   bar.addEventListener("pointerup", (event) => {
-    if (pcSeeking) seekTo(event);
+    if (!pcSeeking) return;
+    updateSeekPreview(event, true);
     pcSeeking = false;
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    if (event.pointerType !== "mouse" || !bar.contains(hit)) hideSeekPreview();
   });
   bar.addEventListener("pointerleave", () => {
-    const tooltip = $("#pcTooltip");
-    if (tooltip) tooltip.hidden = true;
+    if (!pcSeeking) hideSeekPreview();
   });
+  bar.addEventListener("pointercancel", () => {
+    pcSeeking = false;
+    hideSeekPreview();
+  });
+  video.addEventListener("emptied", hideSeekPreview);
 
   video.addEventListener("timeupdate", pcSync);
   video.addEventListener("progress", pcSync);

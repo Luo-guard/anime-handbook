@@ -5147,9 +5147,35 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 .pc-progress:hover .pc-thumb, .pc-progress:active .pc-thumb { opacity: 1; }
 .pc-tooltip {
-  position: absolute; bottom: 22px; transform: translateX(-50%);
-  padding: 2px 8px; border-radius: 6px; background: rgba(15, 20, 17, .92);
-  color: #fff; font-size: 11px; pointer-events: none; white-space: nowrap;
+  position: absolute;
+  inset: auto auto calc(100% + 8px) var(--pc-preview-x, 50%);
+  z-index: 1;
+  transform: translateX(-50%);
+  width: max-content;
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / .18);
+  border-radius: 8px;
+  background: rgb(18 16 23 / .94);
+  box-shadow: 0 3px 12px rgb(0 0 0 / .3);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.pc-progress:has(.pc-tooltip:not([hidden]))::after {
+  content: "";
+  position: absolute;
+  left: var(--pc-hover-x);
+  top: 3px;
+  width: 2px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 99px;
+  background: #fff;
+  pointer-events: none;
 }
 .pc-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .pc-group { display: flex; align-items: center; gap: 2px; min-width: 0; }
