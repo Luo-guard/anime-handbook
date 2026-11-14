@@ -200,7 +200,7 @@ function renderOfflineList() {
             </p>
           </div>
           <div class="offline-row-actions">
-            <button type="button" class="offline-subscribe" data-subscribe="${index}" title="记下这个字幕组；到 设置 → 数据来源 打开「自动追新番」后，有新集才会自动下载">订阅</button>
+            <button type="button" class="offline-subscribe" data-subscribe="${index}" title="记下这个字幕组；到 设置 → 媒体库 → 订阅 开启「自动下载订阅的新集」后，有新集才会自动下载">订阅</button>
             <button type="button" class="offline-download" data-index="${index}">下载</button>
           </div>
         </article>`;
@@ -831,6 +831,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (remove.dataset.job) return removeJob(remove.dataset.job);
   });
   $("#offlineSaveSettings")?.addEventListener("click", saveOfflineSettings);
+  $("#offlineAutoFollow")?.addEventListener("change", saveSubscriptionAutoDownload);
   // 设置面板已搬进主设置弹窗，但读写逻辑共用这套字段，启动时先填一次。
   loadOfflineSettings();
   $("#offlineMigrate")?.addEventListener("click", migrateMediaRoot);
@@ -1616,10 +1617,43 @@ async function taskAction(mediaId, action) {
   }
 }
 
+let subscriptionAutoDownloadRevision = 0;
+let subscriptionAutoDownloadSaving = false;
+
+function syncSubscriptionAutoDownload(checked) {
+  $("#offlineAutoFollow").checked = checked;
+  $("#libAutoFollow").checked = checked;
+}
+
+async function saveSubscriptionAutoDownload(event) {
+  if (subscriptionAutoDownloadSaving) return;
+  const checked = event.currentTarget.checked;
+  subscriptionAutoDownloadSaving = true;
+  subscriptionAutoDownloadRevision += 1;
+  const controls = [$("#offlineAutoFollow"), $("#libAutoFollow")];
+  controls.forEach(control => { control.disabled = true; });
+  syncSubscriptionAutoDownload(checked);
+  try {
+    const result = await api("/api/offline/settings", {
+      method: "POST",
+      body: JSON.stringify({ auto_follow: checked }),
+    });
+    syncSubscriptionAutoDownload(result.config?.auto_follow ?? checked);
+    toast(checked ? "已开启订阅新集自动下载" : "已关闭订阅新集自动下载");
+  } catch (error) {
+    syncSubscriptionAutoDownload(!checked);
+    toast(`自动下载设置保存失败：${error.message || error}`, "error");
+  } finally {
+    subscriptionAutoDownloadSaving = false;
+    controls.forEach(control => { control.disabled = false; });
+  }
+}
+
 async function loadOfflineSettings() {
   const status = "#offlineSettingsStatus";
   offlineStatus(status, "读取设置…");
   try {
+    const revision = subscriptionAutoDownloadRevision;
     const data = await api("/api/offline/settings");
     const config = data.config || {};
     $("#offlineMediaRoot").value = config.media_root || "";
@@ -1630,7 +1664,9 @@ async function loadOfflineSettings() {
     $("#offlineQbPort").value = config.qb_port || 8080;
     $("#offlineQbCategory").value = config.qb_category || "AnimeHandbook";
     $("#offlineSeedAfter").checked = config.seed_after_done !== false;
-    $("#offlineAutoFollow").checked = config.auto_follow === true;
+    if (!subscriptionAutoDownloadSaving && revision === subscriptionAutoDownloadRevision) {
+      syncSubscriptionAutoDownload(config.auto_follow === true);
+    }
     const paths = data.paths || {};
     $("#offlineMediaRoot").placeholder = data.default_media_root || "";
     $("#offlineMediaHint").textContent = `当前实际使用：${paths.media_root || "?"} / ${paths.download_root || "?"}`;
@@ -1662,7 +1698,6 @@ async function saveOfflineSettings() {
         qb_port: Number($("#offlineQbPort").value) || 8080,
         qb_category: $("#offlineQbCategory").value.trim() || "AnimeHandbook",
         seed_after_done: $("#offlineSeedAfter").checked,
-        auto_follow: $("#offlineAutoFollow").checked,
       }),
     });
     const paths = data.paths || {};
@@ -1700,7 +1735,7 @@ async function subscribeFromResult(index) {
     toast(
       autoFollow
         ? `已订阅「${who}」的新集`
-        : `已订阅「${who}」；到 设置 → 数据来源 打开「自动追新番」后才会自动下载`,
+        : `已订阅「${who}」；到 设置 → 媒体库 → 订阅 开启「自动下载订阅的新集」后才会自动下载`,
     );
   } catch (error) {
     toast(error.message || "订阅失败", "error");

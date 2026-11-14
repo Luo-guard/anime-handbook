@@ -420,11 +420,13 @@ async function libDelete(fileId, label) {
 async function loadLibrarySubs() {
   const status = $("#libSubsStatus");
   try {
+    const revision = subscriptionAutoDownloadRevision;
     const data = await api("/api/offline/subscriptions");
     librarySidebar.subs = data.items || [];
     librarySidebar.subsLoaded = true;
-    const follow = $("#libAutoFollow");
-    if (follow) follow.checked = data.auto_follow === true;
+    if (!subscriptionAutoDownloadSaving && revision === subscriptionAutoDownloadRevision) {
+      syncSubscriptionAutoDownload(data.auto_follow === true);
+    }
     renderLibrarySubs();
     if (status) status.textContent = librarySidebar.subs.length
       ? `${librarySidebar.subs.filter((sub) => sub.enabled).length} 条启用中，共 ${librarySidebar.subs.length} 条订阅`
@@ -487,7 +489,7 @@ async function libCheckSubs() {
     const data = await api("/api/offline/check", { method: "POST", body: JSON.stringify({ force: true }) });
     if (status) {
       status.textContent = data.skipped
-        ? `没跑：${data.reason || "自动追新番未开启"}（打开上面的开关后用「立即检查」手动跑一次）`
+        ? `没跑：${data.reason || "订阅新集自动下载未开启"}（打开上面的开关后用「立即检查」手动跑一次）`
         : `检查了 ${data.checked || 0} 条订阅，新下载 ${data.downloaded || 0} 集`;
     }
     loadLibrarySubs();
@@ -592,7 +594,7 @@ async function libSubscribe(button) {
       }),
     });
     button.textContent = "已订阅";
-    toast("已订阅，开启自动追新番后新集会自动下载");
+    toast("已订阅，开启「自动下载订阅的新集」后，新集会自动下载");
   } catch (error) {
     button.disabled = false;
     toast(`订阅失败：${error.message || error}`, "error");
@@ -1003,20 +1005,7 @@ function initLibraryView() {
     const remove = event.target.closest(".lib-delete");
     if (remove) libDelete(remove.dataset.id, remove.dataset.label);
   });
-  $("#libAutoFollow")?.addEventListener("change", async (event) => {
-    const checked = event.target.checked;
-    try {
-      await api("/api/offline/settings", { method: "POST", body: JSON.stringify({ auto_follow: checked }) });
-      const twin = $("#offlineAutoFollow");
-      if (twin) twin.checked = checked;
-      const twin2 = $("#autoFollowSetting");
-      if (twin2) twin2.checked = checked;
-      toast(checked ? "已开启自动追新番" : "已关闭自动追新番");
-    } catch (error) {
-      event.target.checked = !checked;
-      toast(`没存上：${error.message || error}`, "error");
-    }
-  });
+  $("#libAutoFollow")?.addEventListener("change", saveSubscriptionAutoDownload);
   $("#libCheckSubs")?.addEventListener("click", libCheckSubs);
   $("#libSubList")?.addEventListener("click", (event) => {
     const remove = event.target.closest(".lib-sub-delete");

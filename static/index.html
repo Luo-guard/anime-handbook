@@ -393,10 +393,10 @@
                 <p class="library-meta" id="libSubsStatus" role="status"></p>
               </div>
               <div class="lib-subs-actions">
-                <label class="switch-row compact lib-follow-switch" title="开启后才会定时检查订阅">
+                <label class="switch-row compact lib-follow-switch" title="定时检查已订阅的番剧和字幕组，发现新集后自动下载">
                   <input type="checkbox" id="libAutoFollow" />
                   <span class="switch"></span>
-                  <span class="lib-follow-text">自动追新番<small>开启后才会定时检查订阅</small></span>
+                  <span class="lib-follow-text">自动下载订阅的新集<small>定时检查已订阅的番剧和字幕组</small></span>
                 </label>
                 <button type="button" class="primary-button" id="libCheckSubs">立即检查全部订阅</button>
               </div>
@@ -1284,11 +1284,6 @@
           </div>
           <div class="setting-row stacked"><span><strong>按键与操作</strong><small>点击按键框后按下新快捷键或鼠标前进／后退侧键；退格可清空，Esc 取消。重复的已启用按键不能保存；系统保留组合键可能无法使用。上一页、下一页遵循侧边栏当前顺序并跳过隐藏页面，到达第一个或最后一个界面后不再移动。侧键一旦绑定，就不会再触发浏览器自身的前进／后退。</small></span><div id="keyboardBindings"></div><p id="keyboardStatus" role="status"></p><button type="button" id="resetKeyboardBindings" class="secondary-button compact-button">恢复默认快捷键</button></div>
           <div class="settings-section-title" data-settings-section="data">数据来源</div>
-          <h3 class="settings-subsection-title">自动追番</h3>
-          <label class="setting-row">
-            <span><strong>自动追新番</strong><small>开启后，媒体库里订阅过的「关键词 + 字幕组」会定时检查蜜柑并自动下载新集。与「媒体库 → 设置」里的开关是同一个配置。</small></span>
-            <span class="switch-row compact"><input type="checkbox" id="autoFollowSetting" /><span class="switch"></span></span>
-          </label>
           <h3 class="settings-subsection-title">Bangumi 资料来源</h3>
           <div class="setting-row stacked">
             <span>
@@ -1361,7 +1356,7 @@
             <label class="offline-field"><span>下载分类</span><input type="text" id="offlineQbCategory" autocomplete="off" /></label>
             <label class="offline-switch"><input type="checkbox" id="offlineSeedAfter" /><span>下载完成后继续做种<small>关掉会在归档后删除原始文件，省一半空间</small></span></label>
             <h3 class="settings-subsection-title">订阅</h3>
-            <label class="offline-switch"><input type="checkbox" id="offlineAutoFollow" /><span>自动追新番<small>默认关闭；开启后才会定时检查你订阅过的番</small></span></label>
+            <label class="offline-switch"><input type="checkbox" id="offlineAutoFollow" /><span>自动下载订阅的新集<small>定时检查已订阅的番剧和字幕组，发现新集后交给 qBittorrent 下载。切换后立即保存。</small></span></label>
             <button type="button" class="text-button" id="offlineCheckSubs">立即检查全部订阅</button>
             <p class="offline-status" id="offlineSettingsStatus" role="status"></p>
             <div class="offline-settings-actions">
@@ -1709,11 +1704,11 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261113-playback-settings" defer></script>
+    <script src="/modules/settings.js?v=20261114-subscription-switch" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
     <script src="/modules/settings-save.js?v=20261113-playback-settings" defer></script>
-    <script src="/modules/events.js?v=20261113-record-image-selection" defer></script>
+    <script src="/modules/events.js?v=20261114-subscription-switch" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
@@ -1721,9 +1716,9 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
-    <script src="/modules/offline.js?v=20261113-modal-width" defer></script>
+    <script src="/modules/offline.js?v=20261114-subscription-switch" defer></script>
     <script src="/modules/online-playback.js?v=20261114-custom-rules" defer></script>
-    <script src="/modules/library-view.js?v=20261113-record-image-selection" defer></script>
+    <script src="/modules/library-view.js?v=20261114-subscription-switch" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

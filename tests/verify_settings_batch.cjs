@@ -109,7 +109,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
 
   // T2 自动追新番开关在主设置里可开可关，且与离线面板同步
   const autoFollow = await page.evaluate(async () => {
-    const input = document.querySelector('#autoFollowSetting');
+    const input = document.querySelector('#offlineAutoFollow');
     const initial = input.checked;
     input.checked = true;
     input.dispatchEvent(new Event('change', { bubbles: true }));

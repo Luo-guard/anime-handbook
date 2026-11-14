@@ -601,7 +601,6 @@ function prepareHandbookSettings() {
   refreshSharingSettings().catch(() => {});
   refreshWebdavSettings().catch(() => {});
   initSettingsSearch();
-  initAutoFollowSetting();
   initAutoOpenOfflineSetting();
 }
 

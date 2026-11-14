@@ -116,7 +116,7 @@ window.api=async(url)=>({ok:true,files:[],jobs:[]});
     await page.evaluate(() => subscribeFromResult(0));
     const offToast = await page.evaluate(() => toasts.at(-1).text);
     assert.match(offToast, /已订阅/, offToast);
-    assert.match(offToast, /自动追新番/, `必须提到总开关：${offToast}`);
+    assert.match(offToast, /自动下载订阅的新集/, `必须提到总开关：${offToast}`);
 
     // 5) 总开关打开后就是普通的「已订阅」。
     await page.evaluate(() => {

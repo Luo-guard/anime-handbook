@@ -1613,34 +1613,6 @@ function initSettingsSearch() {
   }
 }
 
-// ===== 主设置里的「自动追新番」开关（与离线面板是同一个配置）=====
-async function initAutoFollowSetting() {
-  const input = $("#autoFollowSetting");
-  if (!input) return;
-  try {
-    const data = await api("/api/offline/settings");
-    input.checked = (data.config || {}).auto_follow === true;
-  } catch (error) { /* 读不到就保持当前状态，保存时后端会校验 */ }
-  if (!initAutoFollowSetting.bound) {
-    initAutoFollowSetting.bound = true;
-    input.addEventListener("change", async () => {
-      const checked = input.checked;
-      try {
-        await api("/api/offline/settings", {
-          method: "POST",
-          body: JSON.stringify({ auto_follow: checked }),
-        });
-        const panel = $("#offlineAutoFollow");
-        if (panel) panel.checked = checked;
-        toast(checked ? "已开启自动追新番" : "已关闭自动追新番");
-      } catch (error) {
-        input.checked = !checked;
-        toast(`自动追新番没存上：${error.message || error}`, "error");
-      }
-    });
-  }
-}
-
 // ===== 加入收藏自动打开找资源：开关 + 触发的收藏夹复选 =====
 function renderAutoOpenOfflineCollections() {
   const box = $("#autoOpenOfflineCollections");
