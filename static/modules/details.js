@@ -213,6 +213,141 @@ if (typeof ResizeObserver !== "undefined") {
   if (detailDialog) new ResizeObserver(syncDetailCornerActions).observe(detailDialog);
 }
 
+const detailLayoutHomes = new Map();
+
+function applyDetailLayout() {
+  const dialog = $("#progressModal");
+  if (!dialog) return;
+  const modern = state.settings.detail_layout === "modern";
+  dialog.classList.toggle("detail-modern", modern);
+  dialog.classList.toggle("detail-compact-credits", modern && state.settings.detail_modern_compact_credits !== false);
+  $("#modernDetailMenu").open = false;
+  $("#modernDetailMenu").classList.toggle("hidden", !modern);
+  $("#commentsDetailTab").classList.toggle("hidden", !modern);
+  const activeTab = $("[data-detail-tab].active", dialog)?.dataset.detailTab;
+  switchDetailTab(!activeTab || (!modern && activeTab === "comments") ? "overview" : activeTab);
+
+  const menu = $(".modern-detail-menu-body", dialog);
+  for (const selector of [".progress-links", "#openAgeRelated", "#detailSavedSections"]) {
+    const node = $(selector, dialog);
+    if (!detailLayoutHomes.has(node)) {
+      const home = document.createComment("classic detail position");
+      node.before(home);
+      detailLayoutHomes.set(node, home);
+    }
+    if (modern) menu.append(node);
+    else detailLayoutHomes.get(node).after(node);
+  }
+
+  refreshModernDetailHeader();
+  updateDetailRecordActions();
+  syncDetailCornerActions();
+}
+
+function updateDetailRecordActions() {
+  const dialog = $("#progressModal");
+  const button = $("#saveProgress");
+  if (!dialog || !button) return;
+  const modern = dialog.classList.contains("detail-modern");
+  const anime = state.progressAnime;
+  const stored = new Set((anime?.watched_episode_keys || anime?.watched_episodes || [])
+    .map(key => episodeStorageKey(key, anime)));
+  const draft = new Set([...(state.pendingEpisodes || [])].map(key => episodeStorageKey(key, anime)));
+  const changed = stored.size !== draft.size || [...draft].some(key => !stored.has(key));
+  dialog.classList.toggle("detail-record-pending", modern && changed);
+  button.disabled = modern && !changed;
+  $("#cancelProgress").textContent = modern ? "取消修改" : "取消";
+}
+
+function cancelDetailProgress() {
+  const dialog = $("#progressModal");
+  if (!dialog.classList.contains("detail-modern")) return dialog.close();
+  const anime = state.progressAnime;
+  state.pendingEpisodes = new Set((anime.watched_episode_keys || anime.watched_episodes || []).map(String));
+  renderEpisodeGrid();
+  if (typeof refreshSavedVideoTargets === "function") refreshSavedVideoTargets();
+}
+
+function refreshModernDetailHeader() {
+  const dialog = $("#progressModal");
+  const anime = state.progressAnime;
+  const modern = dialog?.classList.contains("detail-modern") && anime;
+  if (!$("#modernTitleTools")) return;
+  const play = $("#detailOnlinePlay");
+  if (play) {
+    play.textContent = "播放";
+    if (modern && typeof mainPlaybackEpisode === "function") {
+      try {
+        play.textContent = `继续播放 · 第 ${String(mainPlaybackEpisode(anime).number).padStart(2, "0")} 集`;
+      } catch { /* The player provides the reason when opened. */ }
+    }
+  }
+  if (!modern) {
+    $("#modernTitleTools").classList.add("hidden");
+    return;
+  }
+  const original = anime.name && anime.name !== anime.display_name ? anime.name : "";
+  const row = $("#modernTitleTools");
+  const subtitle = $("#modernOriginalTitle");
+  subtitle.classList.remove("hidden");
+  subtitle.textContent = state.settings.detail_modern_original_title !== false ? original : "";
+  row.classList.remove("hidden");
+  const title = $("#progressTitle");
+  const clippedTitle = title.scrollHeight - title.clientHeight > 8;
+  const clippedOriginal = subtitle.scrollWidth > row.clientWidth;
+  $("#modernFullTitle").classList.toggle("hidden", !(clippedTitle || clippedOriginal));
+  subtitle.classList.toggle("hidden", !subtitle.textContent);
+  row.classList.toggle("hidden", !subtitle.textContent && !clippedTitle);
+  $("#detailFullTitleName").textContent = anime.display_name || "";
+  $("#detailFullTitleOriginal").textContent = original;
+}
+
+function detailEpisodeReleaseStatus(anime, group) {
+  if (Number(group.type) === 0 && $("#progressModal").classList.contains("detail-modern")) {
+    const badge = animeBadgeModel(anime);
+    const useAS = state.settings.collection_airing_source === "as";
+    const airing = useAS ? anime.as_airing : anime.airing;
+    const finished = badge.kind === "finished" || airing?.show_status === "finished"
+      || (Number(airing?.total) > 0 && Number(airing.aired) >= Number(airing.total));
+    const total = Number(airing?.total) || Number(anime.episode_count) || Number(group.count);
+    if (finished && total > 0) {
+      return `<span class="episode-release-status" title="按完结状态和正片总集数显示"><i></i>已播 ${total} 集</span>`;
+    }
+  }
+  return episodeReleaseStatus(anime, group);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const dialog = $("#progressModal");
+  $("#modernFullTitle")?.addEventListener("click", () => $("#detailFullTitleDialog").showModal());
+  $("#modernDetailMenu")?.addEventListener("keydown", event => {
+    const menu = event.currentTarget;
+    if (event.key !== "Escape" || !menu.open) return;
+    event.preventDefault();
+    menu.open = false;
+    menu.querySelector("summary").focus();
+  });
+  $("#modernFindResources")?.addEventListener("click", () => {
+    $("#modernDetailMenu").open = false;
+    $("#openOffline").click();
+  });
+  $("#openAgeRelated")?.addEventListener("click", () => {
+    if (!dialog.classList.contains("detail-modern")) return;
+    $("#modernDetailMenu").open = false;
+    switchDetailTab("overview");
+  });
+  document.addEventListener("click", event => {
+    const menu = $("#modernDetailMenu");
+    if (menu?.open && dialog.open && !menu.contains(event.target)) menu.open = false;
+  });
+  if (typeof ResizeObserver !== "undefined" && dialog && $("#modernTitleTools")) {
+    const observer = new ResizeObserver(() => { if (dialog.open) refreshModernDetailHeader(); });
+    observer.observe($("#progressTitle"));
+    observer.observe($("#progressCover"));
+    observer.observe($("#modernTitleTools").parentElement);
+  }
+});
+
 function openProgress(animeId) {
   const anime = state.animes.find((item) => item.id === animeId);
   if (!anime) return;
@@ -223,6 +358,7 @@ function openProgress(animeId) {
   $("#progressCover").src = anime.cover_url;
   $("#progressCover").alt = anime.display_name;
   $("#progressTitle").textContent = anime.display_name;
+  applyDetailLayout();
   $("#collectionDetailStatus").replaceChildren(collectionAction(anime.id,anime.collection_type));
   $("#collectionDetailStatus").classList.toggle("hidden", !collectionEditingSupported());
   $("#progressAirDate").textContent = anime.air_date || "";
@@ -265,11 +401,14 @@ function openProgress(animeId) {
     : "未取得章节列表时可手动填写章节数";
   renderEpisodeGrid();
   $("#progressModal").showModal();
+  refreshModernDetailHeader();
   syncDetailCornerActions();
   if (state.settings?.detail_airtime_source === "as") {
     api(`/api/animes/${anime.id}`, { timeoutMs: 30000 }).then(({ anime: fresh }) => {
-      if (!fresh || state.progressAnime !== anime || !$("#progressModal").open) return;
-      anime.as_airing = fresh.as_airing;
+      if (!fresh || state.progressAnime?.id !== anime.id || !$("#progressModal").open) return;
+      state.progressAnime.as_airing = fresh.as_airing;
+      const entry = state.animes.find(item => item.id === anime.id);
+      if (entry) entry.as_airing = fresh.as_airing;
       refreshEpisodeAiringStatus();
     }).catch(() => { /* Cached airing data remains visible. */ });
   }
@@ -282,7 +421,15 @@ function openProgress(animeId) {
 
 function switchDetailTab(tab) {
   const isCharacters = tab === "characters";
+  const modern = $("#progressModal").classList.contains("detail-modern");
+  const isComments = modern && tab === "comments";
   $("#overviewDetailPanel").classList.toggle("hidden", isCharacters);
+  $("#episodeGrid").classList.toggle("hidden", isComments);
+  const comments = $(".anime-comments", $("#overviewDetailPanel"));
+  comments?.classList.toggle("hidden", modern && !isComments);
+  $("#overviewDetailPanel").classList.toggle("detail-show-comments", isComments);
+  const overview = $('[data-detail-tab="overview"]');
+  if (overview) overview.textContent = modern ? "剧集" : "概览";
   $("#charactersDetailPanel").classList.toggle("hidden", !isCharacters);
   $$("[data-detail-tab]").forEach((button) => {
     const active = button.dataset.detailTab === tab;
@@ -409,10 +556,11 @@ async function ensureEpisodeTitles(anime) {
     if (!latest) return;
     commitAnimes(state.animes.map((item) => item.id === latest.id ? latest : item), { render: false });
     if (state.progressAnime?.id === latest.id) {
+      const current = state.progressAnime;
+      const canonicalKeys = new Map((latest.episodes || []).map(episode => [episodeStorageKey(episode.key, latest), String(episode.key)]));
+      state.pendingEpisodes = new Set([...state.pendingEpisodes].map(key =>
+        canonicalKeys.get(episodeStorageKey(key, current)) || key));
       state.progressAnime = latest;
-      state.pendingEpisodes = new Set(
-        (latest.watched_episode_keys || latest.watched_episodes || []).map(String),
-      );
       $("#episodeCountInput").value = episodeTotal(latest);
       renderEpisodeGrid();
     }
@@ -667,8 +815,9 @@ function episodeAnnotationMarkup(annotations) {
 function refreshEpisodeAiringStatus() {
   if (!state.progressAnime) return;
   renderProgressBadge(state.progressAnime);
+  refreshModernDetailHeader();
   $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
-    element.innerHTML = episodeReleaseStatus(state.progressAnime, {type: Number(element.dataset.episodeAiringType)});
+    element.innerHTML = detailEpisodeReleaseStatus(state.progressAnime, {type: Number(element.dataset.episodeAiringType), count: Number(element.dataset.episodeCount)});
   });
 }
 
@@ -751,12 +900,12 @@ function renderEpisodeGrid() {
   }, []);
   $("#episodeGrid").innerHTML = episodes.length
     ? groups.map((group) => `
-        <section class="episode-group">
+        <section class="episode-group" data-detail-episode-group="${group.type}">
           <div class="episode-group-head">
             <strong>${escapeHtml(group.type_label)}</strong>
             <div class="episode-group-meta">
               <span class="episode-group-summary" data-episode-group-summary>${episodeGroupSummary(group, state.pendingEpisodes)}</span>
-          ${Number(group.type) === 0 ? `<div class="episode-airing-info" data-episode-airing-type="0">${episodeReleaseStatus(anime, group)}</div>` : ""}
+          ${Number(group.type) === 0 ? `<div class="episode-airing-info" data-episode-airing-type="0" data-episode-count="${group.count}">${detailEpisodeReleaseStatus(anime, group)}</div>` : ""}
             </div>
           </div>
           <div class="episode-group-grid">
@@ -768,10 +917,10 @@ function renderEpisodeGrid() {
               const annotations = state.episodeRecordAnnotations?.[key] || [];
               return `
                 <button type="button" class="episode-cell ${watched ? "watched" : ""}${downloaded ? " downloaded" : ""}"
-                  data-episode-key="${escapeHtml(key)}" data-episode-type="${group.type}"
+                  data-episode-key="${escapeHtml(key)}" data-episode-type="${group.type}" data-detail-episode-label="${escapeHtml(episode.label)}"
                   aria-pressed="${watched}"
                   title="${escapeHtml([showEpisodeTitlesOnHover() ? episodeTitle(episode) : "", downloaded ? "已下载 · 扇区可播放" : ""].filter(Boolean).join(" · "))}">
-                  ${escapeHtml(episode.label)}
+                  ${group.type === 2 || group.type === 3 ? `<span class="detail-credit-check" aria-hidden="true"></span><span class="detail-credit-prefix">${escapeHtml(group.type_label)} </span>` : ""}${escapeHtml(episode.label)}
                   ${annotations.length ? `<span class="episode-note-mark" aria-label="本集有 ${annotations.length} 条记录">✎</span>` : ""}
                 </button>
               `;
@@ -780,6 +929,7 @@ function renderEpisodeGrid() {
         </section>
       `).join("")
     : `<div class="empty-state"><p>暂未取得章节。</p></div>`;
+  updateDetailRecordActions();
   // 标注气泡仍按格子绑定；所有点击/长按/右键交给 episode-gesture.js 的委托，
   // 扇区格数与绑定表都由设置驱动，这里不再散着写事件。
   $$(".episode-cell", $("#episodeGrid")).forEach((button) => {
@@ -820,6 +970,7 @@ function renderEpisodeGrid() {
         const watched = keys.filter((item) => state.pendingEpisodes.has(String(item))).length;
         $("[data-episode-group-summary]", section).textContent = `已看 ${watched} / ${keys.length}`;
       });
+      updateDetailRecordActions();
     },
     onAction: (action, key, button) => runEpisodeGestureAction(action, key, button),
   });

@@ -127,6 +127,9 @@ def _normalize_settings(body, settings):
         "collection_rating_source",
         "collection_airing_source",
         "detail_airtime_source",
+        "detail_layout",
+        "detail_modern_original_title",
+        "detail_modern_compact_credits",
         "hide_missing_as_schedule",
         "schedule_airing_source",
         "show_collection_progress_control",
@@ -231,6 +234,12 @@ def _normalize_settings(body, settings):
             if key in {"collection_airing_source", "schedule_airing_source"}:
                 if not isinstance(value, str) or value not in {"bgm", "as"}:
                     raise ValueError("已播集数来源无效")
+            elif key == "detail_layout":
+                if not isinstance(value, str) or value not in {"classic", "modern"}:
+                    raise ValueError("番剧详情布局无效")
+            elif key in {"detail_modern_original_title", "detail_modern_compact_credits"}:
+                if type(value) is not bool:
+                    raise ValueError("番剧详情显示选项无效")
             elif key == "detail_airtime_source":
                 if not isinstance(value, str) or value not in {"yuc", "as"}:
                     raise ValueError("详情更新时间来源无效")

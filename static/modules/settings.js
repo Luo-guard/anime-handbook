@@ -205,7 +205,16 @@ function renderCustomCollectionSettings() {
   });
 }
 
+function updateDetailLayoutSettings() {
+  const modern = $("#detailLayoutInput").value === "modern";
+  $$("[data-modern-detail-setting]").forEach(row => row.classList.toggle("hidden", !modern));
+}
+
 function renderSettingsPanels() {
+  $("#detailLayoutInput").value = state.settings.detail_layout || "classic";
+  $("#detailModernOriginalTitleInput").checked = state.settings.detail_modern_original_title !== false;
+  $("#detailModernCompactCreditsInput").checked = state.settings.detail_modern_compact_credits !== false;
+  updateDetailLayoutSettings();
   $("#episodePlaybackSourceInput").value = episodeGestureConfig().playbackSource;
   if (!window.handbookOnline) renderPlaybackSettings();
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
@@ -1134,6 +1143,7 @@ function setupSettingsTabs() {
     $("#goToScheduleAiringSettings").addEventListener("click", () => showSettingsSection("schedule", "#scheduleAiringSettingsHeading"));
     $("#goToDetailAiringSettings").addEventListener("click", () => showSettingsSection("detail", "#detailAiringSettingsHeading"));
     $("#dmSourceMode").addEventListener("change", updateDanmakuSourceFields);
+    $("#detailLayoutInput").addEventListener("change", updateDetailLayoutSettings);
     settingsGroupsInitialized = true;
   }
   syncSettingsNavigation();

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-source-guide" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-detail-layout" />
   </head>
   <body>
     <div class="app-shell">
@@ -694,6 +694,10 @@
           <img id="progressCover" alt="" />
           <div class="progress-hero-info">
             <h2 id="progressTitle"></h2>
+            <div class="modern-title-tools hidden" id="modernTitleTools">
+              <p id="modernOriginalTitle"></p>
+              <button type="button" class="text-button" id="modernFullTitle">完整番名</button>
+            </div>
             <p class="progress-meta"><span id="progressAirDate"></span><span id="progressBadge" class="update-badge hidden"><i class="update-badge-dot" aria-hidden="true"></i><span id="progressBadgeText"></span></span></p>
             <p class="progress-links"><span id="detailLinks" class="detail-links"></span></p>
             <div class="progress-info-row">
@@ -705,18 +709,25 @@
                   <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
                 </div>
                 <div class="collect-detail-row" id="collectionDetailStatus"></div>
+                <details class="modern-detail-menu hidden" id="modernDetailMenu">
+                  <summary aria-label="番剧更多操作">⋯</summary>
+                  <div class="modern-detail-menu-body">
+                    <button type="button" class="detail-action" id="modernFindResources">找资源</button>
+                  </div>
+                </details>
               </div>
             </div>
             <input id="episodeCountInput" type="hidden" />
           </div>
         </div>
-        <div class="saved-sections">
+        <div class="saved-sections" id="detailSavedSections">
           <details class="saved-video-links hidden" id="savedVideoSection"><summary class="saved-video-heading"><span>已存视频</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedVideoLinks"></div></details>
           <details class="saved-video-links hidden" id="savedLinkSection"><summary class="saved-video-heading"><span>已存链接</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedLinks"></div></details>
         </div>
-        <div class="detail-tabs" role="tablist">
+        <div class="detail-tabs" role="tablist" aria-label="番剧详情分栏">
           <button type="button" class="detail-tab active" data-detail-tab="overview" role="tab" aria-selected="true">概览</button>
           <button type="button" class="detail-tab" data-detail-tab="characters" id="charactersDetailTab" role="tab" aria-selected="false">人物</button>
+          <button type="button" class="detail-tab hidden" data-detail-tab="comments" id="commentsDetailTab" role="tab" aria-selected="false">评论</button>
         </div>
         <section class="detail-panel" id="overviewDetailPanel">
         <div class="episode-grid" id="episodeGrid"></div>
@@ -756,6 +767,13 @@
       </form>
     </dialog>
 
+    <dialog class="episode-record-dialog" id="detailFullTitleDialog" aria-labelledby="detailFullTitleHeading">
+      <form method="dialog">
+        <header class="episode-record-header"><h2 id="detailFullTitleHeading">完整番名</h2></header>
+        <div class="episode-record-body"><strong id="detailFullTitleName"></strong><p id="detailFullTitleOriginal"></p></div>
+        <footer class="episode-record-footer"><button class="secondary-button">关闭</button></footer>
+      </form>
+    </dialog>
     <dialog class="modal settings-modal" id="settingsModal">
       <form method="dialog" class="modal-frame">
         <button class="modal-close" value="cancel" aria-label="关闭">×</button>
@@ -985,6 +1003,10 @@
             <div class="auto-open-offline-list" id="autoOpenOfflineCollections"></div>
           </div>
           <div class="settings-section-title" data-settings-section="detail">番剧详情</div>
+          <h3 class="settings-subsection-title">详情布局</h3>
+          <label class="setting-row"><span><strong>番剧详情布局</strong><small>选择经典布局或深色封面的新版布局。</small></span><select id="detailLayoutInput"><option value="classic">经典布局</option><option value="modern">新版布局</option></select></label>
+          <label class="setting-row hidden" data-modern-detail-setting><span><strong>显示番剧原名</strong><small>当原名与显示名称不同时，在新版标题下显示原名。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernOriginalTitleInput" /><span class="switch"></span></span></label>
+          <label class="setting-row hidden" data-modern-detail-setting><span><strong>用勾选框显示 OP／ED</strong><small>关闭后，OP 和 ED 会各自按剧集方块显示。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernCompactCreditsInput" /><span class="switch"></span></span></label>
           <h3 class="settings-subsection-title" id="detailAiringSettingsHeading" tabindex="-1">放送信息</h3>
           <label class="setting-row">
             <span><strong>播出状态与更新时间来源</strong><small>决定详情顶部的播出状态和更新时间。長門番堂方案结合 Bangumi 的日期资料，AS 使用 AnimeSchedule 的状态和排期。</small></span>
@@ -1711,17 +1733,17 @@
     <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261113-playback-settings" defer></script>
-    <script src="/modules/details.js?v=20261114-airing-missing" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261114-detail-layout" defer></script>
+    <script src="/modules/details.js?v=20261114-detail-layout" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261114-source-guide" defer></script>
+    <script src="/modules/settings.js?v=20261114-detail-layout" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261109-filter-help" defer></script>
-    <script src="/modules/settings-save.js?v=20261113-playback-settings" defer></script>
-    <script src="/modules/events.js?v=20261114-subscription-switch" defer></script>
+    <script src="/modules/settings-save.js?v=20261114-detail-layout" defer></script>
+    <script src="/modules/events.js?v=20261114-detail-layout" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>

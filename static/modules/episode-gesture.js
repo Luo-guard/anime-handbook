@@ -109,16 +109,25 @@ function egRenderMenu(button, config, onAction) {
   const entries = Object.entries(slots).filter(([, action]) => action);
   if (!entries.length) return;
   const rect = button.getBoundingClientRect();
+  const modern = $("#progressModal").classList.contains("detail-modern");
+  const compact = modern && (innerHeight < 310 || innerWidth < 305);
   const scale = Math.min(1, (window.innerWidth - 56) / 164, (window.innerHeight - 56) / 188);
   const fit = (axis, center, size, pad) => {
     const offsets = [0, ...entries.map(([slot]) => EG_COORDS[slot][axis] * scale)];
     return Math.max(pad - Math.min(...offsets), Math.min(center, size - pad - Math.max(...offsets)));
   };
-  const originX = fit(0, rect.left + rect.width / 2, window.innerWidth, 28);
-  const originY = fit(1, rect.top + rect.height / 2, window.innerHeight, 28);
+  const modernCenter = (center, size, radius) => Math.max(radius, Math.min(center, size - radius));
+  const originX = modern
+    ? modernCenter(rect.left + rect.width / 2, innerWidth, compact ? Math.min(144, innerWidth / 2) : 150)
+    : fit(0, rect.left + rect.width / 2, innerWidth, 28);
+  const originY = modern
+    ? modernCenter(rect.top + rect.height / 2, innerHeight, compact ? Math.min(112, innerHeight / 2) : 150)
+    : fit(1, rect.top + rect.height / 2, innerHeight, 28);
   const menu = document.createElement("div");
   menu.id = "episodeQuickMenu";
   menu.className = "episode-quick-menu";
+  menu.classList.toggle("detail-modern-wheel", modern);
+  menu.classList.toggle("detail-wheel-compact", compact);
   menu.setAttribute("role", "group");
   menu.setAttribute("aria-label", "单集快捷操作");
   menu.style.setProperty("--quick-x", `${originX}px`);
@@ -128,9 +137,10 @@ function egRenderMenu(button, config, onAction) {
     + '<span class="episode-quick-cursor" aria-hidden="true"></span>'
     + entries.map(([slot, action]) => {
     const [x, y] = EG_COORDS[slot];
-    return `<button type="button" class="episode-quick-action" style="left:${x * scale}px;top:${y * scale}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action])}</button>`;
+    const label = modern ? ({ score: "单集评分", review: "单集评价", op: "OP 记录", ed: "ED 记录" }[action] || EG_ACTION_LABELS[action]) : EG_ACTION_LABELS[action];
+    return `<button type="button" class="episode-quick-action" style="left:${x * (modern ? 1 : scale)}px;top:${y * (modern ? 1 : scale)}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(label)}</button>`;
   }).join("")
-    + '<button type="button" class="episode-quick-action episode-quick-close" data-episode-menu-close aria-label="关闭单集扇区">×</button>';
+    + '<button type="button" class="episode-quick-action episode-quick-close" data-episode-menu-close aria-label="关闭单集扇区">×'+(modern ? '<small>'+escapeHtml(button.dataset.detailEpisodeLabel || "")+'</small>' : "")+'</button>';
   menu.addEventListener("click", (event) => {
     const item = event.target.closest("[data-episode-action], [data-episode-menu-close]");
     if (!item || egRuntime?.menu !== menu) return;
@@ -309,7 +319,7 @@ function installEpisodeGestures(root, options) {
     event.preventDefault();
     if (event.button === 0 && !egRuntime.button) {
       egRenderMenu(button, configOf(), options.onAction);
-      egRuntime.menu?.querySelector("button")?.focus();
+      egRuntime.menu?.querySelector("button")?.focus({ preventScroll: true });
     }
   });
 
@@ -333,7 +343,9 @@ function installEpisodeGestures(root, options) {
     egRuntime.pendingClick = null;
     egRuntime.button = null;
   });
-  $("#progressModal").addEventListener("scroll", () => egCloseMenu(), { capture: true, passive: true });
+  $("#progressModal").addEventListener("scroll", event => {
+    if (event.target !== egRuntime.menu) egCloseMenu();
+  }, { capture: true, passive: true });
   window.addEventListener("resize", () => egCloseMenu());
 }
 

@@ -241,9 +241,8 @@ $("#saveAnimeComment").addEventListener("click", async () => {
     toast(error.message, "error");
   }
 });
-for (const selector of ["#closeProgress", "#cancelProgress"]) {
-  $(selector).addEventListener("click", () => $("#progressModal").close());
-}
+$("#closeProgress").addEventListener("click", () => $("#progressModal").close());
+$("#cancelProgress").addEventListener("click", cancelDetailProgress);
 $("#saveProgress").addEventListener("click", saveProgress);
 
 const noteComposer = $("#noteComposer");

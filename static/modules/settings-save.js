@@ -47,6 +47,11 @@ const HandbookSettings = (() => {
         schedule_airing_source: $("#scheduleAiringSourceInput").value,
       };
       const detailAirtimeSource = $("#detailAirtimeSourceInput").value || "yuc";
+      const detailLayout = {
+        detail_layout: $("#detailLayoutInput").value,
+        detail_modern_original_title: $("#detailModernOriginalTitleInput").checked,
+        detail_modern_compact_credits: $("#detailModernCompactCreditsInput").checked,
+      };
       // 只有默认展示记录真的变了，才覆盖时间线当前的临时筛选。
       const previousTimelineDefaults = JSON.stringify(Array.isArray(state.settings.timeline_default_themes) ? state.settings.timeline_default_themes : []);
       await requireScheduleSortingSupport();
@@ -72,6 +77,7 @@ const HandbookSettings = (() => {
           schedule_source: $("#scheduleSourceInput").value,
           ...progressSources,
           detail_airtime_source: detailAirtimeSource,
+          ...detailLayout,
           hide_missing_as_schedule: $("#hideMissingAsScheduleInput").checked,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
           schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
@@ -134,6 +140,11 @@ const HandbookSettings = (() => {
       if (gestureSettings && !payload.settings.episode_gestures) throw new Error("单集手势未成功保存，请重启后台并刷新后再试。");
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
       if ((payload.settings.detail_airtime_source || "yuc") !== detailAirtimeSource) throw new Error("后台未保存详情更新时间来源，请重启后台并刷新后重试。");
+      const savedLayout = payload.settings.detail_layout || "classic";
+      if (savedLayout !== detailLayout.detail_layout || (savedLayout === "modern" &&
+          Object.entries(detailLayout).some(([key, value]) => payload.settings[key] !== value))) {
+        throw new Error("后台未保存番剧详情布局，请重启后台并刷新后重试。");
+      }
       if (playbackSettings) applyPlaybackSettings(playbackSettings);
       ThemeSettingsSession.finish(true);
       state.settings = payload.settings;
@@ -151,7 +162,9 @@ const HandbookSettings = (() => {
         ? new Set([...state.timelineThemes].filter((id) => visibleThemeIds.has(id)))
         : new Set(savedTimelineDefaults.filter((id) => visibleThemeIds.has(id)));
       applyTheme();
+      applyDetailLayout();
       applyCharacterTabVisibility();
+      if ($("#progressModal").open) renderEpisodeGrid();
       applyCollectionEditingAvailability();
       $("#dayStartLabel").textContent = state.settings.day_start_hour;
       $("#settingsModal").close();

@@ -5,7 +5,7 @@ const order=['main','collection','detail','playback','offline','schedule','recor
 const original=[...order].reverse();
 const buttons=order.map(name=>({dataset:{settingsTab:name},classList:{contains:()=>false},addEventListener(){}}));
 const list={children:original.flatMap(name=>[{dataset:{settingsSection:name},name:name+' heading'},{dataset:{},name:name+' control'}]),replaceChildren(...children){this.children=children}};
-const ctx=vm.createContext({document:{createElement:()=>({dataset:{},children:[],append(child){this.children.push(child)}})},$:selector=>selector==='.settings-list'?list:{addEventListener(){}},$$:()=>buttons,switchSettingsTab(){},syncSettingsNavigation(){},updateDanmakuSourceFields(){}});
+const ctx=vm.createContext({document:{createElement:()=>({dataset:{},children:[],append(child){this.children.push(child)}})},$:selector=>selector==='.settings-list'?list:{addEventListener(){}},$$:()=>buttons,switchSettingsTab(){},syncSettingsNavigation(){},updateDanmakuSourceFields(){},updateDetailLayoutSettings(){}});
 vm.runInContext('let settingsGroupsInitialized=false;'+source.slice(start,end)+';setupSettingsTabs()',ctx);
 assert.equal(list.children.map(panel=>panel.dataset.settingsGroup).join(','),order.join(','));
 for(const panel of list.children)assert.equal(panel.children[1].name,panel.dataset.settingsGroup+' control');
