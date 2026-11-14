@@ -42,6 +42,8 @@ class RuleToLinkTest(unittest.TestCase):
 
     def test_post_api_and_non_anime_rules_are_skipped(self):
         self.assertIsNone(link_rules.rule_to_link("x", dict(BASE_RULE, usePost=True)))
+        self.assertIsNone(link_rules.rule_to_link("x", dict(BASE_RULE, searchMode="api")))
+        self.assertIsNone(link_rules.rule_to_link("x", dict(BASE_RULE, deprecated=True)))
         self.assertIsNone(link_rules.rule_to_link("x", dict(BASE_RULE, searchURL="")))
         self.assertIsNone(link_rules.rule_to_link("x", dict(BASE_RULE, type="comic")))
         self.assertIsNone(link_rules.rule_to_link("x", dict(BASE_RULE, searchURL="https://x.test/s?q=fixed")))
@@ -54,11 +56,14 @@ class RuleToLinkTest(unittest.TestCase):
 
 
 class ExtractRulesTest(unittest.TestCase):
-    def test_reads_root_files_only(self):
+    def test_uses_only_active_rules_in_official_index(self):
         payload = archive_of({
+            "index.json": [{"name": name} for name in ("a", "B", "retired", "missing", ".github/workflows/ci")],
             "a.json": dict(BASE_RULE, name="A"),
-            "b.json": dict(BASE_RULE, name="B", searchURL="https://b.test/s?wd=@keyword", baseURL="https://b.test"),
+            "B.json": dict(BASE_RULE, name="B", searchURL="https://b.test/s?wd=@keyword", baseURL="https://b.test"),
             ".github/workflows/ci.json": dict(BASE_RULE, name="CI"),
+            "retired.json": dict(BASE_RULE, name="Retired", deprecated=True, searchURL="https://retired.test/?q=@keyword"),
+            "unlisted.json": dict(BASE_RULE, name="Unlisted", searchURL="https://unlisted.test/?q=@keyword"),
             "LICENSE": "not json",
         })
         links = link_rules.extract_rules(payload)
@@ -66,6 +71,7 @@ class ExtractRulesTest(unittest.TestCase):
 
     def test_bad_json_and_duplicate_templates_are_dropped(self):
         payload = archive_of({
+            "index.json": [{"name": name} for name in ("a", "broken", "copy")],
             "a.json": dict(BASE_RULE, name="A"),
             "broken.json": "{not json",
             "copy.json": dict(BASE_RULE, name="Copy of A"),
@@ -76,10 +82,16 @@ class ExtractRulesTest(unittest.TestCase):
 
     def test_results_are_sorted_by_name(self):
         payload = archive_of({
+            "index.json": [{"name": "z"}, {"name": "a"}],
             "z.json": dict(BASE_RULE, name="zeta"),
             "a.json": dict(BASE_RULE, name="Alpha", searchURL="https://a.test/?q=@keyword", baseURL="https://a.test"),
         })
         self.assertEqual([link["name"] for link in link_rules.extract_rules(payload)], ["Alpha", "zeta"])
+
+    def test_missing_or_invalid_index_is_reported(self):
+        for files in ({}, {"index.json": {"name": "a"}}, {"index.json": "not json"}):
+            with self.subTest(files=files), self.assertRaisesRegex(link_rules.RuleFetchError, "官方索引"):
+                link_rules.extract_rules(archive_of(files))
 
     def test_broken_archive_is_reported(self):
         with self.assertRaises(link_rules.RuleFetchError):
@@ -95,6 +107,13 @@ class CacheTest(unittest.TestCase):
             self.assertEqual(link_rules.load_cache(path)["items"], [])
             path.write_text("[1, 2, 3]", encoding="utf-8")
             self.assertEqual(link_rules.load_cache(path)["items"], [])
+
+    def test_unfiltered_cache_is_ignored(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "link-rules.json"
+            path.write_text(json.dumps({"items": [{"id": "rule-retired"}], "fetched_at": 1000}), encoding="utf-8")
+            self.assertEqual(link_rules.load_cache(path)["items"], [])
+            self.assertEqual(link_rules.load_cache(path)["fetched_at"], 0)
 
     def test_refresh_writes_cache_and_keeps_old_file_on_failure(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -123,7 +142,7 @@ class CacheTest(unittest.TestCase):
 
 class FetchRulesTest(unittest.TestCase):
     def test_fetch_reads_the_archive(self):
-        payload = archive_of({"a.json": dict(BASE_RULE, name="A")})
+        payload = archive_of({"index.json": [{"name": "a"}], "a.json": dict(BASE_RULE, name="A")})
 
         class Response(io.BytesIO):
             def __enter__(self):

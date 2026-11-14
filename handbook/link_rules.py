@@ -1,10 +1,10 @@
 """Kazumi 规则仓库 → 详情页跳转链接。
 
-规则仓库里的每个 JSON 描述一个番剧站点的搜索与解析方式。手账只取其中的
+手账按官方 index.json 选取规则，只读取其中的
 站点名和搜索地址，用来在详情页生成「去这个站搜这部番」的链接；解析规则、
 播放地址、弹幕配置一概不用，也不抓取站点内容。
 
-整包一次下载（约 50 KB），本地缓存，用户点「刷新」才会再次联网。
+从同一份压缩包读取索引和规则，写入本地缓存。
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 ARCHIVE_URL = "https://codeload.github.com/Predidit/KazumiRules/zip/refs/heads/main"
 SOURCE_LABEL = "KazumiRules"
 CACHE_FILE = "link-rules.json"
+CACHE_SCHEMA = 1
 MAX_ARCHIVE_BYTES = 4 * 1024 * 1024
 REQUEST_TIMEOUT = 25
 CACHE_TTL = 6 * 3600
@@ -44,11 +45,11 @@ def rule_to_link(stem: str, rule: Any) -> dict[str, Any] | None:
     Rules that search through an API (``searchURL`` empty) or POST cannot be
     turned into a link, so they are skipped instead of producing a dead entry.
     """
-    if not isinstance(rule, dict):
+    if not isinstance(rule, dict) or rule.get("deprecated"):
         return None
     if str(rule.get("type") or "anime").lower() != "anime":
         return None
-    if rule.get("usePost") is True:
+    if rule.get("usePost") or rule.get("searchMode") == "api":
         return None
     search = str(rule.get("searchURL") or "").strip()
     if not search.startswith(("http://", "https://")):
@@ -72,26 +73,40 @@ def rule_to_link(stem: str, rule: Any) -> dict[str, Any] | None:
 
 
 def extract_rules(payload: bytes) -> list[dict[str, Any]]:
-    """Read every top-level ``*.json`` rule from the downloaded archive."""
-    try:
-        archive = zipfile.ZipFile(io.BytesIO(payload))
-    except zipfile.BadZipFile as error:
-        raise RuleFetchError("规则仓库返回的不是有效的压缩包") from error
+    """Read only rules published in the archive's official index."""
     links: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for entry in archive.namelist():
-        # 只要仓库根目录下的规则文件；跳过 .github 等子目录。
-        if entry.count("/") != 1 or not entry.lower().endswith(".json"):
-            continue
-        try:
-            rule = json.loads(archive.read(entry).decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
-            continue
-        link = rule_to_link(Path(entry).stem, rule)
-        if not link or link["template"] in seen:
-            continue
-        seen.add(link["template"])
-        links.append(link)
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            index_path = next(
+                (entry for entry in archive.namelist()
+                 if entry.count("/") == 1 and entry.endswith("/index.json")),
+                None,
+            )
+            if index_path is None:
+                raise RuleFetchError("规则仓库缺少官方索引")
+            try:
+                index = json.loads(archive.read(index_path))
+            except (ValueError, UnicodeError) as error:
+                raise RuleFetchError("规则仓库的官方索引无法读取") from error
+            if not isinstance(index, list):
+                raise RuleFetchError("规则仓库的官方索引格式无效")
+            root = index_path.removesuffix("index.json")
+            for item in index:
+                name = item.get("name") if isinstance(item, dict) else None
+                if not isinstance(name, str) or not name or "/" in name or "\\" in name:
+                    continue
+                try:
+                    rule = json.loads(archive.read(f"{root}{name}.json"))
+                except (KeyError, ValueError, UnicodeError):
+                    continue
+                link = rule_to_link(name, rule)
+                if not link or link["template"] in seen:
+                    continue
+                seen.add(link["template"])
+                links.append(link)
+    except zipfile.BadZipFile as error:
+        raise RuleFetchError("规则仓库返回的不是有效的压缩包") from error
     links.sort(key=lambda item: (item["name"].lower(), item["host"]))
     return links
 
@@ -123,8 +138,9 @@ def load_cache(path: Path) -> dict[str, Any]:
     try:
         document = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {"items": [], "fetched_at": 0, "source": SOURCE_LABEL, "error": ""}
-    if not isinstance(document, dict) or not isinstance(document.get("items"), list):
+        document = None
+    if (not isinstance(document, dict) or document.get("schema") != CACHE_SCHEMA
+            or not isinstance(document.get("items"), list)):
         return {"items": [], "fetched_at": 0, "source": SOURCE_LABEL, "error": ""}
     return document
 
@@ -136,6 +152,7 @@ def refresh(path: Path, timeout: float = REQUEST_TIMEOUT) -> dict[str, Any]:
     old_ids = {str(item.get("id")) for item in previous.get("items") or [] if isinstance(item, dict)}
     new_ids = {str(item.get("id")) for item in items}
     document = {
+        "schema": CACHE_SCHEMA,
         "items": items,
         "fetched_at": int(time.time()),
         "source": SOURCE_LABEL,
