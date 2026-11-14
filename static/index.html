@@ -1119,13 +1119,17 @@
           <label class="setting-row"><strong>播放倍速</strong><select id="playbackSpeedInput"></select></label>
           <label class="setting-row"><span><strong>快进时长</strong><small>用于播放器顶栏的快进按钮。</small></span><span class="inline-input"><input type="number" id="playbackSkipInput" min="1" max="600" step="1" /><span class="input-unit">秒</span></span></label>
           <h3 class="settings-subsection-title" id="playbackRulesHeading" tabindex="-1">在线片源</h3>
+          <label class="setting-row"><span><strong>默认在线片源</strong><small>点击播放并进入在线播放时使用。选择后立即保存。</small></span><select id="onlineDefaultRule" disabled></select></label>
           <div class="setting-row stacked online-rule-manager">
             <div class="online-rule-tools">
               <div class="online-rule-filters" role="group" aria-label="规则列表">
                 <button type="button" class="secondary-button compact-button" data-rule-filter="installed" aria-pressed="true">已安装</button>
                 <button type="button" class="secondary-button compact-button" data-rule-filter="catalogue" aria-pressed="false">规则仓库</button>
               </div>
-              <button type="button" class="secondary-button compact-button" id="onlineRuleCheckUpdates">检查更新</button>
+              <div class="online-rule-filters">
+                <button type="button" class="secondary-button compact-button" id="onlineRuleAddCustom">自定义规则</button>
+                <button type="button" class="secondary-button compact-button" id="onlineRuleCheckUpdates">检查更新</button>
+              </div>
             </div>
             <input type="search" id="onlineRuleFilter" aria-label="搜索规则名称或域名" placeholder="搜索规则名称或域名" />
             <small id="onlineRuleManagerStatus" role="status"></small>
@@ -1569,6 +1573,23 @@
         <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
       </div>
     </dialog>
+    <dialog class="episode-record-dialog" id="onlineRuleEditor" aria-labelledby="onlineRuleEditorTitle">
+      <form method="dialog">
+        <header class="episode-record-header"><h2 id="onlineRuleEditorTitle"></h2></header>
+        <div class="episode-record-body">
+          <label for="onlineRuleName">显示名称（留空使用原名）</label>
+          <input id="onlineRuleName" type="text" maxlength="80" />
+          <div id="onlineRuleCustomFields" hidden>
+            <label for="onlineRuleConfig">规则 JSON</label>
+            <textarea id="onlineRuleConfig" rows="10" spellcheck="false"></textarea>
+            <label for="onlineRuleFile">也可从本地载入 JSON 文件</label>
+            <input id="onlineRuleFile" type="file" accept=".json,application/json" />
+          </div>
+          <p class="episode-record-error" id="onlineRuleEditorError" role="alert" hidden></p>
+        </div>
+        <footer class="episode-record-footer"><button type="button" class="secondary-button" id="onlineRuleEditorCancel">取消</button><button type="submit" class="primary-button">保存</button></footer>
+      </form>
+    </dialog>
     <dialog class="modal online-source-picker" id="onlinePlaybackPicker" aria-labelledby="onlinePlaybackPickerTitle">
       <div class="modal-frame">
         <button type="button" class="modal-close" id="closeOnlinePlaybackPicker" aria-label="关闭">×</button>
@@ -1698,7 +1719,7 @@
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
     <script src="/modules/offline.js?v=20261113-modal-width" defer></script>
-    <script src="/modules/online-playback.js?v=20261113-danmaku-auto-match" defer></script>
+    <script src="/modules/online-playback.js?v=20261114-custom-rules" defer></script>
     <script src="/modules/library-view.js?v=20261113-record-image-selection" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>

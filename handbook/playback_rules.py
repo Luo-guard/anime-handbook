@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 import zipfile
+from uuid import uuid4
 from http.client import HTTPException
 from pathlib import Path
 from urllib.parse import quote, urlencode, urljoin, urlsplit
@@ -39,6 +40,8 @@ def supported(rule):
     if rule.get("deprecated") or rule.get("useNativePlayer") is False or rule.get("usePost"):
         return False
     try:
+        if not isinstance(rule.get("baseURL"), str):
+            return False
         public_url(rule["baseURL"])
     except (KeyError, TypeError, RequestProblem):
         return False
@@ -47,7 +50,8 @@ def supported(rule):
     else:
         search_ok = all(rule.get(field) for field in ("searchURL", "searchList", "searchName", "searchResult"))
     if rule.get("chapterMode") == "api":
-        chapter_ok = (rule.get("chapterApiConfig") or {}).get("format") in {"nested", "delimited"}
+        config = rule.get("chapterApiConfig")
+        chapter_ok = isinstance(config, dict) and config.get("format") in ("nested", "delimited")
     else:
         chapter_ok = all(rule.get(field) for field in ("chapterRoads", "chapterResult"))
     return search_ok and chapter_ok
@@ -60,14 +64,14 @@ def extract_archive(raw):
             path = Path(entry.filename)
             rule_id = path.stem.lower()
             if (entry.filename.count("/") != 1 or path.suffix != ".json" or
-                    not _RULE_ID.fullmatch(rule_id) or entry.file_size > _MAX_RULE):
+                    not _RULE_ID.fullmatch(rule_id) or rule_id.startswith("custom-") or entry.file_size > _MAX_RULE):
                 continue
             try:
                 rule = json.loads(archive.read(entry))
             except (UnicodeError, ValueError):
                 continue
             if supported(rule):
-                rules[rule_id] = rule
+                rules[rule_id] = {key: value for key, value in rule.items() if not key.startswith("_handbook_")}
     return rules
 
 
@@ -113,6 +117,18 @@ def _newer_rule(local, remote):
     return versions[1] > versions[0]
 
 
+def _display_name(rule_id, rule):
+    return rule.get("_handbook_name") or ("稀饭动漫 Next" if rule_id == "xfdmnext" else str(rule.get("name") or rule_id))
+
+
+def _preferred_rule():
+    try:
+        value = json.loads((rule_folder() / ".preferences").read_bytes())
+        return value if isinstance(value, str) else ""
+    except (OSError, ValueError):
+        return ""
+
+
 def rule_list(remote=False, *, refresh=False):
     installed = {}
     for path in rule_folder().glob("*.json"):
@@ -122,28 +138,75 @@ def rule_list(remote=False, *, refresh=False):
             continue
     available = (remote_rules(refresh=True) if refresh else remote_rules()) if remote else {}
     rules = {**available, **installed}
-    return {"items": [
-        {"id": rule_id, "name": "稀饭动漫 Next" if rule_id == "xfdmnext" else str(rule.get("name") or rule_id),
+    preferred = _preferred_rule()
+    return {"default_rule": preferred if preferred == "manual" or preferred in installed else "", "items": [
+        {"id": rule_id, "name": _display_name(rule_id, rule), "custom": rule_id.startswith("custom-") and rule_id in installed,
          "host": urlsplit(rule["baseURL"]).hostname, "version": str(rule.get("version", "")),
          "available_version": str(available.get(rule_id, {}).get("version", "")),
          "installed": rule_id in installed,
-         "update": rule_id in installed and rule_id in available and _newer_rule(rule, available[rule_id])}
+         "update": rule_id in installed and not rule_id.startswith("custom-") and rule_id in available and _newer_rule(rule, available[rule_id])}
         for rule_id, rule in sorted(rules.items(), key=lambda pair: (pair[0] not in installed, pair[0]))
     ]}
 
 
-def change_rule(rule_id, action):
+def change_rule(rule_id, action, *, name=None, config=None):
+    if action == "default":
+        with _LOCK:
+            if rule_id not in ("", "manual"):
+                installed_rule(rule_id)
+            _write_rule(rule_folder() / ".preferences", rule_id)
+        return rule_list()
+    if action == "create":
+        rule_id = f"custom-{uuid4().hex}"
     path = rule_path(rule_id)
+    if action == "rename" and not isinstance(name, str):
+        raise RequestProblem("请输入显示名称")
+    if action in ("rename", "create") and name is not None and (not isinstance(name, str) or len(name.strip()) > 80):
+        raise RequestProblem("规则名称最多 80 个字符")
     rule = None
     if action in ("install", "update"):
+        if rule_id.startswith("custom-"):
+            raise RequestProblem("自定义规则由你手动编辑")
         rule = remote_rules().get(rule_id)
         if not rule:
             raise RequestProblem("该规则已不在兼容规则目录中", 404)
-    elif action != "remove":
+    elif action in ("create", "edit"):
+        if not rule_id.startswith("custom-"):
+            raise RequestProblem("只能编辑自定义规则")
+        if not isinstance(config, str) or len(config.encode("utf-8", errors="replace")) > _MAX_RULE:
+            raise RequestProblem("规则 JSON 不能超过 128 KB")
+        try:
+            rule = json.loads(config)
+        except (ValueError, RecursionError):
+            raise RequestProblem("请输入有效的规则 JSON") from None
+        if not supported(rule) or any(
+            key in rule and not isinstance(rule[key], str)
+            for key in ("name", "version", "searchURL", "searchList", "searchName",
+                        "searchResult", "chapterRoads", "chapterResult", "userAgent", "referer")
+        ):
+            raise RequestProblem("规则缺少有效网址、搜索或选集配置，或使用了当前播放器不支持的模式")
+        rule = {key: value for key, value in rule.items() if not key.startswith("_handbook_")}
+        if action == "create" and name and name.strip():
+            rule["_handbook_name"] = name.strip()
+    elif action not in ("remove", "rename"):
         raise RequestProblem("规则操作无效")
     with _LOCK:
         if action == "remove":
             path.unlink(missing_ok=True)
+            if _preferred_rule() == rule_id:
+                _write_rule(rule_folder() / ".preferences", "")
+        elif action == "rename":
+            local = installed_rule(rule_id)
+            local.pop("_handbook_name", None)
+            if name.strip():
+                local["_handbook_name"] = name.strip()
+            _write_rule(path, local)
+        elif action in ("create", "edit"):
+            if action == "edit":
+                local = installed_rule(rule_id)
+                if alias := local.get("_handbook_name"):
+                    rule["_handbook_name"] = alias
+            _write_rule(path, rule)
         else:
             try:
                 local = installed_rule(rule_id)
@@ -155,6 +218,8 @@ def change_rule(rule_id, action):
                 if action == "update":
                     raise RequestProblem("当前规则已是最新版本")
                 return rule_list()
+            if local and (alias := local.get("_handbook_name")):
+                rule = {**rule, "_handbook_name": alias}
             _write_rule(path, rule)
         for key in [key for key in _CATALOGUES if key[0] == rule_id]:
             del _CATALOGUES[key]
@@ -400,7 +465,7 @@ def _html_roads(rule, provider):
 def catalogue(rule_id, rule, provider):
     if not provider or len(provider) > 2000:
         raise RequestProblem("片源编号无效")
-    key = (rule_id, provider, str(rule.get("version", "")))
+    key = (rule_id, provider, json.dumps(rule, sort_keys=True, ensure_ascii=True))
     with _LOCK:
         cached, expiry = _CATALOGUES.get(key, (None, 0))
     if cached and time.monotonic() < expiry:
@@ -421,7 +486,7 @@ def catalogue(rule_id, rule, provider):
     if not data["sources"]:
         raise RequestProblem("这个站点没有返回可用的选集，请切换规则", 502)
     data["rule"] = rule_id
-    data["ruleName"] = "稀饭动漫 Next" if rule_id == "xfdmnext" else str(rule.get("name") or rule_id)
+    data["ruleName"] = _display_name(rule_id, rule)
     with _LOCK:
         if len(_CATALOGUES) >= 48:
             del _CATALOGUES[next(iter(_CATALOGUES))]
@@ -468,6 +533,12 @@ def serve(handler, path, query):
 
     if route == "rules":
         return handler.send_json(rule_list(remote=arg("remote") == "1", refresh=arg("refresh") == "1"))
+    if route == "custom-rule":
+        rule_id = arg("id")
+        if not rule_id.startswith("custom-"):
+            raise RequestProblem("只能编辑自定义规则")
+        rule = installed_rule(rule_id)
+        return handler.send_json({"config": {key: value for key, value in rule.items() if not key.startswith("_handbook_")}})
     if match := re.fullmatch(r"stream/([\w-]{32})/(main|[a-f0-9]{32})", route, re.ASCII):
         return playback_stream.stream(handler, *match.groups())
     if route not in {"search", "catalogue", "play"}:

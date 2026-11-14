@@ -28,7 +28,9 @@ class PostRoutes:
                 if origin and origin != f"http://{self.headers.get('Host')}":
                     self.send_error_json(403, "只能在手账页面管理播放规则")
                     return
-                self.send_json(playback_rules.change_rule(body.get("id"), body.get("action")))
+                self.send_json(playback_rules.change_rule(
+                    body.get("id"), body.get("action"), name=body.get("name"), config=body.get("config"),
+                ))
                 return
             write_exempt_paths = {
                 "/api/profiles",

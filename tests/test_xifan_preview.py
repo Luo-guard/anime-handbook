@@ -142,6 +142,29 @@ class XifanPreviewTest(unittest.TestCase):
             browser.assert_called_once_with(page, rule)
             issue.assert_called_once_with(media, "file", {})
 
+    def test_custom_rule_and_default_survive_renaming_and_editing(self):
+        config = {
+            "name": "Example", "version": "1", "baseURL": "https://example.com",
+            "searchURL": "/?q=@keyword", "searchList": "//article", "searchName": "//a",
+            "searchResult": "//a", "chapterRoads": "//ul", "chapterResult": "//a",
+        }
+        with tempfile.TemporaryDirectory() as folder, patch.object(rules, "DATA_ROOT", Path(folder)), \
+                patch.object(rules, "remote_rules") as remote:
+            with self.assertRaises(RequestProblem):
+                rules.change_rule(None, "create", config="{}")
+            row = rules.change_rule(None, "create", name="自定义名称", config=json.dumps(config))["items"][0]
+            rule_id = row["id"]
+            self.assertTrue(row["custom"])
+            self.assertEqual(row["name"], "自定义名称")
+            self.assertEqual(rules.change_rule(rule_id, "default")["default_rule"], rule_id)
+            rules.change_rule(rule_id, "rename", name="我的片源")
+            result = rules.change_rule(rule_id, "edit", config=json.dumps({**config, "version": "2"}))
+            self.assertEqual(result["default_rule"], rule_id)
+            self.assertEqual((result["items"][0]["name"], result["items"][0]["version"]), ("我的片源", "2"))
+            self.assertEqual(rules.change_rule(rule_id, "remove")["default_rule"], "")
+            self.assertEqual(rules.change_rule("manual", "default")["default_rule"], "manual")
+            remote.assert_not_called()
+
     def test_rule_update_checks_fresh_catalogue_and_cannot_downgrade(self):
         local = {
             "name": "Example", "version": "1.9", "baseURL": "https://example.com/",
@@ -153,6 +176,7 @@ class XifanPreviewTest(unittest.TestCase):
                 patch.object(rules, "remote_rules", return_value={"example": local}) as remote, \
                 patch.object(rules, "_CATALOGUES", {}):
             rules.change_rule("example", "install")
+            rules.change_rule("example", "rename", name="我的规则")
             remote.return_value = {"example": newer}
             row = rules.rule_list(remote=True, refresh=True)["items"][0]
             remote.assert_called_with(refresh=True)
@@ -162,4 +186,4 @@ class XifanPreviewTest(unittest.TestCase):
             self.assertFalse(rules.rule_list(remote=True)["items"][0]["update"])
             with self.assertRaises(RequestProblem):
                 rules.change_rule("example", "update")
-            self.assertEqual(rules.installed_rule("example"), newer)
+            self.assertEqual(rules.installed_rule("example"), {**newer, "_handbook_name": "我的规则"})

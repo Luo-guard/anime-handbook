@@ -47,6 +47,7 @@ window.onlinePlayback = (() => {
   let selection = null;
   let installed = [];
   let lastRule = "";
+  let defaultRule = "";
   let hlsLibrary;
   let managing = false;
   let checkingRules = false;
@@ -273,7 +274,8 @@ window.onlinePlayback = (() => {
     const status = $("#onlineRuleStatus");
     list.replaceChildren();
     status.textContent = installed.length ? `${installed.length} 个已安装来源` : "暂无已安装来源，请先下载规则。";
-    const preferred = installed.find(rule => rule.id === lastRule)
+    const preferred = installed.find(rule => rule.id === defaultRule)
+      || installed.find(rule => rule.id === lastRule)
       || installed.find(rule => rule.id === "xfdmnext") || installed[0];
     const sources = preferred ? [preferred, ...installed.filter(rule => rule !== preferred)] : [];
     for (const rule of sources) {
@@ -322,7 +324,7 @@ window.onlinePlayback = (() => {
         const query = input.value.trim();
         if (query) searchSource(query === titles[0] ? titles : [query], false);
       });
-      if (autoPlay && rule === preferred) {
+      if (autoPlay && defaultRule !== "manual" && rule === preferred) {
         searched = true;
         group.open = true;
         searchSource(titles, true);
@@ -333,36 +335,63 @@ window.onlinePlayback = (() => {
   let ruleCatalogue = [];
   let ruleFilter = "installed";
 
-  async function refreshRuleCatalogue({ fresh = false } = {}) {
-    if (checkingRules) return;
+  function applyRuleList(result, remote = false) {
+    installed = result.items.filter(rule => rule.installed);
+    defaultRule = result.default_rule || "";
+    if (remote) {
+      ruleCatalogue = result.items;
+    } else {
+      const local = new Map(installed.map(rule => [rule.id, rule]));
+      ruleCatalogue = ruleCatalogue.flatMap(rule => {
+        if (local.has(rule.id)) {
+          const current = local.get(rule.id);
+          local.delete(rule.id);
+          return [{ ...current, available_version: rule.available_version, update: rule.update && rule.version === current.version }];
+        }
+        return rule.available_version ? [{ ...rule, installed: false, update: false, version: rule.available_version }] : [];
+      }).concat([...local.values()]);
+    }
+    const select = $("#onlineDefaultRule");
+    select.replaceChildren(
+      new Option("自动（上次使用的片源优先）", ""),
+      new Option("每次手动选择", "manual"),
+      ...installed.map(rule => new Option(rule.name, rule.id)),
+    );
+    select.value = defaultRule;
+    select.disabled = false;
+    renderRuleCatalogue();
+  }
+
+  async function refreshRuleCatalogue({ fresh = false, remote = false } = {}) {
+    if (checkingRules || managing) return;
     checkingRules = true;
     const check = $("#onlineRuleCheckUpdates");
-    check.disabled = true;
     const status = $("#onlineRuleManagerStatus");
+    check.disabled = true;
     if (fresh) {
       ruleFilter = "installed";
       $("#onlineRuleFilter").value = "";
       renderRuleCatalogue();
     }
-    status.textContent = fresh ? "正在检查规则更新…" : "正在读取 KazumiRules…";
-    let rules;
     try {
-      const query = fresh ? { remote: "1", refresh: "1" } : { remote: "1" };
-      rules = (await request("rules", query)).items;
-      const count = rules.filter(rule => rule.update).length;
-      status.textContent = count ? `${count} 条规则可更新`
-        : fresh ? (rules.some(rule => rule.installed) ? "已安装的规则暂无可用更新" : "尚未安装规则") : "";
+      if (!remote && !fresh) {
+        status.textContent = "";
+        applyRuleList(await request("rules", {}));
+        return;
+      }
+      status.hidden = false;
+      status.textContent = "正在读取 KazumiRules…";
+      const result = await request("rules", fresh ? { remote: "1", refresh: "1" } : { remote: "1" });
+      applyRuleList(result, true);
+      const count = result.items.filter(rule => rule.update).length;
+      status.textContent = count ? `${count} 条规则可更新` : fresh ? "暂无可用更新" : "";
     } catch (error) {
-      rules = installed;
-      try { rules = (await request("rules", {})).items; }
-      catch { /* Keep the last known installed rules if the backend is unavailable. */ }
+      status.hidden = false;
       status.textContent = error.message;
     } finally {
       checkingRules = false;
-      check.disabled = managing;
+      check.disabled = false;
     }
-    ruleCatalogue = rules;
-    renderRuleCatalogue();
   }
 
   function renderRuleCatalogue() {
@@ -376,7 +405,7 @@ window.onlinePlayback = (() => {
     }
     if (!rules.length) {
       list.textContent = query ? "没有匹配的规则。" : ruleFilter === "installed"
-        ? "还没有安装规则。可从规则仓库下载。" : "暂无可下载规则。";
+        ? "还没有安装规则。可新增自定义规则，或从规则仓库下载。" : "暂无可下载规则。";
       return;
     }
     list.replaceChildren(...rules.map(rule => {
@@ -387,18 +416,20 @@ window.onlinePlayback = (() => {
       title.textContent = rule.name;
       const meta = document.createElement("small");
       const version = rule.update ? `${rule.version} → ${rule.available_version}` : rule.version;
-      meta.textContent = [rule.installed && "已安装", rule.host, version].filter(Boolean).join(" · ");
+      meta.textContent = [rule.id === defaultRule && "默认", rule.custom ? "自定义" : rule.installed && "已安装", rule.host, version].filter(Boolean).join(" · ");
       copy.append(title, meta);
       const buttons = document.createElement("div");
       buttons.className = "online-rule-actions";
-      const actions = rule.installed ? [["移除", "remove"]] : [["下载", "install"]];
+      const actions = rule.installed ? [["重命名", "rename"], ["移除", "remove"]] : [["下载", "install"]];
+      if (rule.custom) actions.unshift(["编辑规则", "edit"]);
       if (rule.update) actions.unshift(["更新", "update"]);
       for (const [label, action] of actions) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "secondary-button compact-button";
         button.textContent = label;
-        button.addEventListener("click", () => manageRule(rule, action, button));
+        button.addEventListener("click", () => ["rename", "edit"].includes(action)
+          ? openRuleEditor(action, rule) : manageRule({ id: rule.id, action }, button));
         buttons.append(button);
       }
       row.append(copy, buttons);
@@ -406,27 +437,56 @@ window.onlinePlayback = (() => {
     }));
   }
 
-  async function manageRule(rule, action, button) {
-    if (managing || checkingRules) return;
+  async function manageRule(payload, button, errorBox = $("#onlineRuleManagerStatus")) {
+    if (managing || checkingRules) return false;
     managing = true;
     button.disabled = true;
     $("#onlineRuleCheckUpdates").disabled = true;
-    const status = $("#onlineRuleManagerStatus");
+    errorBox.hidden = true;
     try {
       const result = await api("/api/playback/rules", {
-        method: "POST", body: JSON.stringify({ id: rule.id, action }), timeoutMs: 24000,
+        method: "POST", body: JSON.stringify(payload), timeoutMs: 24000,
       });
-      installed = result.items;
+      applyRuleList(result);
       if ($("#onlinePlaybackPicker").open) renderInstalled();
-      await refreshRuleCatalogue();
-      const completed = { install: "已下载", update: "已更新", remove: "已移除" };
-      toast(`${completed[action]} ${rule.name}`);
+      return true;
     } catch (error) {
-      status.textContent = error.message;
+      errorBox.textContent = error.message;
+      errorBox.hidden = false;
+      return false;
     } finally {
       button.disabled = false;
       managing = false;
-      $("#onlineRuleCheckUpdates").disabled = checkingRules;
+      $("#onlineRuleCheckUpdates").disabled = false;
+    }
+  }
+
+  let editingRule;
+  async function openRuleEditor(action, rule = {}) {
+    if (managing || checkingRules || $("#onlineRuleEditor").open) return;
+    const editor = $("#onlineRuleEditor");
+    const custom = action !== "rename";
+    const field = $("#onlineRuleConfig");
+    try {
+      const config = action === "edit" ? (await request("custom-rule", { id: rule.id })).config : null;
+      if (editor.open) return;
+      editingRule = { id: rule.id, action };
+      $("#onlineRuleEditorTitle").textContent = { create: "新增自定义规则", edit: "编辑自定义规则", rename: "重命名规则" }[action];
+      $("#onlineRuleCustomFields").hidden = !custom;
+      $("#onlineRuleName").parentElement.querySelector('label[for="onlineRuleName"]').hidden = action === "edit";
+      $("#onlineRuleName").hidden = action === "edit";
+      $("#onlineRuleName").value = action === "rename" ? rule.name : "";
+      $("#onlineRuleFile").value = "";
+      field.value = config ? JSON.stringify(config, null, 2) : "";
+      field.placeholder = '{"name":"片源名称","baseURL":"https://…","searchURL":"…","searchList":"…","searchName":"…","searchResult":"…","chapterRoads":"…","chapterResult":"…"}';
+      field.required = custom;
+      $("#onlineRuleEditorError").hidden = true;
+      editor.showModal();
+      (custom ? field : $("#onlineRuleName")).focus();
+    } catch (error) {
+      const status = $("#onlineRuleManagerStatus");
+      status.textContent = error.message;
+      status.hidden = false;
     }
   }
 
@@ -526,6 +586,7 @@ window.onlinePlayback = (() => {
       const result = await request("rules", {});
       if (!dialog.open || selection !== context) return;
       installed = result.items;
+      defaultRule = result.default_rule || "";
       renderInstalled({ autoPlay: !choose });
     } catch (error) {
       if (dialog.open && selection === context) status.textContent = error.message;
@@ -564,11 +625,40 @@ window.onlinePlayback = (() => {
     $("#onlinePlaybackPicker").addEventListener("close", () => {
       if (!$("#onlinePlaybackPicker").open) clearSourceSearches();
     });
+    const ruleEditor = $("#onlineRuleEditor");
+    $("#onlineRuleAddCustom").addEventListener("click", () => openRuleEditor("create"));
+    $("#onlineRuleEditorCancel").addEventListener("click", () => { if (!managing) ruleEditor.close(); });
+    ruleEditor.addEventListener("cancel", event => { if (managing) event.preventDefault(); });
+    $("#onlineRuleFile").addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const errorBox = $("#onlineRuleEditorError");
+      try {
+        if (file.size > 128 * 1024) throw new Error("规则 JSON 不能超过 128 KB");
+        $("#onlineRuleConfig").value = await file.text();
+        errorBox.hidden = true;
+      } catch (error) {
+        errorBox.textContent = error.message;
+        errorBox.hidden = false;
+      }
+    });
+    ruleEditor.querySelector("form").addEventListener("submit", async event => {
+      event.preventDefault();
+      if (await manageRule({
+        ...editingRule, name: $("#onlineRuleName").value,
+        ...(editingRule.action !== "rename" && { config: $("#onlineRuleConfig").value }),
+      }, event.submitter, $("#onlineRuleEditorError"))) ruleEditor.close();
+    });
+    $("#onlineDefaultRule").addEventListener("change", async event => {
+      const select = event.target;
+      if (!await manageRule({ id: select.value, action: "default" }, select)) select.value = defaultRule;
+    });
     $("#onlineRuleFilter").addEventListener("input", renderRuleCatalogue);
     for (const button of $$("[data-rule-filter]")) {
       button.addEventListener("click", () => {
         ruleFilter = button.dataset.ruleFilter;
         renderRuleCatalogue();
+        if (ruleFilter === "catalogue") refreshRuleCatalogue({ remote: true });
       });
     }
     $("#openPlaybackRuleSettings").addEventListener("click", () => openHandbookSettings("playback", "#playbackRulesHeading"));
