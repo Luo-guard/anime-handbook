@@ -1327,10 +1327,12 @@
             </summary>
             <div class="airing-source-guide-body">
               <dl>
-                <div><dt>周表</dt><dd>可选長門番堂、Bangumi 或 AnimeSchedule（AS）。刷新时重新读取所选来源，Bangumi 周表按星期展示。</dd></div>
-                <div><dt>播出状态与更新时间</dt><dd>長門番堂方案结合 Bangumi 的播出日期和長門番堂的放送时间。AS 使用条目状态与下集排期，打开详情时按需补查。</dd></div>
-                <div><dt>已播集数</dt><dd>周表卡片和番剧详情可分别选来源。Bangumi 按逐集日期计算，AS 按放送计划计算。AS 周表缓存 6 小时，到期后按需刷新，也可在周表手动刷新。</dd></div>
-                <div><dt>个人已看进度</dt><dd>确认记录后更新，数据来自手账里保存的观看记录。</dd></div>
+                <div><dt>周表</dt><dd>可选長門番堂、Bangumi 或 AnimeSchedule（AS）。Bangumi 周表按星期展示。三种来源的缓存都约为 6 小时。打开周表时先显示已有缓存，过期后在后台更新，也可手动刷新。</dd></div>
+                <div><dt>番剧资料</dt><dd>番名、首播日期、封面、评分和排名平时读本机资料。本地版启动同步时，会向 Bangumi 补查总集数、评分或所需单集资料尚未补齐的番剧，以及当天尚未检查过播出进度的「在看」番剧。</dd></div>
+                <div><dt>单集名与播出日期</dt><dd>同步后保存在本机。开启「单集名称悬浮提示」后，打开单集资料尚未补齐的番剧详情，也会向 Bangumi 补查。</dd></div>
+                <div><dt>播出状态与更新时间</dt><dd>详情顶部选長門番堂方案时，用本机的季度表钟点和 Bangumi 章节日期计算。选 AS 时，使用条目状态和下集排期，打开详情时按需补查状态并缓存。AS 已确认完结的条目会跳过状态刷新。</dd></div>
+                <div><dt>已播集数</dt><dd>周表卡片和详情「本篇」可分别选来源。Bangumi 按本机逐集日期和可用的放送钟点计算，AS 按上周、本周和下周已到播出时间的原声或字幕排期计算。已有排期到点后，下次计算就会更新集数。</dd></div>
+                <div><dt>个人已看进度</dt><dd>例如「已看 7 / 14」，7 是本篇已看的集数，确认记录后保存到本机。14 是手账已收录的正片集数。</dd></div>
               </dl>
               <div class="airing-source-guide-actions">
                 <button type="button" class="text-button" id="goToScheduleAiringSettings">周表设置</button>
