@@ -2184,7 +2184,7 @@ input[type="number"] {
   outline-offset: 3px;
 }
 
-.episode-quick-menu.visible .episode-quick-action.active {
+.episode-quick-menu.visible:where(:not(.detail-modern-wheel)) .episode-quick-action.active {
   transform: translate(-50%, -50%) scale(1.18);
   transition-delay: 0ms;
 }
@@ -6333,7 +6333,9 @@ body.schedule-picking [data-floating-view="schedule"] {
 .watched .detail-credit-check { background: var(--accent); border-color: var(--accent); color: white; }
 .watched .detail-credit-check::after { content: "✓"; display: block; font-size: 11px; line-height: 12px; }
 .detail-modern-wheel {
-  --wheel-line: color-mix(in srgb, var(--surface) 77%, var(--accent));
+  --wheel-paper: color-mix(in srgb, white 80%, var(--green-50));
+  --wheel-line: color-mix(in srgb, var(--wheel-paper) 81%, var(--accent));
+  --wheel-highlight: color-mix(in srgb, var(--green-100) 80%, var(--accent));
   width: var(--wheel-diameter);
   aspect-ratio: 1;
   transform: translate(-50%, -50%) scale(.88);
@@ -6341,8 +6343,8 @@ body.schedule-picking [data-floating-view="schedule"] {
   isolation: isolate;
   border: 1px solid var(--wheel-line);
   border-radius: 50%;
-  background: color-mix(in srgb, var(--surface) 94%, var(--green-100));
-  box-shadow: 0 14px 38px color-mix(in srgb, var(--green-950) 28%, transparent);
+  background: var(--wheel-paper);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--green-950) 22%, transparent);
   transition: opacity 180ms ease, transform 180ms cubic-bezier(.2,.72,.28,1);
 }
 .detail-modern-wheel.visible { opacity: 1; transform: translate(-50%, -50%); pointer-events: auto; }
@@ -6361,10 +6363,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   border-radius: 50%;
   pointer-events: none;
   background: conic-gradient(from var(--start), transparent 1deg, var(--wedge-color) 1deg calc(var(--arc) - 1deg), transparent calc(var(--arc) - 1deg));
-  mask-image: radial-gradient(circle closest-side, transparent 0 41%, #000 42%);
+  mask-image: radial-gradient(circle closest-side, transparent 0 28%, #000 29%);
 }
 .detail-modern-wheel .episode-quick-action:not(:disabled):is(:hover, :focus-visible, .active) + .episode-wheel-wedge {
-  --wedge-color: var(--green-100);
+  --wedge-color: var(--wheel-highlight);
 }
 .detail-modern-wheel .episode-quick-action,
 .detail-modern-wheel.visible .episode-quick-action {
@@ -6382,11 +6384,12 @@ body.schedule-picking [data-floating-view="schedule"] {
   border-radius: 10px;
   background: transparent;
   color: var(--green-950);
+  font-weight: 650;
   box-shadow: none;
   white-space: nowrap;
   transition: none;
 }
-.detail-modern-wheel.visible .episode-quick-action:not(:disabled):is(:hover, :focus-visible, .active) { background: var(--green-100); }
+.detail-modern-wheel.visible .episode-quick-action:not(:disabled):is(:hover, :focus-visible, .active) { color: var(--green-900); }
 .detail-modern-wheel.visible .episode-quick-action:disabled { opacity: .52; cursor: default; }
 .episode-wheel-icon { font-size: 20px; font-weight: 500; line-height: 1; color: var(--accent); }
 .detail-modern-wheel.visible .episode-quick-close {
@@ -6397,8 +6400,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   aspect-ratio: 1;
   border: 1px solid var(--wheel-line);
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--wheel-paper);
 }
+.detail-modern-wheel.visible .episode-quick-close:is(:hover, :focus-visible),
+.detail-wheel-compact.visible .episode-quick-action:not(:disabled):is(:hover, :focus-visible, .active) { background: var(--green-100); }
 .detail-modern-wheel .episode-quick-close span { font-size: 17px; color: var(--muted); }
 .detail-modern-wheel .episode-quick-close small { font-size: 12px; font-weight: 700; }
 .detail-modern-wheel.detail-wheel-compact {

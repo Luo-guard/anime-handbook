@@ -195,8 +195,22 @@ window.calls=[];
     assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 7);
     const modernBox = await wheel.boundingBox();
     assert(modernBox.x >= 0 && modernBox.x + modernBox.width <= 390 && Math.abs(modernBox.width - modernBox.height) < 1);
+    const play = wheel.locator('[data-episode-action="play"]');
+    const beforeHover = await play.evaluate(node => ({
+      transform: getComputedStyle(node).transform,
+      wedge: getComputedStyle(node.nextElementSibling).backgroundImage,
+    }));
     await page.mouse.move(modernBox.x + modernBox.width / 2, modernBox.y + 14);
-    assert.equal(await wheel.locator('[data-episode-action="play"]').evaluate(node => node.classList.contains("active")), true);
+    const highlighted = await play.evaluate(node => ({
+      active: node.classList.contains("active"),
+      background: getComputedStyle(node).backgroundColor,
+      transform: getComputedStyle(node).transform,
+      wedge: getComputedStyle(node.nextElementSibling).backgroundImage,
+    }));
+    assert.equal(highlighted.active, true);
+    assert.equal(highlighted.transform, beforeHover.transform, "hover does not scale the label");
+    assert.equal(highlighted.background, "rgba(0, 0, 0, 0)", "highlight is painted on the wedge only");
+    assert.notEqual(highlighted.wedge, beforeHover.wedge);
     await page.mouse.click(modernBox.x + modernBox.width / 2, modernBox.y + 14);
     assert.deepEqual(await calls(), [["action", "play", "0:1"]]);
     const modernCellBox = await cell.boundingBox();
