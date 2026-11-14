@@ -837,22 +837,6 @@ async function runEpisodeGestureAction(action, key, button) {
     return createEpisodeQuickRecord(episode, action);
   }
   if (action === "open_menu") return;
-  if (action === "open_detail") {
-    const title = episode.name_cn || episode.name;
-    const dialog = document.createElement("dialog");
-    dialog.className = "modal";
-    dialog.setAttribute("aria-label", "单集详情");
-    dialog.innerHTML = `<div class="modal-card">
-      <form method="dialog"><button class="modal-close" aria-label="关闭">×</button></form>
-      <h2>${escapeHtml(episode.display_label || [episode.type_label || "本篇", episode.label].join(" "))}</h2>
-      ${title ? `<p>${escapeHtml(title)}</p>` : ""}
-      ${episodeAnnotationMarkup(state.episodeRecordAnnotations?.[key] || [])}
-    </div>`;
-    dialog.addEventListener("close", () => dialog.remove(), { once: true });
-    document.body.append(dialog);
-    dialog.showModal();
-    return;
-  }
   if (action === "play") return playDetailEpisode(key);
   if (action === "cancel_download" && state.progressAnime) {
     const anime = state.progressAnime;

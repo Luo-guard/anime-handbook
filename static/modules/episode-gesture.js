@@ -7,7 +7,7 @@
 const EG_ACTION_LABELS = {
   open_menu: "打开扇区", play: "播放", download: "下载", cancel_download: "取消下载",
   delete: "删除本地文件", score: "评分", review: "评价", op: "OP", ed: "ED",
-  open_detail: "单集详情", reveal_in_folder: "查看本地文件", redownload: "查找其他片源",
+  reveal_in_folder: "查看本地文件", redownload: "查找其他片源",
 };
 const EG_SLOTS = ["top", "bottom", "top_right", "bottom_right", "top_left", "bottom_left"];
 const EG_SLOT_LABELS = {
@@ -35,7 +35,7 @@ const EG_DEFAULT = {
   },
   bindings: {
     RightClick: "open_menu", LongClick: "open_menu",
-    "Ctrl+Click": "open_detail", "Alt+Click": "reveal_in_folder",
+    "Alt+Click": "reveal_in_folder",
   },
 };
 const EG_LONG_PRESS_MS = 420;
@@ -44,14 +44,19 @@ const EG_DOUBLE_DELAY = 250;
 function episodeGestureConfig() {
   const raw = state.settings?.episode_gestures || {};
   const hiddenActions = new Set(raw.hidden_actions || []);
+  // 已保存的旧动作按留空处理，保留用户选择的其他布局和手势。
+  hiddenActions.delete("open_detail");
+  const removeRetiredAction = entries => Object.fromEntries(
+    Object.entries(entries).map(([key, action]) => [key, action === "open_detail" ? "" : action]),
+  );
   const onlineHidden = hiddenActions.delete("online_play");
   const localHidden = hiddenActions.has("play");
   if (!raw.playback_source && localHidden && !onlineHidden) hiddenActions.delete("play");
   return {
     enabled: raw.enabled !== false,
     keepMenu: raw.keep_menu_on_release !== false,
-    slots: { ...EG_DEFAULT.slots, ...(raw.slots || {}) },
-    bindings: { ...(raw.bindings || EG_DEFAULT.bindings) },
+    slots: removeRetiredAction({ ...EG_DEFAULT.slots, ...raw.slots }),
+    bindings: removeRetiredAction(raw.bindings || EG_DEFAULT.bindings),
     playbackSource: raw.playback_source || (localHidden === onlineHidden ? "auto" : localHidden ? "online" : "local"),
     hiddenActions,
   };

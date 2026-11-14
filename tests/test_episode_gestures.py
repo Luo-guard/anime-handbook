@@ -55,6 +55,22 @@ class GestureNormalizeTests(unittest.TestCase):
         self.assertEqual(value["slots"]["bottom"], "")
         self.assertEqual(value["slots"]["top_right"], "score")
 
+    def test_retired_episode_detail_leaves_its_old_bindings_empty(self):
+        value = eg.normalize({
+            "hidden_actions": ["open_detail", "download"],
+            "slots": {"top": "open_detail", "bottom": "play"},
+            "bindings": {"RightClick": "open_detail", "Ctrl+Click": "open_detail",
+                         "Shift+Click": "score"},
+        })
+        self.assertEqual(value["hidden_actions"], ["download"])
+        self.assertEqual(value["slots"]["top"], "")
+        self.assertEqual(value["slots"]["bottom"], "play")
+        self.assertEqual(eg.action_for_gesture(value, "RightClick"), "")
+        self.assertNotIn("Ctrl+Click", value["bindings"])
+        self.assertEqual(eg.action_for_gesture(value, "Shift+Click"), "score")
+        self.assertEqual(eg.normalize(value), value)
+        self.assertNotIn("Ctrl+Click", eg.defaults()["bindings"])
+
     def test_max_four_gestures_per_action(self):
         ok = eg.normalize({"bindings": {
             "RightClick": "play", "LongClick": "play", "MiddleClick": "play", "Alt+Click": "play",

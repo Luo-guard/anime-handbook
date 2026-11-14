@@ -14,7 +14,7 @@ import copy
 ACTIONS = {
     "open_menu", "play", "download", "cancel_download", "delete",
     "score", "review", "op", "ed",
-    "open_detail", "reveal_in_folder", "redownload",
+    "reveal_in_folder", "redownload",
 }
 BASE_GESTURES = {
     "DoubleClick", "RightClick", "LongClick", "LongRightClick", "MiddleClick",
@@ -31,7 +31,7 @@ for _prefix in MODIFIER_PREFIXES[1:]:
 MAX_GESTURES_PER_ACTION = 4
 SLOT_KEYS = ("top", "bottom", "top_right", "bottom_right", "top_left", "bottom_left")
 HIDEABLE_ACTIONS = {"play", "online_play", "download", "cancel_download", "delete",
-                    "open_detail", "reveal_in_folder", "redownload"}
+                    "reveal_in_folder", "redownload"}
 PLAYBACK_SOURCES = {"auto", "local", "online"}
 
 DEFAULT_SLOTS = {
@@ -45,7 +45,6 @@ DEFAULT_SLOTS = {
 DEFAULT_BINDINGS = {
     "RightClick": "open_menu",
     "LongClick": "open_menu",
-    "Ctrl+Click": "open_detail",
     "Alt+Click": "reveal_in_folder",
 }
 
@@ -75,7 +74,7 @@ def normalize(value) -> dict:
     result["keep_menu_on_release"] = keep
     hidden = value.get("hidden_actions", [])
     if not isinstance(hidden, list) or any(
-        not isinstance(action, str) or action not in HIDEABLE_ACTIONS for action in hidden
+        not isinstance(action, str) or action not in HIDEABLE_ACTIONS | {"open_detail"} for action in hidden
     ):
         raise ValueError("扇区入口设置无效")
     source = value.get("playback_source")
@@ -90,7 +89,7 @@ def normalize(value) -> dict:
     if not isinstance(source, str) or source not in PLAYBACK_SOURCES:
         raise ValueError("播放来源设置无效")
     result["playback_source"] = source
-    result["hidden_actions"] = sorted(set(hidden) - {"online_play"})
+    result["hidden_actions"] = sorted(set(hidden) - {"online_play", "open_detail"})
 
     slots = value.get("slots", DEFAULT_SLOTS)
     if not isinstance(slots, dict) or set(slots) - set(SLOT_KEYS):
@@ -98,7 +97,7 @@ def normalize(value) -> dict:
     cleaned_slots = {}
     for key in SLOT_KEYS:
         item = slots.get(key, DEFAULT_SLOTS[key])
-        if item is None or item == "":
+        if item in (None, "", "open_detail"):
             cleaned_slots[key] = ""  # 用户主动去掉这一格
         elif isinstance(item, str) and item in ACTIONS and item != "open_menu":
             cleaned_slots[key] = item
@@ -126,6 +125,10 @@ def normalize(value) -> dict:
             raise ValueError("左键单击固定用于记录已看，不能改绑")
         if gesture not in GESTURES:
             raise ValueError(f"手势无效：{gesture}")
+        if action == "open_detail":
+            if gesture in DEFAULT_BINDINGS:
+                cleaned[gesture] = ""
+            continue
         if action not in ACTIONS:
             raise ValueError(f"单集动作无效：{action}")
         cleaned[gesture] = action
