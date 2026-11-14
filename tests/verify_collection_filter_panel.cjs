@@ -56,6 +56,11 @@ function dragCell(el,panel){
       const dialog = document.querySelector('#collectionFloatingPanel');
       // 拖选要用 elementFromPoint，弹窗必须先真的显示出来，否则矩阵坐标全是 0。
       if (!dialog.open) dialog.showModal();
+      const sections = [...dialog.querySelectorAll(".collection-control-section")];
+      const collapsedByDefault = sections.every((section) =>
+        !section.open && section.querySelector(".cc-section-content").getBoundingClientRect().height === 0);
+      if (!collapsedByDefault) throw new Error("筛选和排序默认收起");
+      sections.forEach((section) => section.querySelector("summary").click());
       const rows = () => panel.querySelectorAll('.season-matrix-row').length;
       const pressed = () => [...panel.querySelectorAll('[data-season-key].active')]
         .map((b) => b.dataset.seasonKey).sort();
@@ -145,6 +150,7 @@ function dragCell(el,panel){
       state.settings.collection_sort_modes = { 1: 'rank' };
       state.settings.collection_sort_directions = { 1: 'desc' };
       updateSortPicker();
+      if ($("#ccSortNote").textContent !== "评分 ↓") throw new Error("排序摘要应同步选择");
       const activeDirs = [...document.querySelectorAll('#collectionSortPickerMenu [data-sort-direction].active')];
       const highlight = {
         activeRows: sortRows.filter((r) => r.classList.contains('active')).map((r) => r.dataset.sortMode),

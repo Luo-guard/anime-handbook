@@ -31,6 +31,8 @@ $("#searchInput").addEventListener("input", (event) => {
 
 $("#collectionFloatingButton").addEventListener("click", () => {
   const panel = $("#collectionFloatingPanel");
+  $$(".collection-control-section", panel).forEach((section) => { section.open = false; });
+  $(".cc-body", panel).scrollTop = 0;
   panel.showModal();
   $("#collectionFloatingButton").setAttribute("aria-expanded", "true");
 });

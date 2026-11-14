@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-library-settings" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-collection-filters" />
   </head>
   <body>
     <div class="app-shell">
@@ -433,28 +433,34 @@
               <button type="button" class="collection-controls-close" id="closeCollectionFloatingPanel" aria-label="关闭">×</button>
             </header>
             <div class="cc-body">
-              <section class="collection-control-section">
-                <div class="cc-section-head">
-                  <h4>季度筛选</h4>
-                  <span class="cc-section-note" id="ccSeasonNote"></span>
+              <details class="collection-control-section">
+                <summary class="cc-section-head">
+                  <span class="cc-section-title">季度筛选</span>
+                  <span class="cc-section-note" id="ccSeasonNote">全部季度</span>
+                  <span class="cc-section-chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="cc-section-content">
+                  <div class="season-filter-panel" id="seasonFilterPanel"></div>
                 </div>
-                <div class="season-filter-panel" id="seasonFilterPanel"></div>
-              </section>
-              <section class="collection-control-section">
-                <div class="cc-section-head">
-                  <h4>排序方式</h4>
-                  <span class="cc-section-note">点方向键切换升降序</span>
+              </details>
+              <details class="collection-control-section">
+                <summary class="cc-section-head">
+                  <span class="cc-section-title">排序方式</span>
+                  <span class="cc-section-note" id="ccSortNote">名称 ↑</span>
+                  <span class="cc-section-chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="cc-section-content">
+                  <div class="sort-picker-menu" id="collectionSortPickerMenu">
+                    <div data-sort-mode="name"><span>名称</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
+                    <div data-sort-mode="rank"><span>评分</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
+                    <div data-sort-mode="popularity"><span>热度</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
+                    <div data-sort-mode="airdate"><span>首播</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
+                    <div data-sort-mode="latest" title="按已播出的最新一集的更新日期；↑ 最新在前，↓ 最早在前"><span>最新一集</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
+                    <div data-sort-mode="kazumi"><span>加入时间</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
+                    <div data-sort-mode="custom"><span>自定义</span><em class="sort-row-hint">拖拽调整</em><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
+                  </div>
                 </div>
-                <div class="sort-picker-menu" id="collectionSortPickerMenu">
-                  <div data-sort-mode="name"><span>名称</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
-                  <div data-sort-mode="rank"><span>评分</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
-                  <div data-sort-mode="popularity"><span>热度</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
-                  <div data-sort-mode="airdate"><span>首播</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
-                  <div data-sort-mode="latest" title="按已播出的最新一集的更新日期；↑ 最新在前，↓ 最早在前"><span>最新一集</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
-                  <div data-sort-mode="kazumi"><span>加入时间</span><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
-                  <div data-sort-mode="custom"><span>自定义</span><em class="sort-row-hint">拖拽调整</em><div class="sort-dir"><button data-sort-direction="asc" aria-label="升序">↑</button><button data-sort-direction="desc" aria-label="降序">↓</button></div></div>
-                </div>
-              </section>
+              </details>
             </div>
             <footer class="cc-foot">
               <button type="button" class="cc-foot-reset" id="ccResetAll">恢复默认</button>
@@ -1806,7 +1812,7 @@
     <script src="/schedule.js?v=20261114-card-columns" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
-    <script src="/modules/collection.js?v=20261111-cleanup" defer></script>
+    <script src="/modules/collection.js?v=20261114-collection-filters" defer></script>
     <script src="/modules/presentation.js?v=20261114-finished-airing" defer></script>
     <script src="/modules/collection-cards.js?v=20261114-card-columns" defer></script>
     <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
@@ -1822,7 +1828,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
     <script src="/modules/settings-save.js?v=20261114-wheel-style" defer></script>
-    <script src="/modules/events.js?v=20261114-bgm-source-cards" defer></script>
+    <script src="/modules/events.js?v=20261114-collection-filters" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>

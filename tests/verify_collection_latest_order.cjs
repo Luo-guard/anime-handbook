@@ -91,11 +91,12 @@ function episodeTotal(a){return (a.episodes||[]).length;}
 
       // 排序方式面板里真的出现这一项，且两列补满
       const row = document.querySelector('[data-sort-mode="latest"]');
-      const gridColumns = getComputedStyle(document.querySelector('#collectionSortPickerMenu')).gridTemplateColumns;
       // 7 项两列，最后一项要横跨两列（否则右下角留一个空洞）。
       // 弹窗默认是 display:none，量之前先打开，否则量到的是 0×0。
       const panel = document.querySelector('#collectionFloatingPanel');
       if (!panel.open) panel.showModal();
+      document.querySelector('#collectionSortPickerMenu').closest('details').open = true;
+      const gridColumns = getComputedStyle(document.querySelector('#collectionSortPickerMenu')).gridTemplateColumns;
       const menuBox = document.querySelector('#collectionSortPickerMenu').getBoundingClientRect().width;
       const customBox = document.querySelector('[data-sort-mode="custom"]').getBoundingClientRect().width;
       const customSpans = customBox > menuBox - 12;

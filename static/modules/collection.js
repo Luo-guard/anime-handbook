@@ -152,7 +152,7 @@ function updateSeasonNote() {
   const count = state.seasonFilters.size;
   const note = $("#ccSeasonNote");
   if (note) {
-    note.textContent = count ? `已选 ${count} 个季度` : "可多选，跨年份也能一起选";
+    note.textContent = count ? `已选 ${count} 个季度` : "全部季度";
     note.classList.toggle("is-active", count > 0);
   }
 }
@@ -343,8 +343,12 @@ function collectionSortDirection() {
 function updateSortPicker() {
   const mode = collectionSortMode();
   const direction = collectionSortDirection();
+  const note = $("#ccSortNote");
   $$("[data-sort-mode]").forEach((row) => {
     const active = row.dataset.sortMode === mode;
+    if (active && note) {
+      note.textContent = `${row.firstElementChild.textContent} ${direction === "desc" ? "↓" : "↑"}`;
+    }
     row.classList.toggle("active", active);
     $$("[data-sort-direction]", row).forEach((button) => button.classList.toggle("active", active && button.dataset.sortDirection === direction));
   });

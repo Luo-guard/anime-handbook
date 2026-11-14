@@ -693,18 +693,39 @@ h1 {
   .collection-controls-modal[open]::backdrop { animation: none; }
 }
 .collection-control-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid rgb(var(--theme-rgb) / .09);
-  border-radius: 16px;
+  flex: 0 0 auto;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
   background: var(--paper);
 }
-.cc-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.collection-control-section h4 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 800; letter-spacing: .02em; }
-.cc-section-note { color: var(--muted); font-size: 11.5px; }
-.cc-section-note.is-active { color: var(--green-700); font-weight: 700; }
+.cc-section-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: inherit;
+  cursor: pointer;
+  list-style: none;
+}
+.cc-section-head::-webkit-details-marker { display: none; }
+.cc-section-head:hover { background: var(--green-50); }
+.cc-section-head:focus-visible { outline: 2px solid var(--green-700); outline-offset: -3px; }
+.cc-section-title { color: var(--ink); font-size: 13px; font-weight: 800; }
+.cc-section-note { color: var(--muted); font-size: 11.5px; text-align: end; }
+.cc-section-note.is-active { color: var(--green-800); font-weight: 700; }
+.cc-section-chevron {
+  justify-self: center;
+  width: 7px;
+  height: 7px;
+  border: solid var(--green-700);
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-2px) rotate(45deg);
+}
+.collection-control-section[open] .cc-section-chevron { transform: translateY(2px) rotate(225deg); }
+.cc-section-content { padding: 0 14px 14px; }
+.collection-control-section:not([open]) > .cc-section-content { display: none; }
 .cc-foot {
   display: flex;
   align-items: center;
@@ -3064,7 +3085,8 @@ dialog::backdrop {
   .cc-head { padding:16px 16px 10px; }
   .cc-head h3 { font-size:19px; }
   .cc-body { padding:0 10px 2px; gap:10px; }
-  .collection-control-section { padding:12px; border-radius:14px; }
+  .cc-section-head { padding: 12px; }
+  .cc-section-content { padding: 0 12px 12px; }
   .season-matrix-head,
   .season-matrix-row { grid-template-columns: 56px repeat(4, minmax(0, 1fr)); gap: 4px; }
   .sort-row-hint { display: none; }
@@ -3075,8 +3097,6 @@ dialog::backdrop {
   .season-cell { padding: 6px 1px; font-size: 11px; }
   .season-row-year { font-size: 10.5px; }
   .season-toolbar-hint { display: none; }
-  /* 极窄屏先让位给控件本身，说明文字收起来 */
-  .cc-section-note { display: none; }
 }
 @media (max-width: 380px) {
   .collection-controls-modal-frame .sort-picker-menu { grid-template-columns: 1fr; }
