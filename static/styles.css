@@ -6293,9 +6293,6 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 16px; }
 .detail-modern.detail-non-episodes:not(.detail-record-pending) #detailRecordFooter,
 .detail-modern.detail-non-episodes #detailCreditActions { display: none; }
-.detail-modern .detail-record-buttons { gap: 5px; }
-.detail-modern .detail-record-buttons > button { min-height: 36px; padding: 6px 11px; border-radius: 10px; font-size: 13px; }
-.detail-modern #cancelProgress { border-color: transparent; background: transparent; }
 #cancelProgress { transition: opacity 160ms ease; }
 .detail-credit-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
 .modern-detail-menu { position: static; }
@@ -6491,6 +6488,5 @@ body.schedule-picking [data-floating-view="schedule"] {
   .detail-modern .progress-meta { flex-flow: row wrap; align-items: center; }
   .detail-modern .episode-group-grid { --episode-min: 36px; --episode-gap: 6px; }
   .detail-modern .episode-cell { min-height: 36px; }
-  .detail-modern .detail-record-buttons > button { padding-inline: 7px; }
   .detail-credit-actions { gap: 4px; }
 }

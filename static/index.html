@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-wheel-highlight" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-modern-record-setting" />
   </head>
   <body>
     <div class="app-shell">
@@ -1014,6 +1014,7 @@
           <h3 class="settings-subsection-title">详情布局</h3>
           <label class="setting-row"><span><strong>番剧详情布局</strong><small>选择经典布局或深色封面的新版布局。</small></span><select id="detailLayoutInput"><option value="classic">经典布局</option><option value="modern">新版布局</option></select></label>
           <label class="setting-row" data-classic-detail-setting><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改才高亮「确认记录」并显示「取消」。关闭时，两个按钮始终显示并可用。</small></span><span class="switch-row compact"><input type="checkbox" id="detailClassicRecordOnChangeInput" /><span class="switch"></span></span></label>
+          <label class="setting-row hidden" data-modern-detail-setting><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改才高亮「确认记录」并显示「取消修改」。关闭时，两个按钮始终显示并可用。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernRecordOnChangeInput" /><span class="switch"></span></span></label>
           <label class="setting-row hidden" data-modern-detail-setting><span><strong>显示番剧原名</strong><small>当原名与显示名称不同时，在新版标题下显示原名。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernOriginalTitleInput" /><span class="switch"></span></span></label>
           <label class="setting-row hidden" data-modern-detail-setting><span><strong>用勾选框显示 OP／ED</strong><small>关闭后，OP 和 ED 会各自按剧集方块显示。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernCompactCreditsInput" /><span class="switch"></span></span></label>
           <h3 class="settings-subsection-title" id="detailAiringSettingsHeading" tabindex="-1">放送信息</h3>
@@ -1756,15 +1757,15 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261114-episode-wheel" defer></script>
-    <script src="/modules/details.js?v=20261114-finished-airing" defer></script>
+    <script src="/modules/details.js?v=20261114-modern-record-setting" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261114-card-columns" defer></script>
+    <script src="/modules/settings.js?v=20261114-modern-record-setting" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261114-card-columns" defer></script>
+    <script src="/modules/settings-save.js?v=20261114-modern-record-setting" defer></script>
     <script src="/modules/events.js?v=20261114-bgm-source-cards" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

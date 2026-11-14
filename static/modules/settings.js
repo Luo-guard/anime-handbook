@@ -218,6 +218,7 @@ function renderSettingsPanels() {
   $("#detailModernOriginalTitleInput").checked = state.settings.detail_modern_original_title !== false;
   $("#detailModernCompactCreditsInput").checked = state.settings.detail_modern_compact_credits !== false;
   $("#detailClassicRecordOnChangeInput").checked = state.settings.detail_classic_record_on_change === true;
+  $("#detailModernRecordOnChangeInput").checked = state.settings.detail_modern_record_on_change !== false;
   updateDetailLayoutSettings();
   $("#episodePlaybackSourceInput").value = episodeGestureConfig().playbackSource;
   if (!window.handbookOnline) renderPlaybackSettings();

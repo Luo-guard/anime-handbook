@@ -258,7 +258,8 @@ function updateDetailRecordActions() {
     .map(key => episodeStorageKey(key, anime)));
   const draft = new Set([...(state.pendingEpisodes || [])].map(key => episodeStorageKey(key, anime)));
   const changed = stored.size !== draft.size || [...draft].some(key => !stored.has(key));
-  const onChange = modern || state.settings.detail_classic_record_on_change === true;
+  const onChange = modern ? state.settings.detail_modern_record_on_change !== false
+    : state.settings.detail_classic_record_on_change === true;
   dialog.classList.toggle("detail-record-on-change", onChange);
   dialog.classList.toggle("detail-record-pending", changed);
   button.disabled = button.dataset.saving === "true" || (onChange && !changed);
