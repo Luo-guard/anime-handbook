@@ -108,8 +108,14 @@ function egCloseMenu() {
 
 function egRenderMenu(button, config, onAction) {
   egCloseMenu();
-  const modern = $("#progressModal").classList.contains("detail-modern");
+  const modernLayout = $("#progressModal").classList.contains("detail-modern");
+  const modern = modernLayout ? state.settings?.detail_modern_wheel_style !== "classic"
+    : state.settings?.detail_classic_wheel_style === "modern";
   const downloaded = button.classList.contains("downloaded");
+  const playbackUnavailable = button.classList.contains("unreleased")
+    && (!downloaded || config.playbackSource === "online");
+  const actionAvailability = action => action === "play" && playbackUnavailable
+    ? ' disabled title="本集尚未播出"' : "";
   const slots = Object.fromEntries((modern ? EG_WHEEL_SLOTS : EG_SLOTS).map(slot => [slot, config.slots[slot]]));
   for (const [slot, action] of Object.entries(slots)) {
     if (!egRecordEnabled(action) || config.hiddenActions.has(action)
@@ -156,9 +162,7 @@ function egRenderMenu(button, config, onAction) {
       + entries.map(([slot, action], index) => {
         const [icon, text] = EG_WHEEL_ACTIONS[action] || ["", EG_ACTION_LABELS[action]];
         const angle = index * arc * Math.PI / 180;
-        const unavailable = action === "play" && button.classList.contains("unreleased")
-          && (!downloaded || config.playbackSource === "online");
-        return `<button type="button" class="episode-quick-action" style="left:${50 + 32 * Math.sin(angle)}%;top:${50 - 32 * Math.cos(angle)}%" data-episode-action="${action}" data-slot="${slot}"${unavailable ? ' disabled title="本集尚未播出"' : ""}><span class="episode-wheel-icon" aria-hidden="true">${icon}</span>${escapeHtml(text)}</button><span class="episode-wheel-wedge" aria-hidden="true" style="--start:${index * arc - arc / 2}deg;--arc:${arc}deg"></span>`;
+        return `<button type="button" class="episode-quick-action" style="left:${50 + 32 * Math.sin(angle)}%;top:${50 - 32 * Math.cos(angle)}%" data-episode-action="${action}" data-slot="${slot}"${actionAvailability(action)}><span class="episode-wheel-icon" aria-hidden="true">${icon}</span>${escapeHtml(text)}</button><span class="episode-wheel-wedge" aria-hidden="true" style="--start:${index * arc - arc / 2}deg;--arc:${arc}deg"></span>`;
       }).join("");
   } else {
     menu.innerHTML = '<span class="episode-quick-halo" aria-hidden="true"></span>'
@@ -166,7 +170,7 @@ function egRenderMenu(button, config, onAction) {
       + '<span class="episode-quick-cursor" aria-hidden="true"></span>'
       + entries.map(([slot, action]) => {
         const [x, y] = EG_COORDS[slot];
-        return `<button type="button" class="episode-quick-action" style="left:${x * scale}px;top:${y * scale}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action])}</button>`;
+        return `<button type="button" class="episode-quick-action" style="left:${x * scale}px;top:${y * scale}px" data-episode-action="${action}" data-slot="${slot}"${actionAvailability(action)}>${escapeHtml(EG_ACTION_LABELS[action])}</button>`;
       }).join("")
       + '<button type="button" class="episode-quick-action episode-quick-close" data-episode-menu-close aria-label="关闭单集扇区">×</button>';
   }

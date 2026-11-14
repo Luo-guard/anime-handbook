@@ -223,6 +223,19 @@ window.calls=[];
     await page.mouse.up();
     assert.deepEqual(await calls(), [["action", "play", "0:1"]]);
 
+    await page.evaluate(() => {
+      state.settings.detail_classic_wheel_style = "modern";
+      state.settings.detail_modern_wheel_style = "classic";
+    });
+    await other.click({ button: "right" });
+    assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 0);
+    assert(await wheel.locator('[data-episode-action="play"]').isDisabled());
+    await page.keyboard.press("Escape");
+    await page.locator("#progressModal").evaluate(dialog => dialog.classList.remove("detail-modern"));
+    await other.click({ button: "right" });
+    assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 6);
+    assert.deepEqual(await calls(), []);
+
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Episode gestures: six slots, click/drag selection, keep switch, modifier bindings, removable slots and double-click delay passed.');
   } finally {

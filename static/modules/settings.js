@@ -212,6 +212,8 @@ function updateDetailLayoutSettings() {
 }
 
 function renderSettingsPanels() {
+  $("#detailClassicWheelStyleInput").value = state.settings.detail_classic_wheel_style || "classic";
+  $("#detailModernWheelStyleInput").value = state.settings.detail_modern_wheel_style || "modern";
   $("#collectionGridColumnsInput").value = String(state.settings.collection_grid_columns || 0);
   $("#scheduleGridColumnsInput").value = String(state.settings.schedule_grid_columns || 0);
   $("#detailLayoutInput").value = state.settings.detail_layout || "classic";

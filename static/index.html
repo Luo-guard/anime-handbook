@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-modern-record-setting" />
+  <link rel="stylesheet" href="/styles.css?v=20261114-wheel-style" />
   </head>
   <body>
     <div class="app-shell">
@@ -1066,6 +1066,14 @@
             </span>
           </label>
           <h3 class="settings-subsection-title">单集扇区与手势</h3>
+          <label class="setting-row">
+            <span><strong>经典详情的扇区样式</strong><small>使用经典详情布局时，单集操作菜单采用的样式。</small></span>
+            <select id="detailClassicWheelStyleInput"><option value="classic">经典扇区</option><option value="modern">新版扇区</option></select>
+          </label>
+          <label class="setting-row">
+            <span><strong>新版详情的扇区样式</strong><small>使用新版详情布局时，单集操作菜单采用的样式。</small></span>
+            <select id="detailModernWheelStyleInput"><option value="classic">经典扇区</option><option value="modern" selected>新版扇区</option></select>
+          </label>
           <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击切换已看。右键和长按等手势可在下方设置。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
           <label class="setting-row"><span><strong>长按松手后保留扇区</strong><small>长按后滑向动作并松手可直接执行。开启后，原地松手也可继续点选。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked">
@@ -1758,16 +1766,16 @@
     <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261114-episode-wheel" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261114-wheel-style" defer></script>
     <script src="/modules/details.js?v=20261114-modern-record-setting" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261109-sidebar-fix" defer></script>
-    <script src="/modules/settings.js?v=20261114-modern-record-setting" defer></script>
+    <script src="/modules/settings.js?v=20261114-wheel-style" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261114-modern-record-setting" defer></script>
+    <script src="/modules/settings-save.js?v=20261114-wheel-style" defer></script>
     <script src="/modules/events.js?v=20261114-bgm-source-cards" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

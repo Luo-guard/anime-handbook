@@ -132,6 +132,8 @@ def _normalize_settings(body, settings):
         "detail_modern_compact_credits",
         "detail_classic_record_on_change",
         "detail_modern_record_on_change",
+        "detail_classic_wheel_style",
+        "detail_modern_wheel_style",
         "hide_missing_as_schedule",
         "schedule_airing_source",
         "show_collection_progress_control",
@@ -241,6 +243,9 @@ def _normalize_settings(body, settings):
             elif key == "detail_layout":
                 if not isinstance(value, str) or value not in {"classic", "modern"}:
                     raise ValueError("番剧详情布局无效")
+            elif key in {"detail_classic_wheel_style", "detail_modern_wheel_style"}:
+                if not isinstance(value, str) or value not in {"classic", "modern"}:
+                    raise ValueError("单集扇区样式无效")
             elif key in {
                 "detail_modern_original_title", "detail_modern_compact_credits",
                 "detail_classic_record_on_change", "detail_modern_record_on_change",

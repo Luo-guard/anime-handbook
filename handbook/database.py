@@ -675,6 +675,8 @@ class HandbookDB:
                 "detail_modern_compact_credits": True,
                 "detail_classic_record_on_change": False,
                 "detail_modern_record_on_change": True,
+                "detail_classic_wheel_style": "classic",
+                "detail_modern_wheel_style": "modern",
                 "hide_missing_as_schedule": True,
                 "schedule_airing_source": "bgm",
                 "show_schedule_source_switch": True,

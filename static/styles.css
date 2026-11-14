@@ -2173,7 +2173,7 @@ input[type="number"] {
 .episode-quick-menu.visible .episode-quick-action[data-slot="bottom_left"] { transition-delay: 80ms; }
 .episode-quick-menu.visible .episode-quick-action[data-slot="top_left"] { transition-delay: 100ms; }
 
-.episode-quick-action:is(:hover, :focus-visible, .active) {
+.episode-quick-action:where(:not(:disabled)):is(:hover, :focus-visible, .active) {
   background: var(--green-700);
   border-color: var(--green-700);
   color: #fff;
@@ -2183,6 +2183,7 @@ input[type="number"] {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+
 
 .episode-quick-menu.visible:where(:not(.detail-modern-wheel)) .episode-quick-action.active {
   transform: translate(-50%, -50%) scale(1.18);
@@ -6387,7 +6388,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   transition: none;
 }
 .detail-modern-wheel.visible .episode-quick-action:not(:disabled):is(:hover, :focus-visible, .active) { color: var(--green-900); }
-.detail-modern-wheel.visible .episode-quick-action:disabled { opacity: .52; cursor: default; }
+.episode-quick-menu.visible .episode-quick-action:disabled { opacity: .52; cursor: default; }
 .episode-wheel-icon { font-size: 20px; font-weight: 500; line-height: 1; color: var(--accent); }
 .detail-modern-wheel.visible .episode-quick-close {
   left: 50%;

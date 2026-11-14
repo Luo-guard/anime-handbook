@@ -53,6 +53,8 @@ const HandbookSettings = (() => {
         detail_modern_compact_credits: $("#detailModernCompactCreditsInput").checked,
         detail_classic_record_on_change: $("#detailClassicRecordOnChangeInput").checked,
         detail_modern_record_on_change: $("#detailModernRecordOnChangeInput").checked,
+        detail_classic_wheel_style: $("#detailClassicWheelStyleInput").value || "classic",
+        detail_modern_wheel_style: $("#detailModernWheelStyleInput").value || "modern",
       };
       // 只有默认展示记录真的变了，才覆盖时间线当前的临时筛选。
       const previousTimelineDefaults = JSON.stringify(Array.isArray(state.settings.timeline_default_themes) ? state.settings.timeline_default_themes : []);
