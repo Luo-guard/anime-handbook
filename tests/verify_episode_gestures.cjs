@@ -172,6 +172,43 @@ window.calls=[];
     await cell.dblclick({ modifiers: ['Control'] });
     assert.deepEqual(await calls(), [['action', 'reveal_in_folder', '0:1']]);
 
+    await setConfig({});
+    await page.evaluate(() => {
+      $("#progressModal").classList.add("detail-modern");
+      $('[data-episode-key="0:2"]').classList.add("unreleased");
+      delete state.settings.show_episode_review_record;
+      delete state.settings.show_episode_rating_record;
+      delete state.settings.show_oped_record;
+    });
+    const wheel = page.locator("#episodeQuickMenu");
+    const other = page.locator('[data-episode-key="0:2"]');
+    await other.click({ button: "right" });
+    await wheel.locator(".episode-wheel-wedge").first().waitFor({ state: "attached" });
+    assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 6);
+    assert.equal(await wheel.locator(".episode-wheel-icon").count(), 6);
+    assert.equal(await wheel.locator("[data-episode-menu-close] small").textContent(), "第 02 集");
+    assert.equal(await wheel.locator('[data-episode-action="play"]').isDisabled(), true);
+    assert.equal(await wheel.locator('[data-episode-action="reveal_in_folder"]').count(), 0);
+    await page.keyboard.press("Escape");
+    await cell.click({ button: "right" });
+    await page.waitForTimeout(210);
+    assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 7);
+    const modernBox = await wheel.boundingBox();
+    assert(modernBox.x >= 0 && modernBox.x + modernBox.width <= 390 && Math.abs(modernBox.width - modernBox.height) < 1);
+    await page.mouse.move(modernBox.x + modernBox.width / 2, modernBox.y + 14);
+    assert.equal(await wheel.locator('[data-episode-action="play"]').evaluate(node => node.classList.contains("active")), true);
+    await page.mouse.click(modernBox.x + modernBox.width / 2, modernBox.y + 14);
+    assert.deepEqual(await calls(), [["action", "play", "0:1"]]);
+    const modernCellBox = await cell.boundingBox();
+    await page.mouse.move(modernCellBox.x + modernCellBox.width / 2, modernCellBox.y + modernCellBox.height / 2);
+    await page.mouse.down();
+    await wheel.waitFor();
+    await page.waitForTimeout(200);
+    const holdBox = await wheel.boundingBox();
+    await page.mouse.move(holdBox.x + holdBox.width / 2, holdBox.y + 14);
+    await page.mouse.up();
+    assert.deepEqual(await calls(), [["action", "play", "0:1"]]);
+
     assert.deepEqual(errors, [], 'no page errors');
     console.log('Episode gestures: six slots, click/drag selection, keep switch, modifier bindings, removable slots and double-click delay passed.');
   } finally {

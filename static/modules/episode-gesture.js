@@ -19,6 +19,13 @@ const EG_COORDS = {
   top_right: [82, -54], bottom_right: [82, 54],
   top_left: [-82, -54], bottom_left: [-82, 54],
 };
+const EG_WHEEL_SLOTS = ["top", "top_right", "bottom_right", "bottom", "bottom_left", "top_left"];
+const EG_WHEEL_ACTIONS = {
+  play: ["▶", "播放本集"], score: ["☆", "单集评分"], review: ["✎", "单集评价"],
+  download: ["↓", "查找资源"], op: ["♫", "OP 记录"], ed: ["♪", "ED 记录"],
+  reveal_in_folder: ["▣", "查看本地文件"], redownload: ["↻", "查找其他片源"],
+  cancel_download: ["×", "取消下载"], delete: ["−", "删除本地文件"],
+};
 const EG_RECORD_SETTINGS = {
   review: "show_episode_review_record", score: "show_episode_rating_record",
   op: "show_oped_record", ed: "show_oped_record",
@@ -101,16 +108,21 @@ function egCloseMenu() {
 
 function egRenderMenu(button, config, onAction) {
   egCloseMenu();
-  const slots = Object.fromEntries(EG_SLOTS.map(slot => [slot, config.slots[slot]]));
+  const modern = $("#progressModal").classList.contains("detail-modern");
+  const downloaded = button.classList.contains("downloaded");
+  const slots = Object.fromEntries((modern ? EG_WHEEL_SLOTS : EG_SLOTS).map(slot => [slot, config.slots[slot]]));
   for (const [slot, action] of Object.entries(slots)) {
     if (!egRecordEnabled(action) || config.hiddenActions.has(action)
-      || (action === "delete" && !button.classList.contains("downloaded"))) delete slots[slot];
+      || (!downloaded && (action === "delete" || (modern && action === "reveal_in_folder")))) delete slots[slot];
   }
   const entries = Object.entries(slots).filter(([, action]) => action);
+  if (modern && downloaded && !config.hiddenActions.has("reveal_in_folder") && !entries.some(([, action]) => action === "reveal_in_folder")) {
+    entries.push(["local", "reveal_in_folder"]);
+  }
   if (!entries.length) return;
   const rect = button.getBoundingClientRect();
-  const modern = $("#progressModal").classList.contains("detail-modern");
-  const compact = modern && (innerHeight < 310 || innerWidth < 305);
+  const diameter = Math.min(314, innerWidth - 16, innerHeight - 16);
+  const compact = modern && diameter < 275;
   const scale = Math.min(1, (window.innerWidth - 56) / 164, (window.innerHeight - 56) / 188);
   const fit = (axis, center, size, pad) => {
     const offsets = [0, ...entries.map(([slot]) => EG_COORDS[slot][axis] * scale)];
@@ -118,10 +130,10 @@ function egRenderMenu(button, config, onAction) {
   };
   const modernCenter = (center, size, radius) => Math.max(radius, Math.min(center, size - radius));
   const originX = modern
-    ? modernCenter(rect.left + rect.width / 2, innerWidth, compact ? Math.min(144, innerWidth / 2) : 150)
+    ? modernCenter(rect.left + rect.width / 2, innerWidth, compact ? Math.min(143, innerWidth / 2) : diameter / 2 + 8)
     : fit(0, rect.left + rect.width / 2, innerWidth, 28);
   const originY = modern
-    ? modernCenter(rect.top + rect.height / 2, innerHeight, compact ? Math.min(112, innerHeight / 2) : 150)
+    ? modernCenter(rect.top + rect.height / 2, innerHeight, compact ? innerHeight / 2 : diameter / 2 + 8)
     : fit(1, rect.top + rect.height / 2, innerHeight, 28);
   const menu = document.createElement("div");
   menu.id = "episodeQuickMenu";
@@ -132,18 +144,36 @@ function egRenderMenu(button, config, onAction) {
   menu.setAttribute("aria-label", "单集快捷操作");
   menu.style.setProperty("--quick-x", `${originX}px`);
   menu.style.setProperty("--quick-y", `${originY}px`);
-  menu.innerHTML = '<span class="episode-quick-halo" aria-hidden="true"></span>'
-    + '<span class="episode-quick-trail" aria-hidden="true"></span>'
-    + '<span class="episode-quick-cursor" aria-hidden="true"></span>'
-    + entries.map(([slot, action]) => {
-    const [x, y] = EG_COORDS[slot];
-    const label = modern ? ({ score: "单集评分", review: "单集评价", op: "OP 记录", ed: "ED 记录" }[action] || EG_ACTION_LABELS[action]) : EG_ACTION_LABELS[action];
-    return `<button type="button" class="episode-quick-action" style="left:${x * (modern ? 1 : scale)}px;top:${y * (modern ? 1 : scale)}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(label)}</button>`;
-  }).join("")
-    + '<button type="button" class="episode-quick-action episode-quick-close" data-episode-menu-close aria-label="关闭单集扇区">×'+(modern ? '<small>'+escapeHtml(button.dataset.detailEpisodeLabel || "")+'</small>' : "")+'</button>';
+  if (modern) {
+    const type = Number(button.dataset.episodeType) || 0;
+    const label = button.dataset.detailEpisodeLabel || button.textContent.trim();
+    const group = button.closest(".episode-group")?.querySelector(".episode-group-head strong")?.textContent;
+    const title = type ? `${group || ""} ${label}`.trim() : `第 ${label} 集`;
+    menu.setAttribute("aria-label", `${title}的单集操作`);
+    menu.style.setProperty("--wheel-diameter", `${diameter}px`);
+    const arc = 360 / entries.length;
+    menu.innerHTML = `<button type="button" class="episode-quick-action episode-quick-close" data-episode-menu-close aria-label="关闭单集扇区"><span aria-hidden="true">×</span><small>${escapeHtml(title)}</small></button>`
+      + entries.map(([slot, action], index) => {
+        const [icon, text] = EG_WHEEL_ACTIONS[action] || ["", EG_ACTION_LABELS[action]];
+        const angle = index * arc * Math.PI / 180;
+        const unavailable = action === "play" && button.classList.contains("unreleased")
+          && (!downloaded || config.playbackSource === "online");
+        return `<button type="button" class="episode-quick-action" style="left:${50 + 32 * Math.sin(angle)}%;top:${50 - 32 * Math.cos(angle)}%" data-episode-action="${action}" data-slot="${slot}"${unavailable ? ' disabled title="本集尚未播出"' : ""}><span class="episode-wheel-icon" aria-hidden="true">${icon}</span>${escapeHtml(text)}</button><span class="episode-wheel-wedge" aria-hidden="true" style="--start:${index * arc - arc / 2}deg;--arc:${arc}deg"></span>`;
+      }).join("");
+  } else {
+    menu.innerHTML = '<span class="episode-quick-halo" aria-hidden="true"></span>'
+      + '<span class="episode-quick-trail" aria-hidden="true"></span>'
+      + '<span class="episode-quick-cursor" aria-hidden="true"></span>'
+      + entries.map(([slot, action]) => {
+        const [x, y] = EG_COORDS[slot];
+        return `<button type="button" class="episode-quick-action" style="left:${x * scale}px;top:${y * scale}px" data-episode-action="${action}" data-slot="${slot}">${escapeHtml(EG_ACTION_LABELS[action])}</button>`;
+      }).join("")
+      + '<button type="button" class="episode-quick-action episode-quick-close" data-episode-menu-close aria-label="关闭单集扇区">×</button>';
+  }
   menu.addEventListener("click", (event) => {
-    const item = event.target.closest("[data-episode-action], [data-episode-menu-close]");
-    if (!item || egRuntime?.menu !== menu) return;
+    const item = event.target.closest("[data-episode-action], [data-episode-menu-close]")
+      || (event.detail && egWheelTarget(menu, event));
+    if (!item || item.disabled || egRuntime?.menu !== menu) return;
     event.preventDefault();
     event.stopPropagation();
     egCloseMenu();
@@ -161,6 +191,18 @@ function egRenderMenu(button, config, onAction) {
   return menu;
 }
 
+function egWheelTarget(menu, event) {
+  if (!menu.classList.contains("detail-modern-wheel") || menu.classList.contains("detail-wheel-compact")) return null;
+  const rect = menu.getBoundingClientRect();
+  const dx = event.clientX - (rect.left + rect.width / 2);
+  const dy = event.clientY - (rect.top + rect.height / 2);
+  const radius = Math.hypot(dx, dy);
+  if (radius < rect.width * .15 || radius > rect.width / 2) return null;
+  const actions = menu.querySelectorAll("[data-episode-action]");
+  const angle = Math.atan2(dx, -dy) / (2 * Math.PI);
+  return actions[(Math.round(angle * actions.length) + actions.length) % actions.length];
+}
+
 function egUpdateTarget(event) {
   const menu = egRuntime?.menu;
   if (!menu) return;
@@ -173,10 +215,15 @@ function egUpdateTarget(event) {
   menu.style.setProperty("--drag-x", `${length ? dx * distance / length : 0}px`);
   menu.style.setProperty("--drag-y", `${length ? dy * distance / length : 0}px`);
   menu.classList.toggle("dragging", Boolean(egRuntime.button && egRuntime.dragged));
+  const wedge = egWheelTarget(menu, event);
+  const direct = menu.classList.contains("detail-modern-wheel")
+    ? document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-episode-action], [data-episode-menu-close]")
+    : null;
   menu.querySelectorAll("[data-episode-action]").forEach((item) => {
     const rect = item.getBoundingClientRect();
-    item.classList.toggle("active", event.clientX >= rect.left && event.clientX <= rect.right
-      && event.clientY >= rect.top && event.clientY <= rect.bottom);
+    item.classList.toggle("active", !item.disabled && (direct ? item === direct : wedge ? item === wedge
+      : event.clientX >= rect.left && event.clientX <= rect.right
+        && event.clientY >= rect.top && event.clientY <= rect.bottom));
   });
 }
 
