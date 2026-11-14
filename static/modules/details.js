@@ -258,8 +258,8 @@ function updateDetailRecordActions() {
     .map(key => episodeStorageKey(key, anime)));
   const draft = new Set([...(state.pendingEpisodes || [])].map(key => episodeStorageKey(key, anime)));
   const changed = stored.size !== draft.size || [...draft].some(key => !stored.has(key));
-  dialog.classList.toggle("detail-record-pending", modern && changed);
-  button.disabled = button.dataset.saving === "true" || (modern && !changed);
+  dialog.classList.toggle("detail-record-pending", changed);
+  button.disabled = button.dataset.saving === "true" || !changed;
   $("#cancelProgress").disabled = modern && button.dataset.saving === "true";
   $("#cancelProgress").textContent = modern ? "取消修改" : "取消";
 }
