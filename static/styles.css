@@ -4238,6 +4238,32 @@ dialog::backdrop {
 .progress-info-row .detail-actions { display: flex; align-items: center; gap: 8px; }
 .progress-info-row .collect-detail-row { margin-top: 0; margin-left: 0; }
 
+.progress-modal:not(.detail-modern) #detailOnlinePlay {
+  gap: 7px;
+  padding-inline: 8px;
+  border-color: transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--green-800);
+  box-shadow: none;
+  transform: none;
+}
+.progress-modal:not(.detail-modern) #detailOnlinePlay::before {
+  content: "";
+  width: 9px;
+  height: 10px;
+  flex: none;
+  background: currentColor;
+  clip-path: polygon(12% 0, 100% 50%, 12% 100%);
+}
+.progress-modal:not(.detail-modern) #detailOnlinePlay:hover:not(:disabled) {
+  background: var(--green-50);
+}
+.progress-modal:not(.detail-modern) #detailOnlinePlay:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* 详情页的页内动作（找资源 / 相关番剧）：D 方案 —— 去掉边框和底色，做成
    纯文字操作；和右侧「在看」状态选择器统一到同一套尺寸/字号/图标。
    状态类控件保留细框表示「可展开」，一轻一重，不再互相打架。 */
