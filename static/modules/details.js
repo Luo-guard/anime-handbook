@@ -383,10 +383,6 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#modernDetailMenu").open = false;
     $("#openOffline").click();
   });
-  $("#modernRateAnime")?.addEventListener("click", () => {
-    $("#modernDetailMenu").open = false;
-    $("#openAnimeRating").click();
-  });
   $("#openAgeRelated")?.addEventListener("click", () => {
     if (!dialog.classList.contains("detail-modern")) return;
     $("#modernDetailMenu").open = false;
