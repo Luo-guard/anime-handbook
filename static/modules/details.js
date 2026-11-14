@@ -88,6 +88,12 @@ function animeAiringCounts(anime, today = new Date()) {
 
 function animeScheduleBadge(anime) {
   const airing = anime?.as_airing;
+  if (airing?.show_status === "finished" || (airing?.total > 0 && airing.aired >= airing.total)) {
+    return { kind: "finished", text: "已完结", title: "AnimeSchedule 的播出状态" };
+  }
+  if (airing?.show_status === "upcoming" && !(airing.aired > 0)) {
+    return { kind: "upcoming", text: "未开播", title: "AnimeSchedule 标记为未开播" };
+  }
   const next = beijingAiringSlot(airing?.next_at);
   if (next && !airing.unavailable) {
     return {
@@ -96,8 +102,8 @@ function animeScheduleBadge(anime) {
       title: `AnimeSchedule${airing.stale ? "（缓存）" : ""}下一集排期 · ${airing.next_label || next.weekday + " " + next.clock}（北京时间）`,
     };
   }
-  if (airing?.total > 0 && airing.aired >= airing.total) {
-    return { kind: "finished", text: "已完结", title: "按 AnimeSchedule 的播出进度判断" };
+  if (airing?.show_status === "ongoing") {
+    return { kind: "ongoing", text: "连载中", title: "AnimeSchedule 标记为连载中，暂无可用的下一集时间" };
   }
   const loading = airing?.status === "loading";
   return {
@@ -251,6 +257,13 @@ function openProgress(animeId) {
   renderEpisodeGrid();
   $("#progressModal").showModal();
   syncDetailCornerActions();
+  if (state.settings?.detail_airtime_source === "as") {
+    api(`/api/animes/${anime.id}`, { timeoutMs: 30000 }).then(({ anime: fresh }) => {
+      if (!fresh || state.progressAnime !== anime || !$("#progressModal").open) return;
+      anime.as_airing = fresh.as_airing;
+      refreshEpisodeAiringStatus();
+    }).catch(() => { /* Cached airing data remains visible. */ });
+  }
   ensureEpisodeTitles(anime);
   refreshEpisodeRecordAnnotations(anime.id);
   // 打开详情就刷一次「已下载」角标：以前从没做过这个标记，下载完的集在

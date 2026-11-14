@@ -376,7 +376,7 @@ class ReadRoutes:
                 anime_id = int(path.rsplit("/", 1)[1])
                 anime = self.database.get_anime(anime_id)
                 if anime:
-                    self.send_json({"anime": self._with_progress([anime])[0]})
+                    self.send_json({"anime": self._with_progress([anime], detail=True)[0]})
                 else:
                     self.send_error_json(404, "动漫不存在")
             elif path == "/api/timeline":

@@ -118,6 +118,7 @@ class AnimeScheduleService:
         self.request_lock = threading.Lock()
         self.week_lock = threading.Lock()
         self.mapping_lock = threading.Lock()
+        self.detail_lock = threading.Lock()
         self.cache = self._read("progress.json", {"records": {}, "weeks": {}})
         if not isinstance(self.cache, dict):
             self.cache = {}
@@ -262,6 +263,9 @@ class AnimeScheduleService:
         with self.lock:
             weeks = self._progress_cache()
         title_routes = self._title_routes(row for week in weeks for row in week.get("rows", []))
+        self._refresh_matches(ids, titles, title_routes)
+
+    def _refresh_matches(self, ids, titles, title_routes):
         mapping = None
         for bgm_id in ids:
             key = str(bgm_id)
@@ -293,13 +297,49 @@ class AnimeScheduleService:
                 current = self.cache["records"].get(key, {})
                 if current is not previous and current.get("route"):
                     continue
-                confirmed = {"route": candidate["route"], "total": int(candidate.get("episodes") or 0)} if candidate else {}
+                confirmed = {
+                    "route": candidate["route"], "total": int(candidate.get("episodes") or 0),
+                    **self._status_metadata(candidate),
+                } if candidate else {}
                 self.cache["records"][key] = {
                     **previous, **confirmed,
                     "lookup_routes": self._lookup_routes(names, title_routes),
                     "fetched": time.time(), "checked": time.time(),
                 }
                 self._write("progress.json", self.cache)
+
+    @staticmethod
+    def _status_metadata(anime):
+        return {"show_status": str(anime.get("status") or "").strip().lower(),
+                "status_checked": time.time()}
+
+    def refresh_detail_status(self, bgm_id):
+        """Backfill status only for the opened detail, including legacy bindings."""
+        if not self.token():
+            return
+        key = str(bgm_id)
+        with self.detail_lock:
+            try:
+                self._refresh_matches([bgm_id], None, {})
+                with self.lock:
+                    record = self.cache["records"].get(key, {})
+                    route = record.get("route")
+                    checked = record.get("status_checked", 0)
+                    if not route or record.get("show_status") == "finished" or time.time() - checked < UNMATCHED_TTL:
+                        return
+                anime = self._get("anime/" + route)
+                with self.lock:
+                    current = self.cache["records"].get(key, {})
+                    if current.get("route") != route:
+                        return
+                    if anime.get("route") == route:
+                        current = {**current, **self._status_metadata(anime)}
+                    else:
+                        current = {**current, "status_checked": time.time()}
+                    self.cache["records"][key] = current
+                    self._write("progress.json", self.cache)
+            except (OSError, ValueError, TimeoutError, RuntimeError) as error:
+                record_failure("animeschedule_detail_status", error)
 
     def _run(self):
         try:
@@ -352,6 +392,9 @@ class AnimeScheduleService:
                 result = compute_progress(route, rows_by_route.get(route, ()), record.get("total", 0)) if route else None
                 if result:
                     result["stale"] = now - latest > 6 * 3600
-                output[str(value)] = result or {"source": "as", "unavailable": True,
+                payload = result or {"source": "as", "unavailable": True,
                     "status": "loading" if value in self.pending or value in self.inflight else "unavailable" if configured else "unconfigured"}
+                if record.get("show_status"):
+                    payload["show_status"] = record["show_status"]
+                output[str(value)] = payload
             return output

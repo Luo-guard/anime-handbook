@@ -91,7 +91,7 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
                 AS_SERVICES[root] = AnimeScheduleService(root)
             return AS_SERVICES[root]
 
-    def _with_progress(self, animes):
+    def _with_progress(self, animes, *, detail=False):
         self._with_airing(animes)
         settings = self.database.get_settings()
         if any(settings.get(key) == "as" for key in (
@@ -101,7 +101,11 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
                 key for field in ("name", "name_cn", "display_name")
                 if (key := title_key(row.get(field)))
             } for row in animes}
-            progress = self.animeschedule.get_many(titles, titles=titles)
+            service = self.animeschedule
+            if detail and settings.get("detail_airtime_source") == "as":
+                for anime_id in titles:
+                    service.refresh_detail_status(anime_id)
+            progress = service.get_many(titles, titles=titles)
             for row in animes:
                 row["as_airing"] = progress.get(str(row["id"]))
         return animes

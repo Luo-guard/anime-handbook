@@ -91,6 +91,37 @@ class AnimeScheduleTest(unittest.TestCase):
             self.assertEqual(restored.cache["records"]["1"]["route"], "correct")
             self.assertNotIn("token", Path(root, "progress.json").read_text())
 
+    def test_detail_backfills_finished_status_without_inventing_progress(self):
+        with tempfile.TemporaryDirectory() as root:
+            service = AnimeScheduleService(root)
+            service.cache["records"]["1"] = {"route": "correct", "total": 12}
+            with patch.object(service, "token", return_value="configured"), patch.object(
+                service, "_get", return_value={"route": "correct", "status": "Finished", "episodes": 12},
+            ) as get:
+                service.refresh_detail_status(1)
+                service.refresh_detail_status(1)
+            get.assert_called_once_with("anime/correct")
+            restored = AnimeScheduleService(root)
+            with patch.object(restored, "token", return_value=""):
+                progress = restored.get_many([1])["1"]
+            self.assertEqual(progress["show_status"], "finished")
+            self.assertTrue(progress["unavailable"])
+            self.assertNotIn("aired", progress)
+
+    def test_detail_can_match_an_upcoming_anime_outside_the_timetable(self):
+        with tempfile.TemporaryDirectory() as root:
+            service = AnimeScheduleService(root)
+            service.mapping = {"1": {"mal_id": "12", "anilist_id": "34"}}
+            service.mapping_loaded = time.time()
+            with patch.object(service, "token", return_value="configured"), patch.object(
+                service, "_get", return_value={"anime": [{**candidate(), "status": "Upcoming"}]},
+            ) as get:
+                service.refresh_detail_status(1)
+                service.refresh_detail_status(1)
+            get.assert_called_once_with("anime?mal-ids=12&page=1")
+            with patch.object(service, "token", return_value=""):
+                self.assertEqual(service.get_many([1])["1"]["show_status"], "upcoming")
+
     def test_worker_failure_backs_off_without_poisoning_existing_cache(self):
         with tempfile.TemporaryDirectory() as root:
             service = AnimeScheduleService(root)

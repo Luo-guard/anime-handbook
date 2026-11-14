@@ -145,7 +145,7 @@ class ASCalendar:
         return result
 
     def _store_metadata(self, animes):
-        fields = ("route", "title", "names", "websites", "premier", "episodes", "imageVersionRoute")
+        fields = ("route", "title", "names", "websites", "premier", "episodes", "status", "imageVersionRoute")
         for anime in animes:
             if isinstance(anime, dict) and anime.get("route"):
                 self.catalogue[anime["route"]] = {field: anime[field] for field in fields if field in anime}
@@ -165,7 +165,11 @@ class ASCalendar:
                 if not fetched or (previous.get("route") == route and previous.get("fetched", 0) > fetched):
                     continue
                 self.service.cache["records"][key] = {
+                    **(previous if previous.get("route") == route else {}),
                     "route": route, "total": int(metadata.get("episodes") or 0),
+                    **({"show_status": str(metadata["status"]).strip().lower(), "status_checked": fetched}
+                       if metadata.get("status") and (previous.get("route") != route
+                           or fetched >= previous.get("status_checked", 0)) else {}),
                     "fetched": fetched, "checked": previous.get("checked", 0),
                 }
             self.service._write("progress.json", self.service.cache)
