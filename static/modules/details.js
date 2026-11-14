@@ -226,11 +226,13 @@ function applyDetailLayout() {
   const activeTab = $("[data-detail-tab].active", dialog)?.dataset.detailTab;
   switchDetailTab(activeTab || "overview");
 
-  const menu = $(".modern-detail-menu-body", dialog);
+  const menu = $("#modernDetailMenu");
   const facts = $("#modernDetailFacts");
   facts.classList.toggle("hidden", !modern);
   for (const [selector, destination] of [
-    [".progress-links", menu], ["#openAgeRelated", menu], ["#detailSavedSections", menu],
+    [".progress-links", $(".modern-menu-sites", menu)],
+    ["#openAgeRelated", $(".modern-menu-actions", menu)],
+    ["#detailSavedSections", $(".modern-menu-saved", menu)],
     ["#animeRating", facts], ["#personalRating", facts],
   ]) {
     const node = $(selector, dialog);
