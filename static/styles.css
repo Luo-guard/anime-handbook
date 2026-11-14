@@ -6071,7 +6071,6 @@ body.schedule-picking [data-floating-view="schedule"] {
 /* New detail layout shares the classic dialog and its controls. */
 .detail-credit-check, .detail-credit-prefix { display: none; }
 #progressModal.detail-modern {
-  width: min(900px, calc(100vw - 28px));
   scrollbar-gutter: auto;
   scrollbar-width: thin;
   background: color-mix(in srgb, var(--surface) 97%, var(--accent));
@@ -6162,9 +6161,12 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern .detail-corner-actions .modal-close { margin: 12px 14px 0 0; width: 34px; height: 34px; background: rgb(255 255 255 / .13); color: white; }
 .detail-modern .detail-tabs { margin-top: 4px; border-color: var(--detail-line); }
 .detail-modern .detail-tab { padding: 10px 2px; font-size: 14px; }
-.detail-modern .detail-panel { min-height: 0; }
-.detail-modern .anime-comments { margin-top: 15px; }
-.detail-modern .detail-show-comments :is(#episodeGrid, #ageRelatedSection) { display: none; }
+.detail-modern #overviewDetailPanel { min-height: 230px; }
+.detail-modern .anime-comments {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--detail-line);
+}
 .detail-record-buttons { display: flex; gap: 10px; margin-left: auto; }
 .detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--detail-line); }
 .detail-modern.detail-non-episodes:not(.detail-record-pending) #detailRecordFooter,
@@ -6292,7 +6294,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 
 .detail-modern #episodeGrid { max-height: none; overflow: visible; padding: 14px 0 0; }
-.detail-modern .episode-group-grid { grid-template-columns: repeat(auto-fill, minmax(43px, 1fr)); }
+.detail-modern .episode-group-grid { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); }
 .detail-modern .episode-cell {
   aspect-ratio: auto;
   min-height: 38px;
@@ -6348,6 +6350,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-modern [data-detail-tab]:focus-visible,
 .modern-detail-menu > summary:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 @media (max-width: 480px) {
+  .detail-modern #overviewDetailPanel { min-height: 0; }
   .detail-modern .progress-hero { align-items: start; padding-top: 20px; }
   .detail-modern .progress-meta { flex-flow: row wrap; align-items: center; }
   .detail-modern .episode-group-grid { grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 6px; }

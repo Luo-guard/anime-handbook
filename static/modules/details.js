@@ -223,9 +223,8 @@ function applyDetailLayout() {
   dialog.classList.toggle("detail-compact-credits", modern && state.settings.detail_modern_compact_credits !== false);
   $("#modernDetailMenu").open = false;
   $("#modernDetailMenu").classList.toggle("hidden", !modern);
-  $("#commentsDetailTab").classList.toggle("hidden", !modern);
   const activeTab = $("[data-detail-tab].active", dialog)?.dataset.detailTab;
-  switchDetailTab(!activeTab || (!modern && activeTab === "comments") ? "overview" : activeTab);
+  switchDetailTab(activeTab || "overview");
 
   const menu = $(".modern-detail-menu-body", dialog);
   const facts = $("#modernDetailFacts");
@@ -489,16 +488,10 @@ function openProgress(animeId) {
 function switchDetailTab(tab) {
   const isCharacters = tab === "characters";
   const modern = $("#progressModal").classList.contains("detail-modern");
-  const isComments = modern && tab === "comments";
-  $("#progressModal").classList.toggle("detail-non-episodes", modern && (isCharacters || isComments));
+  $("#progressModal").classList.toggle("detail-non-episodes", modern && isCharacters);
   $("#overviewDetailPanel").classList.toggle("hidden", isCharacters);
-  $("#overviewDetailPanel").setAttribute("aria-labelledby", isComments ? "commentsDetailTab" : "overviewDetailTab");
-  $("#episodeGrid").classList.toggle("hidden", isComments);
-  const comments = $(".anime-comments", $("#overviewDetailPanel"));
-  comments?.classList.toggle("hidden", modern && !isComments);
-  $("#overviewDetailPanel").classList.toggle("detail-show-comments", isComments);
   const overview = $('[data-detail-tab="overview"]');
-  if (overview) overview.textContent = modern ? "剧集" : "概览";
+  if (overview) overview.textContent = "概览";
   $("#charactersDetailPanel").classList.toggle("hidden", !isCharacters);
   $$("[data-detail-tab]").forEach((button) => {
     const active = button.dataset.detailTab === tab;
