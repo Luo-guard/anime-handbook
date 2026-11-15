@@ -2350,10 +2350,7 @@ dialog::backdrop {
   max-height: calc(100dvh - 28px);
   overflow: auto;
   overscroll-behavior: contain;
-  /* 预留滚动条槽，滚动条出现时内容不横向跳。槽要两边都留，否则只有右侧
-     空出 15px，看起来像卡片右边被直尺裁掉了；dialog 自己也得有底色，
-     不然那截槽是透明的，会透出背后的收藏页。 */
-  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
   background: #fbfcf9;
   -webkit-overflow-scrolling: touch;
 }
@@ -4394,32 +4391,6 @@ dialog::backdrop {
 .progress-info-row .detail-actions { display: flex; align-items: center; gap: 8px; }
 .progress-info-row .collect-detail-row { margin-top: 0; margin-left: 0; }
 
-.progress-modal:not(.detail-modern) #detailOnlinePlay {
-  gap: 7px;
-  padding-inline: 8px;
-  border-color: transparent;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--green-800);
-  box-shadow: none;
-  transform: none;
-}
-.progress-modal:not(.detail-modern) #detailOnlinePlay::before {
-  content: "";
-  width: 9px;
-  height: 10px;
-  flex: none;
-  background: currentColor;
-  clip-path: polygon(12% 0, 100% 50%, 12% 100%);
-}
-.progress-modal:not(.detail-modern) #detailOnlinePlay:hover:not(:disabled) {
-  background: var(--green-50);
-}
-.progress-modal:not(.detail-modern) #detailOnlinePlay:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
 /* 详情页的页内动作（找资源 / 相关番剧）：D 方案 —— 去掉边框和底色，做成
    纯文字操作；和右侧「在看」状态选择器统一到同一套尺寸/字号/图标。
    状态类控件保留细框表示「可展开」，一轻一重，不再互相打架。 */
@@ -4465,29 +4436,10 @@ dialog::backdrop {
   margin-top: 8px;
 }
 
-.detail-corner-download {
-  width: 56px;
-  height: 56px;
-  border: 0;
-  border-radius: 0 22px 0 100%;
-  background: var(--green-700);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 13px 14px 0 0;
-  transition: background .15s, transform .15s;
-}
-.detail-corner-download:hover { background: var(--green-600); transform: scale(1.04); }
-.detail-corner-download:active { transform: scale(.97); }
-.detail-corner-download:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 /* 弹窗打开时自动焦点落在表单容器上（tabindex=-1 + autofocus），别让容器
    自己带描边；也不让角标按钮成为「第一个可聚焦元素」——那样一打开就顶着
    一圈 focus ring，看着像多余的白边。 */
 #progressForm:focus { outline: none; }
-.detail-corner-download svg { width: 20px; height: 20px; }
-@media(max-width:650px){.detail-corner-download{width:46px;height:46px;padding:10px 11px 0 0}.detail-corner-download svg{width:17px;height:17px}}
 
 /* 详情弹窗内的「在看」状态选择器：保留细框，但尺寸/字号/图标与找资源一致。
    用 .collect-detail-row 限定作用域，周表卡片、搜索结果里的收藏按钮不受影响。 */
@@ -6276,34 +6228,83 @@ body.schedule-picking [data-floating-view="schedule"] {
   .episode-record-dialog[open] { animation: none; }
 }
 
-/* New detail layout shares the classic dialog and its controls. */
+/* The two detail headers share a layout and use their own palette. */
 .detail-credit-check, .detail-credit-prefix { display: none; }
 #progressModal.detail-modern {
-  scrollbar-gutter: auto;
-  scrollbar-width: thin;
   background: color-mix(in srgb, var(--surface) 97%, var(--accent));
 }
-.detail-modern #progressForm {
+#progressForm {
   --detail-gutter: clamp(16px, 4vw, 34px);
-  --detail-hero: color-mix(in srgb, var(--green-950) 72%, #20212a);
-  --detail-hero-muted: color-mix(in srgb, #e7e3ee 83%, var(--detail-hero));
-  --detail-hero-edge: rgb(255 255 255 / .19);
+  --detail-hero: transparent;
+  --detail-hero-ink: var(--ink);
+  --detail-hero-muted: var(--muted);
+  --detail-hero-emphasis: var(--green-800);
+  --detail-hero-edge: var(--line);
+  --detail-hero-button: var(--green-50);
+  --detail-hero-hover: var(--green-100);
   --detail-line: color-mix(in srgb, var(--surface) 83%, var(--accent));
   padding: 0 var(--detail-gutter) 20px;
   background: inherit;
   min-height: 0;
 }
-.detail-modern .progress-hero {
+#progressModal.detail-modern #progressForm {
+  --detail-hero: color-mix(in srgb, var(--green-950) 72%, #20212a);
+  --detail-hero-ink: #fff;
+  --detail-hero-muted: color-mix(in srgb, #e7e3ee 83%, var(--detail-hero));
+  --detail-hero-emphasis: var(--green-100);
+  --detail-hero-edge: rgb(255 255 255 / .19);
+  --detail-hero-button: rgb(255 255 255 / .09);
+  --detail-hero-hover: rgb(255 255 255 / .18);
+}
+.progress-modal .progress-hero {
   grid-template-columns: clamp(64px, 13vw, 114px) minmax(0, 1fr);
   align-items: center;
   gap: clamp(12px, 3vw, 26px);
   margin-inline: calc(-1 * var(--detail-gutter));
   padding: 28px var(--detail-gutter) 23px;
   background: var(--detail-hero);
-  color: #fff;
+  color: var(--detail-hero-ink);
 }
-.detail-modern .progress-hero img { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; }
-.detail-modern .progress-hero h2 {
+.progress-modal .progress-hero img { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; }
+.detail-artwork { display: none; }
+.detail-with-artwork .progress-hero {
+  position: relative;
+  min-height: clamp(250px, 38vw, 342px);
+}
+.detail-with-artwork .progress-hero > :is(#progressCover, .progress-hero-info) {
+  position: relative;
+  z-index: 1;
+}
+.detail-with-artwork .detail-artwork {
+  display: block;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.detail-with-artwork .detail-artwork img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-position: center;
+  aspect-ratio: auto;
+}
+.detail-artwork img:not(.loaded) { visibility: hidden; }
+.detail-artwork::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(12 11 20 / .82) 0%, rgb(12 11 20 / .68) 43%, rgb(12 11 20 / .12) 100%),
+    linear-gradient(0deg, var(--detail-hero), transparent 58%);
+}
+.detail-with-artwork .progress-hero-info { text-shadow: 0 1px 4px rgb(8 7 12 / .5); }
+.detail-with-artwork .progress-actions { text-shadow: none; }
+.detail-with-artwork .detail-corner-actions .modal-close {
+  background: rgb(12 11 20 / .55);
+}
+.progress-modal .progress-hero h2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -6321,9 +6322,9 @@ body.schedule-picking [data-floating-view="schedule"] {
 #modernFullTitle { flex: none; padding: 0; color: inherit; font-size: 12px; text-decoration: underline; }
 #detailFullTitleDialog .episode-record-body { overflow-wrap: anywhere; }
 #detailFullTitleOriginal { margin: 0; color: var(--muted); }
-.detail-modern .progress-hero-info .progress-info-row { display: contents; }
-.detail-modern .progress-hero-info h2 { order: -4; }
-.detail-modern .modern-title-tools { order: -3; }
+.progress-modal .progress-hero-info .progress-info-row { display: contents; }
+.progress-modal .progress-hero-info h2 { order: -4; }
+.progress-modal .modern-title-tools { order: -3; }
 .modern-detail-facts {
   order: -2;
   display: flex;
@@ -6335,38 +6336,60 @@ body.schedule-picking [data-floating-view="schedule"] {
   font-size: 13px;
 }
 .modern-detail-facts > :empty { display: none; }
-.detail-modern .progress-meta { color: #fff; margin-top: 6px; }
-.detail-modern .progress-meta #progressAirDate { color: var(--detail-hero-muted); }
-.detail-modern .update-badge { white-space: normal; }
-.detail-modern .update-badge:is(.finished, .unknown, .ongoing) {
+.progress-modal .progress-meta { color: var(--detail-hero-ink); margin-top: 6px; }
+.progress-modal .progress-meta #progressAirDate { color: var(--detail-hero-muted); }
+.progress-modal .update-badge { white-space: normal; }
+.progress-modal .update-badge:is(.finished, .unknown, .ongoing) {
   color: var(--detail-hero-muted);
   border-color: var(--detail-hero-edge);
   background: transparent;
 }
-.detail-modern .update-badge.ongoing { background: rgb(255 255 255 / .1); color: #fff; }
-.detail-modern .update-badge-dot { background: currentColor; opacity: .72; }
-.detail-modern .progress-info-row .progress-actions { position: relative; gap: 7px; margin: 12px 0 0; }
-.detail-modern .detail-actions:empty { display: none; }
-.detail-modern :is(#detailOnlinePlay, .collect-detail-row .collect-trigger, .modern-detail-menu > summary) {
+.progress-modal .update-badge.ongoing { background: var(--detail-hero-button); color: var(--detail-hero-ink); }
+.progress-modal .update-badge-dot { background: currentColor; opacity: .72; }
+.progress-modal .progress-info-row .progress-actions { position: relative; gap: 7px; margin: 12px 0 0; }
+.progress-modal :is(#detailOnlinePlay, .collect-detail-row .collect-trigger, .modern-detail-menu > summary) {
   min-height: 39px;
   border-radius: 10px;
   font-size: 13px;
   font-weight: 650;
 }
-.detail-modern #detailOnlinePlay { padding: 8px 11px; background: var(--green-100); border-color: var(--green-100); color: var(--green-950); }
-.detail-modern #detailOnlinePlay::before { content: "▶" / ""; margin-right: 7px; font-size: 10px; }
-.detail-modern #detailOnlinePlay[aria-disabled="true"] { opacity: .65; cursor: default; }
-.detail-modern #detailOnlinePlay[aria-disabled="true"]::before { content: none; }
-.detail-modern .collect-detail-row .collect-trigger {
-  background: rgb(255 255 255 / .09);
-  color: #fff;
+.progress-modal #detailOnlinePlay { padding: 8px 11px; background: var(--green-100); border-color: var(--green-100); color: var(--green-950); }
+.progress-modal #detailOnlinePlay::before { content: "▶" / ""; margin-right: 7px; font-size: 10px; }
+.progress-modal #detailOnlinePlay[aria-disabled="true"] { opacity: .65; cursor: default; }
+.progress-modal #detailOnlinePlay[aria-disabled="true"]::before { content: none; }
+.progress-modal .collect-detail-row .collect-trigger {
+  background: var(--detail-hero-button);
+  color: var(--detail-hero-ink);
   border-color: var(--detail-hero-edge);
 }
-.detail-modern .collect-detail-row .collect-glyph { display: none; }
-.detail-modern .collect-detail-row .collect-caret { opacity: .85; }
-.detail-modern :is(.collect-detail-row .collect-trigger, .modern-detail-menu > summary):hover { background: rgb(255 255 255 / .18); }
-.detail-modern .detail-corner-download { display: none; }
-.detail-modern .detail-corner-actions .modal-close { margin: 12px 14px 0 0; width: 34px; height: 34px; background: rgb(255 255 255 / .13); color: white; }
+.progress-modal .collect-detail-row .collect-glyph { display: none; }
+.progress-modal .collect-detail-row .collect-caret { opacity: .85; }
+.progress-modal :is(.collect-detail-row .collect-trigger, .modern-detail-menu > summary):hover { background: var(--detail-hero-hover); }
+.progress-modal:not(.detail-modern) .progress-actions :is(#detailOnlinePlay, .collect-trigger, .modern-detail-menu > summary) {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  box-shadow: none;
+}
+.progress-modal:not(.detail-modern) #detailOnlinePlay {
+  color: var(--green-900);
+  background: var(--green-100);
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--green-100));
+}
+.progress-modal:not(.detail-modern) #detailOnlinePlay:hover:not([aria-disabled="true"]) {
+  background: color-mix(in srgb, var(--green-100) 85%, var(--accent));
+}
+.progress-modal:not(.detail-modern) .progress-actions :is(.collect-trigger, .modern-detail-menu > summary) {
+  color: var(--green-800);
+  background: var(--surface);
+}
+.progress-modal:not(.detail-modern) .progress-actions :is(.collect-trigger:hover, .modern-detail-menu > summary:hover, .modern-detail-menu[open] > summary) {
+  background: var(--green-50);
+  border-color: var(--active-inset);
+}
+.progress-modal .detail-corner-actions .modal-close { margin: 12px 14px 0 0; width: 34px; height: 34px; background: var(--surface); color: var(--muted); }
+.detail-modern .detail-corner-actions .modal-close { background: rgb(255 255 255 / .13); color: white; }
 .detail-modern .detail-tabs { margin-top: 4px; border-color: var(--detail-line); }
 .detail-modern .detail-tab { padding: 10px 2px; font-size: 14px; }
 .detail-modern #overviewDetailPanel { min-height: 220px; }
@@ -6396,10 +6419,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   cursor: pointer;
   list-style: none;
   border: 1px solid var(--detail-hero-edge);
-  background: rgb(255 255 255 / .09);
+  background: var(--detail-hero-button);
 }
 .modern-detail-menu > summary::-webkit-details-marker { display: none; }
-.detail-modern .modern-detail-menu[open] > summary { background: rgb(255 255 255 / .2); }
+.progress-modal .modern-detail-menu[open] > summary { background: var(--detail-hero-hover); }
 .modern-detail-menu:not([open]) > .modern-detail-menu-body { display: none; }
 .modern-detail-menu-body {
   position: absolute;
@@ -6587,10 +6610,10 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 
 .detail-modern #episodeGrid { max-height: none; overflow: visible; padding: 14px 0 0; }
-.detail-modern .episode-group-grid {
+.progress-modal .episode-group-grid {
   --episode-gap: 8px;
-  --episode-min: 40px;
-  grid-template-columns: repeat(auto-fill, minmax(max(var(--episode-min), calc((100% - 11 * var(--episode-gap)) / 12)), 1fr));
+  --episode-min: 39px;
+  grid-template-columns: repeat(auto-fill, minmax(max(var(--episode-min), calc((100% - 12 * var(--episode-gap)) / 13)), 1fr));
   gap: var(--episode-gap);
 }
 .detail-modern .episode-group-meta { flex-wrap: wrap; gap: 4px 10px; }
@@ -6616,7 +6639,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   color: var(--green-950);
 }
 .detail-modern .episode-cell.downloaded::after { width: 5px; height: 5px; background: var(--accent); box-shadow: none; }
-.detail-modern .progress-hero-info { align-self: center; }
+.progress-modal .progress-hero-info { align-self: center; }
 .detail-modern .episode-release-status { white-space: normal; }
 .detail-release-info { position: relative; color: var(--green-950); }
 .detail-release-info summary { cursor: pointer; font-size: 12px; font-weight: 700; text-align: right; }
@@ -6642,16 +6665,21 @@ body.schedule-picking [data-floating-view="schedule"] {
   :is(#saveProgress, #cancelProgress) { transition: none; }
 }
 
-.detail-modern .progress-hero-info .anime-rating { margin-top: 0; color: var(--detail-hero-muted); font-size: 13px; }
-.detail-modern .progress-hero-info .rating-score { color: var(--green-100); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
-.detail-modern .progress-hero-info .rating-score::before { content: "Bangumi "; }
-.detail-modern .progress-hero-info .personal-rating { margin: 0; color: var(--green-100); font: inherit; font-weight: 700; }
+.progress-modal .progress-hero-info .anime-rating { margin-top: 0; color: var(--detail-hero-muted); font-size: 13px; }
+.progress-modal .progress-hero-info .rating-score { color: var(--detail-hero-emphasis); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.progress-modal .progress-hero-info .rating-score::before { content: "Bangumi "; }
+.progress-modal .progress-hero-info .personal-rating { margin: 0; color: var(--detail-hero-emphasis); font: inherit; font-weight: 700; }
 .detail-modern [data-detail-tab]:focus-visible,
 .modern-detail-menu > summary:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 @media (max-width: 480px) {
   .detail-modern #overviewDetailPanel { min-height: 0; }
-  .detail-modern .progress-hero { align-items: start; padding-top: 20px; }
-  .detail-modern .progress-meta { flex-flow: row wrap; align-items: center; }
-  .detail-modern .episode-group-grid { --episode-min: 36px; --episode-gap: 6px; }
+  .progress-modal .progress-hero { align-items: start; padding-top: 20px; }
+  .progress-modal .progress-meta { flex-flow: row wrap; align-items: center; }
+  .progress-modal .episode-group-grid { --episode-min: 36px; --episode-gap: 6px; }
+  .detail-with-artwork .progress-hero { min-height: 0; }
+  .detail-with-artwork .detail-artwork::after {
+    background: linear-gradient(90deg, rgb(12 11 20 / .58), rgb(12 11 20 / .72)),
+      linear-gradient(0deg, var(--detail-hero), transparent 60%);
+  }
   .detail-credit-actions { gap: 4px; }
 }

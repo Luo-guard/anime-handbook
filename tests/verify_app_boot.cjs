@@ -130,8 +130,14 @@ function scriptUrls() {
 
     const closeButton = page.getByRole('button', { name: '关闭番剧详情' });
     const closeBox = await closeButton.boundingBox();
-    const downloadBox = await page.locator('#openOffline').boundingBox();
-    assert.ok(closeBox.x + closeBox.width <= downloadBox.x, 'close and download buttons must not overlap');
+    const menuTrigger = page.locator('#modernDetailMenu > summary');
+    const menuBox = await menuTrigger.boundingBox();
+    assert.ok(closeBox.x >= menuBox.x + menuBox.width || closeBox.y + closeBox.height <= menuBox.y,
+      'close and more buttons must not overlap');
+    await menuTrigger.click();
+    assert.equal(await page.locator('#openOffline').isVisible(), true, 'the more menu exposes Find resources');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#modernDetailMenu').evaluate(node => node.open), false);
     await closeButton.click();
     assert.equal(await page.locator('#progressModal').evaluate(node => node.open), false, 'the close button dismisses the detail modal');
 

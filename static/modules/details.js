@@ -190,11 +190,7 @@ function applyBgmRatingLink(rating, anime, hasRating) {
   }
 }
 
-// 详情弹窗右上角的按钮组要贴住卡片真实的右上角。弹窗为滚动条
-// 预留了两侧槽（scrollbar-gutter: stable both-edges），绝对定位只能落在
-// padding box 里，右边会空出半个槽宽；用负 right 补偿又会把按钮顶进滚动区域、
-// 给弹窗添一条横向滚动条（且槽宽随浏览器/缩放变化，写死 15px 会顶出卡边）。
-// 所以直接按弹窗的视口矩形把它固定住：既严丝合缝，弹窗内部滚动时也一直贴角。
+// 按弹窗的视口矩形定位关闭按钮，使它在弹窗内部滚动时仍贴住右上角。
 function syncDetailCornerActions() {
   const dialog = document.querySelector("#progressModal");
   const actions = dialog?.querySelector(".detail-corner-actions");
@@ -213,41 +209,37 @@ if (typeof ResizeObserver !== "undefined") {
   if (detailDialog) new ResizeObserver(syncDetailCornerActions).observe(detailDialog);
 }
 
-const detailLayoutHomes = new Map();
-
 function applyDetailLayout() {
   const dialog = $("#progressModal");
   if (!dialog) return;
-  const modern = state.settings.detail_layout === "modern";
+  const artwork = state.settings.detail_layout === "artwork";
+  const modern = artwork || state.settings.detail_layout === "modern";
   dialog.classList.toggle("detail-modern", modern);
+  dialog.classList.toggle("detail-with-artwork", artwork);
+  updateDetailArtwork();
   dialog.classList.toggle("detail-compact-credits", modern && state.settings.detail_modern_compact_credits !== false);
   $("#modernDetailMenu").open = false;
-  $("#modernDetailMenu").classList.toggle("hidden", !modern);
   const activeTab = $("[data-detail-tab].active", dialog)?.dataset.detailTab;
   switchDetailTab(activeTab || "overview");
 
-  const menu = $("#modernDetailMenu");
-  const facts = $("#modernDetailFacts");
-  facts.classList.toggle("hidden", !modern);
-  for (const [selector, destination] of [
-    [".progress-links", $(".modern-menu-sites", menu)],
-    ["#openAgeRelated", $(".modern-menu-actions", menu)],
-    ["#detailSavedSections", $(".modern-menu-saved", menu)],
-    ["#animeRating", facts], ["#personalRating", facts],
-  ]) {
-    const node = $(selector, dialog);
-    if (!detailLayoutHomes.has(node)) {
-      const home = document.createComment("classic detail position");
-      node.before(home);
-      detailLayoutHomes.set(node, home);
-    }
-    if (modern) destination.append(node);
-    else detailLayoutHomes.get(node).after(node);
-  }
-
-  refreshModernDetailHeader();
+  refreshDetailHeader();
   updateDetailRecordActions();
   syncDetailCornerActions();
+}
+
+function updateDetailArtwork() {
+  const dialog = $("#progressModal");
+  const anime = dialog.open && dialog.classList.contains("detail-with-artwork") ? state.progressAnime : null;
+  for (const [selector, url] of [
+    ["#detailArtworkCover", anime?.cover_url],
+    ["#detailArtwork", anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}`],
+  ]) {
+    const image = $(selector);
+    if (!image || image.getAttribute("src") === (url || null)) continue;
+    image.classList.remove("loaded");
+    if (url) image.src = url;
+    else image.removeAttribute("src");
+  }
 }
 
 function updateDetailRecordActions() {
@@ -293,21 +285,21 @@ function modernDetailAiring(anime, count) {
   };
 }
 
-function refreshModernDetailHeader() {
+function refreshDetailHeader() {
   const dialog = $("#progressModal");
   const anime = state.progressAnime;
-  const modern = dialog?.classList.contains("detail-modern") && anime;
-  if (!$("#modernTitleTools")) return;
+  if (!anime || !$("#modernTitleTools")) return;
+  const modern = dialog.classList.contains("detail-modern");
   const play = $("#detailOnlinePlay");
   let nextEpisode = 0;
   const mainCells = $$('#episodeGrid [data-episode-type="0"]', dialog);
-  const airing = modern ? modernDetailAiring(anime, mainCells.length) : null;
+  const airing = modernDetailAiring(anime, mainCells.length);
   const aired = airing?.finished ? null : airing?.kind === "upcoming" ? 0 : airing?.count ?? null;
   if (play) {
     play.textContent = "播放";
     play.removeAttribute("aria-disabled");
     delete play.dataset.detailEpisodeKey;
-    if (modern && typeof mainPlaybackEpisode === "function") {
+    if (typeof mainPlaybackEpisode === "function") {
       try {
         const target = mainPlaybackEpisode(anime);
         nextEpisode = target.number;
@@ -330,13 +322,9 @@ function refreshModernDetailHeader() {
       }
     }
   }
-  if (!modern) {
-    $("#modernTitleTools").classList.add("hidden");
-    return;
-  }
   const count = Number(anime.episode_count) || mainCells.length;
   $("#modernDetailEpisodeTotal").textContent = count > 0 ? `全 ${count} 集` : "";
-  mainCells.forEach((cell, index) => {
+  if (modern) mainCells.forEach((cell, index) => {
     const key = episodeStorageKey(cell.dataset.episodeKey, anime);
     const unreleased = aired !== null && index >= aired;
     cell.classList.toggle("unreleased", unreleased);
@@ -371,6 +359,13 @@ function detailEpisodeReleaseStatus(anime, group) {
 
 document.addEventListener("DOMContentLoaded", () => {
   const dialog = $("#progressModal");
+  $$(".detail-artwork img").forEach(image => {
+    image.addEventListener("load", () => image.classList.toggle("loaded", image.naturalWidth > 0));
+    image.addEventListener("error", () => {
+      image.classList.remove("loaded");
+      image.removeAttribute("src");
+    });
+  });
   $("#modernFullTitle")?.addEventListener("click", () => $("#detailFullTitleDialog").showModal());
   dialog?.addEventListener("keydown", event => {
     const menu = $("#modernDetailMenu");
@@ -379,12 +374,7 @@ document.addEventListener("DOMContentLoaded", () => {
     menu.open = false;
     menu.querySelector("summary").focus();
   });
-  $("#modernFindResources")?.addEventListener("click", () => {
-    $("#modernDetailMenu").open = false;
-    $("#openOffline").click();
-  });
   $("#openAgeRelated")?.addEventListener("click", () => {
-    if (!dialog.classList.contains("detail-modern")) return;
     $("#modernDetailMenu").open = false;
     switchDetailTab("overview");
   });
@@ -406,7 +396,7 @@ document.addEventListener("DOMContentLoaded", () => {
     next.click();
   });
   if (typeof ResizeObserver !== "undefined" && dialog && $("#modernTitleTools")) {
-    const observer = new ResizeObserver(() => { if (dialog.open) refreshModernDetailHeader(); });
+    const observer = new ResizeObserver(() => { if (dialog.open) refreshDetailHeader(); });
     observer.observe($("#progressTitle"));
     observer.observe($("#progressCover"));
     observer.observe($("#modernTitleTools").parentElement);
@@ -467,7 +457,8 @@ function openProgress(animeId) {
     : "未取得章节列表时可手动填写章节数";
   renderEpisodeGrid();
   $("#progressModal").showModal();
-  refreshModernDetailHeader();
+  updateDetailArtwork();
+  refreshDetailHeader();
   syncDetailCornerActions();
   if (state.settings?.detail_airtime_source === "as") {
     api(`/api/animes/${anime.id}`, { timeoutMs: 30000 }).then(({ anime: fresh }) => {
@@ -879,7 +870,7 @@ function episodeAnnotationMarkup(annotations) {
 function refreshEpisodeAiringStatus() {
   if (!state.progressAnime) return;
   renderProgressBadge(state.progressAnime);
-  refreshModernDetailHeader();
+  refreshDetailHeader();
   $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
     const markup = detailEpisodeReleaseStatus(state.progressAnime, {
       type: Number(element.dataset.episodeAiringType), count: Number(element.dataset.episodeCount),
@@ -933,7 +924,7 @@ async function syncEpisodeDownloadMarks(files = null) {
     const base = String(cell.title || "").replace(/(?:^| · )已下载 · 扇区可播放$/, "");
     cell.title = on ? [base, "已下载 · 扇区可播放"].filter(Boolean).join(" · ") : base;
   });
-  if ($("#progressModal").classList.contains("detail-modern")) refreshModernDetailHeader();
+  refreshDetailHeader();
 }
 
 function renderEpisodeGrid() {
@@ -1016,7 +1007,7 @@ function renderEpisodeGrid() {
     creditActions.classList.toggle("hidden", credits.length === 0);
   }
   updateDetailRecordActions();
-  if ($("#progressModal").classList.contains("detail-modern")) refreshModernDetailHeader();
+  refreshDetailHeader();
   // 标注气泡仍按格子绑定；所有点击/长按/右键交给 episode-gesture.js 的委托，
   // 扇区格数与绑定表都由设置驱动，这里不再散着写事件。
   $$(".episode-cell", $("#progressModal")).forEach((button) => {
@@ -1260,7 +1251,7 @@ async function saveProgress() {
       if (dialog.classList.contains("detail-modern")) {
         Object.assign(state.progressAnime, result.anime);
         updateDetailRecordActions();
-        refreshModernDetailHeader();
+        refreshDetailHeader();
         refreshEpisodeRecordAnnotations(anime.id);
       } else {
         dialog.close();

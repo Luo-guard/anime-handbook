@@ -789,7 +789,10 @@ document.addEventListener("visibilitychange", () => {
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-  $("#openOffline")?.addEventListener("click", openOffline);
+  $("#openOffline")?.addEventListener("click", () => {
+    $("#modernDetailMenu").open = false;
+    openOffline();
+  });
   $("#offlineClose")?.addEventListener("click", () => $("#offlineModal").close());
   $("#offlineModal")?.addEventListener("close", () => setOfflinePolling(false));
   $("#offlineSearchButton")?.addEventListener("click", runOfflineSearch);

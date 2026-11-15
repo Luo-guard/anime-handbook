@@ -11,6 +11,7 @@ from . import screenshots as screenshot_tools
 from . import danmaku as danmaku_tools
 from . import xifan_preview
 from . import playback_rules
+from .detail_artwork import get_artwork
 from .offline import OfflineStore
 from .offline_service import OfflineError, OfflineService
 
@@ -451,6 +452,22 @@ class ReadRoutes:
                         "custom_collections": self.database.list_custom_collections(),
                     }
                 )
+            elif re.fullmatch(r"/api/detail-artwork/[1-9]\d{0,9}", path):
+                anime_id = int(path.rsplit("/", 1)[1])
+                with self.database.connect() as db:
+                    row = db.execute("SELECT id, name, name_cn FROM anime WHERE id = ?", (anime_id,)).fetchone()
+                if row is None:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                anime = dict(row)
+                aliases = self.animeschedule.cached_titles(anime_id, (anime["name"], anime["name_cn"]))
+                body = get_artwork(self.database.asset_root, anime, aliases)
+                if body:
+                    send_asset(self, body, "image/webp", cache="private, max-age=86400")
+                else:
+                    self.send_response(HTTPStatus.NO_CONTENT)
+                    self.send_header("Cache-Control", "private, no-store")
+                    self.end_headers()
             elif path.startswith("/api/covers/"):
                 anime_id = int(path.rsplit("/", 1)[1])
                 tag = getattr(self.sync, "cover_etag", lambda _: None)(anime_id)

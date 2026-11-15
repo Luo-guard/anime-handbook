@@ -231,6 +231,21 @@ class AnimeScheduleService:
     def _progress_cache(self):
         return [self.cache["weeks"].get(f"{year}-{week}", {}) for year, week in progress_weeks()]
 
+    def cached_titles(self, anime_id, names):
+        """Return matching known titles without refreshing AnimeSchedule."""
+        with self.lock:
+            route = self.cache["records"].get(str(anime_id), {}).get("route")
+            rows = [row for week in self._progress_cache() for row in week.get("rows", ())]
+        if not route:
+            routes = self._lookup_routes((title_key(name) for name in names), self._title_routes(rows))
+            if len(routes) != 1:
+                return ()
+            route = routes[0]
+        return tuple(dict.fromkeys(
+            row[field] for row in rows if row.get("route") == route
+            for field in ("english", "romaji", "native", "title") if row.get(field)
+        ))
+
     @staticmethod
     def _title_routes(rows):
         index = {}

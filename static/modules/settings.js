@@ -206,7 +206,7 @@ function renderCustomCollectionSettings() {
 }
 
 function updateDetailLayoutSettings() {
-  const modern = $("#detailLayoutInput").value === "modern";
+  const modern = ["modern", "artwork"].includes($("#detailLayoutInput").value);
   $$("[data-modern-detail-setting]").forEach(row => row.classList.toggle("hidden", !modern));
   $$("[data-classic-detail-setting]").forEach(row => row.classList.toggle("hidden", modern));
 }

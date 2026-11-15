@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261114-detail-menu" />
+  <link rel="stylesheet" href="/styles.css?v=20261115-detail-artwork" />
   </head>
   <body>
     <div class="app-shell">
@@ -693,10 +693,13 @@
     <dialog class="modal progress-modal" id="progressModal" aria-labelledby="progressTitle">
       <div class="detail-corner-actions">
         <button type="button" class="modal-close" id="closeProgress" aria-label="关闭番剧详情">×</button>
-        <button type="button" class="detail-corner-download" id="openOffline" title="我的库 · 找资源" aria-label="打开我的库与找资源"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></button>
       </div>
       <form method="dialog" class="modal-frame" id="progressForm" tabindex="-1" autofocus>
         <div class="progress-hero">
+          <div class="detail-artwork" aria-hidden="true">
+            <img id="detailArtworkCover" alt="" />
+            <img id="detailArtwork" alt="" />
+          </div>
           <img id="progressCover" alt="" />
           <div class="progress-hero-info">
             <h2 id="progressTitle"></h2>
@@ -704,30 +707,35 @@
               <p id="modernOriginalTitle"></p>
               <button type="button" class="text-button" id="modernFullTitle">完整番名</button>
             </div>
-            <div class="modern-detail-facts hidden" id="modernDetailFacts"><span id="modernDetailEpisodeTotal"></span></div>
-            <p class="progress-meta"><span id="progressAirDate"></span><span id="progressBadge" class="update-badge hidden"><i class="update-badge-dot" aria-hidden="true"></i><span id="progressBadgeText"></span></span></p>
-            <p class="progress-links"><span id="detailLinks" class="detail-links"></span></p>
-            <div class="progress-info-row">
+            <div class="modern-detail-facts" id="modernDetailFacts">
+              <span id="modernDetailEpisodeTotal"></span>
               <a class="anime-rating hidden" id="animeRating"></a>
               <div class="personal-rating hidden" id="personalRating"></div>
+            </div>
+            <p class="progress-meta"><span id="progressAirDate"></span><span id="progressBadge" class="update-badge hidden"><i class="update-badge-dot" aria-hidden="true"></i><span id="progressBadgeText"></span></span></p>
+            <div class="progress-info-row">
               <div class="progress-actions">
                 <button type="button" class="primary-button hidden" id="detailOnlinePlay">播放</button>
-                <div class="detail-actions">
-                  <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
-                </div>
                 <div class="collect-detail-row" id="collectionDetailStatus"></div>
-                <details class="modern-detail-menu hidden" id="modernDetailMenu">
+                <details class="modern-detail-menu" id="modernDetailMenu">
                   <summary aria-label="番剧更多操作">⋯</summary>
                   <div class="modern-detail-menu-body">
                     <div class="modern-menu-actions">
-                      <button type="button" class="detail-action" id="modernFindResources">
+                      <button type="button" class="detail-action" id="openOffline">
                         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></svg>
                         <span>找资源</span>
                       </button>
+                      <button type="button" class="detail-action" id="openAgeRelated"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span id="openAgeRelatedLabel">相关番剧</span></button>
                     </div>
-                    <div class="modern-menu-saved"></div>
+                    <div class="modern-menu-saved">
+                      <div class="saved-sections" id="detailSavedSections">
+                        <details class="saved-video-links hidden" id="savedVideoSection"><summary class="saved-video-heading"><span>已存视频</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedVideoLinks"></div></details>
+                        <details class="saved-video-links hidden" id="savedLinkSection"><summary class="saved-video-heading"><span>已存链接</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedLinks"></div></details>
+                      </div>
+                    </div>
                     <div class="modern-menu-sites">
                       <div class="modern-menu-section-label">站点链接</div>
+                      <p class="progress-links"><span id="detailLinks" class="detail-links"></span></p>
                     </div>
                   </div>
                 </details>
@@ -735,10 +743,6 @@
             </div>
             <input id="episodeCountInput" type="hidden" />
           </div>
-        </div>
-        <div class="saved-sections" id="detailSavedSections">
-          <details class="saved-video-links hidden" id="savedVideoSection"><summary class="saved-video-heading"><span>已存视频</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedVideoLinks"></div></details>
-          <details class="saved-video-links hidden" id="savedLinkSection"><summary class="saved-video-heading"><span>已存链接</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div id="savedLinks"></div></details>
         </div>
         <div class="detail-tabs" role="tablist" aria-label="番剧详情分栏">
           <button type="button" class="detail-tab active" data-detail-tab="overview" id="overviewDetailTab" role="tab" aria-selected="true" aria-controls="overviewDetailPanel">概览</button>
@@ -1026,10 +1030,10 @@
           </div>
           <div class="settings-section-title" data-settings-section="detail">番剧详情</div>
           <h3 class="settings-subsection-title">详情布局</h3>
-          <label class="setting-row"><span><strong>番剧详情布局</strong><small>选择经典布局或深色封面的新版布局。</small></span><select id="detailLayoutInput"><option value="classic">经典布局</option><option value="modern">新版布局</option></select></label>
+          <label class="setting-row"><span><strong>番剧详情样式</strong><small>番剧图片优先使用横版壁纸，找不到时使用封面。</small></span><select id="detailLayoutInput"><option value="classic">白色</option><option value="modern">主题色</option><option value="artwork">番剧图片</option></select></label>
           <label class="setting-row" data-classic-detail-setting><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改才高亮「确认记录」并显示「取消」。关闭时，两个按钮始终显示并可用。</small></span><span class="switch-row compact"><input type="checkbox" id="detailClassicRecordOnChangeInput" /><span class="switch"></span></span></label>
           <label class="setting-row hidden" data-modern-detail-setting><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改才高亮「确认记录」并显示「取消修改」。关闭时，两个按钮始终显示并可用。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernRecordOnChangeInput" /><span class="switch"></span></span></label>
-          <label class="setting-row hidden" data-modern-detail-setting><span><strong>显示番剧原名</strong><small>当原名与显示名称不同时，在新版标题下显示原名。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernOriginalTitleInput" /><span class="switch"></span></span></label>
+          <label class="setting-row"><span><strong>显示番剧原名</strong><small>当原名与显示名称不同时，在标题下显示原名。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernOriginalTitleInput" /><span class="switch"></span></span></label>
           <label class="setting-row hidden" data-modern-detail-setting><span><strong>用勾选框显示 OP／ED</strong><small>关闭后，OP 和 ED 会各自按剧集方块显示。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernCompactCreditsInput" /><span class="switch"></span></span></label>
           <h3 class="settings-subsection-title" id="detailAiringSettingsHeading" tabindex="-1">放送信息</h3>
           <label class="setting-row">
@@ -1827,15 +1831,15 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261114-wheel-style" defer></script>
-    <script src="/modules/details.js?v=20261114-detail-menu-rating" defer></script>
+    <script src="/modules/details.js?v=20261115-detail-artwork" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261114-latest-airing" defer></script>
-    <script src="/modules/settings.js?v=20261114-library-settings" defer></script>
+    <script src="/modules/settings.js?v=20261115-detail-artwork" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261114-wheel-style" defer></script>
+    <script src="/modules/settings-save.js?v=20261115-detail-artwork" defer></script>
     <script src="/modules/events.js?v=20261114-collection-filters" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
@@ -1844,7 +1848,7 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
-    <script src="/modules/offline.js?v=20261114-library-settings" defer></script>
+    <script src="/modules/offline.js?v=20261115-detail-header" defer></script>
     <script src="/modules/online-playback.js?v=20261114-episode-labels" defer></script>
     <script src="/modules/library-view.js?v=20261114-qb-autostart" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>

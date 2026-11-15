@@ -241,7 +241,7 @@ def _normalize_settings(body, settings):
                 if not isinstance(value, str) or value not in {"bgm", "as"}:
                     raise ValueError("已播集数来源无效")
             elif key == "detail_layout":
-                if not isinstance(value, str) or value not in {"classic", "modern"}:
+                if not isinstance(value, str) or value not in {"classic", "modern", "artwork"}:
                     raise ValueError("番剧详情布局无效")
             elif key in {"detail_classic_wheel_style", "detail_modern_wheel_style"}:
                 if not isinstance(value, str) or value not in {"classic", "modern"}:

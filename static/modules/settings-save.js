@@ -147,7 +147,7 @@ const HandbookSettings = (() => {
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
       if ((payload.settings.detail_airtime_source || "yuc") !== detailAirtimeSource) throw new Error("后台未保存详情更新时间来源，请重启后台并刷新后重试。");
       const savedLayout = payload.settings.detail_layout || "classic";
-      if (savedLayout !== detailLayout.detail_layout || (savedLayout === "modern" &&
+      if (savedLayout !== detailLayout.detail_layout || (["modern", "artwork"].includes(savedLayout) &&
           Object.entries(detailLayout).some(([key, value]) => payload.settings[key] !== value))) {
         throw new Error("后台未保存番剧详情布局，请重启后台并刷新后重试。");
       }
