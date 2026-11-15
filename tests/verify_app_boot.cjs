@@ -141,6 +141,36 @@ function scriptUrls() {
     await closeButton.click();
     assert.equal(await page.locator('#progressModal').evaluate(node => node.open), false, 'the close button dismisses the detail modal');
 
+    await page.route('**/api/airing?revision=1', route => route.fulfill({ json: {
+      revision: 2, animes: [], collection: {
+        animes: [{ id: 12, name: '测试番剧', display_name: '测试番剧', collection_type: 1,
+          episodes: [{ key: '0:8', type: 0, sort: 8, name_cn: '刚同步的标题' }] }],
+        custom_collections: [],
+      },
+    } }));
+    const playerLabels = await page.evaluate(async () => {
+      const file = { id: 1, episode_key: '0:8' };
+      offlineView.playing = file;
+      offlineView.playingAnimeId = 12;
+      offlineView.animeName = '测试番剧';
+      offlineView.local = { files: [file] };
+      openOfflinePlayerDialog();
+      pcSyncEpisodeLabels();
+      const before = document.querySelector('#pcStageTitle').textContent;
+      await refreshAiringProgress();
+      return {
+        before, after: document.querySelector('#pcStageTitle').textContent,
+        playlist: document.querySelector('#pcPlaylistMenu button').textContent,
+        online: onlineEpisodeLabel({ animeId: 12, episode: { number: 8 } }),
+      };
+    });
+    assert.deepEqual(playerLabels, {
+      before: '测试番剧 · 第 08 集',
+      after: '测试番剧 · 第 08 集 · 刚同步的标题',
+      playlist: '● 第 08 集 · 刚同步的标题',
+      online: '第 8 集 · 刚同步的标题',
+    });
+
     console.log('App boot smoke: real script order loads clean, boot completes, toolbar/help/empty state wired, no collection refetch without writes, detail modal closes on outside click.');
   } finally {
     await browser.close();

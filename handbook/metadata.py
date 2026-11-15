@@ -16,6 +16,9 @@ import threading
 import time
 from datetime import timedelta
 import urllib.request
+from schedule import ScheduleService
+from .airing import airing_at
+from .animeschedule import AnimeScheduleService
 from .common import (APP_ROOT, aired_main_episode_count, json_dumps, normalize_episodes, now_iso)
 from .database import HandbookDB
 
@@ -27,6 +30,8 @@ class SyncService:
         self._lock = threading.Lock()
         self._episode_request_lock = threading.Lock()
         self._episode_last_request = 0.0
+        self._airtime_schedule = ScheduleService(database.asset_root / "schedule")
+        self._deferred_episode_checks: dict[int, datetime] = {}
         self.status: dict[str, Any] = {
             "running": False,
             "phase": "idle",
@@ -61,6 +66,50 @@ class SyncService:
         # check.  Every other collection is enriched when first imported, then
         # left alone during routine startup syncs.
         return int(item.get("collection_type") or 0) == 1
+
+    @staticmethod
+    def _episode_check_after(item, slot, now, as_airtimes=None):
+        if not slot and not as_airtimes:
+            return None
+        for episode in item.get("episodes") or []:
+            if episode.get("type") != 0 or any(str(episode.get(field) or "").strip() for field in ("name_cn", "name")):
+                continue
+            at = (as_airtimes or {}).get(episode.get("sort"))
+            if at is None:
+                at, precision = airing_at(episode, slot or {})
+                if precision != "minute":
+                    continue
+            at = at.astimezone(now.tzinfo)
+            due = at + timedelta(hours=1)
+            if at.date() <= now.date() <= due.date() and now < due:
+                return due
+        return None
+
+    def start_due_episode_checks(self):
+        """Resume checks deferred by the usual collection sync, via the existing airing poll."""
+        if not self._deferred_episode_checks or not self._lock.acquire(blocking=False):
+            return
+        now = datetime.now().astimezone()
+        due = {anime_id for anime_id, at in self._deferred_episode_checks.items() if now >= at}
+        if not due:
+            self._lock.release()
+            return
+        for anime_id in due:
+            self._deferred_episode_checks.pop(anime_id)
+
+        def refresh():
+            try:
+                self.enrich_missing(anime_ids=due)
+            except Exception as error:
+                record_failure("metadata_fallback", error)
+            finally:
+                self._lock.release()
+
+        try:
+            threading.Thread(target=refresh, name="handbook-deferred-episodes", daemon=True).start()
+        except RuntimeError:
+            self._lock.release()
+            raise
 
     @staticmethod
     def find_kazumi_database() -> Path | None:
@@ -166,7 +215,7 @@ class SyncService:
             self._lock.release()
 
     def start_background(self, *, enrich_all: bool = False) -> bool:
-        if self.status.get("running"):
+        if self.status.get("running") or self._lock.locked():
             return False
         thread = threading.Thread(
             target=self.sync,
@@ -177,30 +226,44 @@ class SyncService:
         thread.start()
         return True
 
-    def enrich_missing(self, *, refresh_all: bool = False) -> int:
+    def enrich_missing(self, *, refresh_all: bool = False, anime_ids: set[int] | None = None) -> int:
         candidates = self.database.list_anime()
-        fetch_episode_titles = bool(
-            self.database.get_settings().get("show_episode_titles_on_hover")
-        )
+        settings = self.database.get_settings()
+        fetch_episode_titles = bool(settings.get("show_episode_titles_on_hover"))
         if not refresh_all:
-            candidates = [
-                item
-                for item in candidates
-                if item["episode_count"] is None
-                or (fetch_episode_titles and not item.get("episode_titles_synced"))
-                or int(item.get("bgm_rating_version") or 0) < 2
-                or (
-                    self._should_track_release_count(item, item.get("air_date"))
-                    and not self._release_count_is_current(item)
+            now = datetime.now().astimezone()
+            slots = self._airtime_schedule.airtime_index()
+            as_airtimes = {}
+            if settings.get("detail_airtime_source") == "as" or settings.get("collection_airing_source") == "as":
+                as_airtimes = AnimeScheduleService(self.database.asset_root / "animeschedule").cached_episode_airtimes(
+                    int(item["id"]) for item in candidates
                 )
-            ]
-        self.status["pending"] = len(candidates)
+            selected = []
+            for item in candidates:
+                anime_id = int(item["id"])
+                if anime_ids is not None and anime_id not in anime_ids:
+                    continue
+                daily = self._should_track_release_count(item, item.get("air_date")) and not self._release_count_is_current(item)
+                initial = item["episode_count"] is None or (
+                    fetch_episode_titles and not item.get("episode_titles_synced")
+                )
+                rating_missing = int(item.get("bgm_rating_version") or 0) < 2
+                if daily and not initial:
+                    due = self._episode_check_after(item, slots.get(anime_id), now, as_airtimes.get(anime_id))
+                    if due:
+                        self._deferred_episode_checks[anime_id] = due
+                        continue
+                if initial or rating_missing or daily:
+                    selected.append(item)
+            candidates = selected
+        if anime_ids is None:
+            self.status["pending"] = len(candidates)
         if not candidates:
             return 0
         enriched = 0
         with ThreadPoolExecutor(max_workers=6) as executor:
             futures = {
-                executor.submit(self.fetch_bgm_bundle, int(item["id"]), item): item
+                executor.submit(self.fetch_bgm_bundle, int(item["id"]), item, refresh_all=refresh_all): item
                 for item in candidates
             }
             for future in as_completed(futures):
@@ -238,8 +301,11 @@ class SyncService:
                         ),
                     )
                     enriched += 1
-                    self.status["enriched"] = enriched
-                    self.status["pending"] = len(candidates) - enriched
+                    if metadata.get("_episode_release_synced"):
+                        self._deferred_episode_checks.pop(int(metadata["id"]), None)
+                    if anime_ids is None:
+                        self.status["enriched"] = enriched
+                        self.status["pending"] = len(candidates) - enriched
                 except Exception as error:
                     record_failure("metadata_fallback", error)
                     # One unavailable subject must not abort the remaining sync.
@@ -486,7 +552,7 @@ class SyncService:
         )
 
     def fetch_bgm_bundle(
-        self, anime_id: int, existing: dict[str, Any] | None = None
+        self, anime_id: int, existing: dict[str, Any] | None = None, *, refresh_all: bool = False
     ) -> dict[str, Any]:
         metadata = self.fetch_bgm(anime_id)
         rating = metadata.get("rating") or {}
@@ -496,21 +562,20 @@ class SyncService:
         fetch_titles = bool(
             self.database.get_settings().get("show_episode_titles_on_hover")
         )
-        should_refresh_release = (
-            self._should_track_release_count(existing or {}, metadata.get("date"))
-            and not self._release_count_is_current(existing or {})
-        )
-        if fetch_titles or should_refresh_release:
+        existing = existing or {}
+        daily = self._should_track_release_count(existing, metadata.get("date")) and not self._release_count_is_current(existing)
+        deferred = self._deferred_episode_checks.get(anime_id)
+        should_refresh_release = daily and (not deferred or datetime.now().astimezone() >= deferred)
+        initial_titles = fetch_titles and not existing.get("episode_titles_synced")
+        if initial_titles or should_refresh_release or (refresh_all and fetch_titles):
             try:
                 synced_episodes = normalize_episodes(self.fetch_bgm_episodes(anime_id))
                 # The episode request is already needed to calculate the aired
                 # count. Keep that structural list too, so OP/ED groups remain
                 # intact even when hover titles themselves stay disabled.
-                metadata["_episodes"] = (
-                    synced_episodes if fetch_titles or should_refresh_release else None
-                )
-                metadata["_episode_titles_synced"] = fetch_titles
-                if should_refresh_release:
+                metadata["_episodes"] = synced_episodes
+                metadata["_episode_titles_synced"] = bool(synced_episodes) or fetch_titles
+                if daily:
                     metadata["_aired_episode_count"] = aired_main_episode_count(
                         synced_episodes
                     )

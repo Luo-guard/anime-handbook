@@ -14,11 +14,9 @@ function onlineEpisodeLabel(session, episode = session.episode) {
   const number = onlineLocalEpisodeNumber(episode, source, context?.target.first);
   if (!number) return "播放";
   const label = `第 ${number} 集`;
-  const anime = state.progressAnime?.id === animeId ? state.progressAnime
-    : state.animes.find(item => item.id === animeId) || context?.anime;
-  const localEpisode = anime?.episodes?.find(item => episodeStorageKey(item.key, anime) === `0:${number}`);
-  const name = [localEpisode?.name_cn, localEpisode?.name].map(value => String(value || "").trim())
-    .find(value => value && value !== String(number) && value.replace(/\s/g, "") !== `第${number}集`);
+  const anime = state.animes.find(item => item.id === animeId)
+    || (state.progressAnime?.id === animeId ? state.progressAnime : context?.anime);
+  const name = storedPlaybackEpisodeName(anime, `0:${number}`);
   return name ? `${label} · ${name}` : label;
 }
 

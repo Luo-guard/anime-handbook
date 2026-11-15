@@ -46,6 +46,22 @@ function episodeLabelOf(key) {
   return prefix ? `${prefix} ${padded}` : `第 ${padded} 集`;
 }
 
+function storedPlaybackEpisodeName(anime, key) {
+  const canonical = episodeStorageKey(key, anime);
+  const number = Number(canonical.split(":")[1]);
+  const episode = anime?.episodes?.find(item => episodeStorageKey(item.key, anime) === canonical);
+  return [episode?.name_cn, episode?.name].map(value => String(value || "").trim())
+    .find(value => value && !(Number(value) === number)
+      && Number(/^第\s*(\d+)\s*集$/.exec(value)?.[1]) !== number);
+}
+
+function pcLocalEpisodeLabel(key) {
+  const label = episodeLabelOf(key);
+  const anime = state.animes.find(item => item.id === offlineView.playingAnimeId);
+  const name = storedPlaybackEpisodeName(anime, key);
+  return name ? `${label} · ${name}` : label;
+}
+
 function formatOfflineSize(text) {
   return String(text || "未知大小");
 }
@@ -566,7 +582,7 @@ function playLocalFile(fileId) {
   offlineView.playing = file;
   offlineView.playingAnimeId = offlineView.animeId;
   const video = $("#offlineVideo");
-  pcSetTitle(offlineView.animeName || "本地文件", episodeLabelOf(file.episode_key), file.source_title);
+  pcSetTitle(offlineView.animeName || "本地文件", pcLocalEpisodeLabel(file.episode_key), file.source_title);
   clearSubtitleSession();
   const toggle = $("#offlineSubtitleToggle");
   toggle.classList.toggle("hidden", !file.subtitle_path);
@@ -1109,7 +1125,7 @@ function pcRenderPlaylist() {
   menu.innerHTML = files.length
     ? files.map((file, position) => {
         const current = index === position;
-        const label = online ? onlineEpisodeLabel(online, file) : episodeLabelOf(file.episode_key);
+        const label = online ? onlineEpisodeLabel(online, file) : pcLocalEpisodeLabel(file.episode_key);
         return `<button type="button" data-id="${escapeHtml(String(file.id))}" class="${current ? "active" : ""}">${current ? "● " : ""}${escapeHtml(label)}</button>`;
       }).join("")
     : '<p class="pc-menu-empty">还没有可播放的集</p>';
@@ -1121,6 +1137,21 @@ function pcRefreshEpisodes() {
   const next = $("#pcNext");
   if (prev) prev.disabled = index <= 0;
   if (next) next.disabled = index < 0 || index >= files.length - 1;
+  pcRenderPlaylist();
+}
+
+function pcSyncEpisodeLabels() {
+  if (!$("#offlinePlayer")?.open) return;
+  const online = window.onlinePlayback?.current;
+  const file = offlineView.playing;
+  if (online) {
+    const { catalogue, source } = online;
+    pcSetTitle(catalogue.title, onlineEpisodeLabel(online), `${catalogue.ruleName} · ${source.name}`);
+  } else if (file) {
+    pcSetTitle(offlineView.animeName || "本地文件", pcLocalEpisodeLabel(file.episode_key), file.source_title);
+  } else {
+    return;
+  }
   pcRenderPlaylist();
 }
 

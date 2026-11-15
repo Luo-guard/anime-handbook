@@ -60,6 +60,19 @@ function adoptInitialRandomTheme() {
   state.randomThemeProfile = String(chosen.id);
 }
 
+function applySyncedCollection(fresh, revision) {
+  commitAnimes(fresh.animes, { render: false });
+  state.custom_collections = fresh.custom_collections || state.custom_collections;
+  state.dataRevision = revision;
+  const detail = state.animes.find(item => item.id === state.progressAnime?.id);
+  if (detail) refreshDetailEpisodeMetadata(detail);
+  pcSyncEpisodeLabels();
+  renderTabs();
+  renderCollection();
+  renderSeasonFilter();
+  populateAnimeSelect();
+}
+
 async function refreshStatus(options = {}) {
   const silent = Boolean(options.silent);
   const payload = await api("/api/status");
@@ -70,17 +83,9 @@ async function refreshStatus(options = {}) {
   const revision = Number(payload.revision || 0);
   const collectionChanged = revision !== state.dataRevision;
   if (collectionChanged) {
+    const previous = state.dataRevision;
     const fresh = await api("/api/collection-state");
-    commitAnimes(fresh.animes, { render: false });
-    state.custom_collections = fresh.custom_collections || state.custom_collections;
-    // 拉取成功才记账，失败时下一次轮询会再试一次。
-    state.dataRevision = revision;
-    renderTabs();
-    renderCollection();
-    renderSeasonFilter();
-    populateAnimeSelect();
-  } else {
-    state.dataRevision = revision;
+    if (state.dataRevision === previous) applySyncedCollection(fresh, revision);
   }
   renderStats();
   renderSync();
@@ -117,11 +122,12 @@ let airingRefreshTimer = null;
 async function refreshAiringProgress() {
   if (airingRefreshPending || document.hidden) return;
   airingRefreshPending = true;
-  const collection = state.animes;
+  let collection = state.animes;
   try {
     const ids = (typeof scheduleState !== "undefined" ? scheduleState.data?.items || [] : [])
       .map((item) => item.id || item.local_id).filter(Boolean);
     const params = new URLSearchParams();
+    if (!window.handbookOnline && Number.isFinite(state.dataRevision)) params.set("revision", String(state.dataRevision));
     if (state.settings.schedule_airing_source === "as") {
       if (ids.length) params.set("ids", ids.join(","));
       if (typeof scheduleSource === "function" && scheduleSource() === "as" && scheduleState.week) {
@@ -132,6 +138,10 @@ async function refreshAiringProgress() {
     const payload = await api(`/api/airing${query}`);
     // A profile change or collection refresh invalidates this request's owner.
     if (state.animes !== collection) return;
+    if (payload.collection) {
+      applySyncedCollection(payload.collection, payload.revision);
+      collection = state.animes;
+    }
     const fresh = new Map((payload.animes || []).map((anime) => [anime.id, anime.airing]));
     const freshAS = new Map((payload.animes || []).map((anime) => [anime.id, anime.as_airing]));
     let changed = false;

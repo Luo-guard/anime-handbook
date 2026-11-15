@@ -445,7 +445,7 @@ function openProgress(animeId) {
       refreshEpisodeAiringStatus();
     }).catch(() => { /* Cached airing data remains visible. */ });
   }
-  ensureEpisodeTitles(anime);
+  if (window.handbookOnline) ensureEpisodeTitles(anime);
   refreshEpisodeRecordAnnotations(anime.id);
   // 打开详情就刷一次「已下载」角标：以前从没做过这个标记，下载完的集在
   // 格子上和没下载的完全一样，只能靠点扇区「播放」试出来。
@@ -573,6 +573,23 @@ async function refreshEpisodeRecordAnnotations(animeId) {
   }
 }
 
+function refreshDetailEpisodeMetadata(latest) {
+  const current = state.progressAnime;
+  if (!$("#progressModal")?.open || current?.id !== latest.id) return;
+  const episodesChanged = JSON.stringify(current.episodes) !== JSON.stringify(latest.episodes);
+  const countChanged = episodeTotal(current) !== episodeTotal(latest);
+  state.progressAnime = latest;
+  if (episodesChanged || countChanged) {
+    const canonicalKeys = new Map((latest.episodes || []).map(episode => [episodeStorageKey(episode.key, latest), String(episode.key)]));
+    state.pendingEpisodes = new Set([...state.pendingEpisodes].map(key =>
+      canonicalKeys.get(episodeStorageKey(key, current)) || key));
+    if (countChanged) $("#episodeCountInput").value = episodeTotal(latest);
+    renderEpisodeGrid();
+  } else {
+    refreshEpisodeAiringStatus();
+  }
+}
+
 async function ensureEpisodeTitles(anime) {
   if (!showEpisodeTitlesOnHover() || anime.episode_titles_synced) return;
   try {
@@ -583,15 +600,8 @@ async function ensureEpisodeTitles(anime) {
     const latest = result.anime;
     if (!latest) return;
     commitAnimes(state.animes.map((item) => item.id === latest.id ? latest : item), { render: false });
-    if (state.progressAnime?.id === latest.id) {
-      const current = state.progressAnime;
-      const canonicalKeys = new Map((latest.episodes || []).map(episode => [episodeStorageKey(episode.key, latest), String(episode.key)]));
-      state.pendingEpisodes = new Set([...state.pendingEpisodes].map(key =>
-        canonicalKeys.get(episodeStorageKey(key, current)) || key));
-      state.progressAnime = latest;
-      $("#episodeCountInput").value = episodeTotal(latest);
-      renderEpisodeGrid();
-    }
+    refreshDetailEpisodeMetadata(latest);
+    pcSyncEpisodeLabels();
   } catch (error) {
     toast(`单集名称暂未补全：${error.message}`, "error");
   }

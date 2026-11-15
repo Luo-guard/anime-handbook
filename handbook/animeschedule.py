@@ -73,11 +73,7 @@ def choose_match(expected, candidates):
     return next(iter(matches.values())) if len(matches) == 1 else None
 
 
-def compute_progress(route, rows, total=0, now=None):
-    """Use actual dated raw/sub events; never extrapolate weekly episodes."""
-    current = now or datetime.now(BEIJING)
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=BEIJING)
+def episode_airing_events(route, rows, total=0):
     events = {}
     for row in rows:
         if row.get("route") != route or row.get("airType") not in {"raw", "sub"}:
@@ -93,6 +89,15 @@ def compute_progress(route, rows, total=0, now=None):
         count = row.get("episodes")
         if type(count) is int and count > 0:
             total = max(total, count)
+    return events, total
+
+
+def compute_progress(route, rows, total=0, now=None):
+    """Use actual dated raw/sub events; never extrapolate weekly episodes."""
+    current = now or datetime.now(BEIJING)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=BEIJING)
+    events, total = episode_airing_events(route, rows, total)
     if not events:
         return None
     reached = [number for number, at in events.items() if at <= current]
@@ -230,6 +235,20 @@ class AnimeScheduleService:
 
     def _progress_cache(self):
         return [self.cache["weeks"].get(f"{year}-{week}", {}) for year, week in progress_weeks()]
+
+    def cached_episode_airtimes(self, anime_ids):
+        """Use previously matched, dated events without scheduling an AS request."""
+        with self.lock:
+            rows_by_route = {}
+            for week in self._progress_cache():
+                for row in week.get("rows", ()):
+                    rows_by_route.setdefault(row.get("route"), []).append(row)
+            result = {}
+            for anime_id in anime_ids:
+                route = self.cache["records"].get(str(anime_id), {}).get("route")
+                if route and route in rows_by_route:
+                    result[anime_id] = episode_airing_events(route, rows_by_route[route])[0]
+            return result
 
     def cached_titles(self, anime_id, names):
         """Return matching known titles without refreshing AnimeSchedule."""

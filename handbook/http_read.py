@@ -433,9 +433,17 @@ class ReadRoutes:
                     }
                 )
             elif path == "/api/airing":
+                desktop = not hasattr(self, "services")
+                revision = self.database.revision
+                if desktop:
+                    self.sync.start_due_episode_checks()
                 animes = self._with_progress(self.database.list_anime())
                 payload = {"animes": [{"id": anime["id"], "airing": anime.get("airing"),
                     **({"as_airing": anime["as_airing"]} if "as_airing" in anime else {})} for anime in animes]}
+                if desktop and "revision" in query and query["revision"][0] != str(revision):
+                    payload.update(revision=revision, collection={
+                        "animes": animes, "custom_collections": self.database.list_custom_collections(),
+                    })
                 if self.database.get_settings().get("schedule_airing_source") == "as":
                     ids = [int(value) for value in query.get("ids", [""])[0].split(",")[:500] if value.isdecimal()]
                     if query.get("calendar_source", [""])[0] == "as":

@@ -1560,12 +1560,21 @@ class HandbookDB:
             # A full Bangumi episode list may be cached even when title hover is
             # disabled. Preserve it during rating/airing refreshes; otherwise a
             # fallback list of only regular episodes would erase OP/ED groups.
-            if episodes is None and int(current["episode_count"] or 0) == episode_count:
-                normalized_episodes = normalize_episodes(
-                    json_list(current["episodes"])
-                )
+            cached_episodes = normalize_episodes(json_list(current["episodes"]))
+            if not episodes and (
+                any(episode["id"] for episode in cached_episodes)
+                or int(current["episode_count"] or 0) == episode_count
+            ):
+                normalized_episodes = cached_episodes
             else:
                 normalized_episodes = normalize_episodes(episodes or [])
+            if episodes:
+                previous = {episode["key"]: episode for episode in cached_episodes}
+                for episode in normalized_episodes:
+                    cached = previous.get(episode["key"], {})
+                    for field in ("name", "name_cn"):
+                        if not episode[field].strip() and cached.get(field):
+                            episode[field] = cached[field]
             if not normalized_episodes and episode_count:
                 normalized_episodes = generated_episodes(episode_count)
             effective_count = len(normalized_episodes) if normalized_episodes else episode_count
