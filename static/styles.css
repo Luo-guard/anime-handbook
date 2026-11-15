@@ -6702,8 +6702,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-play-hover: #fff4ff;
   color: var(--detail-cinema-ink);
   background: var(--detail-cinema-base);
-  scrollbar-color: #777786 transparent;
+  /* Even a transparent native track reserves space beside the artwork. */
+  scrollbar-width: none;
 }
+#progressModal[data-detail-background="artwork"]::-webkit-scrollbar { display: none; }
 
 [data-detail-background="artwork"] #progressForm {
   display: grid;
