@@ -209,15 +209,12 @@ if (typeof ResizeObserver !== "undefined") {
   if (detailDialog) new ResizeObserver(syncDetailCornerActions).observe(detailDialog);
 }
 
-function applyDetailLayout() {
+function applyDetailAppearance() {
   const dialog = $("#progressModal");
   if (!dialog) return;
-  const artwork = state.settings.detail_layout === "artwork";
-  const modern = artwork || state.settings.detail_layout === "modern";
-  dialog.classList.toggle("detail-modern", modern);
-  dialog.classList.toggle("detail-with-artwork", artwork);
+  dialog.dataset.detailBackground = state.settings.detail_layout || "classic";
   updateDetailArtwork();
-  dialog.classList.toggle("detail-compact-credits", modern && state.settings.detail_modern_compact_credits !== false);
+  dialog.classList.toggle("detail-compact-credits", state.settings.detail_compact_credits === true);
   $("#modernDetailMenu").open = false;
   const activeTab = $("[data-detail-tab].active", dialog)?.dataset.detailTab;
   switchDetailTab(activeTab || "overview");
@@ -229,7 +226,7 @@ function applyDetailLayout() {
 
 function updateDetailArtwork() {
   const dialog = $("#progressModal");
-  const anime = dialog.open && dialog.classList.contains("detail-with-artwork") ? state.progressAnime : null;
+  const anime = dialog.open && dialog.dataset.detailBackground === "artwork" ? state.progressAnime : null;
   for (const [selector, url] of [
     ["#detailArtworkCover", anime?.cover_url],
     ["#detailArtwork", anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}`],
@@ -246,31 +243,23 @@ function updateDetailRecordActions() {
   const dialog = $("#progressModal");
   const button = $("#saveProgress");
   if (!dialog || !button) return;
-  const modern = dialog.classList.contains("detail-modern");
   const anime = state.progressAnime;
   const stored = new Set((anime?.watched_episode_keys || anime?.watched_episodes || [])
     .map(key => episodeStorageKey(key, anime)));
   const draft = new Set([...(state.pendingEpisodes || [])].map(key => episodeStorageKey(key, anime)));
   const changed = stored.size !== draft.size || [...draft].some(key => !stored.has(key));
-  const onChange = modern ? state.settings.detail_modern_record_on_change !== false
-    : state.settings.detail_classic_record_on_change === true;
+  const onChange = state.settings.detail_record_on_change === true;
   dialog.classList.toggle("detail-record-on-change", onChange);
   dialog.classList.toggle("detail-record-pending", changed);
   button.disabled = button.dataset.saving === "true" || (onChange && !changed);
-  $("#cancelProgress").disabled = modern && button.dataset.saving === "true";
-  $("#cancelProgress").textContent = modern ? "取消修改" : "取消";
+  $("#cancelProgress").disabled = button.dataset.saving === "true";
 }
 
 function cancelDetailProgress() {
-  const dialog = $("#progressModal");
-  if (!dialog.classList.contains("detail-modern")) return dialog.close();
-  const anime = state.progressAnime;
-  state.pendingEpisodes = new Set((anime.watched_episode_keys || anime.watched_episodes || []).map(String));
-  renderEpisodeGrid();
-  if (typeof refreshSavedVideoTargets === "function") refreshSavedVideoTargets();
+  $("#progressModal").close();
 }
 
-function modernDetailAiring(anime, count) {
+function detailPlaybackAiring(anime, count) {
   const useAS = state.settings.collection_airing_source === "as";
   const airing = useAS ? anime.as_airing : anime.airing;
   const kind = animeBadgeModel(anime).kind;
@@ -279,7 +268,7 @@ function modernDetailAiring(anime, count) {
   const finished = kind === "finished" || airing?.show_status === "finished"
     || (!airing?.unavailable && Number(airing?.total) > 0 && aired >= total);
   return {
-    kind, finished, useAS,
+    kind, finished,
     count: finished && total > 0 ? total
       : !airing?.unavailable && (useAS || Number(airing?.total) > 0) && Number.isInteger(aired) && aired >= 0 ? aired : null,
   };
@@ -289,11 +278,10 @@ function refreshDetailHeader() {
   const dialog = $("#progressModal");
   const anime = state.progressAnime;
   if (!anime || !$("#modernTitleTools")) return;
-  const modern = dialog.classList.contains("detail-modern");
   const play = $("#detailOnlinePlay");
   let nextEpisode = 0;
   const mainCells = $$('#episodeGrid [data-episode-type="0"]', dialog);
-  const airing = modernDetailAiring(anime, mainCells.length);
+  const airing = detailPlaybackAiring(anime, mainCells.length);
   const aired = airing?.finished ? null : airing?.kind === "upcoming" ? 0 : airing?.count ?? null;
   if (play) {
     play.textContent = "播放";
@@ -324,7 +312,7 @@ function refreshDetailHeader() {
   }
   const count = Number(anime.episode_count) || mainCells.length;
   $("#modernDetailEpisodeTotal").textContent = count > 0 ? `全 ${count} 集` : "";
-  if (modern) mainCells.forEach((cell, index) => {
+  mainCells.forEach((cell, index) => {
     const key = episodeStorageKey(cell.dataset.episodeKey, anime);
     const unreleased = aired !== null && index >= aired;
     cell.classList.toggle("unreleased", unreleased);
@@ -344,17 +332,6 @@ function refreshDetailHeader() {
   row.classList.toggle("hidden", !subtitle.textContent && !clippedTitle);
   $("#detailFullTitleName").textContent = anime.display_name || "";
   $("#detailFullTitleOriginal").textContent = original;
-}
-
-function detailEpisodeReleaseStatus(anime, group) {
-  if (Number(group.type) !== 0 || !$("#progressModal").classList.contains("detail-modern")) {
-    return episodeReleaseStatus(anime, group);
-  }
-  const { useAS, finished, count } = modernDetailAiring(anime, Number(group.count));
-  if (count === null) return episodeReleaseStatus(anime, group);
-  const note = finished ? "按完结状态和正片总集数显示"
-    : useAS ? "来自 AnimeSchedule 放送计划" : "按 Bangumi 逐集播出资料计算";
-  return `<details class="detail-release-info"><summary>已播 ${count} 集</summary><p>${note}</p></details>`;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -383,7 +360,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (menu?.open && dialog.open && !menu.contains(event.target)) menu.open = false;
   });
   $(".detail-tabs", dialog)?.addEventListener("keydown", event => {
-    if (!dialog.classList.contains("detail-modern")) return;
     const tabs = $$("[data-detail-tab]:not(.hidden)", event.currentTarget);
     const index = tabs.indexOf(event.target);
     if (index < 0) return;
@@ -414,7 +390,7 @@ function openProgress(animeId) {
   $("#progressCover").src = anime.cover_url;
   $("#progressCover").alt = anime.display_name;
   $("#progressTitle").textContent = anime.display_name;
-  applyDetailLayout();
+  applyDetailAppearance();
   $("#collectionDetailStatus").replaceChildren(collectionAction(anime.id,anime.collection_type));
   $("#collectionDetailStatus").classList.toggle("hidden", !collectionEditingSupported());
   $("#progressAirDate").textContent = anime.air_date || "";
@@ -478,8 +454,6 @@ function openProgress(animeId) {
 
 function switchDetailTab(tab) {
   const isCharacters = tab === "characters";
-  const modern = $("#progressModal").classList.contains("detail-modern");
-  $("#progressModal").classList.toggle("detail-non-episodes", modern && isCharacters);
   $("#overviewDetailPanel").classList.toggle("hidden", isCharacters);
   const overview = $('[data-detail-tab="overview"]');
   if (overview) overview.textContent = "概览";
@@ -488,8 +462,7 @@ function switchDetailTab(tab) {
     const active = button.dataset.detailTab === tab;
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
-    if (modern) button.tabIndex = active ? 0 : -1;
-    else button.removeAttribute("tabindex");
+    button.tabIndex = active ? 0 : -1;
   });
 }
 
@@ -872,7 +845,7 @@ function refreshEpisodeAiringStatus() {
   renderProgressBadge(state.progressAnime);
   refreshDetailHeader();
   $$("[data-episode-airing-type]", $("#episodeGrid")).forEach((element) => {
-    const markup = detailEpisodeReleaseStatus(state.progressAnime, {
+    const markup = episodeReleaseStatus(state.progressAnime, {
       type: Number(element.dataset.episodeAiringType), count: Number(element.dataset.episodeCount),
     });
     const current = element.querySelector(".detail-release-info");
@@ -975,7 +948,7 @@ function renderEpisodeGrid() {
             <strong>${escapeHtml(group.type_label)}</strong>
             <div class="episode-group-meta">
               <span class="episode-group-summary" data-episode-group-summary>${episodeGroupSummary(group, state.pendingEpisodes)}</span>
-          ${Number(group.type) === 0 ? `<div class="episode-airing-info" data-episode-airing-type="0" data-episode-count="${group.count}">${detailEpisodeReleaseStatus(anime, group)}</div>` : ""}
+          ${Number(group.type) === 0 ? `<div class="episode-airing-info" data-episode-airing-type="0" data-episode-count="${group.count}">${episodeReleaseStatus(anime, group)}</div>` : ""}
             </div>
           </div>
           <div class="episode-group-grid">
@@ -1248,14 +1221,7 @@ async function saveProgress() {
     if (index >= 0) state.animes[index] = result.anime;
     commitAnimes(state.animes, { render: false });
     if (dialog.open && state.progressAnime?.id === anime.id) {
-      if (dialog.classList.contains("detail-modern")) {
-        Object.assign(state.progressAnime, result.anime);
-        updateDetailRecordActions();
-        refreshDetailHeader();
-        refreshEpisodeRecordAnnotations(anime.id);
-      } else {
-        dialog.close();
-      }
+      dialog.close();
     }
     renderCollection();
     await refreshStatus();

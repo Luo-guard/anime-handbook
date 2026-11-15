@@ -128,6 +128,9 @@ def _normalize_settings(body, settings):
         "collection_airing_source",
         "detail_airtime_source",
         "detail_layout",
+        "detail_record_on_change",
+        "detail_wheel_style",
+        "detail_compact_credits",
         "detail_modern_original_title",
         "detail_modern_compact_credits",
         "detail_classic_record_on_change",
@@ -243,12 +246,13 @@ def _normalize_settings(body, settings):
             elif key == "detail_layout":
                 if not isinstance(value, str) or value not in {"classic", "modern", "artwork"}:
                     raise ValueError("番剧详情布局无效")
-            elif key in {"detail_classic_wheel_style", "detail_modern_wheel_style"}:
+            elif key in {"detail_wheel_style", "detail_classic_wheel_style", "detail_modern_wheel_style"}:
                 if not isinstance(value, str) or value not in {"classic", "modern"}:
                     raise ValueError("单集扇区样式无效")
             elif key in {
                 "detail_modern_original_title", "detail_modern_compact_credits",
                 "detail_classic_record_on_change", "detail_modern_record_on_change",
+                "detail_record_on_change", "detail_compact_credits",
             }:
                 if type(value) is not bool:
                     raise ValueError("番剧详情显示选项无效")
@@ -535,7 +539,11 @@ def normalize_settings(body, settings):
 
 
 def _save_settings_values(self, body, effects):
-    pending_settings, balance_initial, balance_daily_target = normalize_settings(body, self.database.get_settings())
+    settings = self.database.get_settings()
+    pending_settings, balance_initial, balance_daily_target = normalize_settings(body, settings)
+    if "detail_layout" in pending_settings:
+        for key in ("detail_record_on_change", "detail_wheel_style", "detail_compact_credits"):
+            pending_settings.setdefault(key, settings[key])
     # 收集完一次写入：逐键提交时 61 个键要开 61 次连接、61 个事务。
     self.database.set_settings(pending_settings)
     self.database.update_episode_balance_settings(

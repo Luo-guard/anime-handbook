@@ -174,7 +174,7 @@ window.calls=[];
 
     await setConfig({});
     await page.evaluate(() => {
-      $("#progressModal").classList.add("detail-modern");
+      state.settings.detail_wheel_style = "modern";
       $('[data-episode-key="0:2"]').classList.add("unreleased");
       delete state.settings.show_episode_review_record;
       delete state.settings.show_episode_rating_record;
@@ -223,15 +223,15 @@ window.calls=[];
     await page.mouse.up();
     assert.deepEqual(await calls(), [["action", "play", "0:1"]]);
 
-    await page.evaluate(() => {
-      state.settings.detail_classic_wheel_style = "modern";
-      state.settings.detail_modern_wheel_style = "classic";
-    });
+    await page.evaluate(() => { state.settings.detail_wheel_style = "classic"; });
     await other.click({ button: "right" });
     assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 0);
     assert(await wheel.locator('[data-episode-action="play"]').isDisabled());
     await page.keyboard.press("Escape");
-    await page.locator("#progressModal").evaluate(dialog => dialog.classList.remove("detail-modern"));
+    await page.evaluate(() => {
+      $("#progressModal").dataset.detailBackground = "artwork";
+      state.settings.detail_wheel_style = "modern";
+    });
     await other.click({ button: "right" });
     assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 6);
     assert.deepEqual(await calls(), []);

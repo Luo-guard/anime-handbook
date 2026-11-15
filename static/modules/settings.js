@@ -205,23 +205,15 @@ function renderCustomCollectionSettings() {
   });
 }
 
-function updateDetailLayoutSettings() {
-  const modern = ["modern", "artwork"].includes($("#detailLayoutInput").value);
-  $$("[data-modern-detail-setting]").forEach(row => row.classList.toggle("hidden", !modern));
-  $$("[data-classic-detail-setting]").forEach(row => row.classList.toggle("hidden", modern));
-}
-
 function renderSettingsPanels() {
-  $("#detailClassicWheelStyleInput").value = state.settings.detail_classic_wheel_style || "classic";
-  $("#detailModernWheelStyleInput").value = state.settings.detail_modern_wheel_style || "modern";
+  $("#detailWheelStyleInput").value = state.settings.detail_wheel_style === "modern" ? "modern" : "classic";
   $("#collectionGridColumnsInput").value = String(state.settings.collection_grid_columns || 0);
   $("#scheduleGridColumnsInput").value = String(state.settings.schedule_grid_columns || 0);
-  $("#detailLayoutInput").value = state.settings.detail_layout || "classic";
+  const background = $$('input[name="detailBackground"]').find(input => input.value === state.settings.detail_layout);
+  (background || $('input[name="detailBackground"][value="classic"]')).checked = true;
   $("#detailModernOriginalTitleInput").checked = state.settings.detail_modern_original_title !== false;
-  $("#detailModernCompactCreditsInput").checked = state.settings.detail_modern_compact_credits !== false;
-  $("#detailClassicRecordOnChangeInput").checked = state.settings.detail_classic_record_on_change === true;
-  $("#detailModernRecordOnChangeInput").checked = state.settings.detail_modern_record_on_change !== false;
-  updateDetailLayoutSettings();
+  $("#detailCompactCreditsInput").checked = state.settings.detail_compact_credits === true;
+  $("#detailRecordOnChangeInput").checked = state.settings.detail_record_on_change === true;
   $("#episodePlaybackSourceInput").value = episodeGestureConfig().playbackSource;
   if (!window.handbookOnline) renderPlaybackSettings();
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;
@@ -1167,7 +1159,6 @@ function setupSettingsTabs() {
     $("#goToScheduleAiringSettings").addEventListener("click", () => showSettingsSection("schedule", "#scheduleAiringSettingsHeading"));
     $("#goToDetailAiringSettings").addEventListener("click", () => showSettingsSection("detail", "#detailAiringSettingsHeading"));
     $("#dmSourceMode").addEventListener("change", updateDanmakuSourceFields);
-    $("#detailLayoutInput").addEventListener("change", updateDetailLayoutSettings);
     settingsGroupsInitialized = true;
   }
   syncSettingsNavigation();

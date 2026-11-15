@@ -764,10 +764,17 @@ class HandbookDB:
 
     def get_settings(self) -> dict[str, Any]:
         with self.connect() as db:
-            return {
+            settings = {
                 row["key"]: json.loads(row["value"])
                 for row in db.execute("SELECT key, value FROM settings")
             }
+        # Older profiles stored these preferences separately by layout.
+        modern = settings.get("detail_layout") in ("modern", "artwork")
+        old_layout = "modern" if modern else "classic"
+        settings.setdefault("detail_record_on_change", settings.get(f"detail_{old_layout}_record_on_change", modern))
+        settings.setdefault("detail_wheel_style", settings.get(f"detail_{old_layout}_wheel_style", old_layout))
+        settings.setdefault("detail_compact_credits", modern and settings.get("detail_modern_compact_credits", True))
+        return settings
 
     def set_setting(self, key: str, value: Any) -> None:
         self.set_settings({key: value})

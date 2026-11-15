@@ -108,9 +108,7 @@ function egCloseMenu() {
 
 function egRenderMenu(button, config, onAction) {
   egCloseMenu();
-  const modernLayout = $("#progressModal").classList.contains("detail-modern");
-  const modern = modernLayout ? state.settings?.detail_modern_wheel_style !== "classic"
-    : state.settings?.detail_classic_wheel_style === "modern";
+  const modern = state.settings?.detail_wheel_style === "modern";
   const downloaded = button.classList.contains("downloaded");
   const playbackUnavailable = button.classList.contains("unreleased")
     && (!downloaded || config.playbackSource === "online");

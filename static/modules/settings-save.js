@@ -47,14 +47,12 @@ const HandbookSettings = (() => {
         schedule_airing_source: $("#scheduleAiringSourceInput").value,
       };
       const detailAirtimeSource = $("#detailAirtimeSourceInput").value || "yuc";
-      const detailLayout = {
-        detail_layout: $("#detailLayoutInput").value,
+      const detailSettings = {
+        detail_layout: $('input[name="detailBackground"]:checked').value,
         detail_modern_original_title: $("#detailModernOriginalTitleInput").checked,
-        detail_modern_compact_credits: $("#detailModernCompactCreditsInput").checked,
-        detail_classic_record_on_change: $("#detailClassicRecordOnChangeInput").checked,
-        detail_modern_record_on_change: $("#detailModernRecordOnChangeInput").checked,
-        detail_classic_wheel_style: $("#detailClassicWheelStyleInput").value || "classic",
-        detail_modern_wheel_style: $("#detailModernWheelStyleInput").value || "modern",
+        detail_compact_credits: $("#detailCompactCreditsInput").checked,
+        detail_record_on_change: $("#detailRecordOnChangeInput").checked,
+        detail_wheel_style: $("#detailWheelStyleInput").value,
       };
       // 只有默认展示记录真的变了，才覆盖时间线当前的临时筛选。
       const previousTimelineDefaults = JSON.stringify(Array.isArray(state.settings.timeline_default_themes) ? state.settings.timeline_default_themes : []);
@@ -81,7 +79,7 @@ const HandbookSettings = (() => {
           schedule_source: $("#scheduleSourceInput").value,
           ...progressSources,
           detail_airtime_source: detailAirtimeSource,
-          ...detailLayout,
+          ...detailSettings,
           hide_missing_as_schedule: $("#hideMissingAsScheduleInput").checked,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
           schedule_card_fields: Object.fromEntries($$("#scheduleCardFieldInputs input").map((input) => [input.dataset.scheduleField, input.checked])),
@@ -146,10 +144,8 @@ const HandbookSettings = (() => {
       if (gestureSettings && !payload.settings.episode_gestures) throw new Error("单集手势未成功保存，请重启后台并刷新后再试。");
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
       if ((payload.settings.detail_airtime_source || "yuc") !== detailAirtimeSource) throw new Error("后台未保存详情更新时间来源，请重启后台并刷新后重试。");
-      const savedLayout = payload.settings.detail_layout || "classic";
-      if (savedLayout !== detailLayout.detail_layout || (["modern", "artwork"].includes(savedLayout) &&
-          Object.entries(detailLayout).some(([key, value]) => payload.settings[key] !== value))) {
-        throw new Error("后台未保存番剧详情布局，请重启后台并刷新后重试。");
+      if (Object.entries(detailSettings).some(([key, value]) => payload.settings[key] !== value)) {
+        throw new Error("后台未保存番剧详情设置，请重启后台并刷新后重试。");
       }
       if (playbackSettings) applyPlaybackSettings(playbackSettings);
       ThemeSettingsSession.finish(true);
@@ -168,7 +164,7 @@ const HandbookSettings = (() => {
         ? new Set([...state.timelineThemes].filter((id) => visibleThemeIds.has(id)))
         : new Set(savedTimelineDefaults.filter((id) => visibleThemeIds.has(id)));
       applyTheme();
-      applyDetailLayout();
+      applyDetailAppearance();
       applyCharacterTabVisibility();
       if ($("#progressModal").open) renderEpisodeGrid();
       applyCollectionEditingAvailability();

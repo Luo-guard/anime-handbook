@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261115-detail-artwork" />
+  <link rel="stylesheet" href="/styles.css?v=20261115-detail-background" />
   </head>
   <body>
     <div class="app-shell">
@@ -690,7 +690,7 @@
         </div>
       </form>
     </dialog>
-    <dialog class="modal progress-modal" id="progressModal" aria-labelledby="progressTitle">
+    <dialog class="modal progress-modal" id="progressModal" aria-labelledby="progressTitle" data-detail-background="classic">
       <div class="detail-corner-actions">
         <button type="button" class="modal-close" id="closeProgress" aria-label="关闭番剧详情">×</button>
       </div>
@@ -1029,12 +1029,19 @@
             <div class="auto-open-offline-list" id="autoOpenOfflineCollections"></div>
           </div>
           <div class="settings-section-title" data-settings-section="detail">番剧详情</div>
-          <h3 class="settings-subsection-title">详情布局</h3>
-          <label class="setting-row"><span><strong>番剧详情样式</strong><small>番剧图片优先使用横版壁纸，找不到时使用封面。</small></span><select id="detailLayoutInput"><option value="classic">白色</option><option value="modern">主题色</option><option value="artwork">番剧图片</option></select></label>
-          <label class="setting-row" data-classic-detail-setting><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改才高亮「确认记录」并显示「取消」。关闭时，两个按钮始终显示并可用。</small></span><span class="switch-row compact"><input type="checkbox" id="detailClassicRecordOnChangeInput" /><span class="switch"></span></span></label>
-          <label class="setting-row hidden" data-modern-detail-setting><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改才高亮「确认记录」并显示「取消修改」。关闭时，两个按钮始终显示并可用。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernRecordOnChangeInput" /><span class="switch"></span></span></label>
+          <h3 class="settings-subsection-title">外观</h3>
+          <div class="setting-row stacked">
+            <span><strong id="detailBackgroundLabel">详情头部背景</strong><small>番剧图片优先用横版壁纸，找不到时用封面。</small></span>
+            <div class="detail-background-options" role="radiogroup" aria-labelledby="detailBackgroundLabel">
+              <label><input type="radio" name="detailBackground" value="classic" checked /><span class="detail-background-swatch" aria-hidden="true"></span><span>白色</span></label>
+              <label><input type="radio" name="detailBackground" value="modern" /><span class="detail-background-swatch" aria-hidden="true"></span><span>主题色</span></label>
+              <label><input type="radio" name="detailBackground" value="artwork" /><span class="detail-background-swatch" aria-hidden="true"></span><span>番剧图片</span></label>
+            </div>
+          </div>
           <label class="setting-row"><span><strong>显示番剧原名</strong><small>当原名与显示名称不同时，在标题下显示原名。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernOriginalTitleInput" /><span class="switch"></span></span></label>
-          <label class="setting-row hidden" data-modern-detail-setting><span><strong>用勾选框显示 OP／ED</strong><small>关闭后，OP 和 ED 会各自按剧集方块显示。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernCompactCreditsInput" /><span class="switch"></span></span></label>
+          <h3 class="settings-subsection-title">观看记录</h3>
+          <label class="setting-row"><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改时「确认记录」可用，并显示「取消」。</small></span><span class="switch-row compact"><input type="checkbox" id="detailRecordOnChangeInput" /><span class="switch"></span></span></label>
+          <label class="setting-row"><span><strong>用勾选框显示 OP／ED</strong><small>开启后，片头和片尾移到记录按钮旁勾选。关闭时按剧集方块显示。</small></span><span class="switch-row compact"><input type="checkbox" id="detailCompactCreditsInput" /><span class="switch"></span></span></label>
           <h3 class="settings-subsection-title" id="detailAiringSettingsHeading" tabindex="-1">放送信息</h3>
           <label class="setting-row">
             <span><strong>播出状态与更新时间来源</strong><small>决定详情顶部的播出状态和更新时间。長門番堂方案结合 Bangumi 的日期资料，AS 使用 AnimeSchedule 的状态和排期。</small></span>
@@ -1062,7 +1069,7 @@
           <label class="setting-row">
             <span>
               <strong>Bangumi 评分行可点击跳转</strong>
-              <small>开启后，详情页的「评分 / 排名 / 评分人数」整行变成链接，点击在新标签打开 Bangumi 条目页；中键、右键与上方 Bangumi 链接一致。</small>
+              <small>点击评分、排名或评分人数时，在新标签打开 Bangumi 条目页。</small>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="bgmRatingLinkInput" />
@@ -1085,12 +1092,8 @@
           </label>
           <h3 class="settings-subsection-title">单集扇区与手势</h3>
           <label class="setting-row">
-            <span><strong>经典详情的扇区样式</strong><small>使用经典详情布局时，单集操作菜单采用的样式。</small></span>
-            <select id="detailClassicWheelStyleInput"><option value="classic">经典扇区</option><option value="modern">新版扇区</option></select>
-          </label>
-          <label class="setting-row">
-            <span><strong>新版详情的扇区样式</strong><small>使用新版详情布局时，单集操作菜单采用的样式。</small></span>
-            <select id="detailModernWheelStyleInput"><option value="classic">经典扇区</option><option value="modern" selected>新版扇区</option></select>
+            <span><strong>单集扇区样式</strong><small>右键或长按召出的单集操作菜单样式。</small></span>
+            <select id="detailWheelStyleInput"><option value="classic">经典扇区</option><option value="modern">新版扇区</option></select>
           </label>
           <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击切换已看。右键和长按等手势可在下方设置。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
           <label class="setting-row"><span><strong>长按松手后保留扇区</strong><small>长按后滑向动作并松手可直接执行。开启后，原地松手也可继续点选。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
@@ -1830,16 +1833,16 @@
     <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261114-wheel-style" defer></script>
-    <script src="/modules/details.js?v=20261115-detail-artwork" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261115-detail-background" defer></script>
+    <script src="/modules/details.js?v=20261115-detail-background" defer></script>
     <script src="/modules/records.js?v=20261112-record-image-folder" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261114-latest-airing" defer></script>
-    <script src="/modules/settings.js?v=20261115-detail-artwork" defer></script>
+    <script src="/modules/settings.js?v=20261115-detail-background" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261115-detail-artwork" defer></script>
+    <script src="/modules/settings-save.js?v=20261115-detail-background" defer></script>
     <script src="/modules/events.js?v=20261114-collection-filters" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

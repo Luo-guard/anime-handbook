@@ -8,10 +8,12 @@ import unittest
 from copy import deepcopy
 from unittest.mock import patch, PropertyMock
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.request import urlopen
 
 from handbook import common as app
 from handbook.common import episode_groups
+from handbook.settings_service import save_settings
 
 
 def sample_item(anime_id: int, collection_type: int, name: str) -> dict:
@@ -942,6 +944,27 @@ class HandbookDBTest(unittest.TestCase):
         self.assertEqual(self.db.get_settings()["theme_color"], "forest")
         self.db.set_setting("theme_color", "ocean")
         self.assertEqual(self.db.get_settings()["theme_color"], "ocean")
+
+    def test_detail_background_change_preserves_legacy_detail_preferences(self) -> None:
+        self.db.set_settings({
+            "detail_layout": "artwork",
+            "detail_modern_wheel_style": "classic",
+            "detail_modern_record_on_change": True,
+            "detail_modern_compact_credits": True,
+        })
+        responses = []
+        handler = SimpleNamespace(database=self.db, send_json=responses.append)
+        save_settings(handler, {"detail_layout": "classic"})
+        saved = responses[-1]["settings"]
+        self.assertEqual(saved["detail_layout"], "classic")
+        self.assertEqual(saved["detail_wheel_style"], "classic")
+        self.assertTrue(saved["detail_record_on_change"])
+        self.assertTrue(saved["detail_compact_credits"])
+        save_settings(handler, {"detail_layout": "modern", "detail_compact_credits": False})
+        saved = self.db.get_settings()
+        self.assertEqual(saved["detail_wheel_style"], "classic")
+        self.assertTrue(saved["detail_record_on_change"])
+        self.assertFalse(saved["detail_compact_credits"])
 
     def test_collection_rating_visibility_setting(self) -> None:
         self.assertTrue(self.db.get_settings()["show_bgm_rating_in_collection"])

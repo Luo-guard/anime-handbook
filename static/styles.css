@@ -1155,7 +1155,6 @@ h1 {
 
 .statistics-bar-fill {
   position: absolute;
-  right: 12%;
   bottom: 0;
   left: 12%;
   min-height: 5px;
@@ -2608,10 +2607,10 @@ dialog::backdrop {
 .episode-cell {
   position: relative;
   aspect-ratio: 1;
-  border: 1px solid #d9ddd9;
+  border: 1px solid var(--detail-episode-edge, #d9ddd9);
   border-radius: 9px;
-  color: #778079;
-  background: #e8eae7;
+  color: var(--detail-episode-ink, #778079);
+  background: var(--detail-episode-paper, #e8eae7);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -2619,15 +2618,16 @@ dialog::backdrop {
 }
 
 .episode-cell:hover {
-  border-color: #9aaf9f;
+  border-color: var(--detail-episode-hover-edge, #9aaf9f);
+  background: var(--detail-episode-hover, var(--detail-episode-paper, #e8eae7));
   transform: translateY(-1px);
 }
 
 .episode-cell.watched {
-  border-color: #6d96b8;
-  color: #fff;
-  background: var(--blue);
-  box-shadow: 0 4px 10px rgba(95, 143, 186, 0.2);
+  border-color: var(--detail-watched-edge, #6d96b8);
+  color: var(--detail-watched-ink, #fff);
+  background: var(--detail-watched-paper, var(--blue));
+  box-shadow: 0 4px 10px var(--detail-watched-shadow, rgba(95, 143, 186, 0.2));
 }
 
 /* 已下载的集留一个右下角小点：以前格子上完全没有标记，只能靠点扇区
@@ -2640,11 +2640,11 @@ dialog::backdrop {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--green-600);
+  background: var(--detail-download-dot, var(--green-600));
   box-shadow: 0 0 0 2px var(--surface);
 }
 .episode-cell.watched.downloaded::after {
-  background: #fff;
+  background: var(--detail-download-dot, #fff);
   box-shadow: 0 0 0 2px rgba(0, 0, 0, .14);
 }
 
@@ -6228,35 +6228,139 @@ body.schedule-picking [data-floating-view="schedule"] {
   .episode-record-dialog[open] { animation: none; }
 }
 
-/* The two detail headers share a layout and use their own palette. */
-.detail-credit-check, .detail-credit-prefix { display: none; }
-#progressModal.detail-modern {
-  background: color-mix(in srgb, var(--surface) 97%, var(--accent));
+/* Background choices only change the detail palette and artwork layer. */
+.detail-background-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(5px, 1.4vw, 12px);
 }
-#progressForm {
+.detail-background-options label {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  justify-items: stretch;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.detail-background-options label:hover { border-color: var(--accent); }
+.detail-background-options label:has(:checked) {
+  border-color: var(--accent);
+  background: var(--green-50);
+  color: var(--green-900);
+  box-shadow: inset 0 0 0 1px var(--active-inset);
+}
+.detail-background-options label:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.detail-background-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.detail-background-swatch {
+  position: relative;
+  display: block;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: linear-gradient(#fbfcf9 76%, var(--green-50) 76%);
+}
+.detail-background-swatch::before,
+.detail-background-swatch::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 12%;
+  width: 17%;
+  height: 17px;
+  inset-inline: 12% auto;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: .5;
+}
+.detail-background-swatch::after {
+  inset-inline-start: 35%;
+  width: 44%;
+  height: 3px;
+  top: 10px;
+  box-shadow: 0 8px currentColor;
+}
+[value="modern"] + .detail-background-swatch {
+  background: linear-gradient(color-mix(in srgb, var(--green-950) 72%, #20212a) 76%, var(--green-50) 76%);
+  color: #fff;
+}
+[value="artwork"] + .detail-background-swatch {
+  background:
+    linear-gradient(0deg, var(--green-50) 24%, transparent 24%),
+    linear-gradient(120deg, var(--green-950) 32%, var(--green-700) 64%, var(--green-500));
+  color: #fff;
+}
+.detail-credit-check, .detail-credit-prefix { display: none; }
+#progressModal {
   --detail-gutter: clamp(16px, 4vw, 34px);
   --detail-hero: transparent;
   --detail-hero-ink: var(--ink);
   --detail-hero-muted: var(--muted);
   --detail-hero-emphasis: var(--green-800);
   --detail-hero-edge: var(--line);
-  --detail-hero-button: var(--green-50);
-  --detail-hero-hover: var(--green-100);
+  --detail-hero-button: var(--surface);
+  --detail-hero-badge: var(--green-50);
+  --detail-hero-hover: var(--green-50);
+  --detail-hero-control-ink: var(--green-800);
+  --detail-hero-hover-edge: var(--active-inset);
+  --detail-play-ink: var(--green-900);
+  --detail-play-edge: color-mix(in srgb, var(--accent) 22%, var(--green-100));
+  --detail-play-hover: color-mix(in srgb, var(--green-100) 85%, var(--accent));
+  --detail-close-paper: var(--surface);
+  --detail-close-ink: var(--muted);
   --detail-line: color-mix(in srgb, var(--surface) 83%, var(--accent));
+}
+#progressForm {
   padding: 0 var(--detail-gutter) 20px;
   background: inherit;
   min-height: 0;
 }
-#progressModal.detail-modern #progressForm {
+#progressModal:is([data-detail-background="modern"], [data-detail-background="artwork"]) {
+  background: color-mix(in srgb, var(--surface) 97%, var(--accent));
   --detail-hero: color-mix(in srgb, var(--green-950) 72%, #20212a);
   --detail-hero-ink: #fff;
   --detail-hero-muted: color-mix(in srgb, #e7e3ee 83%, var(--detail-hero));
   --detail-hero-emphasis: var(--green-100);
   --detail-hero-edge: rgb(255 255 255 / .19);
   --detail-hero-button: rgb(255 255 255 / .09);
+  --detail-hero-badge: var(--detail-hero-button);
   --detail-hero-hover: rgb(255 255 255 / .18);
+  --detail-hero-control-ink: var(--detail-hero-ink);
+  --detail-hero-hover-edge: var(--detail-hero-edge);
+  --detail-play-ink: var(--green-950);
+  --detail-play-edge: var(--green-100);
+  --detail-play-hover: var(--green-100);
+  --detail-close-paper: rgb(255 255 255 / .13);
+  --detail-close-ink: #fff;
+  --detail-episode-paper: transparent;
+  --detail-episode-ink: var(--muted);
+  --detail-episode-edge: var(--detail-line);
+  --detail-episode-hover: var(--green-50);
+  --detail-episode-hover-edge: var(--active-inset);
+  --detail-watched-paper: var(--green-100);
+  --detail-watched-ink: var(--green-950);
+  --detail-watched-edge: transparent;
+  --detail-watched-shadow: transparent;
+  --detail-download-dot: var(--accent);
 }
 .progress-modal .progress-hero {
+  position: relative;
   grid-template-columns: clamp(64px, 13vw, 114px) minmax(0, 1fr);
   align-items: center;
   gap: clamp(12px, 3vw, 26px);
@@ -6266,23 +6370,19 @@ body.schedule-picking [data-floating-view="schedule"] {
   color: var(--detail-hero-ink);
 }
 .progress-modal .progress-hero img { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; }
-.detail-artwork { display: none; }
-.detail-with-artwork .progress-hero {
-  position: relative;
-  min-height: clamp(250px, 38vw, 342px);
-}
-.detail-with-artwork .progress-hero > :is(#progressCover, .progress-hero-info) {
+.progress-hero > :is(#progressCover, .progress-hero-info) {
   position: relative;
   z-index: 1;
 }
-.detail-with-artwork .detail-artwork {
-  display: block;
+.detail-artwork {
+  display: none;
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
 }
-.detail-with-artwork .detail-artwork img {
+[data-detail-background="artwork"] .detail-artwork { display: block; }
+.progress-modal .detail-artwork img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -6299,10 +6399,10 @@ body.schedule-picking [data-floating-view="schedule"] {
     linear-gradient(90deg, rgb(12 11 20 / .82) 0%, rgb(12 11 20 / .68) 43%, rgb(12 11 20 / .12) 100%),
     linear-gradient(0deg, var(--detail-hero), transparent 58%);
 }
-.detail-with-artwork .progress-hero-info { text-shadow: 0 1px 4px rgb(8 7 12 / .5); }
-.detail-with-artwork .progress-actions { text-shadow: none; }
-.detail-with-artwork .detail-corner-actions .modal-close {
-  background: rgb(12 11 20 / .55);
+[data-detail-background="artwork"] .progress-hero-info { text-shadow: 0 1px 4px rgb(8 7 12 / .5); }
+[data-detail-background="artwork"] .progress-actions { text-shadow: none; }
+#progressModal[data-detail-background="artwork"] {
+  --detail-close-paper: rgb(12 11 20 / .55);
 }
 .progress-modal .progress-hero h2 {
   display: -webkit-box;
@@ -6344,71 +6444,39 @@ body.schedule-picking [data-floating-view="schedule"] {
   border-color: var(--detail-hero-edge);
   background: transparent;
 }
-.progress-modal .update-badge.ongoing { background: var(--detail-hero-button); color: var(--detail-hero-ink); }
+.progress-modal .update-badge.ongoing { background: var(--detail-hero-badge); color: var(--detail-hero-ink); }
 .progress-modal .update-badge-dot { background: currentColor; opacity: .72; }
 .progress-modal .progress-info-row .progress-actions { position: relative; gap: 7px; margin: 12px 0 0; }
 .progress-modal :is(#detailOnlinePlay, .collect-detail-row .collect-trigger, .modern-detail-menu > summary) {
   min-height: 39px;
   border-radius: 10px;
-  font-size: 13px;
-  font-weight: 650;
-}
-.progress-modal #detailOnlinePlay { padding: 8px 11px; background: var(--green-100); border-color: var(--green-100); color: var(--green-950); }
-.progress-modal #detailOnlinePlay::before { content: "▶" / ""; margin-right: 7px; font-size: 10px; }
-.progress-modal #detailOnlinePlay[aria-disabled="true"] { opacity: .65; cursor: default; }
-.progress-modal #detailOnlinePlay[aria-disabled="true"]::before { content: none; }
-.progress-modal .collect-detail-row .collect-trigger {
-  background: var(--detail-hero-button);
-  color: var(--detail-hero-ink);
-  border-color: var(--detail-hero-edge);
-}
-.progress-modal .collect-detail-row .collect-glyph { display: none; }
-.progress-modal .collect-detail-row .collect-caret { opacity: .85; }
-.progress-modal :is(.collect-detail-row .collect-trigger, .modern-detail-menu > summary):hover { background: var(--detail-hero-hover); }
-.progress-modal:not(.detail-modern) .progress-actions :is(#detailOnlinePlay, .collect-trigger, .modern-detail-menu > summary) {
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: .01em;
   box-shadow: none;
 }
-.progress-modal:not(.detail-modern) #detailOnlinePlay {
-  color: var(--green-900);
-  background: var(--green-100);
-  border-color: color-mix(in srgb, var(--accent) 22%, var(--green-100));
+.progress-modal #detailOnlinePlay { padding: 8px 11px; background: var(--green-100); border-color: var(--detail-play-edge); color: var(--detail-play-ink); }
+.progress-modal #detailOnlinePlay:hover:not([aria-disabled="true"]) { background: var(--detail-play-hover); }
+.progress-modal #detailOnlinePlay::before { content: "▶" / ""; margin-right: 7px; font-size: 10px; }
+.progress-modal #detailOnlinePlay[aria-disabled="true"] { opacity: .65; cursor: default; }
+.progress-modal #detailOnlinePlay[aria-disabled="true"]::before { content: none; }
+.progress-modal .collect-detail-row .collect-trigger {
+  background: var(--detail-hero-button);
+  color: var(--detail-hero-control-ink);
+  border-color: var(--detail-hero-edge);
 }
-.progress-modal:not(.detail-modern) #detailOnlinePlay:hover:not([aria-disabled="true"]) {
-  background: color-mix(in srgb, var(--green-100) 85%, var(--accent));
+.progress-modal .collect-detail-row .collect-glyph { display: none; }
+.progress-modal .collect-detail-row .collect-caret { opacity: .85; }
+.progress-modal :is(.collect-trigger:hover, .modern-detail-menu > summary:hover, .modern-detail-menu[open] > summary) {
+  background: var(--detail-hero-hover);
+  border-color: var(--detail-hero-hover-edge);
 }
-.progress-modal:not(.detail-modern) .progress-actions :is(.collect-trigger, .modern-detail-menu > summary) {
-  color: var(--green-800);
-  background: var(--surface);
-}
-.progress-modal:not(.detail-modern) .progress-actions :is(.collect-trigger:hover, .modern-detail-menu > summary:hover, .modern-detail-menu[open] > summary) {
-  background: var(--green-50);
-  border-color: var(--active-inset);
-}
-.progress-modal .detail-corner-actions .modal-close { margin: 12px 14px 0 0; width: 34px; height: 34px; background: var(--surface); color: var(--muted); }
-.detail-modern .detail-corner-actions .modal-close { background: rgb(255 255 255 / .13); color: white; }
-.detail-modern .detail-tabs { margin-top: 4px; border-color: var(--detail-line); }
-.detail-modern .detail-tab { padding: 10px 2px; font-size: 14px; }
-.detail-modern #overviewDetailPanel { min-height: 220px; }
-.detail-modern .anime-comments {
-  margin-top: 24px;
-}
-.detail-modern .anime-comments-heading { margin-bottom: 6px; }
-.detail-modern .anime-comment-tools { display: flex; align-items: center; gap: 4px; }
-.detail-modern .anime-comment-tools .comment-trigger {
-  padding: 5px 8px;
-  border-radius: 6px;
-}
-.detail-modern .anime-comment-tools .comment-trigger:hover { background: var(--green-50); }
-.detail-modern .anime-comment-list { margin-top: 6px; }
-.detail-modern .anime-comment-list > .muted-line { margin: 0; }
+.progress-modal .detail-corner-actions .modal-close { margin: 12px 14px 0 0; width: 34px; height: 34px; background: var(--detail-close-paper); color: var(--detail-close-ink); }
+.progress-modal:is([data-detail-background="modern"], [data-detail-background="artwork"]) .detail-tabs { border-color: var(--detail-line); }
 .detail-record-buttons { display: flex; gap: 10px; margin-left: auto; }
-.detail-modern #detailRecordFooter { align-items: center; flex-wrap: wrap; margin-top: 16px; }
-.detail-modern.detail-non-episodes:not(.detail-record-pending) #detailRecordFooter,
-.detail-modern.detail-non-episodes #detailCreditActions { display: none; }
+#detailRecordFooter { align-items: center; flex-wrap: wrap; }
+.progress-modal:has(#overviewDetailPanel.hidden) #detailCreditActions { display: none; }
 #cancelProgress { transition: opacity 160ms ease; }
 .detail-credit-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
 .modern-detail-menu { position: relative; }
@@ -6420,9 +6488,9 @@ body.schedule-picking [data-floating-view="schedule"] {
   list-style: none;
   border: 1px solid var(--detail-hero-edge);
   background: var(--detail-hero-button);
+  color: var(--detail-hero-control-ink);
 }
 .modern-detail-menu > summary::-webkit-details-marker { display: none; }
-.progress-modal .modern-detail-menu[open] > summary { background: var(--detail-hero-hover); }
 .modern-detail-menu:not([open]) > .modern-detail-menu-body { display: none; }
 .modern-detail-menu-body {
   position: absolute;
@@ -6609,54 +6677,21 @@ body.schedule-picking [data-floating-view="schedule"] {
   .detail-modern-wheel { transition: none; }
 }
 
-.detail-modern #episodeGrid { max-height: none; overflow: visible; padding: 14px 0 0; }
 .progress-modal .episode-group-grid {
   --episode-gap: 8px;
   --episode-min: 39px;
   grid-template-columns: repeat(auto-fill, minmax(max(var(--episode-min), calc((100% - 12 * var(--episode-gap)) / 13)), 1fr));
   gap: var(--episode-gap);
 }
-.detail-modern .episode-group-meta { flex-wrap: wrap; gap: 4px 10px; }
-.detail-modern .episode-cell {
-  background: transparent;
-  color: var(--muted);
-  border-color: var(--detail-line);
-  border-radius: 8px;
-  font-variant-numeric: tabular-nums;
-  box-shadow: none;
-}
-.detail-modern .episode-cell:hover { background: var(--green-50); border-color: var(--active-inset); }
-.detail-modern .episode-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.detail-modern .episode-cell.watched {
-  background: var(--green-100);
-  color: var(--green-950);
-  border-color: transparent;
-}
-.detail-modern .episode-cell.unreleased:not(.watched) { border-style: dashed; }
-.detail-modern .episode-cell.next-to-play {
-  border: 1px solid var(--accent);
+.progress-modal .episode-cell { font-variant-numeric: tabular-nums; }
+.progress-modal .episode-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.progress-modal .episode-cell.unreleased:not(.watched) { border-style: dashed; }
+.progress-modal .episode-cell.next-to-play:not(.watched) {
+  border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
   color: var(--green-950);
 }
-.detail-modern .episode-cell.downloaded::after { width: 5px; height: 5px; background: var(--accent); box-shadow: none; }
 .progress-modal .progress-hero-info { align-self: center; }
-.detail-modern .episode-release-status { white-space: normal; }
-.detail-release-info { position: relative; color: var(--green-950); }
-.detail-release-info summary { cursor: pointer; font-size: 12px; font-weight: 700; text-align: right; }
-.detail-release-info p {
-  position: absolute;
-  z-index: 2;
-  top: calc(100% + 4px);
-  right: 0;
-  width: max-content;
-  max-width: min(200px, 70vw);
-  margin: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--detail-line);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
 
 .detail-record-on-change:not(.detail-record-pending) #cancelProgress { visibility: hidden; opacity: 0; }
 #saveProgress:disabled { background: var(--green-50); color: var(--muted); border-color: var(--line); opacity: 1; }
@@ -6669,15 +6704,13 @@ body.schedule-picking [data-floating-view="schedule"] {
 .progress-modal .progress-hero-info .rating-score { color: var(--detail-hero-emphasis); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
 .progress-modal .progress-hero-info .rating-score::before { content: "Bangumi "; }
 .progress-modal .progress-hero-info .personal-rating { margin: 0; color: var(--detail-hero-emphasis); font: inherit; font-weight: 700; }
-.detail-modern [data-detail-tab]:focus-visible,
+.progress-modal [data-detail-tab]:focus-visible,
 .modern-detail-menu > summary:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 @media (max-width: 480px) {
-  .detail-modern #overviewDetailPanel { min-height: 0; }
   .progress-modal .progress-hero { align-items: start; padding-top: 20px; }
   .progress-modal .progress-meta { flex-flow: row wrap; align-items: center; }
   .progress-modal .episode-group-grid { --episode-min: 36px; --episode-gap: 6px; }
-  .detail-with-artwork .progress-hero { min-height: 0; }
-  .detail-with-artwork .detail-artwork::after {
+  .detail-artwork::after {
     background: linear-gradient(90deg, rgb(12 11 20 / .58), rgb(12 11 20 / .72)),
       linear-gradient(0deg, var(--detail-hero), transparent 60%);
   }
