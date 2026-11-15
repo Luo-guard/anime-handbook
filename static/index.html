@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261115-detail-episode-outline" />
+  <link rel="stylesheet" href="/styles.css?v=20261115-detail-cinema" />
   </head>
   <body>
     <div class="app-shell">
@@ -695,11 +695,11 @@
         <button type="button" class="modal-close" id="closeProgress" aria-label="关闭番剧详情">×</button>
       </div>
       <form method="dialog" class="modal-frame" id="progressForm" tabindex="-1" autofocus>
+        <div class="detail-artwork" aria-hidden="true">
+          <img id="detailArtworkCover" alt="" />
+          <img id="detailArtwork" alt="" />
+        </div>
         <div class="progress-hero">
-          <div class="detail-artwork" aria-hidden="true">
-            <img id="detailArtworkCover" alt="" />
-            <img id="detailArtwork" alt="" />
-          </div>
           <img id="progressCover" alt="" />
           <div class="progress-hero-info">
             <h2 id="progressTitle"></h2>
@@ -1031,7 +1031,7 @@
           <div class="settings-section-title" data-settings-section="detail">番剧详情</div>
           <h3 class="settings-subsection-title">外观</h3>
           <div class="setting-row stacked">
-            <span><strong id="detailBackgroundLabel">详情头部背景</strong><small>番剧图片优先用横版壁纸，找不到时用封面。</small></span>
+            <span><strong id="detailBackgroundLabel">详情背景</strong><small>主题色用于页首。番剧图片会延伸到剧集区，找不到横版壁纸时用封面。</small></span>
             <div class="detail-background-options" role="radiogroup" aria-labelledby="detailBackgroundLabel">
               <label><input type="radio" name="detailBackground" value="classic" checked /><span class="detail-background-swatch" aria-hidden="true"></span><span>白色</span></label>
               <label><input type="radio" name="detailBackground" value="modern" /><span class="detail-background-swatch" aria-hidden="true"></span><span>主题色</span></label>
