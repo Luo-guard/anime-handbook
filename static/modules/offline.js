@@ -535,6 +535,7 @@ function openOfflinePlayerDialog() {
   const backdrop = $("#offlinePlayerBackdrop");
   if (backdrop) backdrop.hidden = false;
   player.show();
+  pcWake();
   // 非模态 dialog 不自动拿焦点；聚焦 dialog 本体（不是关闭按钮，否则那个 ×
   // 会多一圈焦点环），Esc 与 Tab 的顺序才和模态时一致。
   player.focus({ preventScroll: true });
@@ -966,18 +967,19 @@ function pcWake() {
   const wrap = $("#offlinePlayerVideoWrap");
   if (wrap) wrap.classList.remove("player-idle");
   window.clearTimeout(pcIdleTimer);
-  pcIdleTimer = window.setTimeout(pcSleep, 2600);
+  if ($("#offlinePlayer")?.open) pcIdleTimer = window.setTimeout(pcSleep, 2600);
 }
 
 function pcSleep() {
   const wrap = $("#offlinePlayerVideoWrap");
   const video = $("#offlineVideo");
-  if (!wrap || !video || video.paused || pcSeeking) return;
+  if (!wrap || !$("#offlinePlayer")?.open || !video?.readyState || video.error || video.ended || pcSeeking) return;
   // 面板/菜单开着、正在输弹幕时都不自动藏。
   if ($(".danmaku-panel:not(.hidden)")) return;
   if ($("#pcSpeedMenu") && !$("#pcSpeedMenu").classList.contains("hidden")) return;
   if ($("#pcPlaylistMenu") && !$("#pcPlaylistMenu").classList.contains("hidden")) return;
   if (document.activeElement === $("#dmSendInput")) return;
+  if ($(".player-controls :focus-visible, .player-topbar :focus-visible", wrap)) return;
   wrap.classList.add("player-idle");
 }
 
@@ -1511,21 +1513,25 @@ function pcInit() {
     if (!pcSeeking) return;
     updateSeekPreview(event, true);
     pcSeeking = false;
+    pcWake();
     const hit = document.elementFromPoint(event.clientX, event.clientY);
     if (event.pointerType !== "mouse" || !bar.contains(hit)) hideSeekPreview();
   });
   bar.addEventListener("pointerleave", () => {
     if (!pcSeeking) hideSeekPreview();
   });
-  bar.addEventListener("pointercancel", () => {
+  bar.addEventListener("lostpointercapture", () => {
+    if (!pcSeeking) return;
     pcSeeking = false;
     hideSeekPreview();
+    pcWake();
   });
   video.addEventListener("emptied", hideSeekPreview);
 
   video.addEventListener("timeupdate", pcSync);
   video.addEventListener("progress", pcSync);
   video.addEventListener("durationchange", pcSync);
+  video.addEventListener("loadedmetadata", pcSyncPlayState);
   video.addEventListener("play", pcSyncPlayState);
   video.addEventListener("pause", pcSyncPlayState);
   video.addEventListener("ended", pcSyncPlayState);
@@ -1535,6 +1541,7 @@ function pcInit() {
   // 点画面 = 播放/暂停；双击 = 全屏（Kazumi 习惯）。
   let pcClickTimer = 0;
   wrap.addEventListener("click", (event) => {
+    pcWake();
     if (event.target.closest("button, input, select, .danmaku-panel, .pc-progress, .pc-menu")) return;
     window.clearTimeout(pcClickTimer);
     pcClickTimer = window.setTimeout(() => pcTogglePlay(), 220);
@@ -1545,12 +1552,20 @@ function pcInit() {
     pcToggleFullscreen();
   });
 
-  // 鼠标不动 2.6 秒自动藏控制栏；暂停/面板打开时永远显示。
+  // 播放与暂停时都按同一段空闲时间隐藏控制栏。
   wrap.addEventListener("mousemove", pcWake);
   wrap.addEventListener("pointerdown", pcWake);
+  wrap.addEventListener("focusin", pcWake);
+  wrap.addEventListener("focusout", pcWake);
+  wrap.addEventListener("fullscreenchange", pcWake);
+  $("#offlinePlayer")?.addEventListener("close", (event) => {
+    if (!event.currentTarget.open) window.clearTimeout(pcIdleTimer);
+  });
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".pc-pop-host")) {
-      $$("#playerControls .pc-menu").forEach((node) => node.classList.add("hidden"));
+      const menus = $$("#playerControls .pc-menu:not(.hidden)");
+      menus.forEach((node) => node.classList.add("hidden"));
+      if (menus.length) pcWake();
     }
   });
 

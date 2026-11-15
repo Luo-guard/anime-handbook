@@ -204,7 +204,24 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   await page.mouse.move(560, 410);
   assert.equal(await page.evaluate(() => document.querySelector('#offlinePlayerVideoWrap').classList.contains('player-idle')), false, '动鼠标要恢复');
 
-  // 12) Esc 关播放器（原有行为不回归）
+  // 12) 暂停时也隐藏，打开的菜单可以留在画面上。
+  const stage = page.locator('#offlinePlayerVideoWrap');
+  const isIdle = () => stage.evaluate((node) => node.classList.contains('player-idle'));
+  await page.locator('#pcPlay').click();
+  await page.waitForFunction(() => document.querySelector('#offlineVideo').paused);
+  await page.waitForFunction(() => document.querySelector('#offlinePlayerVideoWrap').classList.contains('player-idle'));
+  assert.equal(await page.locator('#offlineVideo').evaluate((video) => video.paused), true);
+  await page.mouse.move(550, 400);
+  assert.equal(await isIdle(), false, '暂停时移动鼠标也要恢复控制栏');
+  await page.locator('#pcSpeed').click();
+  await page.waitForTimeout(2800);
+  assert.equal(await isIdle(), false, '暂停时展开的菜单不能随控制栏隐藏');
+  await page.locator('#pcSpeed').click();
+  await page.waitForFunction(() => document.querySelector('#offlinePlayerVideoWrap').classList.contains('player-idle'));
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await isIdle(), false, '暂停时使用播放器快捷键也要恢复控制栏');
+
+  // 13) Esc 关播放器（原有行为不回归）
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
   assert.equal(await page.evaluate(() => document.querySelector('#offlinePlayer').open), false, 'Esc 要关播放器');

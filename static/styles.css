@@ -5300,7 +5300,7 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 .pc-menu.pc-list { min-width: 168px; max-height: 250px; overflow-y: auto; }
 .pc-menu-empty { margin: 8px 10px; color: rgba(255, 255, 255, .6); font-size: 12px; }
 
-/* 自动隐藏：播放中鼠标不动 2.6 秒 */
+/* 播放和暂停时的空闲控制栏。 */
 .offline-player-video.player-idle { cursor: none; }
 .player-idle .player-topbar, .player-idle .player-controls { opacity: 0; pointer-events: none; }
 
