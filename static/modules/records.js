@@ -176,8 +176,12 @@ function eventThemes(event) {
 }
 
 function renderRecordContent(event, parts = eventRecordParts(event)) {
+  const episode = event.event_type === "note" && event.anime_id && event.episodes?.length === 1
+    ? event.episodes[0] : null;
+  const name = episode && [episode.display_label, episode.label].includes(parts.episodeText)
+    ? storedEpisodeName(episode) : "";
   const pills = parts.episodeText
-    ? `<div class="episode-pills"><span class="episode-pill">${escapeHtml(parts.episodeText)}</span></div>`
+    ? `<div class="episode-pills"><span class="episode-pill">${escapeHtml(parts.episodeText)}</span>${name ? `<span class="record-episode-name">${escapeHtml(name)}</span>` : ""}</div>`
     : "";
   return `${pills}${parts.content ? `<p>${renderRecordText(parts.content)}</p>` : ""}`;
 }

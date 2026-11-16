@@ -50,9 +50,7 @@ function storedPlaybackEpisodeName(anime, key) {
   const canonical = episodeStorageKey(key, anime);
   const number = Number(canonical.split(":")[1]);
   const episode = anime?.episodes?.find(item => episodeStorageKey(item.key, anime) === canonical);
-  return [episode?.name_cn, episode?.name].map(value => String(value || "").trim())
-    .find(value => value && !(Number(value) === number)
-      && Number(/^第\s*(\d+)\s*集$/.exec(value)?.[1]) !== number);
+  return storedEpisodeName(episode, number);
 }
 
 function pcLocalEpisodeLabel(key) {

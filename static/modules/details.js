@@ -1191,6 +1191,7 @@ async function createEpisodeQuickRecord(episode, action) {
   if (!definition) return;
   const theme = recordThemes().find((item) => item.id === definition.id) || { id: definition.id, name: definition.label };
   const episodeLabel = episode.display_label || `${episode.type_label || "本篇"} ${episode.label}`;
+  const episodeName = storedEpisodeName(episode);
   const dialog = document.createElement("dialog");
   dialog.className = "episode-record-dialog";
   dialog.setAttribute("aria-labelledby", "episodeRecordTitle");
@@ -1198,7 +1199,7 @@ async function createEpisodeQuickRecord(episode, action) {
     <form method="dialog">
       <header class="episode-record-header">
         <h2 id="episodeRecordTitle">${escapeHtml(definition.label)}</h2>
-        <p>${escapeHtml(episodeLabel)}</p>
+        <p>${escapeHtml(episodeLabel)}${episodeName ? ` · ${escapeHtml(episodeName)}` : ""}</p>
         <button type="button" class="episode-record-close" aria-label="关闭">×</button>
       </header>
       <div class="episode-record-body">

@@ -8,8 +8,17 @@ function episodeSummaryText(anime) {
   return anime.episode_summary || (episodeTotal(anime) ? `${episodeTotal(anime)} 条` : "章节待同步");
 }
 
+function storedEpisodeName(episode, number = episode?.sort ?? episode?.ep ?? episode?.label) {
+  const episodeNumber = Number(number);
+  return [episode?.name_cn, episode?.name].map(value => String(value || "").trim()).find(name => {
+    if (!name) return false;
+    const placeholder = /^(?:第\s*([\d.]+)\s*[集话話]|(?:ep(?:isode)?|本篇|SP|OP|ED)\s*([\d.]+))$/i.exec(name);
+    return Number(name) !== episodeNumber && Number(placeholder?.[1] || placeholder?.[2]) !== episodeNumber;
+  }) || "";
+}
+
 function episodeTitle(episode) {
-  const name = episode.name_cn || episode.name || "";
+  const name = storedEpisodeName(episode);
   return name ? `${episode.display_label} · ${name}` : episode.display_label;
 }
 

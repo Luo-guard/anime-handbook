@@ -2345,7 +2345,16 @@ input[type="number"] {
 .episode-pills {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 5px;
+}
+
+.record-episode-name {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .episode-pill {
@@ -6263,7 +6272,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   color: white;
 }
 .episode-record-header h2 { margin: 0; font-size: 20px; line-height: 1.4; }
-.episode-record-header p { margin: 4px 0 0; color: var(--green-100); font-size: 13px; }
+.episode-record-header p { margin: 4px 0 0; color: var(--green-100); font-size: 13px; overflow-wrap: anywhere; }
 .episode-record-close {
   position: absolute;
   top: 14px;
