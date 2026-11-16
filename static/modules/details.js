@@ -229,7 +229,7 @@ function updateDetailArtwork() {
   const anime = dialog.open && dialog.dataset.detailBackground === "artwork" ? state.progressAnime : null;
   for (const [selector, url] of [
     ["#detailArtworkCover", anime?.cover_url],
-    ["#detailArtwork", anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=2`],
+    ["#detailArtwork", anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=3`],
   ]) {
     const image = $(selector);
     if (!image || image.getAttribute("src") === (url || null)) continue;

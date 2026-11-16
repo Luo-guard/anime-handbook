@@ -90,6 +90,31 @@ class DetailArtworkTest(unittest.TestCase):
             self.assertIsNone(detail_artwork.get_artwork(root, {"id": 12, "name": "作品"}))
             self.assertEqual(old.read_bytes(), b"unchecked artwork")
 
+    def test_recovers_missing_artwork_with_an_id_matched_alias(self):
+        with TemporaryDirectory() as directory, patch.object(detail_artwork, "_find", return_value=b"image") as find:
+            root = Path(directory)
+            previous = root / "detail-artwork" / "v2" / "27364.webp"
+            previous.parent.mkdir(parents=True)
+            previous.write_bytes(b"")
+            catalogue = root / "animeschedule" / "external-ids.json"
+            catalogue.parent.mkdir()
+            catalogue.write_text('[{"bgm_id":"27364","anime_planet_id":"hyouka"}]', encoding="utf-8")
+            self.assertEqual(detail_artwork.get_artwork(root, {"id": 27364, "name": "氷菓"}, miss_hours=0), b"image")
+            find.assert_called_once_with(["氷菓", "hyouka"])
+
+    def test_keeps_previously_verified_positive_cache(self):
+        with TemporaryDirectory() as directory, patch.object(detail_artwork, "_find") as find:
+            root = Path(directory)
+            previous = root / "detail-artwork" / "v2" / "12.webp"
+            previous.parent.mkdir(parents=True)
+            previous.write_bytes(b"verified")
+            self.assertEqual(detail_artwork.get_artwork(root, {"id": 12, "name": "作品"}), b"verified")
+            find.assert_not_called()
+
+    def test_transliteration_does_not_allow_unrelated_partial_tags(self):
+        self.assertTrue(detail_artwork._label_keys("Bungo Stray Dogs") & detail_artwork._label_keys("Bungou Stray Dogs"))
+        self.assertFalse(detail_artwork._label_keys("Max Reijou Nano Ni") & detail_artwork._label_keys("Max"))
+
     def test_configured_miss_expiry_and_permanent_mode_use_existing_cache(self):
         anime = {"id": 12, "name": "作品"}
         with TemporaryDirectory() as directory, patch.object(

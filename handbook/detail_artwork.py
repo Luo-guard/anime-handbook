@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from http.client import HTTPException
+from functools import lru_cache
 from io import BytesIO
 import json
 import re
@@ -23,7 +24,7 @@ DOCUMENT_BYTES = 2 * 1024 * 1024
 ERRORS = (OSError, HTTPException, ValueError, TypeError, KeyError, etree.LxmlError, Image.DecompressionBombError)
 SEARCH_SLOTS = threading.BoundedSemaphore(3)
 CACHE_LOCKS = tuple(threading.Lock() for _ in range(32))
-CACHE_VERSION = "v2"
+CACHE_VERSION = "v3"
 ARTWORK_RETRY_SECONDS = 6 * 3600
 CROSSOVER_TAGS = {"crossover", "crossovers", "クロスオーバー", "跨作品"}
 HOSTS = {
@@ -89,12 +90,40 @@ def _key(value):
     return "".join(char for char in unicodedata.normalize("NFKC", value).casefold() if char.isalnum())
 
 
+def _label_keys(value):
+    keys = {_key(value)}
+    words = re.findall(r"[a-z0-9]+", unicodedata.normalize("NFKC", value).casefold())
+    # Permit spelling differences in a full title, such as Bungo/Bungou and optional articles.
+    significant = [word for word in words if word not in {"a", "an", "the"}]
+    if value.isascii() and len(significant) >= 3:
+        keys.add("".join(word[:-1] if len(word) >= 5 and word.endswith("ou") else word for word in significant))
+    return keys - {""}
+
+
+@lru_cache(maxsize=4)
+def _artwork_slugs(path, modified_ns):
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    return {str(row["bgm_id"]): row["anime_planet_id"] for row in rows
+            if isinstance(row, dict) and row.get("bgm_id") and isinstance(row.get("anime_planet_id"), str)}
+
+
+def _cached_artwork_title(root, anime_id):
+    path = root / "animeschedule" / "external-ids.json"
+    try:
+        slug = _artwork_slugs(path, path.stat().st_mtime_ns).get(str(anime_id), "")
+    except (OSError, ValueError, TypeError):
+        return ""
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+        return ""
+    return slug.replace("-", " ")
+
+
 def _titles(anime, aliases):
     titles = []
     for title in (anime.get("name"), anime.get("name_cn"), *aliases):
         if not title or not _key(title):
             continue
-        base = re.sub(r"\s*(?:第\s*[\d一二三四五六七八九十]+\s*[季期]|season\s+\d+|\d+(?:st|nd|rd|th)\s+season)\s*$", "", title, flags=re.I).rstrip(" :：-")
+        base = re.sub(r"\s*(?:第\s*[\d一二三四五六七八九十]+\s*(?:[季期]|シーズン)|season\s+\d+|\d+(?:st|nd|rd|th)\s+season)\s*$", "", title, flags=re.I).rstrip(" :：-")
         titles.extend(value[:120] for value in (base, title) if value)
     return list(dict.fromkeys(titles))
 
@@ -119,14 +148,18 @@ def _ordered(candidates):
 
 
 def _alpha(lookup, titles):
-    expected = {_key(title) for title in titles}
+    expected = set().union(*(_label_keys(title) for title in titles))
     names = list(dict.fromkeys([titles[0], *(title for title in titles if title.isascii()), *titles]))
-    for title in names[:2]:
+    for title in names[:3]:
         query = urlencode({"q": title, "type": "wallpaper"})
-        page, address = lookup.page(f"https://alphacoders.com/search/view?{query}")
+        try:
+            page, address = lookup.page(f"https://alphacoders.com/search/view?{query}")
+        except ERRORS:
+            continue
         candidates = []
         for card in page.xpath('//*[contains(concat(" ", @class, " "), " thumb-container-wallpaper-desktop ")]'):
-            tags = {_key(tag) for tag in card.xpath('.//a[contains(@class,"thumb-tag-masonry")]//text()')}
+            tags = set().union(*(_label_keys(tag.text_content().strip())
+                                 for tag in card.xpath('.//a[contains(@class,"thumb-tag-masonry")]')))
             # Search can redirect on a partial word. The gallery URL alone says nothing about a card.
             if not expected.intersection(tags) or tags & CROSSOVER_TAGS:
                 continue
@@ -290,11 +323,13 @@ def get_artwork(root, anime, aliases=(), *, miss_hours=DEFAULT_ARTWORK_MISS_HOUR
     with lock:
         previous = b""
         try:
-            stat = path.stat()
-            previous = path.read_bytes()
-            ttl = (30 * 24 if previous else miss_hours) * 3600
-            if (not previous and miss_hours == 0) or time.time() - stat.st_mtime < ttl:
-                return previous or None
+            existing = path if path.exists() else root / "detail-artwork" / "v2" / path.name
+            previous = existing.read_bytes()
+            # Keep previously verified images. Recheck old misses with the new aliases.
+            if previous or existing == path:
+                ttl = (30 * 24 if previous else miss_hours) * 3600
+                if (not previous and miss_hours == 0) or time.time() - existing.stat().st_mtime < ttl:
+                    return previous or None
         except OSError:
             pass
         try:
@@ -305,7 +340,8 @@ def get_artwork(root, anime, aliases=(), *, miss_hours=DEFAULT_ARTWORK_MISS_HOUR
         if not SEARCH_SLOTS.acquire(blocking=False):
             return previous or None
         try:
-            titles = _titles(anime, aliases)
+            cached_title = _cached_artwork_title(root, anime_id)
+            titles = _titles(anime, (*aliases, cached_title))
             temporary = path.with_suffix(f".{uuid4().hex}.tmp")
             try:
                 result = (_find(titles) if titles else None) or previous
