@@ -1304,7 +1304,44 @@ function pcShotBlob(canvas, maxBytes = 14 * 1024 * 1024) {
   })();
 }
 
-async function pcScreenshot() {
+async function pcCaptureScreenshot(video, seconds) {
+  const paused = video.paused;
+  const media = video.currentSrc;
+  const mediaLoad = pcMediaLoad;
+  const upscaleCanvas = pcUpscaleCanvas(video);
+  const original = paused ? pcDrawShot(video, null) : null;
+  const enhanced = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
+  if (mediaLoad !== pcMediaLoad || video.currentSrc !== media ||
+      (paused && (!video.paused || video.currentTime !== seconds))) {
+    throw new Error("画面已切换，请重新截图");
+  }
+  const shot = await pcShotBlob(enhanced || original || pcDrawShot(video, null));
+  return { ...shot, upscaled: Boolean(enhanced), usedOriginal: Boolean(upscaleCanvas && !enhanced) };
+}
+
+let pcClipboardShotVersion = 0;
+
+async function pcCopyScreenshot(shot) {
+  const version = ++pcClipboardShotVersion;
+  if (typeof ClipboardItem !== "function" || !navigator.clipboard?.write) {
+    return " · 当前浏览器无法复制图片到剪贴板";
+  }
+  // Start the clipboard write in the shortcut event, before frame retrieval
+  // and PNG encoding finish. Save and copy both consume the same PNG.
+  const png = shot.then(({ blob }) => {
+    if (version !== pcClipboardShotVersion) throw new Error("已有更新的截图");
+    return blob;
+  });
+  png.catch(() => {}); // The browser may reject the write before reading the PNG.
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    return version === pcClipboardShotVersion ? " · 已复制到剪贴板" : "";
+  } catch (error) {
+    return version === pcClipboardShotVersion ? " · 复制到剪贴板失败" : "";
+  }
+}
+
+async function pcScreenshot({ copy = false } = {}) {
   const video = $("#offlineVideo");
   if (!video || !video.videoWidth || video.readyState < 2 || video.seeking) {
     toast("视频还没准备好，先等画面出来再截图", "error");
@@ -1314,38 +1351,18 @@ async function pcScreenshot() {
   const anime = online?.catalogue.title || offlineView.animeName || "动漫";
   const episode = online ? onlineEpisodeLabel(online) : episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
   const seconds = video.currentTime;
-  const paused = video.paused;
-  const media = video.currentSrc;
-  const mediaLoad = pcMediaLoad;
-  const upscaleCanvas = pcUpscaleCanvas(video);
-  let canvas;
-  let upscaled;
+  const capture = pcCaptureScreenshot(video, seconds);
+  const clipboard = copy ? pcCopyScreenshot(capture) : "";
+  let shot;
   try {
-    const original = paused ? pcDrawShot(video, null) : null;
-    canvas = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
-    if (mediaLoad !== pcMediaLoad || video.currentSrc !== media ||
-        (paused && (!video.paused || video.currentTime !== seconds))) {
-      toast("截图时画面已切换，请重新截图", "error");
-      return;
-    }
-    upscaled = Boolean(canvas);
-    canvas ||= original || pcDrawShot(video, null);
+    shot = await capture;
   } catch (error) {
     toast(`截图失败：${error.message || error}`, "error");
     return;
   }
-  let blob;
-  let shotSize = { width: canvas.width, height: canvas.height };
-  try {
-    const shot = await pcShotBlob(canvas);
-    blob = shot.blob;
-    shotSize = { width: shot.width, height: shot.height };
-  } catch (error) {
-    toast(`截图失败：${error.message || error}`, "error");
-    return;
-  }
-  const sizeTag = upscaled ? `超分 ${shotSize.width}×${shotSize.height} · ` : "";
-  const shotNote = !upscaled && upscaleCanvas ? "（未取得超分帧，已保存原画）" : "";
+  const { blob, width, height, upscaled, usedOriginal } = shot;
+  const sizeTag = upscaled ? `超分 ${width}×${height} · ` : "";
+  const shotNote = usedOriginal ? "（未取得超分帧，已保存原画）" : "";
   // 先进媒体库的图片库（按番名分文件夹、按模板命名）；后台不可用时退回浏览器下载。
   try {
     const data = await new Promise((resolve, reject) => {
@@ -1358,7 +1375,7 @@ async function pcScreenshot() {
       method: "POST",
       body: JSON.stringify({ anime, episode, seconds, data }),
     });
-    toast(`已存入媒体库 · ${sizeTag}图片：「${result.folder}」/ ${result.name}${shotNote}`);
+    toast(`已存入媒体库 · ${sizeTag}图片：「${result.folder}」/ ${result.name}${shotNote}${await clipboard}`);
   } catch (error) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1367,7 +1384,7 @@ async function pcScreenshot() {
     link.download = `${anime} ${episode} ${stamp}.png`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast(`入库失败（${error.message || error}），已改为下载到浏览器${shotNote}`, "error");
+    toast(`入库失败（${error.message || error}），已改为下载到浏览器${shotNote}${await clipboard}`, "error");
   }
 }
 
@@ -1395,6 +1412,7 @@ const PC_SHORTCUT_RUNNERS = {
   player_fullscreen: () => pcToggleFullscreen(),
   player_danmaku: () => $("#offlineDanmakuToggle")?.click(),
   player_screenshot: () => pcScreenshot(),
+  player_screenshot_copy: () => pcScreenshot({ copy: true }),
   player_speed_up: () => pcStepSpeed(1),
   player_speed_down: () => pcStepSpeed(-1),
   player_speed_1: () => pcApplySpeed(1),
@@ -1415,7 +1433,8 @@ function pcRenderShortcutHelp() {
   const lines = [
     ["player_play_pause", "player_rewind", "player_forward", "player_skip"],
     ["player_volume_up", "player_volume_down", "player_mute", "player_fullscreen"],
-    ["player_prev", "player_next", "player_danmaku", "player_screenshot"],
+    ["player_prev", "player_next", "player_danmaku"],
+    ["player_screenshot", "player_screenshot_copy"],
     ["player_speed_down", "player_speed_up", "player_speed_1", "player_speed_2", "player_speed_3"],
   ];
   list.innerHTML = lines.map((ids) => {
@@ -1493,7 +1512,7 @@ function pcInit() {
     $("#pcPlaylistMenu")?.classList.add("hidden");
     pcSelectEpisode(window.onlinePlayback?.current ? item.dataset.id : Number(item.dataset.id));
   });
-  $("#pcScreenshot")?.addEventListener("click", pcScreenshot);
+  $("#pcScreenshot")?.addEventListener("click", () => pcScreenshot());
   $(".pc-shortcuts")?.addEventListener("toggle", (event) => {
     if (event.target.open) pcRenderShortcutHelp();
   });

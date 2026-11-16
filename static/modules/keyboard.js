@@ -28,6 +28,7 @@ const SHORTCUT_ACTIONS = [
   {id:"player_fullscreen",name:"全屏 / 退出全屏",key:"f",enabled:true,scope:"player"},
   {id:"player_danmaku",name:"弹幕开关",key:"d",enabled:true,scope:"player"},
   {id:"player_screenshot",name:"截图",key:"s",enabled:true,scope:"player"},
+  {id:"player_screenshot_copy",name:"截图并复制到剪贴板",key:"Shift+s",enabled:true,scope:"player"},
   {id:"player_prev",name:"上一集",key:"p",enabled:true,scope:"player"},
   {id:"player_next",name:"下一集",key:"n",enabled:true,scope:"player"},
   {id:"player_skip",name:"跳过（按设定的秒数快进）",key:"k",enabled:true,scope:"player"},
@@ -50,6 +51,13 @@ function keyboardPreferences(value=state.settings.keyboard_shortcuts) {
   if (!value?.bindings?.quick_record && Object.entries(bindings).some(([id, binding]) =>
     id !== "quick_record" && binding.enabled && binding.keys.includes(bindings.quick_record.keys[0]))) {
     bindings.quick_record.enabled = false;
+  }
+  // Leave an existing Shift+S player binding in place on upgrade.
+  const copy = bindings.player_screenshot_copy;
+  if (!value?.bindings?.player_screenshot_copy && SHORTCUT_ACTIONS.some(({ id, scope }) =>
+    id !== "player_screenshot_copy" && (scope === "player" || id === "quick_record") &&
+    bindings[id].enabled && bindings[id].keys.includes(copy.keys[0]))) {
+    copy.enabled = false;
   }
   return {enabled:value?.enabled!==false,bindings};
 }
@@ -99,7 +107,7 @@ const SHORTCUT_GROUPS = [
   },
   {
     title: "播放器 · 字幕与截图",
-    actions: ["player_danmaku", "player_screenshot"],
+    actions: ["player_danmaku", "player_screenshot", "player_screenshot_copy"],
   },
   {
     title: "播放器 · 倍速",

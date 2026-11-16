@@ -74,7 +74,7 @@ const HandbookSettings = (() => {
       const payload = await api("/api/settings", {
         method: "PATCH",
         body: JSON.stringify({
-          keyboard_shortcuts: keyboardSettings,
+          ...(keyboardChanged ? { keyboard_shortcuts: keyboardSettings } : {}),
           ...(gestureSettings ? { episode_gestures: gestureSettings } : {}),
           day_start_hour: Number($("#dayStartInput").value),
           show_episode_balance: $("#showEpisodeBalanceInput").checked,

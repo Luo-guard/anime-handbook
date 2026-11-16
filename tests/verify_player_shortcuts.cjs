@@ -23,7 +23,7 @@ const { isolatedServer } = require('./isolated_server.cjs');
     await page.evaluate(() => switchSettingsTab('keyboard'));
     await page.waitForTimeout(400);
 
-    // 1) 播放器三组 + 17 个动作都在界面上
+    // 1) 播放器三组 + 18 个动作都在界面上
     const ui = await page.evaluate(() => {
       const groups = [...document.querySelectorAll('#keyboardBindings .keyboard-group')]
         .map((g) => ({ title: g.querySelector('.keyboard-group-title')?.firstChild?.textContent?.trim(), rows: [...g.querySelectorAll('.keyboard-binding')].map((r) => r.dataset.shortcutAction) }))
@@ -37,12 +37,13 @@ const { isolatedServer } = require('./isolated_server.cjs');
       };
     });
     assert.equal(ui.groups.length, 3, `播放器应有 3 个分组，实际 ${ui.groups.length}`);
-    assert.equal(Object.keys(ui.chips).length, 17, '播放器动作应有 17 个');
+    assert.equal(Object.keys(ui.chips).length, 18, '播放器动作应有 18 个');
     // 2) 默认键位对齐 Kazumi 的 defaultShortcuts
     const expected = {
       player_play_pause: ['Space'], player_forward: ['ArrowRight'], player_rewind: ['ArrowLeft'],
       player_prev: ['p'], player_next: ['n'], player_volume_up: ['ArrowUp'], player_volume_down: ['ArrowDown'],
       player_mute: ['m'], player_fullscreen: ['f'], player_danmaku: ['d'], player_screenshot: ['s'],
+      player_screenshot_copy: ['Shift+s'],
       player_skip: ['k'], player_speed_1: ['1'], player_speed_2: ['2'], player_speed_3: ['3'],
       player_speed_up: ['x'], player_speed_down: ['z'],
     };
@@ -51,10 +52,12 @@ const { isolatedServer } = require('./isolated_server.cjs');
     }
 
     // 3) 改一个键位：后端能存、界面重渲染后还在
-    const res = await patch({ player_skip: { enabled: true, keys: ['Alt+k'] } });
+    const copyBinding = { enabled: true, keys: ['Alt+s'] };
+    const res = await patch({ player_skip: { enabled: true, keys: ['Alt+k'] }, player_screenshot_copy: copyBinding });
     assert.equal(res.status, 200, `保存播放器快捷键应成功，实际 ${res.status}`);
-    const saved = await (await fetch(`${API}/api/bootstrap`)).json().then((d) => d.settings.keyboard_shortcuts.bindings.player_skip);
-    assert.deepEqual(saved, { enabled: true, keys: ['Alt+k'] }, `后端保存结果：${JSON.stringify(saved)}`);
+    const saved = await (await fetch(`${API}/api/bootstrap`)).json().then((d) => d.settings.keyboard_shortcuts.bindings);
+    assert.deepEqual(saved.player_skip, { enabled: true, keys: ['Alt+k'] });
+    assert.deepEqual(saved.player_screenshot_copy, copyBinding);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => scheduleState.initialized === true, null, { timeout: 40000 });
     await page.click('#settingsButton');
@@ -68,7 +71,7 @@ const { isolatedServer } = require('./isolated_server.cjs');
     const status = await page.evaluate(() => document.querySelector('#keyboardStatus')?.textContent || '');
     assert.equal(status, '', `同键跨作用域不该报重复：${status}`);
 
-    console.log('Player shortcuts: 3 groups / 17 actions, Kazumi default keys, custom binding persists, cross-scope duplicates allowed.');
+    console.log('Player shortcuts: 3 groups / 18 actions, clipboard shortcut, custom bindings persist, cross-scope duplicates allowed.');
   } finally {
     await fetch(`${API}/api/settings`, {
       method: 'PATCH',

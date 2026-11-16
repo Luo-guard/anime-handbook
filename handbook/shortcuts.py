@@ -6,7 +6,7 @@ APP_ACTIONS = {"collection", "library", "schedule", "timeline", "statistics", "r
 # 所以 Space / 1 / 2 / 3 这类同键不算冲突）。
 PLAYER_ACTIONS = {
     "player_play_pause", "player_rewind", "player_forward", "player_volume_up", "player_volume_down",
-    "player_mute", "player_fullscreen", "player_danmaku", "player_screenshot", "player_prev",
+    "player_mute", "player_fullscreen", "player_danmaku", "player_screenshot", "player_screenshot_copy", "player_prev",
     "player_next", "player_skip", "player_speed_down", "player_speed_up",
     "player_speed_1", "player_speed_2", "player_speed_3",
 }
