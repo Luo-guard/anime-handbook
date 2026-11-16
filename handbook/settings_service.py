@@ -129,6 +129,7 @@ def _normalize_settings(body, settings):
         "collection_airing_source",
         "detail_airtime_source",
         "detail_layout",
+        "detail_size",
         "detail_artwork_miss_hours",
         "detail_record_on_change",
         "detail_comment_types",
@@ -251,6 +252,9 @@ def _normalize_settings(body, settings):
             elif key == "detail_layout":
                 if not isinstance(value, str) or value not in {"classic", "modern", "artwork"}:
                     raise ValueError("番剧详情布局无效")
+            elif key == "detail_size":
+                if not isinstance(value, str) or value not in {"small", "large"}:
+                    raise ValueError("番剧详情版面大小无效")
             elif key == "detail_comment_types":
                 if not isinstance(value, list) or any(not isinstance(kind, str) or kind not in DETAIL_COMMENT_KINDS for kind in value):
                     raise ValueError("详情评论显示类型无效")

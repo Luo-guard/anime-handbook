@@ -6390,6 +6390,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 .detail-credit-check, .detail-credit-prefix { display: none; }
 #progressModal {
   --detail-gutter: clamp(16px, 4vw, 34px);
+  --detail-artwork-tail: 110px;
   --detail-hero: transparent;
   --detail-hero-ink: var(--ink);
   --detail-hero-muted: var(--muted);
@@ -6406,8 +6407,14 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-close-paper: var(--surface);
   --detail-close-ink: var(--muted);
   --detail-line: color-mix(in srgb, var(--surface) 83%, var(--accent));
+  /* Keep the content width equal across backgrounds while the dialog scrolls. */
+  scrollbar-width: none;
 }
+#progressModal::-webkit-scrollbar { display: none; }
 #progressForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  isolation: isolate;
   padding: 0 var(--detail-gutter) 20px;
   background: inherit;
   min-height: 0;
@@ -6772,14 +6779,17 @@ body.schedule-picking [data-floating-view="schedule"] {
 
 /* The artwork stretches behind the hero and the first episode rows. */
 .detail-artwork { display: none; }
-#progressModal[data-detail-background="artwork"] {
+#progressModal[data-detail-size="large"] {
   --modal-width: 1120px;
   --detail-gutter: clamp(13px, 5vw, 60px);
-  --artwork-action-height: 44px;
-  --artwork-action-size: 15px;
-  --artwork-info-size: 15px;
-  --artwork-caption-size: 13px;
-  --artwork-section-size: 18px;
+  --detail-artwork-tail: 168px;
+  --detail-action-height: 44px;
+  --detail-action-size: 15px;
+  --detail-info-size: 15px;
+  --detail-caption-size: 13px;
+  --detail-section-size: 18px;
+}
+#progressModal[data-detail-background="artwork"] {
   --detail-cinema-base: #171924;
   --detail-cinema-paper: #242531;
   --detail-cinema-ink: #f3f1ef;
@@ -6795,15 +6805,9 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-play-hover: #fff4ff;
   color: var(--detail-cinema-ink);
   background: var(--detail-cinema-base);
-  /* Even a transparent native track reserves space beside the artwork. */
-  scrollbar-width: none;
 }
-#progressModal[data-detail-background="artwork"]::-webkit-scrollbar { display: none; }
 
 [data-detail-background="artwork"] #progressForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  isolation: isolate;
   background: transparent;
 }
 [data-detail-background="artwork"] .detail-artwork {
@@ -6811,7 +6815,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   position: absolute;
   z-index: -1;
   grid-area: 1 / 1 / 3 / 2;
-  inset: 0 calc(-1 * var(--detail-gutter)) -168px;
+  inset: 0 calc(-1 * var(--detail-gutter)) calc(-1 * var(--detail-artwork-tail));
   pointer-events: none;
 }
 .detail-artwork img,
@@ -6830,51 +6834,50 @@ body.schedule-picking [data-floating-view="schedule"] {
     linear-gradient(90deg, #171924f0 0%, #171924a8 37%, #17192414 92%);
 }
 
-.progress-modal[data-detail-background="artwork"] .progress-hero {
+.progress-modal[data-detail-size="large"] .progress-hero {
   min-height: 322px;
   grid-template-columns: 156px minmax(0, 1fr);
   gap: 30px;
   padding-block: 48px;
 }
-[data-detail-background="artwork"] #progressCover {
-  aspect-ratio: 3 / 4.2;
-  box-shadow: 0 9px 30px #0005;
-}
-[data-detail-background="artwork"] .progress-hero h2 {
+[data-detail-size="large"] #progressCover { aspect-ratio: 3 / 4.2; }
+[data-detail-background="artwork"] #progressCover { box-shadow: 0 9px 30px #0005; }
+[data-detail-size="large"] .progress-hero h2 {
   font-size: clamp(32px, 4.5vw, 54px);
   line-height: 1.13;
   letter-spacing: -.025em;
 }
-[data-detail-background="artwork"] :is(#modernOriginalTitle, .modern-detail-facts, .progress-hero-info .anime-rating, .progress-hero-info .rating-score, .progress-meta #progressAirDate) {
-  font-size: var(--artwork-info-size);
+[data-detail-size="large"] :is(#modernOriginalTitle, .modern-detail-facts, .progress-hero-info .anime-rating, .progress-hero-info .rating-score, .progress-meta #progressAirDate) {
+  font-size: var(--detail-info-size);
 }
-[data-detail-background="artwork"] :is(#modernFullTitle, .progress-meta .update-badge) { font-size: var(--artwork-caption-size); }
-[data-detail-background="artwork"] .progress-info-row .progress-actions {
+[data-detail-size="large"] :is(#modernFullTitle, .progress-meta .update-badge) { font-size: var(--detail-caption-size); }
+[data-detail-size="large"] .progress-info-row .progress-actions {
   justify-content: flex-start;
   gap: 8px;
   margin-top: 16px;
 }
-[data-detail-background="artwork"] :is(#detailOnlinePlay, .collect-detail-row .collect-trigger, .modern-detail-menu > summary) {
-  min-height: var(--artwork-action-height);
+[data-detail-size="large"] :is(#detailOnlinePlay, .collect-detail-row .collect-trigger, .modern-detail-menu > summary) {
+  min-height: var(--detail-action-height);
   border-radius: 12px;
-  font-size: var(--artwork-action-size);
+  font-size: var(--detail-action-size);
 }
-[data-detail-background="artwork"] #detailOnlinePlay {
+[data-detail-size="large"] #detailOnlinePlay {
   padding-inline: 1em;
-  background: #f1e4ff;
   font-weight: 700;
 }
-[data-detail-background="artwork"] #detailOnlinePlay::before { font-size: .8em; }
-[data-detail-background="artwork"] .modern-detail-menu > summary {
-  min-width: var(--artwork-action-height);
+[data-detail-background="artwork"] #detailOnlinePlay { background: #f1e4ff; }
+[data-detail-size="large"] #detailOnlinePlay::before { font-size: .8em; }
+[data-detail-size="large"] .modern-detail-menu > summary {
+  min-width: var(--detail-action-height);
   font-size: 20px;
   line-height: 1;
 }
-.progress-modal[data-detail-background="artwork"] .detail-corner-actions .modal-close {
-  width: var(--artwork-action-height);
-  height: var(--artwork-action-height);
+.progress-modal[data-detail-size="large"] .detail-corner-actions .modal-close {
+  width: var(--detail-action-height);
+  height: var(--detail-action-height);
 }
-[data-detail-background="artwork"] #modernDetailEpisodeTotal { color: var(--detail-hero-emphasis); font-weight: 700; }
+#progressModal #modernDetailEpisodeTotal { font-weight: 700; }
+[data-detail-background="artwork"] #modernDetailEpisodeTotal { color: var(--detail-hero-emphasis); }
 [data-detail-background="artwork"] .anime-rating[href]:hover .rating-score { color: var(--detail-hero-emphasis); }
 
 [data-detail-background="artwork"] #progressForm > :is(.detail-tabs, .detail-panel, .modal-actions) {
@@ -6890,23 +6893,23 @@ body.schedule-picking [data-floating-view="schedule"] {
   --active-inset: var(--accent);
   color: var(--ink);
 }
-[data-detail-background="artwork"] .detail-tabs { margin: 24px 0 15px; }
-[data-detail-background="artwork"] .detail-tab { padding: 12px 2px 10px; font-size: var(--artwork-action-size); }
-[data-detail-background="artwork"] .detail-panel { min-height: 0; }
-[data-detail-background="artwork"] .episode-grid {
+[data-detail-size="large"] .detail-tabs { margin: 24px 0 15px; }
+[data-detail-size="large"] .detail-tab { padding: 12px 2px 10px; font-size: var(--detail-action-size); }
+[data-detail-size="large"] .detail-panel { min-height: 0; }
+[data-detail-size="large"] .episode-grid {
   max-height: none;
   overflow: visible;
   padding: 0;
 }
-[data-detail-background="artwork"] :is(.episode-group-head, .anime-comments-heading h3, .characters-heading h3) {
-  font-size: var(--artwork-section-size);
+[data-detail-size="large"] :is(.episode-group-head, .anime-comments-heading h3, .characters-heading h3) {
+  font-size: var(--detail-section-size);
 }
-[data-detail-background="artwork"] :is(.episode-group-head span, .characters-heading p, .anime-comment-item p, .comment-trigger) {
-  font-size: var(--artwork-caption-size);
+[data-detail-size="large"] :is(.episode-group-head span, .characters-heading p, .anime-comment-item p, .comment-trigger) {
+  font-size: var(--detail-caption-size);
 }
-[data-detail-background="artwork"] .comment-trigger { min-height: 32px; }
-[data-detail-background="artwork"] .episode-group-meta { flex-wrap: wrap; gap: 4px 9px; }
-[data-detail-background="artwork"] .episode-group-grid {
+[data-detail-size="large"] .comment-trigger { min-height: 32px; }
+[data-detail-size="large"] .episode-group-meta { flex-wrap: wrap; gap: 4px 9px; }
+[data-detail-size="large"] .episode-group-grid {
   grid-template-columns: repeat(13, minmax(0, 1fr));
   gap: 7px;
 }
@@ -6918,8 +6921,8 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-episode-hover-edge: var(--accent);
   --detail-watched-paper: rgb(255 255 255 / .08);
   --detail-watched-ink: var(--accent);
-  font-size: var(--artwork-action-size);
 }
+[data-detail-size="large"] .episode-cell { font-size: var(--detail-action-size); }
 [data-detail-background="artwork"] .episode-cell.next-to-play:not(.watched) {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -6941,48 +6944,48 @@ body.schedule-picking [data-floating-view="schedule"] {
   border-color: var(--line);
   background: var(--green-50);
 }
-[data-detail-background="artwork"] :is(#cancelProgress, #saveProgress, #refreshCharacters, #saveAnimeComment, #cancelAnimeComment) {
-  min-height: var(--artwork-action-height);
+[data-detail-size="large"] :is(#cancelProgress, #saveProgress, #refreshCharacters, #saveAnimeComment, #cancelAnimeComment) {
+  min-height: var(--detail-action-height);
   padding: 7px 1em;
-  font-size: var(--artwork-action-size);
+  font-size: var(--detail-action-size);
 }
 
 @media (max-width: 800px) {
-  #progressModal[data-detail-background="artwork"] {
-    --artwork-action-size: 14px;
-    --artwork-info-size: 14px;
-    --artwork-section-size: 16px;
+  #progressModal[data-detail-size="large"] {
+    --detail-action-size: 14px;
+    --detail-info-size: 14px;
+    --detail-section-size: 16px;
+    --detail-artwork-tail: 108px;
   }
-  .progress-modal[data-detail-background="artwork"] .progress-hero {
+  .progress-modal[data-detail-size="large"] .progress-hero {
     min-height: 280px;
     grid-template-columns: 114px minmax(0, 1fr);
     gap: 18px;
     padding-block: 28px;
   }
-  [data-detail-background="artwork"] .detail-artwork { bottom: -108px; }
-  [data-detail-background="artwork"] .episode-group-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  [data-detail-size="large"] .episode-group-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 }
 
 @media (max-width: 480px) {
-  #progressModal[data-detail-background="artwork"] {
-    --artwork-action-height: 36px;
-    --artwork-action-size: 13px;
-    --artwork-info-size: 12px;
-    --artwork-caption-size: 12px;
+  #progressModal[data-detail-size="large"] {
+    --detail-action-height: 36px;
+    --detail-action-size: 13px;
+    --detail-info-size: 12px;
+    --detail-caption-size: 12px;
+    --detail-artwork-tail: 100px;
   }
-  .progress-modal[data-detail-background="artwork"] .progress-hero {
+  .progress-modal[data-detail-size="large"] .progress-hero {
     min-height: 0;
     grid-template-columns: 66px minmax(0, 1fr);
     gap: 10px;
     padding-block: 22px 18px;
   }
-  [data-detail-background="artwork"] .progress-hero h2 { font-size: 25px; }
-  [data-detail-background="artwork"] .progress-info-row .progress-actions { margin-top: 11px; gap: 6px; }
-  [data-detail-background="artwork"] .detail-artwork { bottom: -100px; }
+  [data-detail-size="large"] .progress-hero h2 { font-size: 25px; }
+  [data-detail-size="large"] .progress-info-row .progress-actions { margin-top: 11px; gap: 6px; }
   [data-detail-background="artwork"] .detail-artwork::after {
     background: linear-gradient(0deg, #171924, transparent 56%),
       linear-gradient(90deg, #171924dc, #17192448);
   }
-  [data-detail-background="artwork"] .detail-tabs { margin-top: 8px; }
-  [data-detail-background="artwork"] .episode-group-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  [data-detail-size="large"] .detail-tabs { margin-top: 8px; }
+  [data-detail-size="large"] .episode-group-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 }

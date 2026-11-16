@@ -209,10 +209,15 @@ if (typeof ResizeObserver !== "undefined") {
   if (detailDialog) new ResizeObserver(syncDetailCornerActions).observe(detailDialog);
 }
 
+function detailSize(settings = state.settings) {
+  return settings.detail_size || (settings.detail_layout === "artwork" ? "large" : "small");
+}
+
 function applyDetailAppearance() {
   const dialog = $("#progressModal");
   if (!dialog) return;
   dialog.dataset.detailBackground = state.settings.detail_layout || "classic";
+  dialog.dataset.detailSize = detailSize();
   updateDetailArtwork();
   dialog.classList.toggle("detail-compact-credits", state.settings.detail_compact_credits === true);
   $("#modernDetailMenu").open = false;

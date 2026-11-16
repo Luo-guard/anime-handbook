@@ -211,6 +211,7 @@ function renderSettingsPanels() {
   $("#scheduleGridColumnsInput").value = String(state.settings.schedule_grid_columns || 0);
   const background = $$('input[name="detailBackground"]').find(input => input.value === state.settings.detail_layout);
   (background || $('input[name="detailBackground"][value="classic"]')).checked = true;
+  $("#detailSizeInput").value = detailSize();
   const artworkRetry = $("#detailArtworkRetryInput");
   const artworkHours = state.settings.detail_artwork_miss_hours ?? 168;
   artworkRetry.value = [...artworkRetry.options].some(option => option.value === String(artworkHours))

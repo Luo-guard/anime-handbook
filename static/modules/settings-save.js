@@ -61,6 +61,7 @@ const HandbookSettings = (() => {
       const artworkMissHours = Number(artworkRetry === "custom" ? artworkHours.value : artworkRetry);
       const detailSettings = {
         detail_layout: $('input[name="detailBackground"]:checked').value,
+        detail_size: $("#detailSizeInput").value,
         detail_modern_original_title: $("#detailModernOriginalTitleInput").checked,
         detail_compact_credits: $("#detailCompactCreditsInput").checked,
         detail_record_on_change: $("#detailRecordOnChangeInput").checked,
