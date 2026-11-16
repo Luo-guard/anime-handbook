@@ -1,6 +1,8 @@
 from io import BytesIO
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -87,6 +89,40 @@ class DetailArtworkTest(unittest.TestCase):
             old.write_bytes(b"unchecked artwork")
             self.assertIsNone(detail_artwork.get_artwork(root, {"id": 12, "name": "作品"}))
             self.assertEqual(old.read_bytes(), b"unchecked artwork")
+
+    def test_configured_miss_expiry_and_permanent_mode_use_existing_cache(self):
+        anime = {"id": 12, "name": "作品"}
+        with TemporaryDirectory() as directory, patch.object(
+            detail_artwork, "_find", side_effect=[None, b"image"],
+        ) as find:
+            root = Path(directory)
+            self.assertIsNone(detail_artwork.get_artwork(root, anime))
+            cached = root / "detail-artwork" / detail_artwork.CACHE_VERSION / "12.webp"
+            check_time = time.time() - 48 * 3600
+            os.utime(cached, (check_time, check_time))
+            self.assertIsNone(detail_artwork.get_artwork(root, anime))  # default 7 days
+            self.assertIsNone(detail_artwork.get_artwork(root, anime, miss_hours=0))
+            self.assertEqual(find.call_count, 1)
+            self.assertEqual(detail_artwork.get_artwork(root, anime, miss_hours=24), b"image")
+            self.assertEqual(detail_artwork.get_artwork(root, anime, miss_hours=1), b"image")
+            self.assertEqual(find.call_count, 2)
+
+    def test_unavailable_catalogues_do_not_create_a_permanent_miss(self):
+        anime = {"id": 12, "name": "作品"}
+        with TemporaryDirectory() as directory, patch.object(
+            detail_artwork, "_find", side_effect=[detail_artwork.ArtworkCataloguesUnavailable, b"image"],
+        ) as find:
+            root = Path(directory)
+            self.assertIsNone(detail_artwork.get_artwork(root, anime, miss_hours=0))
+            cached = root / "detail-artwork" / detail_artwork.CACHE_VERSION / "12.webp"
+            retry = cached.with_suffix(".retry")
+            self.assertFalse(cached.exists())
+            self.assertIsNone(detail_artwork.get_artwork(root, anime, miss_hours=0))
+            self.assertEqual(find.call_count, 1)
+            check_time = time.time() - 7 * 3600
+            os.utime(retry, (check_time, check_time))
+            self.assertEqual(detail_artwork.get_artwork(root, anime, miss_hours=0), b"image")
+            self.assertFalse(retry.exists())
 
     def test_decodes_and_resizes_an_actual_landscape(self):
         for size, expected in [((2560, 1440), (1920, 1080)), ((1280, 1600), None), ((1920, 408), None)]:

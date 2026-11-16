@@ -1,7 +1,7 @@
 """Read route controller; transport and errors live on RequestHandler."""
 from __future__ import annotations
 from .http_context import (HTTPStatus, Path, ScheduleService, VideoLinks, attach_collection, find_background_asset, json, mimetypes, parse_qs, re, safe_asset_id, season_key, send_asset, urlparse)
-from .common import MAX_DETAIL_LINKS
+from .common import DEFAULT_ARTWORK_MISS_HOURS, MAX_DETAIL_LINKS
 from .link_rules import cache_path, load_cache, payload as rules_payload
 from urllib.parse import quote, unquote
 
@@ -472,7 +472,8 @@ class ReadRoutes:
                     return
                 anime = dict(row)
                 aliases = self.animeschedule.cached_titles(anime_id, (anime["name"], anime["name_cn"]))
-                body = get_artwork(self.database.asset_root, anime, aliases)
+                miss_hours = self.database.get_settings().get("detail_artwork_miss_hours", DEFAULT_ARTWORK_MISS_HOURS)
+                body = get_artwork(self.database.asset_root, anime, aliases, miss_hours=miss_hours)
                 if body:
                     send_asset(self, body, "image/webp", cache="private, max-age=86400")
                 else:

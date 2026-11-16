@@ -591,6 +591,8 @@ def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str
 
 
 MAX_DETAIL_LINKS = 12
+DEFAULT_ARTWORK_MISS_HOURS = 168
+MAX_ARTWORK_MISS_HOURS = 8760
 DETAIL_LINK_KINDS = {"bgm", "bilibili", "custom", "saved_video", "rules_menu"}
 
 

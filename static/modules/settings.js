@@ -211,6 +211,13 @@ function renderSettingsPanels() {
   $("#scheduleGridColumnsInput").value = String(state.settings.schedule_grid_columns || 0);
   const background = $$('input[name="detailBackground"]').find(input => input.value === state.settings.detail_layout);
   (background || $('input[name="detailBackground"][value="classic"]')).checked = true;
+  const artworkRetry = $("#detailArtworkRetryInput");
+  const artworkHours = state.settings.detail_artwork_miss_hours ?? 168;
+  artworkRetry.value = [...artworkRetry.options].some(option => option.value === String(artworkHours))
+    ? String(artworkHours) : "custom";
+  $("#detailArtworkHoursInput").value = artworkHours || 168;
+  artworkRetry.onchange = () => $("#detailArtworkCustomHours").classList.toggle("hidden", artworkRetry.value !== "custom");
+  artworkRetry.onchange();
   $("#detailModernOriginalTitleInput").checked = state.settings.detail_modern_original_title !== false;
   $("#detailCompactCreditsInput").checked = state.settings.detail_compact_credits === true;
   $("#detailRecordOnChangeInput").checked = state.settings.detail_record_on_change === true;

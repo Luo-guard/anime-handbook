@@ -17,7 +17,7 @@ from datetime import timedelta
 from .concurrency import database_state
 from .record_identity import read_aliases, store_aliases, collapse_repaired
 from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso,
-    normalize_kazumi_category, DETAIL_COMMENT_DEFAULTS, DETAIL_COMMENT_RATINGS,
+    normalize_kazumi_category, DEFAULT_ARTWORK_MISS_HOURS, DETAIL_COMMENT_DEFAULTS, DETAIL_COMMENT_RATINGS,
 )
 
 # 区分“不修改这个字段”和“把它改成 None（不映射）”。
@@ -672,6 +672,7 @@ class HandbookDB:
                 "collection_airing_source": "bgm",
                 "detail_airtime_source": "yuc",
                 "detail_layout": "classic",
+                "detail_artwork_miss_hours": DEFAULT_ARTWORK_MISS_HOURS,
                 "detail_modern_original_title": True,
                 "detail_modern_compact_credits": True,
                 "detail_classic_record_on_change": False,

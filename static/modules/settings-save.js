@@ -52,6 +52,13 @@ const HandbookSettings = (() => {
         throw new Error(scheduleCollectedDetailError);
       }
       const detailAirtimeSource = $("#detailAirtimeSourceInput").value || "yuc";
+      const artworkRetry = $("#detailArtworkRetryInput").value;
+      const artworkHours = $("#detailArtworkHoursInput");
+      if (artworkRetry === "custom" && (!artworkHours.value || !artworkHours.checkValidity())) {
+        artworkHours.focus();
+        throw new Error("请输入 1–8760 之间的整数小时");
+      }
+      const artworkMissHours = Number(artworkRetry === "custom" ? artworkHours.value : artworkRetry);
       const detailSettings = {
         detail_layout: $('input[name="detailBackground"]:checked').value,
         detail_modern_original_title: $("#detailModernOriginalTitleInput").checked,
@@ -86,6 +93,7 @@ const HandbookSettings = (() => {
           ...progressSources,
           detail_airtime_source: detailAirtimeSource,
           ...detailSettings,
+          detail_artwork_miss_hours: artworkMissHours,
           detail_comment_types: commentTypes,
           hide_missing_as_schedule: $("#hideMissingAsScheduleInput").checked,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
@@ -161,6 +169,9 @@ const HandbookSettings = (() => {
       }
       if (JSON.stringify(detailCommentTypes(payload.settings)) !== JSON.stringify(commentTypes)) {
         throw new Error("后台未保存番剧评论显示设置，请重启后台并刷新后重试。");
+      }
+      if ((payload.settings.detail_artwork_miss_hours ?? 168) !== artworkMissHours) {
+        throw new Error("后台未保存壁纸查找间隔，请重启后台并刷新后重试。");
       }
       if ((payload.settings.show_episode_review_rating_marks !== false) !== $("#showEpisodeReviewRatingMarksInput").checked) {
         throw new Error("后台未保存单集标记设置，请重启后台并刷新后重试。");

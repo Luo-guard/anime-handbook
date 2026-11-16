@@ -1039,6 +1039,16 @@
               <label><input type="radio" name="detailBackground" value="artwork" /><span class="detail-background-swatch" aria-hidden="true"></span><span>番剧图片</span></label>
             </div>
           </div>
+          <div class="setting-row">
+            <span><strong id="detailArtworkRetryLabel">找不到壁纸时，多久后再查</strong><small>到期后，下次打开番剧详情时再查找。选「永久」会一直使用封面，直到你改回其他间隔。</small></span>
+            <div class="theme-profile-controls">
+              <select id="detailArtworkRetryInput" aria-labelledby="detailArtworkRetryLabel">
+                <option value="24">1 天</option><option value="168" selected>7 天</option><option value="720">30 天</option>
+                <option value="custom">自定义</option><option value="0">永久</option>
+              </select>
+              <span class="inline-input hidden" id="detailArtworkCustomHours"><input type="number" id="detailArtworkHoursInput" min="1" max="8760" step="1" aria-label="重新查找间隔（小时）" /><span class="input-unit">小时</span></span>
+            </div>
+          </div>
           <label class="setting-row"><span><strong>显示番剧原名</strong><small>当原名与显示名称不同时，在标题下显示原名。</small></span><span class="switch-row compact"><input type="checkbox" id="detailModernOriginalTitleInput" /><span class="switch"></span></span></label>
           <h3 class="settings-subsection-title">观看记录</h3>
           <label class="setting-row"><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改时「确认记录」可用，并显示「取消」。</small></span><span class="switch-row compact"><input type="checkbox" id="detailRecordOnChangeInput" /><span class="switch"></span></span></label>
@@ -1855,10 +1865,10 @@
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
     <script src="/modules/lifecycle.js?v=20261115-episode-metadata" defer></script>
-    <script src="/modules/settings.js?v=20261116-episode-marks" defer></script>
+    <script src="/modules/settings.js?v=20261116-artwork-retry" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261116-episode-marks" defer></script>
+    <script src="/modules/settings-save.js?v=20261116-artwork-retry" defer></script>
     <script src="/modules/events.js?v=20261116-episode-images" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

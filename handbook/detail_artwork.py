@@ -15,6 +15,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from lxml import etree, html
 from PIL import Image, ImageOps
+from .common import DEFAULT_ARTWORK_MISS_HOURS
 
 
 IMAGE_BYTES = 16 * 1024 * 1024
@@ -23,6 +24,7 @@ ERRORS = (OSError, HTTPException, ValueError, TypeError, KeyError, etree.LxmlErr
 SEARCH_SLOTS = threading.BoundedSemaphore(3)
 CACHE_LOCKS = tuple(threading.Lock() for _ in range(32))
 CACHE_VERSION = "v2"
+ARTWORK_RETRY_SECONDS = 6 * 3600
 CROSSOVER_TAGS = {"crossover", "crossovers", "クロスオーバー", "跨作品"}
 HOSTS = {
     "alphacoders.com", "wall.alphacoders.com", "wallhaven.cc", "w.wallhaven.cc",
@@ -51,6 +53,7 @@ class Lookup:
     def __init__(self):
         self.deadline = time.monotonic() + 18
         self.opener = build_opener(ArtworkRedirect())
+        self.catalogue_available = False
 
     def read(self, url, *, referer="", image=False):
         remaining = self.deadline - time.monotonic()
@@ -71,11 +74,15 @@ class Lookup:
             return data, response.geturl()
 
     def json(self, url, *, referer=""):
-        return json.loads(self.read(url, referer=referer)[0])
+        result = json.loads(self.read(url, referer=referer)[0])
+        self.catalogue_available = True
+        return result
 
     def page(self, url):
         raw, address = self.read(url)
-        return html.fromstring(raw), address
+        page = html.fromstring(raw)
+        self.catalogue_available = True
+        return page, address
 
 
 def _key(value):
@@ -253,6 +260,10 @@ def _image(lookup, url, referer):
         return output.getvalue()
 
 
+class ArtworkCataloguesUnavailable(Exception):
+    pass
+
+
 def _find(titles):
     lookup = Lookup()
     for provider in PROVIDERS:
@@ -266,20 +277,28 @@ def _find(titles):
                     return image
         except ERRORS:
             continue
+    if not lookup.catalogue_available:
+        raise ArtworkCataloguesUnavailable
     return None
 
 
-def get_artwork(root, anime, aliases=()):
+def get_artwork(root, anime, aliases=(), *, miss_hours=DEFAULT_ARTWORK_MISS_HOURS):
     anime_id = int(anime["id"])
     path = root / "detail-artwork" / CACHE_VERSION / f"{anime_id}.webp"
+    retry = path.with_suffix(".retry")
     lock = CACHE_LOCKS[anime_id % len(CACHE_LOCKS)]
     with lock:
         previous = b""
         try:
             stat = path.stat()
             previous = path.read_bytes()
-            ttl = (30 * 24 if previous else 6) * 3600
-            if time.time() - stat.st_mtime < ttl:
+            ttl = (30 * 24 if previous else miss_hours) * 3600
+            if (not previous and miss_hours == 0) or time.time() - stat.st_mtime < ttl:
+                return previous or None
+        except OSError:
+            pass
+        try:
+            if time.time() - retry.stat().st_mtime < ARTWORK_RETRY_SECONDS:
                 return previous or None
         except OSError:
             pass
@@ -287,12 +306,21 @@ def get_artwork(root, anime, aliases=()):
             return previous or None
         try:
             titles = _titles(anime, aliases)
-            result = (_find(titles) if titles else None) or previous
             temporary = path.with_suffix(f".{uuid4().hex}.tmp")
+            try:
+                result = (_find(titles) if titles else None) or previous
+            except ArtworkCataloguesUnavailable:
+                try:
+                    retry.parent.mkdir(parents=True, exist_ok=True)
+                    retry.touch()
+                except OSError:
+                    pass
+                return previous or None
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 temporary.write_bytes(result)
                 temporary.replace(path)
+                retry.unlink(missing_ok=True)
             except OSError:
                 pass
             finally:

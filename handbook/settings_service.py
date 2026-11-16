@@ -6,7 +6,7 @@ import copy
 from contextlib import ExitStack
 import os
 from .common import (CATEGORY_NAMES, normalize_schedule_grouping, normalize_detail_links, normalize_custom_search_links, normalize_link_sync, normalize_bgm_sources, windows_autostart_change)
-from .common import DETAIL_COMMENT_KINDS
+from .common import DETAIL_COMMENT_KINDS, MAX_ARTWORK_MISS_HOURS
 from .shortcuts import normalize_shortcuts
 from .episode_gestures import normalize_episode_gestures
 from .metadata import SyncService
@@ -129,6 +129,7 @@ def _normalize_settings(body, settings):
         "collection_airing_source",
         "detail_airtime_source",
         "detail_layout",
+        "detail_artwork_miss_hours",
         "detail_record_on_change",
         "detail_comment_types",
         "detail_wheel_style",
@@ -254,6 +255,9 @@ def _normalize_settings(body, settings):
                 if not isinstance(value, list) or any(not isinstance(kind, str) or kind not in DETAIL_COMMENT_KINDS for kind in value):
                     raise ValueError("详情评论显示类型无效")
                 value = list(dict.fromkeys(value))
+            elif key == "detail_artwork_miss_hours":
+                if type(value) is not int or not 0 <= value <= MAX_ARTWORK_MISS_HOURS:
+                    raise ValueError("壁纸重新查找间隔须为 1–8760 小时，或选择永久")
             elif key in {"detail_wheel_style", "detail_classic_wheel_style", "detail_modern_wheel_style"}:
                 if not isinstance(value, str) or value not in {"classic", "modern"}:
                     raise ValueError("单集扇区样式无效")
