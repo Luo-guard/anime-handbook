@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>使用指南 · 动漫手账</title>
+  <style>
+    :root {
+      --paper: #faf9f7;
+      --ink: #272335;
+      --muted: #655f73;
+      --accent: #574177;
+      --tint: #efebf5;
+      --line: #ded8e7;
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.75 "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; }
+    a { color: var(--accent); text-underline-offset: .22em; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .guide { width: min(1110px, calc(100% - 36px)); margin: 0 auto; }
+    header { padding-block: clamp(24px, 5vw, 54px) 24px; border-bottom: 1px solid var(--line); }
+    h1, .part-title {
+      margin: 0;
+      font-family: "Noto Serif SC", "Songti SC", SimSun, serif;
+      line-height: 1.3;
+    }
+    h1 { font-size: clamp(34px, 5vw, 53px); margin-top: 10px; }
+    header p { margin: 8px 0 14px; }
+    .back, header p, .scope, #guideStatus { color: var(--muted); }
+    label { display: block; font-weight: 650; font-size: .9rem; }
+    input {
+      width: min(100%, 420px);
+      padding: 10px 13px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: white;
+      color: inherit;
+      font: inherit;
+    }
+    #guideStatus { margin: 6px 0 0; font-size: .88rem; }
+    .guide-layout { display: grid; grid-template-columns: 215px minmax(0, 1fr); gap: clamp(26px, 5vw, 66px); }
+    nav { align-self: start; position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow: auto; padding: 17px 0 14px; }
+    nav a { display: block; padding: 4px 10px; border-radius: 6px; text-decoration: none; font-size: .91rem; }
+    nav a:hover { background: var(--tint); }
+    nav .toc-part { font-weight: 700; }
+    nav .toc-part + .toc-part { margin-top: 9px; }
+    main { max-width: 760px; min-width: 0; padding-block: 29px 48px; }
+    .part-title { font-size: clamp(25px, 3.5vw, 34px); }
+    .part + .part { margin-top: 38px; }
+    section[id] { scroll-margin-top: 16px; }
+    .chapter { padding: 19px 0; border-bottom: 1px solid var(--line); }
+    .chapter h3 { font-size: 1.2rem; margin: 0 0 8px; }
+    .chapter h4 { font-size: 1rem; margin: 13px 0 3px; }
+    p { margin: 0 0 8px; }
+    ul, ol { margin: 6px 0 8px; padding-inline-start: 1.5em; }
+    li + li { margin-top: 4px; }
+    code { padding: .1em .3em; border-radius: 4px; background: var(--tint); overflow-wrap: anywhere; }
+    .scope { margin-top: 12px; padding: 10px 13px; border-left: 3px solid var(--line); background: var(--tint); font-size: .9rem; }
+    @media (max-width: 720px) {
+      .guide-layout { display: block; }
+      nav { position: static; max-height: none; display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); }
+      nav .toc-part + .toc-part { margin-top: 0; }
+      main { padding-top: 20px; }
+    }
+    @media print { nav, label, input, #guideStatus, .back { display: none; } .guide-layout { display: block; } }
+  </style>
+</head>
+<body>
+  <div class="guide">
+    <header id="top">
+      <a class="back" href="./">← 返回动漫手账</a>
+      <h1>使用指南</h1>
+      <p>第一次用手账，从基础用法开始。想设置片源、下载、同步或核对数据来源，可以直接查进阶章节。</p>
+      <label for="guideSearch">搜索指南</label>
+      <input type="search" id="guideSearch" placeholder="试试「补记」「弹幕」或 qBittorrent" autocomplete="off">
+      <p id="guideStatus" role="status" hidden></p>
+    </header>
+    <div class="guide-layout">
+      <nav aria-label="指南目录">
+        <a class="toc-part" href="#basics">基础用法</a>
+        <a class="toc-part" href="#advanced">进阶用法</a>
+        <a href="#collection">收藏夹与导入</a>
+        <a href="#detail">详情、手势与链接</a>
+        <a href="#playback">播放、片源与弹幕</a>
+        <a href="#library">下载、订阅与媒体库</a>
+        <a href="#schedule">周表与数据更新</a>
+        <a href="#records">看番记录与统计</a>
+        <a href="#ranking">个人排名</a>
+        <a href="#appearance">主题、界面与快捷键</a>
+        <a href="#sync">账号、同步与备份</a>
+        <a href="#editions">电脑版、线上版与安卓版</a>
+        <a href="#troubleshooting">常见问题</a>
+      </nav>
+      <main>
+        <section class="part" id="basics">
+          <h2 class="part-title">基础用法</h2>
+          <div class="chapter" data-guide-chapter>
+            <ol>
+              <li><strong>添加番剧。</strong>在收藏夹点「搜索添加番剧」，搜索番名、确认条目并选择「在看」「想看」等状态。电脑上也可以导入已有的 Kazumi 收藏。</li>
+              <li><strong>看更新。</strong>打开「周表」，按星期或实际周次找新番。收藏夹也可以按「最新一集」排序。</li>
+              <li><strong>播放与记进度。</strong>点封面打开详情，点「播放」续看，或用单集菜单播放指定一集。点集数格选择已看集，最后点「确认记录」。</li>
+              <li><strong>写感想。</strong>在「看番记录」点「写感想」，可关联番剧、补填日期和插图。番剧详情里也可以写评论、打分。</li>
+              <li><strong>换设备继续。</strong>需要电脑与手机互通时，在「设置 → 账号与同步」配置坚果云。同一账号的两台设备要用相同的云端账号标识。</li>
+            </ol>
+            <p class="scope">本机播放、下载与截图相关操作以 Windows 电脑版为主。各端提供的入口见<a href="#editions">版本说明</a>。</p>
+          </div>
+        </section>
+
+        <section class="part" id="advanced">
+          <h2 class="part-title">进阶用法</h2>
+          <section class="chapter" id="collection" data-guide-chapter>
+            <h3>收藏夹与导入</h3>
+            <h4>添加、批量处理和分类</h4>
+            <p>「搜索收藏」查找已加入手账的番，「搜索添加番剧」用来查新条目。添加时核对封面、年份和季数，避免把续作或特别篇加错。已有 Kazumi 收藏可以从电脑同步。批量添加可在搜索窗口粘贴名单，或导入 Excel（.xlsx）、CSV、TSV、TXT、JSON，再核对候选条目和状态。</p>
+            <p>在卡片状态入口或番剧详情里改「在看」「想看」「看过」「搁置」等状态。用「新建收藏夹」建自己的分组，再用卡片的移入入口加番。「加入自定义后隐藏原分类」只控制展示。可在设置调整默认收藏夹、全部收藏夹入口、自定义与 Kazumi 分类的显示和顺序。</p>
+            <h4>排序、筛选和卡片</h4>
+            <p>展开「排序与筛选」中的季度筛选或排序方式。季度可以跨年多选，点年份或季节列头可批量选取。排序可用名称、评分、热度、首播、最新一集、加入时间或自定义，点方向键切换顺序。热度按评分人数，「最新一集」取已有的实际播出信息。选择自定义后可拖动卡片排顺序。</p>
+            <p>「设置 → 收藏夹」可调每行番剧数，空间不足时自动减少列数。卡片可显示 Bangumi 分数或个人评分，也可控制进度、添加番剧、历史记录、新建收藏夹等工具栏入口。需要下载时，可为指定收藏状态开启「加入收藏时自动打开找资源」。</p>
+          </section>
+
+          <section class="chapter" id="detail" data-guide-chapter>
+            <h3>详情、手势与链接</h3>
+            <p>详情的「概览」显示播出信息、正片和特别篇等剧集，以及番剧评论。「人物」在启用后按需从 Bangumi 加载并缓存，可手动刷新。番剧评分、单集评分和单集评价各有入口。片头、片尾可作为集数格显示，也可移到底部用 OP／ED 勾选框记录。</p>
+            <p>在「设置 → 番剧详情」选择白色、主题色或番剧图片。番剧图片会铺到剧集区，优先用横向壁纸，缺图时用封面。同页可控制原名、评分与排名、评分行跳转、角色栏、集名悬浮提示，以及「有修改时才启用确认记录」。</p>
+            <h4>单集菜单和进度</h4>
+            <p>点集数格切换已看状态，点「确认记录」保存。默认可右键或长按打开单集菜单，从中播放、找资源、给本集评分或评价，或者做 OP／ED 记录。长按后滑到动作再松手可执行。也可设置原地松手保留菜单、入口显隐、空位与动作顺序，或在快捷键页调整鼠标组合。</p>
+            <h4>外部链接和相关番剧</h4>
+            <p>详情的「⋯」里有找资源、相关番剧、已保存的视频或链接及站点入口，实际项目随设置和当前条目变化。可配置外部查询链接、官方站点入口、是否合并 B 站搜索和已存视频，以及默认视频置顶。默认视频用于快捷打开，系列或版本相近时可从「相关番剧」核对。规则仓库添加的查询链接只负责打开站点搜索，在线播放规则在播放设置单独管理。</p>
+            <p>电脑版还可使用「动漫手账 · 存视频」浏览器扩展。Edge 或 Chrome 的扩展管理页开启开发人员模式后，加载项目中的 <code>browser-extension</code> 文件夹。在 B 站视频或官方番剧播放页点扩展，回到手账选择要关联的番剧并确认。官方番剧按已保存的选集对应关系续看，BV 合集按分 P 跳转。连载新增选集时，可重新保存同一视频来刷新对应关系。</p>
+          </section>
+
+          <section class="chapter" id="playback" data-guide-chapter>
+            <h3>播放、片源与弹幕</h3>
+            <h4>选集、续播和线路</h4>
+            <p>详情顶部的播放按钮按已确认的观看记录选择下一集。选集菜单切换当前集，续播位置是另一份进度，可在播放设置关闭「从上次位置续播」。播放器优先用手账保存的集数和集名，缺名时只显示集数。收藏夹时钟图标打开「历史记录」，可按全部、在线或缓存筛选并续播。</p>
+            <p>「设置 → 播放设置」可选本地优先、在线播放优先等播放方式，也可设默认倍速、快进时长和优先使用的在线规则。在线规则在「规则仓库」安装，在「已安装」里查找、重命名、移除、检查更新或添加自定义规则。播放器可切换线路和规则，也能打开原网页。</p>
+            <h4>播放器工具与弹幕</h4>
+            <p>控制栏可调整音量、倍速、全屏、选集和上一集／下一集。顶栏可按设定时长快进或保存截图。本地视频有独立字幕时可切换字幕。光标停在进度条时可查看目标时间，移动光标会唤回自动隐藏的控制栏。</p>
+            <p>「播放设置 → 弹幕」可配置开关、字号、滚动时长、不透明度、显示区域、同屏上限、粗体、顶底弹幕和屏蔽词。同屏上限填 0 表示不限。使用弹弹play官方源时可自动匹配正片，也可在播放器手动搜索和换匹配。服务地址和开发者凭据保存在当前浏览器。可用时，播放器的输入框可以发送弹幕。</p>
+          </section>
+
+          <section class="chapter" id="library" data-guide-chapter>
+            <h3>下载、订阅与媒体库</h3>
+            <h4>连接下载器并提交任务</h4>
+            <ol>
+              <li>在 Windows 安装 qBittorrent，并准备好用于归档的 ffmpeg。开启 qBittorrent 的 Web UI，供本机手账连接时监听 <code>127.0.0.1</code>，勾选对本地主机客户端免除认证。手账填写的地址和端口须与 Web UI 一致，默认端口为 <code>8080</code>。</li>
+              <li>在「设置 → 媒体库」填写地址、端口、任务分类和目录，点「保存媒体库设置」。使用本机可识别的 qBittorrent 安装时，手账可按需尝试启动它。连接仍失败时，手动打开下载器并检查 Web UI。</li>
+              <li>从番剧详情或单集菜单点「找资源」，也可从媒体库进入资源搜索。用蜜柑关键词搜索，按字幕组筛选并核对集数、清晰度、编码、字幕和合集标记，然后提交所选条目。</li>
+            </ol>
+            <h4>自动订阅和入库</h4>
+            <p>从结果中选「订阅」保存关键词和字幕组。开启「自动下载订阅的新集」后，手账后台定时检查并提交新集。「立即检查全部订阅」可手动触发。新订阅首次检查用于建立基准，已有队列会去重。下载任务支持查看速度、进度、暂停、继续和重试。下载完成后按番剧与集数整理入库，遇到同集冲突时检查任务提示。「继续做种」会保留下载原文件。</p>
+            <p>媒体库可播放已经归档的视频。换目录时，直接保存只切换路径，想带走原来的视频就用「复制并迁移已入库文件」。下载临时目录留空默认使用媒体库下的 <code>_incoming</code>。项目目录和媒体目录分开存放，便于备份代码和管理大文件。</p>
+            <p>归档会尝试无损换成浏览器可播放的容器，独立保存可提取的字幕。内封 ASS 可在播放器切换，视频能否解码还取决于浏览器与系统支持的编码。</p>
+            <h4>截图与图片库</h4>
+            <p>播放器截图默认保存在媒体库下的「截图」文件夹，可配置独立目录和命名格式。可用 <code>{episode}</code>、<code>{time}</code>、<code>{date}</code>、<code>{anime}</code> 组成文件名，同名自动编号，默认保存 PNG。在「媒体库 → 图片」可按分组浏览、全屏看图、切换图片或多选删除。媒体库侧栏入口可以常驻、有可播放内容时显示或隐藏。</p>
+          </section>
+
+          <section class="chapter" id="schedule" data-guide-chapter>
+            <h3>周表与数据更新</h3>
+            <h4>三种周表和显示规则</h4>
+            <ul>
+              <li><strong>長門番堂（有 C）。</strong>按季度查看放送钟点与网络上线信息。</li>
+              <li><strong>Bangumi。</strong>按星期展示放送列表，具体时刻可能没有资料。</li>
+              <li><strong>AnimeSchedule（AS）。</strong>按实际周次排列，可翻到前后周。手账依据缓存里的原声／字幕计划计算已播，采用较早的有效时间。</li>
+            </ul>
+            <p>三套周表各自保存排序、分组、地区、收藏状态和隐藏名单。要藏一部番，在「排序与筛选 → 去周表里选」点它的卡片，之后可在「查看已隐藏」恢复。卡片内容、行数和已播集数来源可在周表设置调整。</p>
+            <h4>四类数据何时变化</h4>
+            <ul>
+              <li><strong>周表缓存。</strong>AS 周表以及長門番堂和 Bangumi 的季度资料通常缓存约 6 小时。到期后按需刷新，期间可先看到缓存。页首「刷新周表」会重新读取当前来源。</li>
+              <li><strong>详情顶部状态与更新时间。</strong>AS 用条目状态和排期，可在打开详情时按需补查，已确认完结的条目会跳过状态补查。長門番堂方案用本机季度钟点与 Bangumi 的日期资料。</li>
+              <li><strong>已播集数。</strong>周表卡片和详情可以分别选来源。AS 用近三周缓存中时间已到的放送事件。Bangumi 用逐集日期及可用的放送钟点。已有播出时间时，时间一到即可重新计算，临时改期则要等来源和缓存更新。</li>
+              <li><strong>本机资料与个人记录。</strong>番名、封面、首播日期、总集数、评分、排名和集名平时从本机读取。本地版启动收藏同步时，按需补缺少的资料并检查「在看」进度。已安排检查的集有明确播出时间且缺名时，可延到播出约一小时后，一次请求同时补进度和集名。个人已看集数以确认保存的记录为准。</li>
+            </ul>
+            <p>在「设置 → 数据来源」可快速核对来源。Bangumi 有官方站点和可配置的镜像，可先查看和切换站点，新增或修改地址在站点的编辑窗口里完成。</p>
+          </section>
+
+          <section class="chapter" id="records" data-guide-chapter>
+            <h3>看番记录与统计</h3>
+            <p>在「看番记录」按时间浏览观看和感想记录，可按类型、主题等筛选。「写感想」可选一个或多个主题，也可从主题菜单新建主题。另外可选日期、关联番剧及插图。补记时核对观看日期和时间，保存后再去时间线确认。已有记录可以从对应卡片进入编辑或删除。番剧详情里的评论和评分也可在各自入口查看。</p>
+            <p>「设置 → 看番记录」可设置一天从几点算起，例如凌晨 4 点前的记录归前一天，也可切换新增记录和默认展示类型。「记录统计」按日、周、月、年查看，支持选范围和记录类型，设置里可指定默认主题、默认筛选，并隐藏数量为 0 的周期。追番余额可以设当前余额和每日计划集数，通过实际记录查看追番进度。</p>
+          </section>
+
+          <section class="chapter" id="ranking" data-guide-chapter>
+            <h3>个人排名</h3>
+            <p>在「排名 → 新增表单」建自己的封面榜，可以从模板开始。选要加入的番，把封面拖入相应等级，也可调整等级和顺序。修改后点「保存」。常用等级可「保存为模板」，之后新建时复用。表单支持重命名和删除，封面名称的悬停提示与等待时间在设置的「排名」里调整。</p>
+          </section>
+
+          <section class="chapter" id="appearance" data-guide-chapter>
+            <h3>主题、界面与快捷键</h3>
+            <p>「设置 → 主界面设置」可切换主题、编辑或新增自定义主题，并预览颜色、背景等效果。可启用打开时随机主题，或用按周计划设定每天使用的主题。也可改页面名称、显示和排序侧边栏入口、选择启动默认页。Windows 可设置开机自启与关闭后台按钮，主动关闭后台后，可用启动快捷方式重新打开。</p>
+            <h4>默认键位</h4>
+            <p><strong>手账页面</strong> <code>1</code> 到 <code>7</code> 依次打开收藏夹、周表、看番记录、记录统计、排名、设置、媒体库。<code>↑</code>／<code>↓</code> 按侧边栏顺序换页，<code>B</code> 展开或收起侧边栏，<code>Ctrl+Shift+Enter</code> 快速写记录，播放器里也可用。</p>
+            <p><strong>内置播放器</strong> <code>空格</code> 播放或暂停，<code>←</code>／<code>→</code> 快退或快进 5 秒，<code>↑</code>／<code>↓</code> 调音量，<code>M</code> 静音，<code>F</code> 全屏，<code>D</code> 弹幕，<code>S</code> 截图，<code>P</code>／<code>N</code> 上一集或下一集，<code>K</code> 按设定快进，<code>Z</code>／<code>X</code> 调倍速，<code>1</code>／<code>2</code>／<code>3</code> 设为对应倍速。</p>
+            <p>「设置 → 快捷键」可改键、关闭单项或恢复默认。点按键框后按键或按鼠标侧键，退格清空，Esc 取消。关闭后台、搜索、写感想、新增排名、刷新周表、打开排序筛选等键位可以按需启用。手账页面和播放器各自处理键位，填写文本时页面快捷键会让位。</p>
+          </section>
+
+          <section class="chapter" id="sync" data-guide-chapter>
+            <h3>账号、同步与备份</h3>
+            <h4>Kazumi 收藏</h4>
+            <p>在本机账号中绑定电脑上的 Kazumi 库。Kazumi 占用数据库时先关掉它，再同步收藏。打开「自动写回 Kazumi 收藏」后，手账后台会在 Kazumi 关闭时处理待同步的新增和状态改动，观看进度仍记在手账。可查看待同步任务、设置冲突时优先采用手账还是 Kazumi。开启「只读 Kazumi 数据」会暂停写回，并关闭相关收藏编辑入口。</p>
+            <h4>坚果云多端同步</h4>
+            <p>第一台设备在「设置 → 账号与同步」填 WebDAV 地址、坚果云账号和生成的应用密码。保存、测试连接，再「立即同步当前账号」。第二台设备填同一个云端账号标识并同步。可选择每 30 分钟自动同步，也可把收藏页右上角同步按钮设为坚果云或 Kazumi。</p>
+            <p>默认同步当前手账账号的收藏、进度、记录、设置和排名等数据。封面和人物等缓存可以另行获取，媒体文件与本机下载配置留在原设备。两端新增记录可合并，同一部番同一集保留较早的观看时间。删除和编辑已有记录时，先同步后跨设备继续操作。只有另开「一并推送 Kazumi 收藏」并满足校验条件时，才会带上 Kazumi 库。</p>
+            <h4>本机账号与好友共享</h4>
+            <p>可新建、切换、改名或删除本机账号，每个账号可以绑定自己的收藏数据。好友共享使用 Syncthing。运行「设置共享同步.cmd」后，在设置填写脚本创建的 <code>shared</code> 文件夹，再发布当前账号快照或刷新好友账号列表。可配置自动发布和好友账号是否常驻。换机或重装前，可在关闭手账后单独备份项目的 <code>data</code> 目录。媒体和截图如果存放在别处，也要单独备份。</p>
+          </section>
+
+          <section class="chapter" id="editions" data-guide-chapter>
+            <h3>电脑版、线上版与安卓版</h3>
+            <ul>
+              <li><strong>Windows 电脑版。</strong>由本机服务提供页面，支持本机 Kazumi、片源规则、下载器、侧栏媒体库、截图与后台控制。</li>
+              <li><strong>线上版。</strong>有账号时登录部署站点，可用邀请码注册（由站点管理员提供）。线上账号使用站点独立的数据。实际可用项以站点界面为准，本机路径、电脑下载器和后台操作属于电脑版。</li>
+              <li><strong>安卓版。</strong>在「设置」填与电脑版一致的坚果云配置和云端账号标识，保存配置后点顶部「同步」。在「收藏」切状态分类，打开番剧后选集并保存进度。在「记录」查看手账或点「写记录」保存到手机。做完修改后可再同步到电脑。「使用指南」入口在电脑版和线上版。</li>
+            </ul>
+          </section>
+
+          <section class="chapter" id="troubleshooting" data-guide-chapter>
+            <h3>常见问题</h3>
+            <ul>
+              <li><strong>收藏按钮找不到。</strong>检查「只读 Kazumi 数据」、当前账号，以及「收藏夹」设置里是否隐藏了该工具栏按钮。</li>
+              <li><strong>只显示集数，缺少集名。</strong>先等下一轮本机收藏同步和资料补全。来源还没填标题时，播放器会继续显示集数。</li>
+              <li><strong>周表显示已播，片源却找不到。</strong>周表显示放送计划。站点上架时间由片源决定，可以切换线路或看原网页。</li>
+              <li><strong>下载器连接失败。</strong>核对 Web UI 地址和端口，确认 qBittorrent 能正常启动。下载完成但未入库时，在任务详情查看文件识别、同名冲突和归档提示。</li>
+              <li><strong>两端数据没同步。</strong>检查云端账号标识、应用密码和连接测试结果。先同步刚修改过的设备，再到另一台设备同步。</li>
+            </ul>
+          </section>
+        </section>
+        <p id="guideEmpty" hidden>没有匹配的内容。可以换一个短关键词，例如「周表」或「同步」。</p>
+        <p><a href="#top">回到顶部</a></p>
+      </main>
+    </div>
+  </div>
+  <script>
+    const search = document.getElementById("guideSearch");
+    const status = document.getElementById("guideStatus");
+    const parts = [...document.querySelectorAll(".part")].map(part => ({
+      part,
+      chapters: [...part.querySelectorAll("[data-guide-chapter]")].map(chapter => ({
+        chapter,
+        text: (part.firstElementChild.textContent + " " + chapter.textContent).toLowerCase(),
+        link: chapter.id && document.querySelector('nav a[href="#' + chapter.id + '"]'),
+      })),
+      link: document.querySelector('nav a[href="#' + part.id + '"]'),
+    }));
+
+    function filterGuide() {
+      const query = search.value.trim().toLowerCase();
+      const terms = query.split(/\s+/).filter(Boolean);
+      let total = 0;
+      for (const { part, chapters, link } of parts) {
+        let matches = 0;
+        for (const entry of chapters) {
+          const visible = terms.every(term => entry.text.includes(term));
+          entry.chapter.hidden = !visible;
+          if (entry.link) entry.link.hidden = !visible;
+          if (visible) matches++;
+        }
+        part.hidden = link.hidden = !matches;
+        total += matches;
+      }
+      status.hidden = !query;
+      status.textContent = query ? "找到 " + total + " 个章节" : "";
+      document.getElementById("guideEmpty").hidden = total > 0;
+    }
+
+    search.addEventListener("input", filterGuide);
+    document.querySelector("main").addEventListener("click", event => {
+      const link = event.target.closest('a[href^="#"]');
+      if (link && document.getElementById(link.hash.slice(1))?.closest("[hidden]")) {
+        search.value = "";
+        filterGuide();
+      }
+    });
+    filterGuide();
+  </script>
+</body>
+</html>

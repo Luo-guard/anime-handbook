@@ -156,7 +156,7 @@ class Handler(http.RequestHandler):
             html = html.replace('    <script src="/modules/collection.js', '    <script src="/online.js" defer></script>\n    <script src="/modules/collection.js')
             return self.file_response(html.encode(), "text/html; charset=utf-8")
         module_paths = {"/modules/" + path.name for path in core.STATIC_ROOT.joinpath("modules").glob("*.js")}
-        if request_path not in {"/app.js", "/schedule.js", "/styles.css", "/appearance.js"} | module_paths:
+        if request_path not in {"/app.js", "/schedule.js", "/styles.css", "/appearance.js", "/guide.html"} | module_paths:
             return self.send_error_json(404, "页面不存在")
         super().serve_static(request_path)
 

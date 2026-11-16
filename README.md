@@ -4,6 +4,8 @@
 
 功能演进见 [CHANGELOG.md](CHANGELOG.md)，离线下载的完整设计与边界见 [docs/OFFLINE-PLAN.md](docs/OFFLINE-PLAN.md)。
 
+打开手账后，从「设置 → 使用指南」查看基础用法和进阶操作。指南包含按功能查找的目录和搜索。
+
 ## 统一项目目录
 
 - `app.py`、`static/`、`tests/`：电脑版服务、界面和测试。

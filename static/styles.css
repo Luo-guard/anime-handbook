@@ -2749,6 +2749,22 @@ dialog::backdrop {
 .settings-side-nav { display:grid; gap:5px; position:sticky; top:0; padding:7px; border:1px solid var(--line); border-radius:13px; background:rgb(255 255 255 / .7); }
 .settings-side-nav button { padding:9px 10px; border:0; border-radius:8px; color:var(--muted); background:transparent; cursor:pointer; font-size:12px; font-weight:700; text-align:left; }
 .settings-side-nav button.active { color:var(--green-800); background:var(--green-100); }
+.settings-guide-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 3px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--green-50);
+  color: var(--green-800);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.settings-guide-link:hover { background: var(--green-100); }
+.settings-guide-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .settings-modal h2 {
   margin-bottom: 25px;
@@ -3102,6 +3118,7 @@ dialog::backdrop {
   .settings-layout { grid-template-columns:minmax(0,1fr); }
   .settings-side-nav { grid-template-columns:repeat(4, minmax(0,1fr)); position:static; overflow:auto; }
   .settings-side-nav button { padding:8px 5px; font-size:11px; text-align:center; white-space:nowrap; }
+  .settings-guide-link { grid-column: 1 / -1; }
   .custom-theme-row .custom-theme-input {
     width: 100%;
     margin-left: 0;
