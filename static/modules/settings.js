@@ -278,6 +278,7 @@ function renderSettingsPanels() {
   $("#mergeBilibiliLinksInput").checked = state.settings.merge_bilibili_links === true;
   $("#showSavedVideoListInput").checked = enabledSetting("show_saved_video_list");
   $("#showEpisodeTitlesOnHoverInput").checked = showEpisodeTitlesOnHover();
+  $("#showEpisodeReviewRatingMarksInput").checked = state.settings.show_episode_review_rating_marks !== false;
   $("#showRankingHoverTitlesInput").checked = showRankingHoverTitles();
   $("#rankingHoverDelayInput").value = rankingHoverDelay();
   $("#rankingHoverDelayValue").textContent = `${rankingHoverDelay()} 秒`;

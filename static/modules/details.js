@@ -872,6 +872,12 @@ function closeCustomMoveMenuOnce(event) {
   closeCustomMoveMenu();
 }
 
+function visibleEpisodeAnnotations(key) {
+  const annotations = state.episodeRecordAnnotations?.[key] || [];
+  if (state.settings.show_episode_review_rating_marks !== false) return annotations;
+  return annotations.filter(annotation => !annotation.themes.some(theme => theme === "episode_review" || theme === "episode_rating"));
+}
+
 function episodeAnnotationMarkup(annotations) {
   return annotations.map((annotation) => {
     const names = annotation.themes
@@ -998,7 +1004,7 @@ function renderEpisodeGrid() {
               const watched = state.pendingEpisodes.has(key);
               const downloaded = typeof episodeStorageKey === "function"
                 && episodeDownloadKeys.has(episodeStorageKey(key, anime));
-              const annotations = state.episodeRecordAnnotations?.[key] || [];
+              const annotations = visibleEpisodeAnnotations(key);
               return `
                 <button type="button" class="episode-cell ${watched ? "watched" : ""}${downloaded ? " downloaded" : ""}"
                   data-episode-key="${escapeHtml(key)}" data-episode-type="${group.type}" data-detail-episode-label="${escapeHtml(episode.label)}"
@@ -1025,7 +1031,7 @@ function renderEpisodeGrid() {
   // 标注气泡仍按格子绑定；所有点击/长按/右键交给 episode-gesture.js 的委托，
   // 扇区格数与绑定表都由设置驱动，这里不再散着写事件。
   $$(".episode-cell", $("#progressModal")).forEach((button) => {
-    const annotations = state.episodeRecordAnnotations?.[String(button.dataset.episodeKey)] || [];
+    const annotations = visibleEpisodeAnnotations(String(button.dataset.episodeKey));
     if (!annotations.length) return;
     const close = () => $("#episodeAnnotationPopover")?.remove();
     const open = () => {

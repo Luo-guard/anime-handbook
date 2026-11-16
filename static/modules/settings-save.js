@@ -106,6 +106,7 @@ const HandbookSettings = (() => {
           timeline_default_themes: $$("#timelineDefaultThemesMenu input:checked").map((input) => input.value),
           launch_at_login: $("#launchAtLoginInput").checked,
           show_episode_review_record: $("#showEpisodeReviewRecordInput").checked,
+          show_episode_review_rating_marks: $("#showEpisodeReviewRatingMarksInput").checked,
           show_oped_record: $("#showOpedRecordInput").checked,
           show_episode_rating_record: $("#showEpisodeRatingRecordInput").checked,
           show_character_tab: $("#showCharacterTabInput").checked,
@@ -160,6 +161,9 @@ const HandbookSettings = (() => {
       }
       if (JSON.stringify(detailCommentTypes(payload.settings)) !== JSON.stringify(commentTypes)) {
         throw new Error("后台未保存番剧评论显示设置，请重启后台并刷新后重试。");
+      }
+      if ((payload.settings.show_episode_review_rating_marks !== false) !== $("#showEpisodeReviewRatingMarksInput").checked) {
+        throw new Error("后台未保存单集标记设置，请重启后台并刷新后重试。");
       }
       if (playbackSettings) applyPlaybackSettings(playbackSettings);
       ThemeSettingsSession.finish(true);

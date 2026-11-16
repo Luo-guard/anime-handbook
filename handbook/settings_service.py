@@ -159,6 +159,7 @@ def _normalize_settings(body, settings):
         "merge_bilibili_links",
         "show_episode_titles_on_hover",
         "show_episode_review_record",
+        "show_episode_review_rating_marks",
         "show_oped_record",
         "show_episode_rating_record",
         "show_character_tab",

@@ -587,6 +587,7 @@ class HandbookDB:
                 "merge_bilibili_links": False,
                 "show_episode_titles_on_hover": False,
                 "show_episode_review_record": True,
+                "show_episode_review_rating_marks": True,
                 "show_oped_record": True,
                 "show_episode_rating_record": True,
                 "show_character_tab": True,
