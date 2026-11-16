@@ -1228,6 +1228,7 @@
           </label>
           <div class="setting-row"><span><strong>周表来源</strong><small>三套周表独立展示：有 C 的时间与网络上线日期来自長門番堂；Kazumi 使用 Bangumi 放送列表，不提供具体时刻；AS 按实际周次显示原声／字幕的较早放送时间。评分和评分人数来自已关联的 Bangumi / Kazumi 资料。未公布的时间保留空缺，固定按北京时间凌晨 4 点划分播出日；已关联 Bangumi ID 的条目可在详情中加入收藏。</small></span><select id="scheduleSourceInput"><option value="yuc" title="長門番堂（有C）">長門番堂</option><option value="kazumi" title="Kazumi 读取的 Bangumi 放送列表">Bangumi</option><option value="as" title="AnimeSchedule（AS）">AnimeSchedule</option></select></div>
           <div class="setting-row"><span><strong>显示来源切换按钮</strong><small>隐藏后仍可在此处选择来源。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleSourceSwitchInput"><span class="switch"></span></span></div>
+          <label class="setting-row"><span><strong>已收藏的番直接打开收藏夹详情</strong><small>适用于全部周表来源。未收藏的番仍打开周表详情。</small></span><span class="switch-row compact"><input type="checkbox" id="scheduleCollectedDetailInput" /><span class="switch"></span></span></label>
           <label class="setting-row">
             <span><strong>已播集数来源</strong><small>三套周表的卡片共用此选项。它只决定卡片的已播集数，番剧详情中的已播集数另行设置。AS 采用原声／字幕的较早放送计划，不代表所有地区平台同步上线。资料：<a href="https://animeschedule.net" target="_blank" rel="noopener noreferrer">AnimeSchedule</a>；编号对照：<a href="https://github.com/Rhilip/BangumiExtLinker" target="_blank" rel="noopener noreferrer">BangumiExtLinker · CC BY 4.0</a>。</small></span>
             <select id="scheduleAiringSourceInput"><option value="bgm">BGM / Bangumi</option><option value="as">AS / AnimeSchedule</option></select>
@@ -1825,7 +1826,7 @@
       </form>
     </dialog>
     <div class="toast-region" id="toastRegion" popover="manual" aria-live="polite"></div>
-    <script src="/schedule.js?v=20261114-card-columns" defer></script>
+    <script src="/schedule.js?v=20261116-collected-detail" defer></script>
     <script src="/modules/core.js?v=20261104-weekly-plan" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
     <script src="/modules/collection.js?v=20261114-latest-airing" defer></script>
@@ -1843,7 +1844,7 @@
     <script src="/modules/settings.js?v=20261115-detail-background" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261115-detail-background" defer></script>
+    <script src="/modules/settings-save.js?v=20261116-collected-detail" defer></script>
     <script src="/modules/events.js?v=20261114-collection-filters" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

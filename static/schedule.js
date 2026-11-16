@@ -624,6 +624,7 @@ function renderScheduleSettings() {
   $("#scheduleSourceInput").value = scheduleSource();
   $("#scheduleAiringSourceInput").value = state.settings.schedule_airing_source || "bgm";
   $("#scheduleSourceSwitchInput").checked = state.settings.show_schedule_source_switch !== false;
+  $("#scheduleCollectedDetailInput").checked = state.settings.schedule_collected_detail_enabled === true;
   const visibility = scheduleCardVisibility();
   $("#scheduleCardFieldInputs").innerHTML = scheduleCardFieldOptions.map(([key, label, description]) =>
     `<label class="setting-row"><span><strong>${label}</strong><small>${description}</small></span><span class="switch-row compact"><input type="checkbox" data-schedule-field="${key}" ${visibility[key] ? "checked" : ""} /><span class="switch"></span></span></label>`).join("");
@@ -678,9 +679,16 @@ function openScheduleFilters() {
 }
 
 function showScheduleDetail(key) {
-  const item = scheduleState.data?.items.find((row) => row.key === key); if (!item) return;
+  const item = scheduleState.data?.items.find((row) => row.key === key);
+  if (!item) return;
+  // Match against the current collection, since the cached week can predate an add or removal.
+  const anime = state.animes.find((row) => row.id === item.local_id)
+    || state.animes.find((row) => row.id === item.id);
+  if (state.settings.schedule_collected_detail_enabled === true && anime) {
+    openProgress(anime.id);
+    return;
+  }
   const siteBase = String(state.settings.bgm_site_base || "https://bgm.tv").replace(/\/+$/, "");
-  const anime = state.animes.find((row) => row.id === item.local_id || row.id === item.id);
   const keyword = String(anime?.name_cn || anime?.name || item.title || "").trim();
   let scheduleLinks = buildDetailLinkItems(scheduleDetailLinks(), { id: item.id || null, title: keyword, site: siteBase })
     .map((entry) => `<a href="${escapeHtml(entry.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.label)}</a>`)

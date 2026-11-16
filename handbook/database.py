@@ -680,6 +680,7 @@ class HandbookDB:
                 "hide_missing_as_schedule": True,
                 "schedule_airing_source": "bgm",
                 "show_schedule_source_switch": True,
+                "schedule_collected_detail_enabled": False,
                 "schedule_preferences": {},
                 # 隐藏列表按周表来源分开（yuc / kazumi / as），互不影响。
                 "schedule_hidden": {},

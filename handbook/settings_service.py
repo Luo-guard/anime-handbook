@@ -202,6 +202,7 @@ def _normalize_settings(body, settings):
         "kazumi_conflict",
         "schedule_source",
         "show_schedule_source_switch",
+        "schedule_collected_detail_enabled",
         "schedule_sort",
         "schedule_grouping",
         "schedule_statuses",
