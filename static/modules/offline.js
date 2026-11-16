@@ -1194,7 +1194,7 @@ function pcCanvasIsBlank(canvas) {
     }
     return true;
   } catch (error) {
-    return false;   // 读不出来就别乱退回，按有内容处理
+    return true;
   }
 }
 
@@ -1204,27 +1204,58 @@ function pcCanvasIsBlank(canvas) {
 // 后台标签页里 rAF 根本不跑，所以配一个超时兜底，别让截图卡死。
 function pcNextFrame(timeout = 220) {
   return new Promise((resolve) => {
-    let settled = false;
-    const finish = (ok) => { if (!settled) { settled = true; resolve(ok); } };
-    try { requestAnimationFrame(() => finish(true)); } catch (error) { finish(false); }
-    window.setTimeout(() => finish(false), timeout);
+    const frame = requestAnimationFrame(() => {
+      window.clearTimeout(timer);
+      resolve(true);
+    });
+    const timer = window.setTimeout(() => {
+      cancelAnimationFrame(frame);
+      resolve(false);
+    }, timeout);
   });
 }
 
-// 抓到超分画面就返回放大的 canvas，抓不到（没开超分/暂停/读不出）返回 null。
-// 扩展只在视频出帧时重画：暂停后画布是空的，这时只能退回原画。
+function pcReadUpscaledFrame(video, source) {
+  if (pcCanvasIsBlank(source)) return null;
+  try {
+    return pcDrawShot(video, source);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function pcCapturePausedUpscaled(video, source) {
+  const still = pcReadUpscaledFrame(video, source);
+  if (still) return still;
+  const position = video.currentTime;
+  const ranges = video.seekable;
+  const canSeek = Array.from({ length: ranges.length }, (_, index) =>
+    ranges.start(index) <= position && position <= ranges.end(index)).some(Boolean);
+  if (!canSeek) return null;
+
+  // NijiLucid renders on new video frames. Seek to the same position to
+  // present the paused frame again without resuming playback.
+  const media = video.currentSrc;
+  const deadline = performance.now() + 1000;
+  video.currentTime = position;
+  while (performance.now() < deadline && await pcNextFrame(deadline - performance.now())) {
+    if (!video.paused || video.currentSrc !== media || video.currentTime !== position || !source.isConnected) return null;
+    if (video.seeking) continue;
+    const picture = pcReadUpscaledFrame(video, source);
+    if (picture) return picture;
+  }
+  return null;
+}
+
+// 抓到超分画面就返回放大的 canvas。扩展画布不可读时返回 null。
 // 播放中也不是每帧都读到（刚 seek 完、切集时可能空一两帧），所以多试几帧。
 async function pcCaptureUpscaled(video, source = pcUpscaleCanvas(video)) {
   if (!source) return null;
-  if (video.paused) return null;
+  if (video.paused) return pcCapturePausedUpscaled(video, source);
   for (let attempt = 0; attempt < 6; attempt += 1) {
     if (await pcNextFrame(300)) {
-      try {
-        const picture = pcDrawShot(video, source);
-        if (!pcCanvasIsBlank(picture)) return picture;
-      } catch (error) {
-        // 读不出来就再等一帧
-      }
+      const picture = pcReadUpscaledFrame(video, source);
+      if (picture) return picture;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 60));
   }
@@ -1275,7 +1306,7 @@ function pcShotBlob(canvas, maxBytes = 14 * 1024 * 1024) {
 
 async function pcScreenshot() {
   const video = $("#offlineVideo");
-  if (!video || !video.videoWidth) {
+  if (!video || !video.videoWidth || video.readyState < 2 || video.seeking) {
     toast("视频还没准备好，先等画面出来再截图", "error");
     return;
   }
@@ -1283,18 +1314,25 @@ async function pcScreenshot() {
   const anime = online?.catalogue.title || offlineView.animeName || "动漫";
   const episode = online ? onlineEpisodeLabel(online) : episodeLabelOf(offlineView.playing?.episode_key) || "第0集";
   const seconds = video.currentTime;
+  const paused = video.paused;
+  const media = video.currentSrc;
+  const mediaLoad = pcMediaLoad;
   const upscaleCanvas = pcUpscaleCanvas(video);
-  let canvas = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
-  let upscaled = Boolean(canvas);
-  if (!canvas) {
-    // 没开超分、或者这帧没读到内容：老老实实截原始帧，至少不会是张透明图。
-    try {
-      canvas = pcDrawShot(video, null);
-      upscaled = false;
-    } catch (error) {
-      toast(`截图失败：${error.message || error}`, "error");
+  let canvas;
+  let upscaled;
+  try {
+    const original = paused ? pcDrawShot(video, null) : null;
+    canvas = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
+    if (mediaLoad !== pcMediaLoad || video.currentSrc !== media ||
+        (paused && (!video.paused || video.currentTime !== seconds))) {
+      toast("截图时画面已切换，请重新截图", "error");
       return;
     }
+    upscaled = Boolean(canvas);
+    canvas ||= original || pcDrawShot(video, null);
+  } catch (error) {
+    toast(`截图失败：${error.message || error}`, "error");
+    return;
   }
   let blob;
   let shotSize = { width: canvas.width, height: canvas.height };
@@ -1307,8 +1345,7 @@ async function pcScreenshot() {
     return;
   }
   const sizeTag = upscaled ? `超分 ${shotSize.width}×${shotSize.height} · ` : "";
-  // 开着超分却没截到，只可能是暂停（扩展暂停后不再重画）：说清楚，别让人以为功能没生效。
-  const shotNote = !upscaled && upscaleCanvas && video.paused ? "（暂停时截的是原画，播放中才有超分）" : "";
+  const shotNote = !upscaled && upscaleCanvas ? "（未取得超分帧，已保存原画）" : "";
   // 先进媒体库的图片库（按番名分文件夹、按模板命名）；后台不可用时退回浏览器下载。
   try {
     const data = await new Promise((resolve, reject) => {
