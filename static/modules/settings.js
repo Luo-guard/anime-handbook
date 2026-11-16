@@ -333,6 +333,7 @@ function renderSettingsPanels() {
   // 媒体库有自己的三态开关（始终显示 / 有内容时 / 隐藏），这里的勾选框跟它是同一个设置：
   // 勾上=显示，取消=隐藏；auto 也算勾上。以前这颗勾选框是 disabled，用户想在这儿隐藏根本点不动。
   const libraryShown = librarySidebarMode() !== "hide";
+  $("#librarySidebarMode").value = librarySidebarMode();
   $("#sidebarSettingsList").innerHTML = sidebarOrder().map((id, index) => `
     <div class="sidebar-setting-item">
       <label class="mini-check">

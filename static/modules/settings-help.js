@@ -151,7 +151,7 @@ function appendSettingHelp(anchor, title, sources) {
 function setupSettingHelp() {
   if (!settingHelpAvailable()) return;
   // 普通设置行：标题下直接跟一个或多个 <small>。
-  $$("#settingsModal .setting-row").forEach((row) => {
+  $$("#settingsModal :is(.setting-row, .offline-field, .offline-switch, .offline-setting-tools, .offline-settings-actions)").forEach((row) => {
     const firstSmall = row.querySelector("small");
     const title = firstSmall?.parentElement?.querySelector("strong");
     if (!firstSmall || !title) return;

@@ -4490,18 +4490,64 @@ dialog::backdrop {
   gap: 10px;
   padding: 12px var(--offline-settings-inset) 0;
 }
-#settingsModal .offline-settings small,
-#settingsModal .offline-search-section small {
+#settingsModal :is(.offline-settings, .offline-search-section) small.setting-help-source { display: none; }
+.offline-current-value {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--green-50);
+}
+.offline-value-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 3px;
+  color: var(--green-800);
+  font-size: 12px;
+}
+.offline-value-source {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+.offline-value-source:empty { display: none; }
+.offline-value-text {
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.offline-name-example {
   display: block;
+  margin-top: 5px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.55;
+  font-size: 12px;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
-#settingsModal :is(.offline-choice, .offline-switch) small { margin-top: 4px; }
-.offline-name-tokens { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: 1px 0 4px; }
-.offline-name-tokens code { padding: 1px 4px; border-radius: 4px; color: var(--green-800); background: var(--green-50); }
+.offline-name-example:empty { display: none; }
+.offline-value-editor { min-width: 0; }
+.offline-value-editor summary {
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 3px;
+  color: var(--green-800);
+  cursor: pointer;
+}
+.offline-value-editor summary:focus-visible { outline: 2px solid var(--active-inset); border-radius: 5px; }
+.offline-edit-label { display: block; margin: 6px 0 5px; }
+.offline-edit-controls { display: flex; gap: 7px; align-items: center; }
+.offline-edit-controls input { flex: 1; }
+.offline-edit-controls button { flex: none; }
+.offline-draft-badge {
+  margin-inline-start: 5px;
+  color: var(--green-800);
+  font-size: 12px;
+  font-weight: 650;
+}
 .offline-setting-tools {
   display: grid;
   justify-items: start;
@@ -4509,8 +4555,7 @@ dialog::backdrop {
   margin: 0 var(--offline-settings-inset);
   padding: 5px 0 14px;
 }
-.offline-setting-tools > div { display: flex; flex-wrap: wrap; gap: 0 12px; }
-.offline-setting-tools .text-button { padding: 4px 0; font-size: 12px; }
+.offline-setting-tools > div { display: flex; flex-wrap: wrap; gap: 6px 10px; }
 .offline-settings-actions {
   display: flex;
   flex-wrap: wrap;
@@ -4525,6 +4570,7 @@ dialog::backdrop {
 .offline-settings-actions .offline-status { margin: 3px 0 0; overflow-wrap: anywhere; }
 .offline-setting-tools .offline-status:empty { margin: 0; min-height: 0; }
 .offline-settings-actions .primary-button { margin-inline-start: auto; }
+#offlineSettingsDraftStatus { color: var(--green-800); font-size: 13px; }
 .settings-modal:not(.settings-searching):has([data-settings-tab="offline"].active) > .modal-frame > .modal-actions,
 .settings-modal.settings-searching:has(.offline-search-section:only-child) > .modal-frame > .modal-actions { display: none; }
 

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261116-statistics-settings" />
+  <link rel="stylesheet" href="/styles.css?v=20261116-library-settings" />
   </head>
   <body>
     <div class="app-shell">
@@ -1446,82 +1446,124 @@
           </div>
           <div class="settings-section-title" data-settings-section="offline" data-page-label="library">媒体库</div>
           <div class="offline-settings">
-            <h3 class="settings-subsection-title">显示</h3>
+            <h3 class="settings-subsection-title">侧边栏</h3>
             <label class="offline-field offline-choice">
-              <span>主界面的媒体库入口<small>按本地内容显示时，库里至少要有一部可播放的番剧。切换即保存。</small></span>
+              <span><strong>媒体库入口</strong><small>选「有可播放视频时显示」后，媒体库里至少有一部可播放的番剧才会显示入口。此项切换后立即保存。</small></span>
               <select id="librarySidebarMode">
                 <option value="show">始终显示</option>
-                <option value="auto">有本地内容时显示</option>
+                <option value="auto">有可播放视频时显示</option>
                 <option value="hide">隐藏</option>
               </select>
             </label>
 
             <h3 class="settings-subsection-title">文件目录</h3>
-            <label class="offline-field">
-              <span>媒体库目录</span>
-              <input type="text" id="offlineMediaRoot" placeholder="留空使用默认目录" autocomplete="off" aria-describedby="offlineMediaHint" />
-              <small id="offlineMediaHint"></small>
-            </label>
-            <label class="offline-field">
-              <span>下载临时目录</span>
-              <input type="text" id="offlineDownloadRoot" placeholder="留空使用媒体库下的 _incoming" autocomplete="off" aria-describedby="offlineDownloadHint" />
-              <small id="offlineDownloadHint"></small>
-            </label>
-            <div class="offline-setting-tools">
-              <div>
-                <button type="button" class="text-button" id="offlineResetRoot">恢复默认目录</button>
-                <button type="button" class="text-button" id="offlineMigrate">复制并迁移已入库文件</button>
+            <div class="offline-field offline-value-field" data-offline-value="media_root">
+              <span><strong>媒体库目录</strong><small>已入库的视频保存在这里。修改目录后，已有视频仍保留在原处，可用迁移按钮复制过去。</small></span>
+              <div class="offline-current-value">
+                <p class="offline-value-caption"><span>当前生效</span><span class="offline-value-source"></span></p>
+                <div id="offlineMediaHint" class="offline-value-text">正在读取…</div>
+                
               </div>
-              <small>直接保存新目录只改路径。要带上已有视频，请填写目标路径并使用迁移按钮，原文件会保留。</small>
+              <details class="offline-value-editor">
+                <summary>更改目录<span class="offline-draft-badge" hidden>未保存</span></summary>
+                <label class="offline-edit-label" for="offlineMediaRoot">新目录</label>
+                <div class="offline-edit-controls">
+                  <input type="text" id="offlineMediaRoot" autocomplete="off" spellcheck="false" />
+                  <button type="button" class="secondary-button compact-button" data-offline-default="offlineMediaRoot">使用默认</button>
+                </div>
+              </details>
+            </div>
+            <div class="offline-field offline-value-field" data-offline-value="download_root">
+              <span><strong>下载临时目录</strong><small>qBittorrent 下载的视频先存放在这里。使用默认目录时，会跟随媒体库下的 _incoming 文件夹。</small></span>
+              <div class="offline-current-value">
+                <p class="offline-value-caption"><span>当前生效</span><span class="offline-value-source"></span></p>
+                <div id="offlineDownloadHint" class="offline-value-text">正在读取…</div>
+                
+              </div>
+              <details class="offline-value-editor">
+                <summary>更改目录<span class="offline-draft-badge" hidden>未保存</span></summary>
+                <label class="offline-edit-label" for="offlineDownloadRoot">新目录</label>
+                <div class="offline-edit-controls">
+                  <input type="text" id="offlineDownloadRoot" autocomplete="off" spellcheck="false" />
+                  <button type="button" class="secondary-button compact-button" data-offline-default="offlineDownloadRoot">使用默认</button>
+                </div>
+              </details>
+            </div>
+            <div class="offline-setting-tools">
+              <span><strong>切换媒体库目录</strong><small>保存新目录只切换路径。要连已有视频一起复制，请先填新目录，再点「复制并切换目录」。复制完成后会保留原文件。</small></span>
+              <div>
+                <button type="button" class="secondary-button compact-button" id="offlineResetRoot">恢复默认目录</button>
+                <button type="button" class="secondary-button compact-button" id="offlineMigrate">复制并切换目录</button>
+              </div>
               <p class="offline-status" id="offlineMigrationStatus" role="status"></p>
             </div>
 
             <h3 class="settings-subsection-title">播放器截图</h3>
-            <label class="offline-field">
-              <span>截图保存目录</span>
-              <input type="text" id="offlineScreenshotRoot" placeholder="留空使用媒体库下的「截图」文件夹" autocomplete="off" aria-describedby="offlineScreenshotHint" />
-              <small id="offlineScreenshotHint"></small>
-            </label>
-            <label class="offline-field">
-              <span>截图命名格式</span>
-              <input type="text" id="offlineScreenshotName" placeholder="{episode}_{time}" autocomplete="off" aria-describedby="offlineScreenshotNameHelp" />
-              <small id="offlineScreenshotNameHelp">
-                <span class="offline-name-tokens"><span><code>{episode}</code> 集数</span><span><code>{time}</code> 播放时间</span><span><code>{date}</code> 截图日期</span><span><code>{anime}</code> 番名</span></span>
-                默认用「集数_播放时间」，保存为 PNG。同名时自动加序号。
-              </small>
-            </label>
-
+            <div class="offline-field offline-value-field" data-offline-value="screenshot_root">
+              <span><strong>截图保存目录</strong><small>使用默认目录时，截图保存在媒体库下的「截图」文件夹。</small></span>
+              <div class="offline-current-value">
+                <p class="offline-value-caption"><span>当前生效</span><span class="offline-value-source"></span></p>
+                <div id="offlineScreenshotHint" class="offline-value-text">正在读取…</div>
+                
+              </div>
+              <details class="offline-value-editor">
+                <summary>更改目录<span class="offline-draft-badge" hidden>未保存</span></summary>
+                <label class="offline-edit-label" for="offlineScreenshotRoot">新目录</label>
+                <div class="offline-edit-controls">
+                  <input type="text" id="offlineScreenshotRoot" autocomplete="off" spellcheck="false" />
+                  <button type="button" class="secondary-button compact-button" data-offline-default="offlineScreenshotRoot">使用默认</button>
+                </div>
+              </details>
+            </div>
+            <div class="offline-field offline-value-field" data-offline-value="screenshot_name_format">
+              <span><strong>截图命名格式</strong><small>可用 {episode}（集数）、{time}（播放时间）、{date}（日期）、{datetime}（日期和时间）、{anime}（番名）。文件保存为 PNG，同名时自动加序号。</small></span>
+              <div class="offline-current-value">
+                <p class="offline-value-caption"><span>当前生效</span><span class="offline-value-source"></span></p>
+                <div id="offlineScreenshotNameCurrent" class="offline-value-text">正在读取…</div>
+                <div id="offlineScreenshotExample" class="offline-name-example"></div>
+              </div>
+              <details class="offline-value-editor">
+                <summary>更改格式<span class="offline-draft-badge" hidden>未保存</span></summary>
+                <label class="offline-edit-label" for="offlineScreenshotName">新格式</label>
+                <div class="offline-edit-controls">
+                  <input type="text" id="offlineScreenshotName" autocomplete="off" spellcheck="false" />
+                  <button type="button" class="secondary-button compact-button" data-offline-default="offlineScreenshotName">使用默认</button>
+                </div>
+                <output id="offlineScreenshotDraftExample" class="offline-name-example" for="offlineScreenshotName"></output>
+              </details>
+            </div>
             <h3 class="settings-subsection-title">qBittorrent 下载器</h3>
             <div class="offline-field-row">
-              <label class="offline-field"><span>qBittorrent 地址</span><input type="text" id="offlineQbHost" placeholder="127.0.0.1" autocomplete="off" /></label>
-              <label class="offline-field"><span>端口</span><input type="number" id="offlineQbPort" min="1" max="65535" placeholder="8080" /></label>
+              <label class="offline-field"><span><strong>qBittorrent 主机</strong><small>填写 qBittorrent 网页管理界面的主机地址。本机通常是 127.0.0.1。</small></span><input type="text" id="offlineQbHost" autocomplete="off" spellcheck="false" required /></label>
+              <label class="offline-field"><span><strong>端口</strong><small>填写 qBittorrent 网页管理界面的端口，默认 8080。</small></span><input type="number" id="offlineQbPort" min="1" max="65535" required /></label>
             </div>
             <label class="offline-field">
-              <span>下载任务分类</span>
-              <input type="text" id="offlineQbCategory" placeholder="AnimeHandbook" autocomplete="off" aria-describedby="offlineQbCategoryHelp" />
-              <small id="offlineQbCategoryHelp">手账添加的任务会在 qBittorrent 中归入这个分类。</small>
+              <span><strong>下载任务分类</strong><small>手账添加的任务会使用这个 qBittorrent 分类，默认是 AnimeHandbook。</small></span>
+              <input type="text" id="offlineQbCategory" autocomplete="off" required />
             </label>
             <label class="offline-switch">
-              <span>下载完成后继续做种<small>保留下载目录里的原文件供做种。关闭后，视频归档时会清理原下载文件。</small></span>
+              <span><strong>下载完成后继续做种</strong><small>保留下载目录里的原文件供做种。关闭后，视频归档时会清理原下载文件。</small></span>
               <span class="switch-row compact"><input type="checkbox" id="offlineSeedAfter" /><span class="switch"></span></span>
             </label>
 
             <h3 class="settings-subsection-title">订阅</h3>
             <label class="offline-switch">
-              <span>自动下载订阅的新集<small>定时检查已订阅的番剧，发现新集就交给 qBittorrent 下载。切换即保存。</small></span>
+              <span><strong>自动下载订阅的新集</strong><small>定时检查订阅并交给 qBittorrent 下载新集。此项切换后立即保存。</small></span>
               <span class="switch-row compact"><input type="checkbox" id="offlineAutoFollow" /><span class="switch"></span></span>
             </label>
             <div class="offline-setting-tools">
-              <button type="button" class="text-button" id="offlineCheckSubs">立即检查全部订阅</button>
-              <small>找到新集时会提交下载任务。</small>
+              <span><strong>手动检查订阅</strong><small>立即检查全部订阅，找到新集时会提交下载任务。</small></span>
+              <button type="button" class="secondary-button compact-button" id="offlineCheckSubs">立即检查</button>
             </div>
 
             <div class="offline-settings-actions">
               <div>
-                <small>目录、截图和下载器设置需手动保存。</small>
+                <span><strong>保存状态</strong><small>目录、截图和下载器设置使用此处的保存按钮。</small></span>
+                <div id="offlineSettingsDraftStatus" role="status">读取设置中…</div>
                 <p class="offline-status" id="offlineSettingsStatus" role="status"></p>
               </div>
-              <button type="button" class="primary-button" id="offlineSaveSettings">保存媒体库设置</button>
+              <button type="button" class="secondary-button compact-button" id="offlineReloadSettings" hidden>重新读取</button>
+              <button type="button" class="primary-button" id="offlineSaveSettings" disabled>保存媒体库设置</button>
             </div>
           </div>
           <div class="settings-section-title" data-settings-section="sharing">账号与同步</div>
@@ -1924,9 +1966,9 @@
     <script src="/modules/ranking.js?v=20261116-stale-preview" defer></script>
     <script src="/modules/statistics.js?v=20261116-stale-preview" defer></script>
     <script src="/modules/lifecycle.js?v=20261115-episode-metadata" defer></script>
-    <script src="/modules/settings.js?v=20261116-comment-tab" defer></script>
+    <script src="/modules/settings.js?v=20261116-library-settings" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
-    <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
+    <script src="/modules/settings-help.js?v=20261116-library-settings" defer></script>
     <script src="/modules/settings-save.js?v=20261116-statistics-settings" defer></script>
     <script src="/modules/events.js?v=20261116-statistics-settings" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
@@ -1936,9 +1978,9 @@
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
-    <script src="/modules/offline.js?v=20261116-stale-preview" defer></script>
+    <script src="/modules/offline.js?v=20261116-library-settings" defer></script>
     <script src="/modules/online-playback.js?v=20261115-episode-metadata" defer></script>
-    <script src="/modules/library-view.js?v=20261116-stale-preview" defer></script>
+    <script src="/modules/library-view.js?v=20261116-library-settings" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

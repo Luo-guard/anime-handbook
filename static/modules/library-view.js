@@ -1107,7 +1107,10 @@ function initLibraryView() {
 
   // 设置里的显示开关：改动立即保存并生效。
   $("#librarySidebarMode")?.addEventListener("change", async (event) => {
-    const mode = event.target.value;
+    const select = event.currentTarget;
+    if (select.disabled) return;
+    const mode = select.value;
+    select.disabled = true;
     try {
       await api("/api/settings", { method: "PATCH", body: JSON.stringify({ library_sidebar: mode }) });
       state.settings.library_sidebar = mode;
@@ -1118,6 +1121,10 @@ function initLibraryView() {
       toast("已保存");
     } catch (error) {
       toast(`没存上：${error.message || error}`, "error");
+      syncLibraryVisibilityCheckbox?.();
+    } finally {
+      select.value = state.settings.library_sidebar || "show";
+      select.disabled = false;
     }
   });
 

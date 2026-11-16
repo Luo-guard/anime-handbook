@@ -850,6 +850,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (remove.dataset.job) return removeJob(remove.dataset.job);
   });
   $("#offlineSaveSettings")?.addEventListener("click", saveOfflineSettings);
+  $("#offlineReloadSettings")?.addEventListener("click", loadOfflineSettings);
+  for (const [id] of Object.values(OFFLINE_EDIT_FIELDS)) {
+    document.getElementById(id)?.addEventListener("input", renderOfflineSettingsDraft);
+  }
+  $$("[data-offline-default]").forEach(button => button.addEventListener("click", () => {
+    document.getElementById(button.dataset.offlineDefault).value = "";
+    renderOfflineSettingsDraft();
+  }));
   $("#offlineAutoFollow")?.addEventListener("change", saveSubscriptionAutoDownload);
   // 设置面板已搬进主设置弹窗，但读写逻辑共用这套字段，启动时先填一次。
   loadOfflineSettings();
@@ -857,6 +865,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#offlineResetRoot")?.addEventListener("click", () => {
     $("#offlineMediaRoot").value = "";
     $("#offlineDownloadRoot").value = "";
+    renderOfflineSettingsDraft();
   });
   $("#offlineLibraryFilter")?.addEventListener("change", (event) => {
     offlineView.library.filter = event.target.value;
@@ -1765,68 +1774,139 @@ async function saveSubscriptionAutoDownload(event) {
   }
 }
 
-function renderOfflineDirectoryHints(paths = {}) {
-  $("#offlineMediaHint").textContent = paths.media_root ? `当前目录：${paths.media_root}` : "";
-  $("#offlineDownloadHint").textContent = paths.download_root ? `当前目录：${paths.download_root}` : "";
-  $("#offlineScreenshotHint").textContent = paths.screenshot_root ? `当前目录：${paths.screenshot_root}` : "";
+const OFFLINE_EDIT_FIELDS = {
+  media_root: ["offlineMediaRoot", ""],
+  download_root: ["offlineDownloadRoot", ""],
+  screenshot_root: ["offlineScreenshotRoot", ""],
+  screenshot_name_format: ["offlineScreenshotName", ""],
+  qb_host: ["offlineQbHost", "127.0.0.1"],
+  qb_port: ["offlineQbPort", 8080],
+  qb_category: ["offlineQbCategory", "AnimeHandbook"],
+  seed_after_done: ["offlineSeedAfter", true],
+};
+let offlineSavedSettings = null;
+let offlineSettingsBusy = false;
+
+function readOfflineSettingsDraft() {
+  return Object.fromEntries(Object.entries(OFFLINE_EDIT_FIELDS).map(([key, [id]]) => {
+    const input = document.getElementById(id);
+    const value = input.type === "checkbox" ? input.checked
+      : input.type === "number" ? input.valueAsNumber
+      : input.value.trim();
+    return [key, value];
+  }));
+}
+
+function offlineScreenshotExample(template) {
+  const values = { anime: "番剧名", episode: "第03集", time: "12-34", date: "20261116", datetime: "20261116-203015" };
+  const name = (template || "{episode}_{time}").replace(/\{([^}]*)\}/g, (_, token) => Object.hasOwn(values, token) ? values[token] : "")
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").trim().replace(/^[ .]+|[ .]+$/g, "");
+  return `示例 ${name.slice(0, 120) || "截图"}.png`;
+}
+
+function renderOfflineSettingsDraft() {
+  if (!offlineSavedSettings) return;
+  const draft = readOfflineSettingsDraft();
+  const changes = Object.keys(draft).filter(key => draft[key] !== offlineSavedSettings[key]);
+  $$("[data-offline-value]").forEach(row => {
+    const key = row.dataset.offlineValue;
+    const badge = $(".offline-draft-badge", row);
+    badge.hidden = !changes.includes(key);
+    badge.textContent = draft[key] ? "未保存" : "未保存 · 改用默认";
+  });
+  $("#offlineScreenshotDraftExample").textContent = offlineScreenshotExample(draft.screenshot_name_format);
+  $("#offlineSettingsDraftStatus").textContent = changes.length ? `有 ${changes.length} 项修改待保存` : "所有改动均已保存";
+  $("#offlineSaveSettings").disabled = offlineSettingsBusy || !changes.length;
+  $("#offlineMigrate").disabled = offlineSettingsBusy;
+}
+
+function renderOfflineDirectoryHints(paths = {}, config = offlineSavedSettings) {
+  for (const [id, key] of [["offlineMediaHint", "media_root"], ["offlineDownloadHint", "download_root"], ["offlineScreenshotHint", "screenshot_root"]]) {
+    const value = document.getElementById(id);
+    value.textContent = paths[key] || "未能读取目录";
+    const badge = $(".offline-value-source", value.closest(".offline-value-field"));
+    badge.textContent = config && paths[key] ? (config[key] ? "自定义" : "默认") : "";
+  }
+}
+
+function applyOfflineSavedSettings(data, submitted = null) {
+  const current = readOfflineSettingsDraft();
+  const config = data.config;
+  offlineSavedSettings = Object.fromEntries(Object.entries(OFFLINE_EDIT_FIELDS).map(([key, [id, fallback]]) => {
+    const value = config[key] ?? fallback;
+    const input = document.getElementById(id);
+    if (!submitted || current[key] === submitted[key]) {
+      if (input.type === "checkbox") input.checked = value;
+      else input.value = value;
+    }
+    return [key, value];
+  }));
+  renderOfflineDirectoryHints(data.paths, config);
+  const format = config.screenshot_name_format;
+  $("#offlineScreenshotNameCurrent").textContent = format || "{episode}_{time}";
+  $('[data-offline-value="screenshot_name_format"] .offline-value-source').textContent = format ? "自定义" : "默认";
+  $("#offlineScreenshotExample").textContent = offlineScreenshotExample(format);
+  renderOfflineSettingsDraft();
 }
 
 async function loadOfflineSettings() {
+  if (offlineSettingsBusy) return;
   const status = "#offlineSettingsStatus";
+  const retry = $("#offlineReloadSettings");
+  retry.hidden = true;
+  const inputs = Object.values(OFFLINE_EDIT_FIELDS).map(([id]) => document.getElementById(id));
+  inputs.forEach(input => { input.disabled = true; });
   offlineStatus(status, "读取设置…");
   try {
     const revision = subscriptionAutoDownloadRevision;
     const data = await api("/api/offline/settings");
-    const config = data.config || {};
-    $("#offlineMediaRoot").value = config.media_root || "";
-    $("#offlineDownloadRoot").value = config.download_root || "";
-    $("#offlineScreenshotRoot").value = config.screenshot_root || "";
-    $("#offlineScreenshotName").value = config.screenshot_name_format || "";
-    $("#offlineQbHost").value = config.qb_host || "127.0.0.1";
-    $("#offlineQbPort").value = config.qb_port || 8080;
-    $("#offlineQbCategory").value = config.qb_category || "AnimeHandbook";
-    $("#offlineSeedAfter").checked = config.seed_after_done !== false;
+    applyOfflineSavedSettings(data, offlineSavedSettings);
     if (!subscriptionAutoDownloadSaving && revision === subscriptionAutoDownloadRevision) {
-      syncSubscriptionAutoDownload(config.auto_follow === true);
+      syncSubscriptionAutoDownload(data.config.auto_follow === true);
     }
-    $("#offlineMediaRoot").placeholder = data.default_media_root || "留空使用默认目录";
-    renderOfflineDirectoryHints(data.paths);
     const writable = data.writable || {};
-    const room = writable.free_gb ? `，剩余 ${writable.free_gb} GB` : "";
-    offlineStatus(
-      status,
-      writable.ok ? `目录可写${room}` : writable.error || "目录不可写",
-      !writable.ok,
-    );
+    offlineStatus(status, writable.ok ? "" : writable.error || "目录不可写", !writable.ok);
   } catch (error) {
+    $("#offlineSettingsDraftStatus").textContent = "未能读取当前设置";
     offlineStatus(status, error.message || "读取设置失败", true);
+    retry.hidden = false;
+    return;
   }
+  inputs.forEach(input => { input.disabled = false; });
 }
 
 async function saveOfflineSettings() {
+  if (offlineSettingsBusy || !offlineSavedSettings) return;
+  const draft = readOfflineSettingsDraft();
+  const invalid = [
+    [!draft.qb_host, "offlineQbHost", "请输入 qBittorrent 主机。"],
+    [!$("#offlineQbPort").checkValidity(), "offlineQbPort", "端口请输入 1 到 65535 之间的整数。"],
+    [!draft.qb_category, "offlineQbCategory", "请输入下载任务分类。"],
+  ].find(([failed]) => failed);
+  if (invalid) {
+    showSettingsSection("offline", `#${invalid[1]}`);
+    toast(invalid[2], "error");
+    return;
+  }
   const status = "#offlineSettingsStatus";
+  offlineSettingsBusy = true;
+  renderOfflineSettingsDraft();
   offlineStatus(status, "保存中…");
   try {
     const data = await api("/api/offline/settings", {
       method: "POST",
-      body: JSON.stringify({
-        media_root: $("#offlineMediaRoot").value.trim(),
-        download_root: $("#offlineDownloadRoot").value.trim(),
-        screenshot_root: $("#offlineScreenshotRoot").value.trim(),
-        screenshot_name_format: $("#offlineScreenshotName").value.trim(),
-        qb_host: $("#offlineQbHost").value.trim() || "127.0.0.1",
-        qb_port: Number($("#offlineQbPort").value) || 8080,
-        qb_category: $("#offlineQbCategory").value.trim() || "AnimeHandbook",
-        seed_after_done: $("#offlineSeedAfter").checked,
-      }),
+      body: JSON.stringify(draft),
     });
-    renderOfflineDirectoryHints(data.paths);
+    applyOfflineSavedSettings(data, draft);
     const writable = data.writable || {};
-    offlineStatus(status, writable.ok ? "已保存，目录可写" : writable.error || "已保存，但目录不可写", !writable.ok);
+    offlineStatus(status, writable.ok ? "" : writable.error || "已保存，但目录不可写", !writable.ok);
     toast("媒体库设置已保存");
   } catch (error) {
     offlineStatus(status, error.message || "保存失败", true);
     toast(error.message || "保存失败", "error");
+  } finally {
+    offlineSettingsBusy = false;
+    renderOfflineSettingsDraft();
   }
 }
 
@@ -1878,13 +1958,18 @@ async function checkSubscriptions() {
 
 
 async function migrateMediaRoot() {
+  if (offlineSettingsBusy) return;
   const target = $("#offlineMediaRoot").value.trim();
   if (!target) {
     toast("先在上面「媒体库目录」填目标路径", "error");
+    $("#offlineMediaRoot").closest("details").open = true;
+    $("#offlineMediaRoot").focus();
     return;
   }
   if (!window.confirm(`把已入库的文件复制到\n${target}\n\n复制并逐个校验大小，全部成功才切换目录；原文件保留不删。`)) return;
   const status = "#offlineMigrationStatus";
+  offlineSettingsBusy = true;
+  renderOfflineSettingsDraft();
   offlineStatus(status, "正在复制和校验文件…");
   try {
     const data = await api("/api/offline/migrate", {
@@ -1907,11 +1992,17 @@ async function migrateMediaRoot() {
       toast(`迁移完成：${data.copied} 集`);
       refreshOfflineLocal();
       const settings = await api("/api/offline/settings").catch(() => null);
-      if (settings?.paths) renderOfflineDirectoryHints(settings.paths);
+      if (settings?.config) applyOfflineSavedSettings(settings, {media_root: target});
+      else if (settings?.paths) renderOfflineDirectoryHints(settings.paths);
+      else offlineStatus(status, "目录已切换，当前路径暂未刷新。请重新读取媒体库设置。", true);
+      $("#offlineReloadSettings").hidden = Boolean(settings?.paths);
     }
   } catch (error) {
     offlineStatus(status, error.message || "迁移失败", true);
     toast(error.message || "迁移失败", "error");
+  } finally {
+    offlineSettingsBusy = false;
+    renderOfflineSettingsDraft();
   }
 }
 
