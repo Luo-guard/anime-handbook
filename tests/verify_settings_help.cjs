@@ -73,8 +73,8 @@ const harness = [
     await button.hover();
     await page.waitForTimeout(250);
     assert.equal(await popover.isVisible(), true);
-    assert.match(await popover.innerText(), /扇区入口/);
-    assert.match(await popover.innerText(), /关闭后隐藏对应入口/);
+    assert.match(await popover.innerText(), /单集记录入口/);
+    assert.match(await popover.innerText(), /关闭后也会从扇区和鼠标手势中隐藏对应的记录动作/);
     await page.mouse.move(10, 10);
     await page.waitForTimeout(250);
     assert.equal(await popover.isVisible(), false, 'hover leaves closes the tooltip');

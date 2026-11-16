@@ -1,4 +1,4 @@
-// 单集手势设置界面：六格槽位、绑定表、双击提示、冲突检查、恢复默认。
+// 单集手势设置界面：动作增删排序、绑定表、冲突检查、恢复默认。
 const fs = require('fs');
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
@@ -25,20 +25,32 @@ const state={settings:{},pendingEpisodes:new Set()};
     await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style><main style="max-width:760px;margin:20px auto;padding:20px">${block}</main>`);
     await page.addScriptTag({ content: setup + fs.readFileSync('static/modules/episode-gesture.js', 'utf8') + '\nrenderEpisodeGestureSettings();' });
 
-    assert.equal(await page.locator('[data-eg-slot]').count(), 6, 'six slot selects');
+    assert.equal(await page.locator('[data-eg-action]').count(), 6, 'six default actions');
     assert.equal(await page.locator('[data-eg-gesture]').count(), 11, 'eleven gesture selects');
-    assert.equal(await page.locator('[data-eg-slot="top"]').inputValue(), 'play');
     assert.equal(await page.locator('[data-eg-gesture="RightClick"]').inputValue(), 'open_menu');
-    assert.equal(await page.locator('[data-eg-gesture="Ctrl+Click"]').inputValue(), 'open_detail');
+    assert.equal(await page.locator('[data-eg-gesture="Ctrl+Click"]').inputValue(), '');
     assert.equal(await page.locator('#episodeGestureDoubleWarning').isVisible(), false, 'no double-click warning by default');
 
     const read = () => page.evaluate(() => readEpisodeGestureSettings());
 
-    // 去掉一格、改绑一个手势
-    await page.locator('[data-eg-slot="top"]').selectOption('');
+    await page.getByRole('button', { name: '移除播放' }).click();
+    const picker = page.locator('#episodeGestureActionSelect');
+    const add = page.locator('#addEpisodeGestureAction');
+    await picker.selectOption('redownload');
+    await add.click();
+    await page.getByRole('button', { name: '上移查找其他片源' }).click();
     await page.locator('[data-eg-gesture="MiddleClick"]').selectOption('play');
     let value = await read();
-    assert.equal(value.slots.top, '', 'slot can be emptied');
+    assert.deepEqual(value.actions, ['score', 'review', 'download', 'op', 'redownload', 'ed']);
+    for (const action of ['play', 'cancel_download', 'delete', 'reveal_in_folder']) {
+      await picker.selectOption(action);
+      await add.click();
+    }
+    assert.equal((await read()).actions.length, 10);
+    assert(await picker.isDisabled());
+    assert.equal(await page.locator('.eg-preview-item').count(), 10);
+    await page.setViewportSize({width: 360, height: 720});
+    assert(await page.locator('.eg-layout-editor').evaluate(editor => editor.scrollWidth <= editor.clientWidth));
     assert.equal(value.bindings.MiddleClick, 'play', 'gesture can be bound');
     assert.equal(value.keep_menu_on_release, true);
     const playbackSource = page.locator('#episodePlaybackSourceInput');
@@ -70,11 +82,11 @@ const state={settings:{},pendingEpisodes:new Set()};
     // 恢复默认
     await page.locator('#resetEpisodeGestures').click();
     assert.equal(await playbackSource.inputValue(), 'online', 'gesture reset preserves the separate playback preference');
-    assert.equal(await page.locator('[data-eg-slot="top"]').inputValue(), 'play');
+    assert.deepEqual((await read()).actions, ['play', 'score', 'review', 'download', 'op', 'ed']);
     assert.equal(await page.locator('[data-eg-gesture="RightClick"]').inputValue(), 'open_menu');
     assert.equal(await page.locator('#episodeGestureStatus').textContent(), '');
     assert.deepEqual(errors, [], 'no page errors');
-    console.log('Gesture settings: six slots, bindings, double-click warning, conflict guard and reset passed.');
+    console.log('Gesture settings: configurable order, all actions, narrow layout, bindings and reset passed.');
   } finally {
     await browser.close();
   }

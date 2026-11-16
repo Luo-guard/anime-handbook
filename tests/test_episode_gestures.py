@@ -55,6 +55,20 @@ class GestureNormalizeTests(unittest.TestCase):
         self.assertEqual(value["slots"]["bottom"], "")
         self.assertEqual(value["slots"]["top_right"], "score")
 
+    def test_ordered_actions_can_be_empty_or_include_every_action(self):
+        all_actions = sorted(eg.ACTIONS - {"open_menu"}, reverse=True)
+        for actions in ([], ["review"], all_actions):
+            with self.subTest(actions=actions):
+                saved = eg.normalize({"actions": actions, "slots": {"top": "play"}})
+                self.assertEqual(saved["actions"], actions)
+                self.assertNotIn("slots", saved)
+                self.assertEqual(eg.normalize(saved), saved)
+
+    def test_invalid_ordered_actions_rejected(self):
+        for actions in (None, "play", ["open_menu"], ["unknown"], [None], ["play", "play"]):
+            with self.subTest(actions=actions), self.assertRaises(ValueError):
+                eg.normalize({"actions": actions})
+
     def test_retired_episode_detail_leaves_its_old_bindings_empty(self):
         value = eg.normalize({
             "hidden_actions": ["open_detail", "download"],

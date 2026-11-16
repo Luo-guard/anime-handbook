@@ -164,7 +164,9 @@ const HandbookSettings = (() => {
         throw new Error(scheduleCollectedDetailError);
       }
       if(keyboardChanged && JSON.stringify(keyboardPreferences(payload.settings.keyboard_shortcuts))!==JSON.stringify(keyboardSettings)) throw new Error("快捷键未成功保存，请重启后台并刷新后再试。");
-      if (gestureSettings && !payload.settings.episode_gestures) throw new Error("单集手势未成功保存，请重启后台并刷新后再试。");
+      if (gestureSettings && JSON.stringify(payload.settings.episode_gestures?.actions) !== JSON.stringify(gestureSettings.actions)) {
+        throw new Error("扇区动作未成功保存，请重启后台并刷新后再试。");
+      }
       if (Object.entries(progressSources).some(([key, value]) => (payload.settings[key] || "bgm") !== value)) throw new Error("后台未保存已播集数来源，请重启后台并刷新后重试。");
       if ((payload.settings.detail_airtime_source || "yuc") !== detailAirtimeSource) throw new Error("后台未保存详情更新时间来源，请重启后台并刷新后重试。");
       if (Object.entries(detailSettings).some(([key, value]) => payload.settings[key] !== value)) {

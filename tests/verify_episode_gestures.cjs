@@ -1,4 +1,4 @@
-// 单集格子手势：六格扇区、点选/滑选、右键、修饰键、双击延迟、可去掉槽位。
+// 单集格子手势：可变布局、点选/滑选、右键、修饰键与双击延迟。
 const fs = require('fs');
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
@@ -38,16 +38,11 @@ window.calls=[];
     await cell.click();
     assert.deepEqual(await calls(), [['toggle', '0:1']], 'bare left click toggles watched');
 
-    // 2) 右键单击打开六格扇区，方位与默认动作一致
+    // 2) 右键单击，默认动作从顶部顺时针排列。
     await cell.click({ button: 'right' });
     await page.waitForTimeout(60);
-    const slots = await page.locator('#episodeQuickMenu [data-slot]').evaluateAll((nodes) =>
-      nodes.map((node) => [node.dataset.slot, node.dataset.episodeAction]));
-    assert.equal(slots.length, 6, 'six slots by default');
-    assert.deepEqual(Object.fromEntries(slots), {
-      top: 'play', bottom: 'download', top_right: 'score',
-      bottom_right: 'review', top_left: 'ed', bottom_left: 'op',
-    }, 'default slot layout');
+    const actions = () => page.locator('#episodeQuickMenu [data-episode-action]').evaluateAll(nodes => nodes.map(node => node.dataset.episodeAction));
+    assert.deepEqual(await actions(), ['play', 'score', 'review', 'download', 'op', 'ed']);
     assert.deepEqual(await calls(), [], 'opening the menu does not run an action');
     await page.getByRole('button', { name: '关闭单集扇区' }).click();
     await page.locator('#episodeQuickMenu').waitFor({ state: 'detached' });
@@ -56,28 +51,24 @@ window.calls=[];
     await cell.click({ button: 'right' });
 
     // 3) B 版：弹出后再点某一格
-    await page.locator('#episodeQuickMenu [data-slot="top"]').click();
+    await page.locator('#episodeQuickMenu [data-episode-action="play"]').click();
     assert.deepEqual(await calls(), [['action', 'play', '0:1']], 'clicking a slot runs its action');
     await page.waitForTimeout(260); // 收起动画 180ms、DOM 在 200ms 后移除，留余量
     assert.equal(await page.locator('#episodeQuickMenu').count(), 0, 'menu closes after choosing');
 
-    // 3b) 六个方位的悬停高亮都要跟手：指针一定会离开集数区（一行格子才 45px 高，
-    //     最远扇区离中心 98px），所以 pointermove 必须挂在 document 上。
-    //     以前挂在集数区，正上「播放」/ 正下「下载」滑出去就不再更新，看着像没反应。
-    //     目标位置按圆钮实际 rect 取：扇区半径会被 --quick-scale 按视口余量缩，
-    //     硬编码 ±94 在贴边的格子上会落到圆钮外面。
+    // 3b) 指针离开集数区后，按当前圆钮位置更新高亮。
     await cell.click({ button: 'right' });
     await page.waitForTimeout(60);
     const probe = await page.locator('.episode-cell[data-episode-key="0:1"]').boundingBox();
     const px = probe.x + probe.width / 2, py = probe.y + probe.height / 2;
-    for (const slot of ['top', 'bottom', 'top_right', 'bottom_right', 'top_left', 'bottom_left']) {
-      const knob = await page.locator(`#episodeQuickMenu [data-slot="${slot}"]`).boundingBox();
+    for (const action of await actions()) {
+      const knob = await page.locator(`#episodeQuickMenu [data-episode-action="${action}"]`).boundingBox();
       await page.mouse.move(px, py);
       await page.mouse.move(knob.x + knob.width / 2, knob.y + knob.height / 2, { steps: 4 });
       await page.waitForTimeout(60);
       const active = await page.evaluate(() =>
-        document.querySelector('#episodeQuickMenu [data-episode-action].active')?.dataset.slot || null);
-      assert.equal(active, slot, `hovering ${slot} highlights that slot`);
+        document.querySelector('#episodeQuickMenu [data-episode-action].active')?.dataset.episodeAction || null);
+      assert.equal(active, action, `hovering ${action} highlights that action`);
     }
     await page.keyboard.press('Escape');
     await page.waitForTimeout(240);
@@ -90,8 +81,7 @@ window.calls=[];
     await page.mouse.down();
     await page.waitForTimeout(480);
     assert.equal(await page.locator('#episodeQuickMenu').count(), 1, 'long press opens the menu');
-    // 圆钮位置按实际 rect 取，扇区半径会随视口余量缩（--quick-scale）。
-    const topKnob = await page.locator('#episodeQuickMenu [data-slot="top"]').boundingBox();
+    const topKnob = await page.locator('#episodeQuickMenu [data-episode-action="play"]').boundingBox();
     await page.mouse.move(topKnob.x + topKnob.width / 2, topKnob.y + topKnob.height / 2, { steps: 4 });
     await page.mouse.up();
     assert.deepEqual(await calls(), [['action', 'play', '0:1']], 'drag to slot and release runs the action');
@@ -124,12 +114,11 @@ window.calls=[];
     await page.keyboard.up('Alt');
     assert.deepEqual(await calls(), [['action', 'reveal_in_folder', '0:1']], 'Alt+Click runs its bound action');
 
-    // 7) 扇区可以去掉某一格
-    await setConfig({ slots: { ...JSON.parse(JSON.stringify(await page.evaluate(() => episodeGestureConfig().slots))), top: '' } });
+    // 7) 旧版留空与隐藏配置按顺时针迁移。
+    await setConfig({ slots: { top: '' }, hidden_actions: ['download'] });
     await cell.click({ button: 'right' });
     await page.waitForTimeout(60);
-    assert.equal(await page.locator('#episodeQuickMenu [data-slot]').count(), 5, 'one slot removed');
-    assert.equal(await page.locator('#episodeQuickMenu [data-slot="top"]').count(), 0);
+    assert.deepEqual(await actions(), ['score', 'review', 'op', 'ed']);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(240); // 收起动画 180ms + 200ms 后移除 DOM，留出余量
     await setConfig({});
@@ -235,9 +224,83 @@ window.calls=[];
     await other.click({ button: "right" });
     assert.equal(await wheel.locator(".episode-wheel-wedge").count(), 6);
     assert.deepEqual(await calls(), []);
+    await page.keyboard.press("Escape");
+
+    const allActions = ["play", "score", "review", "op", "ed", "download", "cancel_download", "delete", "reveal_in_folder", "redownload"];
+    for (const style of ["classic", "modern"]) {
+      await page.evaluate(value => { state.settings.detail_wheel_style = value; }, style);
+      for (const viewport of [{ width: 1000, height: 800 }, { width: 340, height: 650 }, { width: 650, height: 230 }]) {
+        await page.setViewportSize(viewport);
+        for (let count = 0; count <= allActions.length; count += 1) {
+          const selected = allActions.slice(0, count);
+          await setConfig({ actions: selected });
+          await cell.click({ button: "right" });
+          assert.deepEqual(await actions(), selected, `${style} ${viewport.width}×${viewport.height} / ${count}`);
+          if (count) {
+            await page.locator("#episodeQuickMenu.visible").waitFor({ state: "attached" });
+            const layout = await wheel.evaluate(menu => {
+              const buttons = [...menu.querySelectorAll("button")].map(node => node.getBoundingClientRect());
+              const compact = menu.classList.contains("detail-wheel-compact");
+              const box = menu.getBoundingClientRect();
+              return {
+                fits: (!compact || (box.top >= 0 && box.bottom <= innerHeight))
+                  && buttons.every((a, index) => a.left >= 0 && a.right <= innerWidth
+                    && (compact || (a.top >= 0 && a.bottom <= innerHeight))
+                    && buttons.slice(index + 1).every(b => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)),
+                boxes: buttons.map(button => button.toJSON()),
+              };
+            });
+            assert(layout.fits, `${style} ${viewport.width}×${viewport.height} / ${count} buttons fit without overlap: ${JSON.stringify(layout.boxes)}`);
+            if (viewport.height === 230 && count === allActions.length) {
+              await wheel.locator("[data-episode-action]").last().click();
+              assert.deepEqual(await calls(), [["action", "redownload", "0:1"]]);
+            } else {
+              await page.keyboard.press("Escape");
+            }
+          }
+        }
+      }
+    }
+
+    const touchPage = await browser.newPage({viewport: {width: 340, height: 650}, hasTouch: true, isMobile: true});
+    await touchPage.setContent(`<meta name="viewport" content="width=device-width,initial-scale=1">
+      <style>${fs.readFileSync('static/styles.css', 'utf8')}</style>
+      <div id="progressModal" style="margin-top:200px"><div id="episodeGrid">
+        <button class="episode-cell downloaded" data-episode-key="0:1" style="width:55px;height:55px">01</button>
+      </div></div><div style="height:850px"></div>`);
+    await touchPage.addScriptTag({content: setup + fs.readFileSync('static/modules/episode-gesture.js', 'utf8') + `
+      state.settings.detail_wheel_style = "modern";
+      state.settings.episode_gestures = { actions: ${JSON.stringify(allActions)} };
+      installEpisodeGestures($("#episodeGrid"), {
+        onToggleWatched: () => calls.push("toggle"),
+        onAction: action => calls.push(action),
+      });
+    `});
+    const client = await touchPage.context().newCDPSession(touchPage);
+    const touch = (type, x, y) => client.send("Input.dispatchTouchEvent", {
+      type, touchPoints: type === "touchEnd" ? [] : [{x, y}],
+    });
+    const finger = await touchPage.locator(".episode-cell").boundingBox();
+    const x = finger.x + finger.width / 2;
+    const y = finger.y + finger.height / 2;
+    await touch("touchStart", x, y);
+    await touch("touchMove", x, y - 65);
+    await touch("touchMove", x, y - 130);
+    await touch("touchEnd");
+    await touchPage.waitForFunction(() => scrollY > 0);
+    assert.deepEqual(await touchPage.evaluate(() => calls), []);
+    await touchPage.evaluate(() => scrollTo(0, 0));
+    await touch("touchStart", x, y);
+    await touchPage.locator("#episodeQuickMenu.visible.detail-wheel-compact").waitFor({state: "attached"});
+    await touchPage.waitForTimeout(200);
+    const score = await touchPage.locator('[data-episode-action="score"]').boundingBox();
+    await touch("touchMove", score.x + score.width / 2, score.y + score.height / 2);
+    await touch("touchEnd");
+    assert.deepEqual(await touchPage.evaluate(() => calls), ["score"]);
+    await touchPage.close();
 
     assert.deepEqual(errors, [], 'no page errors');
-    console.log('Episode gestures: six slots, click/drag selection, keep switch, modifier bindings, removable slots and double-click delay passed.');
+    console.log('Episode gestures: legacy migration, click/drag, modifier bindings and 0–10 actions in both styles and compact viewports passed.');
   } finally {
     await browser.close();
   }

@@ -8,9 +8,7 @@
 """
 from __future__ import annotations
 
-import copy
-
-# 允许被绑定的动作。open_menu 是「打开六格扇区」，其余是扇区或手势直接触发。
+# open_menu 只用于手势绑定，其余动作也可加入扇区。
 ACTIONS = {
     "open_menu", "play", "download", "cancel_download", "delete",
     "score", "review", "op", "ed",
@@ -91,7 +89,24 @@ def normalize(value) -> dict:
     result["playback_source"] = source
     result["hidden_actions"] = sorted(set(hidden) - {"online_play", "open_detail"})
 
-    slots = value.get("slots", DEFAULT_SLOTS)
+    if "actions" in value:
+        actions = value["actions"]
+        if (not isinstance(actions, list) or len(actions) > len(ACTIONS) - 1
+                or any(not isinstance(action, str) or action not in ACTIONS - {"open_menu"} for action in actions)):
+            raise ValueError("扇区动作列表无效")
+        if len(set(actions)) != len(actions):
+            raise ValueError("同一个动作只能加入一次")
+        result["actions"] = list(actions)
+        result.pop("slots")
+        result["hidden_actions"] = []
+    else:
+        result["slots"] = _normalize_legacy_slots(value.get("slots", DEFAULT_SLOTS))
+
+    result["bindings"] = _normalize_bindings(value.get("bindings", DEFAULT_BINDINGS))
+    return result
+
+
+def _normalize_legacy_slots(slots) -> dict:
     if not isinstance(slots, dict) or set(slots) - set(SLOT_KEYS):
         raise ValueError("扇区方位无效")
     cleaned_slots = {}
@@ -103,9 +118,10 @@ def normalize(value) -> dict:
             cleaned_slots[key] = item
         else:
             raise ValueError("扇区动作无效")
-    result["slots"] = cleaned_slots
+    return cleaned_slots
 
-    bindings = value.get("bindings", DEFAULT_BINDINGS)
+
+def _normalize_bindings(bindings) -> dict:
     if not isinstance(bindings, dict):
         raise ValueError("手势绑定格式错误")
     # 只传了一部分绑定（外部 PATCH、旧客户端）时，没提到的键保留默认 —— 和上面
@@ -135,8 +151,7 @@ def normalize(value) -> dict:
         counts[action] = counts.get(action, 0) + 1
         if counts[action] > MAX_GESTURES_PER_ACTION:
             raise ValueError(f"同一个动作最多绑定 {MAX_GESTURES_PER_ACTION} 个手势")
-    result["bindings"] = cleaned
-    return copy.deepcopy(result)
+    return cleaned
 
 
 def double_click_bound(value: dict) -> bool:

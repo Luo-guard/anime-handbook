@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261116-comment-tab" />
+  <link rel="stylesheet" href="/styles.css?v=20261116-flexible-wheel" />
   </head>
   <body>
     <div class="app-shell">
@@ -1136,17 +1136,26 @@
           <label class="setting-row"><span><strong>启用单集手势</strong><small>左键单击切换已看。右键和长按等手势可在下方设置。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureEnabledInput" /><span class="switch"></span></span></label>
           <label class="setting-row"><span><strong>长按松手后保留扇区</strong><small>长按后滑向动作并松手可直接执行。开启后，原地松手也可继续点选。</small></span><span class="switch-row compact"><input type="checkbox" id="episodeGestureKeepMenuInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked">
-            <span><strong>动作布局</strong><small>选择「留空」可腾出一格。</small></span>
-            <div id="episodeGestureSlots" class="eg-slot-grid"></div>
+            <span><strong>扇区动作</strong><small>从顶部开始顺时针排列。可以添加、移除或调整顺序。</small></span>
+            <div class="eg-layout-editor">
+              <div class="eg-layout-preview" id="episodeGesturePreview" aria-hidden="true"></div>
+              <div class="eg-layout-controls">
+                <ol class="eg-action-list" id="episodeGestureActions" aria-label="扇区动作顺序"></ol>
+                <div class="eg-add-action">
+                  <select id="episodeGestureActionSelect" aria-label="选择要添加的动作"></select>
+                  <button type="button" class="secondary-button compact-button" id="addEpisodeGestureAction">添加</button>
+                </div>
+                <p class="eg-layout-status" id="episodeGestureLayoutStatus" role="status"></p>
+              </div>
+            </div>
           </div>
           <div class="setting-row stacked">
-            <span><strong>扇区入口</strong><small>关闭后隐藏对应入口。已保存的记录仍可在看番记录中查看。</small></span>
+            <span><strong>单集记录入口</strong><small>关闭后也会从扇区和鼠标手势中隐藏对应的记录动作。</small></span>
             <div class="eg-entry-grid">
               <label class="switch-row compact"><input type="checkbox" id="showEpisodeReviewRecordInput" /><span class="switch"></span><span>显示单集评价入口</span></label>
               <label class="switch-row compact"><input type="checkbox" id="showEpisodeRatingRecordInput" /><span class="switch"></span><span>显示单集评分入口</span></label>
               <label class="switch-row compact"><input type="checkbox" id="showOpedRecordInput" /><span class="switch"></span><span>显示 OP/ED 记录入口</span></label>
             </div>
-            <div id="episodeGestureEntries" class="eg-entry-grid"></div>
           </div>
           <div class="setting-row stacked">
             <span><strong id="episodeMouseGestureHeading" tabindex="-1">单集鼠标手势</strong><small>同一个动作最多绑定 4 个手势。</small></span>
@@ -1904,7 +1913,7 @@
     <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/episode-gesture.js?v=20261115-detail-background" defer></script>
+    <script src="/modules/episode-gesture.js?v=20261116-flexible-wheel" defer></script>
     <script src="/modules/details.js?v=20261116-comment-tab" defer></script>
     <script src="/modules/detail-wallpapers.js?v=20261116-detail-wallpapers" defer></script>
     <script src="/modules/records.js?v=20261116-record-episode-name" defer></script>
@@ -1914,7 +1923,7 @@
     <script src="/modules/settings.js?v=20261116-comment-tab" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261116-comment-tab" defer></script>
+    <script src="/modules/settings-save.js?v=20261116-flexible-wheel" defer></script>
     <script src="/modules/events.js?v=20261116-episode-images" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
