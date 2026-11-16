@@ -210,11 +210,7 @@ if (typeof ResizeObserver !== "undefined") {
 }
 
 function detailSize(settings = state.settings) {
-  return settings.detail_size || (usesDetailArtwork(settings.detail_layout) ? "large" : "small");
-}
-
-function usesDetailArtwork(background) {
-  return background === "artwork" || background === "artwork-full";
+  return settings.detail_size || (settings.detail_layout === "artwork" ? "large" : "small");
 }
 
 function applyDetailAppearance() {
@@ -235,7 +231,7 @@ function applyDetailAppearance() {
 
 function updateDetailArtwork() {
   const dialog = $("#progressModal");
-  const anime = dialog.open && usesDetailArtwork(dialog.dataset.detailBackground) ? state.progressAnime : null;
+  const anime = dialog.open && dialog.dataset.detailBackground === "artwork" ? state.progressAnime : null;
   for (const [selector, url] of [
     ["#detailArtworkCover", anime?.cover_url],
     ["#detailArtwork", anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=3`],
@@ -246,17 +242,6 @@ function updateDetailArtwork() {
     if (url) image.src = url;
     else image.removeAttribute("src");
   }
-  syncFullDetailArtwork();
-}
-
-function syncFullDetailArtwork() {
-  const dialog = $("#progressModal");
-  if (!dialog?.open || dialog.dataset.detailBackground !== "artwork-full") return;
-  const layer = $(".detail-artwork", dialog);
-  if (!layer) return;
-  const image = $("#detailArtwork.loaded", layer);
-  const imageHeight = image?.naturalWidth ? layer.clientWidth * image.naturalHeight / image.naturalWidth : 0;
-  layer.classList.toggle("detail-artwork-short", imageHeight > 0 && imageHeight < layer.clientHeight - 1);
 }
 
 function updateDetailRecordActions() {
@@ -356,17 +341,11 @@ function refreshDetailHeader() {
 
 document.addEventListener("DOMContentLoaded", () => {
   const dialog = $("#progressModal");
-  const artwork = dialog?.querySelector(".detail-artwork");
-  if (artwork && typeof ResizeObserver !== "undefined") new ResizeObserver(syncFullDetailArtwork).observe(artwork);
   $$(".detail-artwork img").forEach(image => {
-    image.addEventListener("load", () => {
-      image.classList.toggle("loaded", image.naturalWidth > 0);
-      syncFullDetailArtwork();
-    });
+    image.addEventListener("load", () => image.classList.toggle("loaded", image.naturalWidth > 0));
     image.addEventListener("error", () => {
       image.classList.remove("loaded");
       image.removeAttribute("src");
-      syncFullDetailArtwork();
     });
   });
   $("#modernFullTitle")?.addEventListener("click", () => $("#detailFullTitleDialog").showModal());

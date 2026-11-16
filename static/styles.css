@@ -6313,11 +6313,8 @@ body.schedule-picking [data-floating-view="schedule"] {
 /* Background choices only change the detail palette and artwork layer. */
 .detail-background-options {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(5px, 1.4vw, 12px);
-}
-@media (max-width: 480px) {
-  .detail-background-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .detail-background-options label {
   position: relative;
@@ -6390,10 +6387,6 @@ body.schedule-picking [data-floating-view="schedule"] {
     linear-gradient(120deg, #171924 20%, #24416b 67%, #42678d);
   color: #fff;
 }
-[value="artwork-full"] + .detail-background-swatch {
-  background: linear-gradient(153deg, #171924 5%, #24416b 58%, #42678d 100%);
-  color: #fff;
-}
 .detail-credit-check, .detail-credit-prefix { display: none; }
 #progressModal {
   --detail-gutter: clamp(16px, 4vw, 34px);
@@ -6426,7 +6419,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   background: inherit;
   min-height: 0;
 }
-#progressModal:is([data-detail-background="modern"], [data-detail-background="artwork"], [data-detail-background="artwork-full"]) {
+#progressModal:is([data-detail-background="modern"], [data-detail-background="artwork"]) {
   background: color-mix(in srgb, var(--surface) 97%, var(--accent));
   --detail-hero: color-mix(in srgb, var(--green-950) 72%, #20212a);
   --detail-hero-ink: #fff;
@@ -6537,7 +6530,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   border-color: var(--detail-hero-hover-edge);
 }
 .progress-modal .detail-corner-actions .modal-close { margin: 12px 14px 0 0; width: 34px; height: 34px; background: var(--detail-close-paper); color: var(--detail-close-ink); }
-.progress-modal:is([data-detail-background="modern"], [data-detail-background="artwork"], [data-detail-background="artwork-full"]) .detail-tabs { border-color: var(--detail-line); }
+.progress-modal:is([data-detail-background="modern"], [data-detail-background="artwork"]) .detail-tabs { border-color: var(--detail-line); }
 .detail-record-buttons { display: flex; gap: 10px; margin-left: auto; }
 #detailRecordFooter { align-items: center; flex-wrap: wrap; }
 .progress-modal:has(#overviewDetailPanel.hidden) #detailCreditActions { display: none; }
@@ -6796,7 +6789,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-caption-size: 13px;
   --detail-section-size: 18px;
 }
-#progressModal:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) {
+#progressModal[data-detail-background="artwork"] {
   --detail-cinema-base: #171924;
   --detail-cinema-paper: #242531;
   --detail-cinema-ink: #f3f1ef;
@@ -6814,10 +6807,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   background: var(--detail-cinema-base);
 }
 
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) #progressForm {
+[data-detail-background="artwork"] #progressForm {
   background: transparent;
 }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .detail-artwork {
+[data-detail-background="artwork"] .detail-artwork {
   display: block;
   position: absolute;
   z-index: -1;
@@ -6848,7 +6841,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   padding-block: 48px;
 }
 [data-detail-size="large"] #progressCover { aspect-ratio: 3 / 4.2; }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) #progressCover { box-shadow: 0 9px 30px #0005; }
+[data-detail-background="artwork"] #progressCover { box-shadow: 0 9px 30px #0005; }
 [data-detail-size="large"] .progress-hero h2 {
   font-size: clamp(32px, 4.5vw, 54px);
   line-height: 1.13;
@@ -6872,7 +6865,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   padding-inline: 1em;
   font-weight: 700;
 }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) #detailOnlinePlay { background: #f1e4ff; }
+[data-detail-background="artwork"] #detailOnlinePlay { background: #f1e4ff; }
 [data-detail-size="large"] #detailOnlinePlay::before { font-size: .8em; }
 [data-detail-size="large"] .modern-detail-menu > summary {
   min-width: var(--detail-action-height);
@@ -6884,10 +6877,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   height: var(--detail-action-height);
 }
 #progressModal #modernDetailEpisodeTotal { font-weight: 700; }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) #modernDetailEpisodeTotal { color: var(--detail-hero-emphasis); }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .anime-rating[href]:hover .rating-score { color: var(--detail-hero-emphasis); }
+[data-detail-background="artwork"] #modernDetailEpisodeTotal { color: var(--detail-hero-emphasis); }
+[data-detail-background="artwork"] .anime-rating[href]:hover .rating-score { color: var(--detail-hero-emphasis); }
 
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) #progressForm > :is(.detail-tabs, .detail-panel, .modal-actions) {
+[data-detail-background="artwork"] #progressForm > :is(.detail-tabs, .detail-panel, .modal-actions) {
   --ink: var(--detail-cinema-ink);
   --muted: var(--detail-cinema-muted);
   --line: var(--detail-cinema-line);
@@ -6920,7 +6913,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   grid-template-columns: repeat(13, minmax(0, 1fr));
   gap: 7px;
 }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .episode-cell {
+[data-detail-background="artwork"] .episode-cell {
   --detail-episode-paper: var(--detail-cinema-paper);
   --detail-episode-ink: var(--detail-cinema-ink);
   --detail-episode-edge: var(--detail-cinema-line);
@@ -6930,23 +6923,23 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-watched-ink: var(--accent);
 }
 [data-detail-size="large"] .episode-cell { font-size: var(--detail-action-size); }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .episode-cell.next-to-play:not(.watched) {
+[data-detail-background="artwork"] .episode-cell.next-to-play:not(.watched) {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .episode-cell.unreleased:not(.watched) { color: var(--muted); }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) :is(.anime-comment-composer, .anime-comment-item, .age-related-card, .character-card) {
+[data-detail-background="artwork"] .episode-cell.unreleased:not(.watched) { color: var(--muted); }
+[data-detail-background="artwork"] :is(.anime-comment-composer, .anime-comment-item, .age-related-card, .character-card) {
   background: var(--surface);
   border-color: var(--line);
 }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .age-related-card:hover { border-color: var(--accent); }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .anime-comment-item p { color: var(--ink); }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .anime-comment-item time { color: var(--muted); }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) :is(#saveProgress, #saveAnimeComment).primary-button:not(:disabled) {
+[data-detail-background="artwork"] .age-related-card:hover { border-color: var(--accent); }
+[data-detail-background="artwork"] .anime-comment-item p { color: var(--ink); }
+[data-detail-background="artwork"] .anime-comment-item time { color: var(--muted); }
+[data-detail-background="artwork"] :is(#saveProgress, #saveAnimeComment).primary-button:not(:disabled) {
   background: var(--accent);
   color: var(--detail-cinema-base);
 }
-:is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) :is(#cancelProgress, #refreshCharacters, .comment-composer-actions .text-button) {
+[data-detail-background="artwork"] :is(#cancelProgress, #refreshCharacters, .comment-composer-actions .text-button) {
   color: var(--ink);
   border-color: var(--line);
   background: var(--green-50);
@@ -6989,29 +6982,10 @@ body.schedule-picking [data-floating-view="schedule"] {
   }
   [data-detail-size="large"] .progress-hero h2 { font-size: 25px; }
   [data-detail-size="large"] .progress-info-row .progress-actions { margin-top: 11px; gap: 6px; }
-  :is([data-detail-background="artwork"], [data-detail-background="artwork-full"]) .detail-artwork::after {
+  [data-detail-background="artwork"] .detail-artwork::after {
     background: linear-gradient(0deg, #171924, transparent 56%),
       linear-gradient(90deg, #171924dc, #17192448);
   }
   [data-detail-size="large"] .detail-tabs { margin-top: 8px; }
   [data-detail-size="large"] .episode-group-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-}
-
-[data-detail-background="artwork-full"] .detail-artwork {
-  grid-area: auto;
-  inset: 0;
-  overflow: hidden;
-}
-[data-detail-background="artwork-full"] #detailArtwork {
-  inset: 0 auto auto 0;
-  height: auto;
-}
-[data-detail-background="artwork-full"] .detail-artwork:has(#detailArtwork.loaded) #detailArtworkCover { visibility: hidden; }
-[data-detail-background="artwork-full"] .detail-artwork-short #detailArtwork {
-  mask-image: linear-gradient(#000 62%, transparent);
-}
-[data-detail-background="artwork-full"] .detail-artwork::after {
-  background:
-    linear-gradient(90deg, #171924e6, #1719248c 45%, #17192424),
-    linear-gradient(0deg, #171924bd, #17192450 53%, #17192415);
 }

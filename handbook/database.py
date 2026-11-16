@@ -772,7 +772,9 @@ class HandbookDB:
                 for row in db.execute("SELECT key, value FROM settings")
             }
         # Older profiles stored these preferences separately by layout.
-        artwork = settings.get("detail_layout") in ("artwork", "artwork-full")
+        if settings.get("detail_layout") == "artwork-full":
+            settings["detail_layout"] = "artwork"
+        artwork = settings.get("detail_layout") == "artwork"
         modern = artwork or settings.get("detail_layout") == "modern"
         settings.setdefault("detail_size", "large" if artwork else "small")
         old_layout = "modern" if modern else "classic"
