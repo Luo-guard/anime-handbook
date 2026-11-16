@@ -65,6 +65,7 @@ const HandbookSettings = (() => {
         detail_modern_original_title: $("#detailModernOriginalTitleInput").checked,
         detail_compact_credits: $("#detailCompactCreditsInput").checked,
         detail_record_on_change: $("#detailRecordOnChangeInput").checked,
+        detail_comments_tab: $("#detailCommentsTabInput").checked,
         detail_wheel_style: $("#detailWheelStyleInput").value,
       };
       const commentTypes = $$("#detailCommentTypesInput input:checked").map(input => input.value);

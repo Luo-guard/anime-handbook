@@ -2008,6 +2008,70 @@ input[type="number"] {
   font-size: 16px;
 }
 
+#commentsDetailPanel .anime-comments {
+  margin: 10px 0 18px;
+}
+#commentsDetailPanel .anime-comments-heading {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--detail-line);
+}
+#commentsDetailPanel .anime-comment-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#commentsDetailPanel .comment-trigger {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--detail-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+}
+#commentsDetailPanel #openAnimeComment {
+  background: var(--green-50);
+}
+#commentsDetailPanel .comment-trigger:hover {
+  border-color: var(--accent);
+}
+#commentsDetailPanel .anime-comment-item {
+  padding: 12px clamp(10px, 2vw, 18px);
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: var(--surface);
+}
+#commentsDetailPanel .anime-comment-head {
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+#commentsDetailPanel .anime-comment-body p {
+  max-width: 70ch;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+#commentsDetailPanel .muted-line {
+  margin: 4px 0;
+}
+#commentsDetailPanel .anime-comment-item time { color: var(--muted); }
+#commentsDetailPanel .anime-comment-composer {
+  border-color: var(--detail-line);
+  background: var(--green-50);
+}
+#commentsDetailPanel :is(.anime-comment-composer, .anime-comment-editor) textarea {
+  min-width: 0;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+[data-detail-background="artwork"] #commentsDetailPanel .delete-anime-comment { color: #efa49f; }
+[data-detail-size="large"] #commentsDetailPanel .anime-comments-heading {
+  padding-bottom: 14px;
+}
+[data-detail-size="large"] #commentsDetailPanel .anime-comment-list {
+  gap: 10px;
+}
+
 .anime-comment-composer {
   padding: 12px;
   border: 1px solid #dce4f4;

@@ -222,6 +222,11 @@ function applyDetailAppearance() {
   dialog.classList.toggle("detail-compact-credits", state.settings.detail_compact_credits === true);
   $("#modernDetailMenu").open = false;
   const activeTab = $("[data-detail-tab].active", dialog)?.dataset.detailTab;
+  const commentsSeparate = state.settings.detail_comments_tab === true;
+  $("#commentsDetailTab").classList.toggle("hidden", !commentsSeparate);
+  const comments = $("#detailComments");
+  const commentsHost = $(commentsSeparate ? "#commentsDetailPanel" : "#overviewDetailPanel");
+  if (comments.parentElement !== commentsHost) commentsHost.append(comments);
   switchDetailTab(activeTab || "overview");
 
   refreshDetailHeader();
@@ -242,7 +247,7 @@ function updateDetailArtwork() {
   const dialog = $("#progressModal");
   const anime = dialog.open && dialog.dataset.detailBackground === "artwork" ? state.progressAnime : null;
   const artwork = $("#detailArtwork");
-  const custom = state.settings.detail_custom_wallpaper_enabled !== false;
+  const custom = state.settings?.detail_custom_wallpaper_enabled !== false;
   setDetailArtworkSource(artwork, anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=4&custom=${Number(custom)}&rev=${detailArtworkRevision}`);
   // Keep the dark background while artwork is loading. Only use the cover
   // after the artwork request has finished without a usable image.
@@ -470,16 +475,14 @@ function openProgress(animeId) {
 }
 
 function switchDetailTab(tab) {
-  const isCharacters = tab === "characters";
-  $("#overviewDetailPanel").classList.toggle("hidden", isCharacters);
-  const overview = $('[data-detail-tab="overview"]');
-  if (overview) overview.textContent = "概览";
-  $("#charactersDetailPanel").classList.toggle("hidden", !isCharacters);
-  $$("[data-detail-tab]").forEach((button) => {
+  const tabs = $$("[data-detail-tab]");
+  if (!tabs.some(button => button.dataset.detailTab === tab && !button.classList.contains("hidden"))) tab = "overview";
+  tabs.forEach((button) => {
     const active = button.dataset.detailTab === tab;
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
     button.tabIndex = active ? 0 : -1;
+    document.getElementById(button.getAttribute("aria-controls")).classList.toggle("hidden", !active);
   });
 }
 

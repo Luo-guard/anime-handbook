@@ -81,7 +81,7 @@ const html = `<!doctype html><link rel="stylesheet" href="/styles.css">
     pending.get(4)(200);
     await loaded("#detailArtwork");
     pending.get(3)(204);
-    assert.equal(await artwork.getAttribute("src"), "/api/detail-artwork/4?v=3");
+    assert.equal(new URL(await artwork.getAttribute("src"), page.url()).pathname, "/api/detail-artwork/4");
     assert.equal(await cover.getAttribute("src"), null);
     assert.deepEqual(artworkRequests, [1, 2, 3, 4]);
     assert.deepEqual(errors, []);

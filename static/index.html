@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261116-stale-preview" />
+  <link rel="stylesheet" href="/styles.css?v=20261116-comment-tab" />
   </head>
   <body>
     <div class="app-shell">
@@ -752,6 +752,7 @@
         <div class="detail-tabs" role="tablist" aria-label="番剧详情分栏">
           <button type="button" class="detail-tab active" data-detail-tab="overview" id="overviewDetailTab" role="tab" aria-selected="true" aria-controls="overviewDetailPanel">概览</button>
           <button type="button" class="detail-tab" data-detail-tab="characters" id="charactersDetailTab" role="tab" aria-selected="false" aria-controls="charactersDetailPanel">人物</button>
+          <button type="button" class="detail-tab hidden" data-detail-tab="comments" id="commentsDetailTab" role="tab" aria-selected="false" aria-controls="commentsDetailPanel" tabindex="-1">评论</button>
         </div>
         <section class="detail-panel" id="overviewDetailPanel" role="tabpanel" aria-labelledby="overviewDetailTab">
         <div class="episode-grid" id="episodeGrid"></div>
@@ -764,7 +765,7 @@
           </div>
           <div class="age-related-grid" id="ageRelatedGrid"></div>
         </section>
-        <section class="anime-comments">
+        <section class="anime-comments" id="detailComments">
           <div class="anime-comments-heading">
             <h3>番剧评论</h3>
             <div class="anime-comment-tools"><button type="button" class="comment-trigger" id="openAnimeComment">写评论</button><button type="button" class="comment-trigger" id="openAnimeRating">评分</button></div>
@@ -784,6 +785,7 @@
           <div class="character-grid" id="characterGrid"></div>
           <div class="empty-state hidden" id="charactersEmpty"><p>点击人物分栏后加载角色资料。</p></div>
         </section>
+        <section class="detail-panel hidden" id="commentsDetailPanel" role="tabpanel" aria-labelledby="commentsDetailTab"></section>
         <div class="modal-actions" id="detailRecordFooter">
           <div class="detail-credit-actions hidden" id="detailCreditActions" role="group" aria-label="片头与片尾"></div>
           <div class="detail-record-buttons">
@@ -1063,6 +1065,7 @@
           <h3 class="settings-subsection-title">观看记录</h3>
           <label class="setting-row"><span><strong>有修改时才启用确认记录</strong><small>开启后，有修改时「确认记录」可用，并显示「取消」。</small></span><span class="switch-row compact"><input type="checkbox" id="detailRecordOnChangeInput" /><span class="switch"></span></span></label>
           <label class="setting-row"><span><strong>用勾选框显示 OP／ED</strong><small>开启后，片头和片尾移到记录按钮旁勾选。关闭时按剧集方块显示。</small></span><span class="switch-row compact"><input type="checkbox" id="detailCompactCreditsInput" /><span class="switch"></span></span></label>
+          <label class="setting-row"><span><strong>评论使用独立分栏</strong><small>开启后在「人物」右侧显示「评论」。关闭时，评论显示在概览的集数下方。</small></span><span class="switch-row compact"><input type="checkbox" id="detailCommentsTabInput" /><span class="switch"></span></span></label>
           <div class="setting-row stacked">
             <span><strong id="detailCommentTypesLabel">番剧评论区显示内容</strong><small>可多选，取消全部勾选可隐藏记录列表。写评论和评分入口仍可使用。</small></span>
             <div id="detailCommentTypesInput" class="schedule-status-options" role="group" aria-labelledby="detailCommentTypesLabel">
@@ -1902,16 +1905,16 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261115-detail-background" defer></script>
-    <script src="/modules/details.js?v=20261116-stale-preview" defer></script>
+    <script src="/modules/details.js?v=20261116-comment-tab" defer></script>
     <script src="/modules/detail-wallpapers.js?v=20261116-detail-wallpapers" defer></script>
     <script src="/modules/records.js?v=20261116-record-episode-name" defer></script>
     <script src="/modules/ranking.js?v=20261116-stale-preview" defer></script>
     <script src="/modules/statistics.js?v=20261116-stale-preview" defer></script>
     <script src="/modules/lifecycle.js?v=20261115-episode-metadata" defer></script>
-    <script src="/modules/settings.js?v=20261116-detail-wallpapers" defer></script>
+    <script src="/modules/settings.js?v=20261116-comment-tab" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261116-detail-wallpapers" defer></script>
+    <script src="/modules/settings-save.js?v=20261116-comment-tab" defer></script>
     <script src="/modules/events.js?v=20261116-episode-images" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

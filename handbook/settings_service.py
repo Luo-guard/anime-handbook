@@ -134,6 +134,7 @@ def _normalize_settings(body, settings):
         "detail_custom_wallpaper_enabled",
         "detail_record_on_change",
         "detail_comment_types",
+        "detail_comments_tab",
         "detail_wheel_style",
         "detail_compact_credits",
         "detail_modern_original_title",
@@ -270,6 +271,7 @@ def _normalize_settings(body, settings):
                 "detail_modern_original_title", "detail_modern_compact_credits",
                 "detail_classic_record_on_change", "detail_modern_record_on_change",
                 "detail_record_on_change", "detail_compact_credits", "detail_custom_wallpaper_enabled",
+                "detail_comments_tab",
             }:
                 if type(value) is not bool:
                     raise ValueError("番剧详情显示选项无效")

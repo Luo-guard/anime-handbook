@@ -224,6 +224,7 @@ function renderSettingsPanels() {
   $("#detailCompactCreditsInput").checked = state.settings.detail_compact_credits === true;
   $("#detailRecordOnChangeInput").checked = state.settings.detail_record_on_change === true;
   const commentTypes = detailCommentTypes();
+  $("#detailCommentsTabInput").checked = state.settings.detail_comments_tab === true;
   $$("#detailCommentTypesInput input").forEach(input => { input.checked = commentTypes.includes(input.value); });
   $("#episodePlaybackSourceInput").value = episodeGestureConfig().playbackSource;
   if (!window.handbookOnline) renderPlaybackSettings();
