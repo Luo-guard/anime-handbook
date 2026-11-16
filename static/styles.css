@@ -6687,6 +6687,11 @@ body.schedule-picking [data-floating-view="schedule"] {
 #progressModal[data-detail-background="artwork"] {
   --modal-width: 1120px;
   --detail-gutter: clamp(13px, 5vw, 60px);
+  --artwork-action-height: 44px;
+  --artwork-action-size: 15px;
+  --artwork-info-size: 15px;
+  --artwork-caption-size: 13px;
+  --artwork-section-size: 18px;
   --detail-cinema-base: #171924;
   --detail-cinema-paper: #242531;
   --detail-cinema-ink: #f3f1ef;
@@ -6748,11 +6753,39 @@ body.schedule-picking [data-floating-view="schedule"] {
   box-shadow: 0 9px 30px #0005;
 }
 [data-detail-background="artwork"] .progress-hero h2 {
-  font-size: clamp(30px, 4.5vw, 50px);
+  font-size: clamp(32px, 4.5vw, 54px);
   line-height: 1.13;
   letter-spacing: -.025em;
 }
-[data-detail-background="artwork"] #detailOnlinePlay { background: #f1e4ff; }
+[data-detail-background="artwork"] :is(#modernOriginalTitle, .modern-detail-facts, .progress-hero-info .anime-rating, .progress-hero-info .rating-score, .progress-meta #progressAirDate) {
+  font-size: var(--artwork-info-size);
+}
+[data-detail-background="artwork"] :is(#modernFullTitle, .progress-meta .update-badge) { font-size: var(--artwork-caption-size); }
+[data-detail-background="artwork"] .progress-info-row .progress-actions {
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+}
+[data-detail-background="artwork"] :is(#detailOnlinePlay, .collect-detail-row .collect-trigger, .modern-detail-menu > summary) {
+  min-height: var(--artwork-action-height);
+  border-radius: 12px;
+  font-size: var(--artwork-action-size);
+}
+[data-detail-background="artwork"] #detailOnlinePlay {
+  padding-inline: 1em;
+  background: #f1e4ff;
+  font-weight: 700;
+}
+[data-detail-background="artwork"] #detailOnlinePlay::before { font-size: .8em; }
+[data-detail-background="artwork"] .modern-detail-menu > summary {
+  min-width: var(--artwork-action-height);
+  font-size: 20px;
+  line-height: 1;
+}
+.progress-modal[data-detail-background="artwork"] .detail-corner-actions .modal-close {
+  width: var(--artwork-action-height);
+  height: var(--artwork-action-height);
+}
 [data-detail-background="artwork"] #modernDetailEpisodeTotal { color: var(--detail-hero-emphasis); font-weight: 700; }
 [data-detail-background="artwork"] .anime-rating[href]:hover .rating-score { color: var(--detail-hero-emphasis); }
 
@@ -6770,14 +6803,20 @@ body.schedule-picking [data-floating-view="schedule"] {
   color: var(--ink);
 }
 [data-detail-background="artwork"] .detail-tabs { margin: 24px 0 15px; }
-[data-detail-background="artwork"] .detail-tab { padding: 12px 1px 9px; }
+[data-detail-background="artwork"] .detail-tab { padding: 12px 2px 10px; font-size: var(--artwork-action-size); }
 [data-detail-background="artwork"] .detail-panel { min-height: 0; }
 [data-detail-background="artwork"] .episode-grid {
   max-height: none;
   overflow: visible;
   padding: 0;
 }
-[data-detail-background="artwork"] .episode-group-head { font-size: 15px; }
+[data-detail-background="artwork"] :is(.episode-group-head, .anime-comments-heading h3, .characters-heading h3) {
+  font-size: var(--artwork-section-size);
+}
+[data-detail-background="artwork"] :is(.episode-group-head span, .characters-heading p, .anime-comment-item p, .comment-trigger) {
+  font-size: var(--artwork-caption-size);
+}
+[data-detail-background="artwork"] .comment-trigger { min-height: 32px; }
 [data-detail-background="artwork"] .episode-group-meta { flex-wrap: wrap; gap: 4px 9px; }
 [data-detail-background="artwork"] .episode-group-grid {
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -6792,7 +6831,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-watched-paper: rgb(255 255 255 / .08);
   --detail-watched-ink: var(--accent);
   --detail-download-dot: var(--accent);
-  font-size: 13px;
+  font-size: var(--artwork-action-size);
 }
 [data-detail-background="artwork"] .episode-cell.next-to-play:not(.watched) {
   border-color: var(--accent);
@@ -6815,8 +6854,18 @@ body.schedule-picking [data-floating-view="schedule"] {
   border-color: var(--line);
   background: var(--green-50);
 }
+[data-detail-background="artwork"] :is(#cancelProgress, #saveProgress, #refreshCharacters, #saveAnimeComment, #cancelAnimeComment) {
+  min-height: var(--artwork-action-height);
+  padding: 7px 1em;
+  font-size: var(--artwork-action-size);
+}
 
 @media (max-width: 800px) {
+  #progressModal[data-detail-background="artwork"] {
+    --artwork-action-size: 14px;
+    --artwork-info-size: 14px;
+    --artwork-section-size: 16px;
+  }
   .progress-modal[data-detail-background="artwork"] .progress-hero {
     min-height: 280px;
     grid-template-columns: 114px minmax(0, 1fr);
@@ -6828,6 +6877,12 @@ body.schedule-picking [data-floating-view="schedule"] {
 }
 
 @media (max-width: 480px) {
+  #progressModal[data-detail-background="artwork"] {
+    --artwork-action-height: 36px;
+    --artwork-action-size: 13px;
+    --artwork-info-size: 12px;
+    --artwork-caption-size: 12px;
+  }
   .progress-modal[data-detail-background="artwork"] .progress-hero {
     min-height: 0;
     grid-template-columns: 66px minmax(0, 1fr);
@@ -6835,6 +6890,7 @@ body.schedule-picking [data-floating-view="schedule"] {
     padding-block: 22px 18px;
   }
   [data-detail-background="artwork"] .progress-hero h2 { font-size: 25px; }
+  [data-detail-background="artwork"] .progress-info-row .progress-actions { margin-top: 11px; gap: 6px; }
   [data-detail-background="artwork"] .detail-artwork { bottom: -100px; }
   [data-detail-background="artwork"] .detail-artwork::after {
     background: linear-gradient(0deg, #171924, transparent 56%),
