@@ -2692,43 +2692,35 @@ dialog::backdrop {
   box-shadow: 0 4px 10px var(--detail-watched-shadow, rgba(95, 143, 186, 0.2));
 }
 
-/* 已下载的集留一个右下角小点：以前格子上完全没有标记，只能靠点扇区
-   「播放」试出来。蓝底（已看）上换成白点，保证对比度。 */
-.episode-cell.downloaded::after {
-  content: "";
+.episode-cell-marks {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--detail-download-dot, var(--green-600));
-  box-shadow: 0 0 0 2px var(--surface);
-}
-.episode-cell.watched.downloaded::after {
-  background: var(--detail-download-dot, #fff);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .14);
-}
-
-.episode-note-mark {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  display: grid;
-  place-items: center;
-  width: 15px;
-  height: 15px;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  color: #fff;
-  background: var(--green-700);
-  box-shadow: 0 2px 5px rgb(24 50 38 / 24%);
-  font-family: Georgia, serif;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  left: 50%;
+  top: calc(50% + 4px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: inherit;
   pointer-events: none;
-  z-index: 2;
+}
+.episode-cell-marks svg {
+  display: block;
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.episode-cell:not(.downloaded) .episode-download-mark,
+.episode-cell:not(.downloaded) .episode-cell-marks:not(:has(.episode-note-mark)) { display: none; }
+.episode-cell:is(.downloaded, :has(.episode-note-mark)) .episode-cell-number {
+  display: inline-block;
+  transform: translateY(-6px);
+}
+@media (max-width: 480px) {
+  .episode-cell-marks svg { width: 10px; height: 10px; }
 }
 
 .episode-annotation-popover {
@@ -6446,7 +6438,6 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-watched-ink: var(--green-950);
   --detail-watched-edge: transparent;
   --detail-watched-shadow: transparent;
-  --detail-download-dot: var(--accent);
 }
 .progress-modal .progress-hero {
   position: relative;
@@ -6642,6 +6633,13 @@ body.schedule-picking [data-floating-view="schedule"] {
   display: inline-flex; gap: 5px; align-items: center; width: auto; min-height: 34px;
   aspect-ratio: auto;
   padding: 4px 6px; background: transparent; border-color: transparent; box-shadow: none;
+}
+.detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell-marks {
+  position: static;
+  transform: none;
+}
+.detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell-number {
+  transform: none;
 }
 .detail-compact-credits :is(.detail-credit-check, .detail-credit-prefix) { display: inline-block; }
 .detail-credit-check { width: 14px; height: 14px; border: 1px solid var(--muted); border-radius: 3px; }
@@ -6920,7 +6918,6 @@ body.schedule-picking [data-floating-view="schedule"] {
   --detail-episode-hover-edge: var(--accent);
   --detail-watched-paper: rgb(255 255 255 / .08);
   --detail-watched-ink: var(--accent);
-  --detail-download-dot: var(--accent);
   font-size: var(--artwork-action-size);
 }
 [data-detail-background="artwork"] .episode-cell.next-to-play:not(.watched) {

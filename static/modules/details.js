@@ -1042,8 +1042,15 @@ function renderEpisodeGrid() {
                   data-episode-key="${escapeHtml(key)}" data-episode-type="${group.type}" data-detail-episode-label="${escapeHtml(episode.label)}"
                   aria-pressed="${watched}"
                   title="${escapeHtml([showEpisodeTitlesOnHover() ? episodeTitle(episode) : "", downloaded ? "已下载 · 扇区可播放" : ""].filter(Boolean).join(" · "))}">
-                  ${group.type === 2 || group.type === 3 ? `<span class="detail-credit-check" aria-hidden="true"></span><span class="detail-credit-prefix">${escapeHtml(group.type_label)} </span>` : ""}${escapeHtml(episode.label)}
-                  ${annotations.length ? `<span class="episode-note-mark" aria-label="本集有 ${annotations.length} 条记录">✎</span>` : ""}
+                  ${group.type === 2 || group.type === 3 ? `<span class="detail-credit-check" aria-hidden="true"></span><span class="detail-credit-prefix">${escapeHtml(group.type_label)} </span>` : ""}<span class="episode-cell-number">${escapeHtml(episode.label)}</span>
+                  <span class="episode-cell-marks">
+                    ${annotations.length ? `<span class="episode-note-mark" role="img" aria-label="本集有 ${annotations.length} 条记录">
+                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.25 2.75h9.5v7h-5l-3.5 3v-3h-1z"/><path d="M5.75 5.25h4.5M5.75 7.25h3"/></svg>
+                    </span>` : ""}
+                    <span class="episode-download-mark" role="img" aria-label="已下载">
+                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.75v6.5m-2.5-2.5L8 9.25l2.5-2.5M3.25 9.75v2.5h9.5v-2.5"/></svg>
+                    </span>
+                  </span>
                 </button>
               `;
             }).join("")}
