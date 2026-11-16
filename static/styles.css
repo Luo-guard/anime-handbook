@@ -7002,12 +7002,12 @@ body.schedule-picking [data-floating-view="schedule"] {
   inset: 0;
   overflow: hidden;
 }
-[data-detail-background="artwork-full"] .detail-artwork img {
+[data-detail-background="artwork-full"] #detailArtwork {
   inset: 0 auto auto 0;
   height: auto;
 }
 [data-detail-background="artwork-full"] .detail-artwork:has(#detailArtwork.loaded) #detailArtworkCover { visibility: hidden; }
-[data-detail-background="artwork-full"] .detail-artwork-short img {
+[data-detail-background="artwork-full"] .detail-artwork-short #detailArtwork {
   mask-image: linear-gradient(#000 62%, transparent);
 }
 [data-detail-background="artwork-full"] .detail-artwork::after {

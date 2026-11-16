@@ -254,7 +254,7 @@ function syncFullDetailArtwork() {
   if (!dialog?.open || dialog.dataset.detailBackground !== "artwork-full") return;
   const layer = $(".detail-artwork", dialog);
   if (!layer) return;
-  const image = $("#detailArtwork.loaded", layer) || $("#detailArtworkCover.loaded", layer);
+  const image = $("#detailArtwork.loaded", layer);
   const imageHeight = image?.naturalWidth ? layer.clientWidth * image.naturalHeight / image.naturalWidth : 0;
   layer.classList.toggle("detail-artwork-short", imageHeight > 0 && imageHeight < layer.clientHeight - 1);
 }
