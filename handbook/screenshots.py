@@ -84,12 +84,23 @@ def save_png(asset_root: Path, *, anime: str, episode: str, seconds: Any, data_u
     folder = base / _safe_segment(anime, "未命名番剧")
     folder.mkdir(parents=True, exist_ok=True)
     name = render_name(config.get("screenshot_name_format"), anime=anime, episode=episode, seconds=seconds)
-    target = folder / f"{name}.png"
-    index = 2
-    while target.exists():
-        target = folder / f"{name}-{index}.png"
-        index += 1
-    target.write_bytes(blob)
+    index = 1
+    while True:
+        suffix = f"-{index}" if index > 1 else ""
+        target = folder / f"{name}{suffix}.png"
+        try:
+            # Claim the filename in one filesystem operation, even across processes.
+            output = target.open("xb")
+        except FileExistsError:
+            index += 1
+            continue
+        try:
+            with output as handle:
+                handle.write(blob)
+        except OSError:
+            target.unlink(missing_ok=True)
+            raise
+        break
     return {
         "ok": True,
         "relative": target.relative_to(base).as_posix(),
