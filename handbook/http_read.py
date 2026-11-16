@@ -372,7 +372,10 @@ class ReadRoutes:
                     self.send_error_json(404, "动漫不存在")
             elif path.endswith("/comments") and path.startswith("/api/animes/"):
                 anime_id = int(path.split("/")[3])
-                self.send_json({"comments": self.database.list_anime_comments(anime_id)})
+                if query.get("related") == ["1"]:
+                    self.send_json({"records": self.database.list_anime_detail_records(anime_id)})
+                else:
+                    self.send_json({"comments": self.database.list_anime_comments(anime_id)})
             elif path.startswith("/api/animes/"):
                 anime_id = int(path.rsplit("/", 1)[1])
                 anime = self.database.get_anime(anime_id)

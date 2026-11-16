@@ -17,7 +17,7 @@ from datetime import timedelta
 from .concurrency import database_state
 from .record_identity import read_aliases, store_aliases, collapse_repaired
 from .common import (BGM_OFFICIAL_SOURCE, CATEGORY_NAMES, DATA_ROOT, DB_PATH, episode_groups, episode_groups_summary, generated_episodes, json_dumps, json_list, normalize_bgm_sources, normalize_episodes, normalize_theme_ids, normalize_watched_keys, now_iso,
-    normalize_kazumi_category,
+    normalize_kazumi_category, DETAIL_COMMENT_DEFAULTS, DETAIL_COMMENT_RATINGS,
 )
 
 # 区分“不修改这个字段”和“把它改成 None（不映射）”。
@@ -773,6 +773,7 @@ class HandbookDB:
         modern = settings.get("detail_layout") in ("modern", "artwork")
         old_layout = "modern" if modern else "classic"
         settings.setdefault("detail_record_on_change", settings.get(f"detail_{old_layout}_record_on_change", modern))
+        settings.setdefault("detail_comment_types", list(DETAIL_COMMENT_DEFAULTS))
         settings.setdefault("detail_wheel_style", settings.get(f"detail_{old_layout}_wheel_style", old_layout))
         settings.setdefault("detail_compact_credits", modern and settings.get("detail_modern_compact_credits", True))
         return settings
@@ -2090,6 +2091,33 @@ class HandbookDB:
                 (anime_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def list_anime_detail_records(self, anime_id: int) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute(
+                """
+                SELECT id, event_type, content, created_at, theme, themes, episodes, raw_directives
+                FROM events
+                WHERE anime_id = ? AND event_type IN ('note', 'anime_comment') AND trim(content) <> ''
+                ORDER BY julianday(created_at) DESC, id DESC
+                """,
+                (anime_id,),
+            ).fetchall()
+        records = []
+        for row in rows:
+            record = dict(row)
+            themes = normalize_theme_ids(json_list(record["themes"]), record.pop("theme") or "other")
+            if record["event_type"] == "anime_comment":
+                kinds = ["anime_comment"]
+            else:
+                kinds = [theme for theme in themes if theme in DETAIL_COMMENT_RATINGS]
+                if not kinds:
+                    kinds = ["anime_comment" if "anime_comment" in themes else "other"]
+            record["themes"] = themes
+            record["episodes"] = json_list(record["episodes"])
+            record["kinds"] = kinds
+            records.append(record)
+        return records
 
     def delete_event(self, event_id: int) -> bool:
         with self._write_lock, self.connect() as db:

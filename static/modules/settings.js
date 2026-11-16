@@ -214,6 +214,8 @@ function renderSettingsPanels() {
   $("#detailModernOriginalTitleInput").checked = state.settings.detail_modern_original_title !== false;
   $("#detailCompactCreditsInput").checked = state.settings.detail_compact_credits === true;
   $("#detailRecordOnChangeInput").checked = state.settings.detail_record_on_change === true;
+  const commentTypes = detailCommentTypes();
+  $$("#detailCommentTypesInput input").forEach(input => { input.checked = commentTypes.includes(input.value); });
   $("#episodePlaybackSourceInput").value = episodeGestureConfig().playbackSource;
   if (!window.handbookOnline) renderPlaybackSettings();
   $("#kazumiReadOnlyInput").checked=state.settings.kazumi_read_only===true;

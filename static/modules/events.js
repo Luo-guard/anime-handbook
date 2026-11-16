@@ -181,17 +181,22 @@ $("#openAnimeComment").addEventListener("click", () => {
   $("#animeCommentContent").focus();
 });
 $("#openAnimeRating").addEventListener("click", async () => {
-  if (!state.progressAnime) return;
-  const value = prompt("写下你的个人评分（可自由输入，例如：五星上、夯、S）", state.progressAnime.personal_rating_text || state.progressAnime.personal_score || "");
+  const current = state.progressAnime;
+  if (!current) return;
+  const value = prompt("写下你的个人评分（可自由输入，例如：五星上、夯、S）", current.personal_rating_text || current.personal_score || "");
   if (value === null) return;
   const score = value.trim();
   try {
-    const result = await api(`/api/animes/${state.progressAnime.id}/rating`, { method: "POST", body: JSON.stringify({ rating: score }) });
-    state.progressAnime.personal_rating_text = score;
-    const anime = state.animes.find((item) => item.id === state.progressAnime.id);
+    const result = await api(`/api/animes/${current.id}/rating`, { method: "POST", body: JSON.stringify({ rating: score }) });
+    current.personal_rating_text = score;
+    const anime = state.animes.find((item) => item.id === current.id);
     if (anime) anime.personal_rating_text = score;
-    $("#personalRating").textContent = score ? `我的评分 ${score}` : "";
-    $("#personalRating").classList.toggle("hidden", !score);
+    if (state.progressAnime?.id === current.id) {
+      state.progressAnime.personal_rating_text = score;
+      $("#personalRating").textContent = score ? `我的评分 ${score}` : "";
+      $("#personalRating").classList.toggle("hidden", !score);
+      if (detailCommentTypes().includes("anime_rating")) await renderAnimeComments(current.id);
+    }
     renderCollection();
     toast(score ? "评分已写入时间线" : (result.deleted ? "评分与对应记录已删除" : "评分已清除"));
   } catch (error) { toast(error.message, "error"); }

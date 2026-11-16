@@ -59,6 +59,7 @@ const HandbookSettings = (() => {
         detail_record_on_change: $("#detailRecordOnChangeInput").checked,
         detail_wheel_style: $("#detailWheelStyleInput").value,
       };
+      const commentTypes = $$("#detailCommentTypesInput input:checked").map(input => input.value);
       // 只有默认展示记录真的变了，才覆盖时间线当前的临时筛选。
       const previousTimelineDefaults = JSON.stringify(Array.isArray(state.settings.timeline_default_themes) ? state.settings.timeline_default_themes : []);
       await requireScheduleSortingSupport();
@@ -85,6 +86,7 @@ const HandbookSettings = (() => {
           ...progressSources,
           detail_airtime_source: detailAirtimeSource,
           ...detailSettings,
+          detail_comment_types: commentTypes,
           hide_missing_as_schedule: $("#hideMissingAsScheduleInput").checked,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
           schedule_collected_detail_enabled: scheduleCollectedDetail,
@@ -156,6 +158,9 @@ const HandbookSettings = (() => {
       if (Object.entries(detailSettings).some(([key, value]) => payload.settings[key] !== value)) {
         throw new Error("后台未保存番剧详情设置，请重启后台并刷新后重试。");
       }
+      if (JSON.stringify(detailCommentTypes(payload.settings)) !== JSON.stringify(commentTypes)) {
+        throw new Error("后台未保存番剧评论显示设置，请重启后台并刷新后重试。");
+      }
       if (playbackSettings) applyPlaybackSettings(playbackSettings);
       ThemeSettingsSession.finish(true);
       state.settings = payload.settings;
@@ -174,6 +179,7 @@ const HandbookSettings = (() => {
         : new Set(savedTimelineDefaults.filter((id) => visibleThemeIds.has(id)));
       applyTheme();
       applyDetailAppearance();
+      if ($("#progressModal").open && state.progressAnime) renderAnimeComments(state.progressAnime.id);
       applyCharacterTabVisibility();
       if ($("#progressModal").open) renderEpisodeGrid();
       applyCollectionEditingAvailability();

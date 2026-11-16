@@ -6,6 +6,7 @@ import copy
 from contextlib import ExitStack
 import os
 from .common import (CATEGORY_NAMES, normalize_schedule_grouping, normalize_detail_links, normalize_custom_search_links, normalize_link_sync, normalize_bgm_sources, windows_autostart_change)
+from .common import DETAIL_COMMENT_KINDS
 from .shortcuts import normalize_shortcuts
 from .episode_gestures import normalize_episode_gestures
 from .metadata import SyncService
@@ -129,6 +130,7 @@ def _normalize_settings(body, settings):
         "detail_airtime_source",
         "detail_layout",
         "detail_record_on_change",
+        "detail_comment_types",
         "detail_wheel_style",
         "detail_compact_credits",
         "detail_modern_original_title",
@@ -247,6 +249,10 @@ def _normalize_settings(body, settings):
             elif key == "detail_layout":
                 if not isinstance(value, str) or value not in {"classic", "modern", "artwork"}:
                     raise ValueError("番剧详情布局无效")
+            elif key == "detail_comment_types":
+                if not isinstance(value, list) or any(not isinstance(kind, str) or kind not in DETAIL_COMMENT_KINDS for kind in value):
+                    raise ValueError("详情评论显示类型无效")
+                value = list(dict.fromkeys(value))
             elif key in {"detail_wheel_style", "detail_classic_wheel_style", "detail_modern_wheel_style"}:
                 if not isinstance(value, str) or value not in {"classic", "modern"}:
                     raise ValueError("单集扇区样式无效")

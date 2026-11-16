@@ -488,6 +488,7 @@ function renderCharacters(characters, animeId) {
         anime_id: anime.id, theme: "character_record", themes: ["character_record"], content: text,
         raw_directives: recordTextFormat({ themes: ["人物记录"], anime: anime.display_name, content: text }),
       }) });
+      if (state.progressAnime?.id === anime.id && detailCommentTypes().includes("other")) await renderAnimeComments(anime.id);
       toast("人物记录已写入时间线");
     } catch (error) { toast(error.message, "error"); }
   }));
@@ -607,28 +608,58 @@ async function ensureEpisodeTitles(anime) {
   }
 }
 
-function renderAnimeComments(comments) {
+function detailCommentTypes(settings = state.settings) {
+  return Array.isArray(settings.detail_comment_types) ? settings.detail_comment_types : ["anime_comment", "other"];
+}
+
+let detailCommentRequest = 0;
+const detailCommentDate = new Intl.DateTimeFormat("zh-CN", {
+  year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+});
+
+async function renderAnimeComments(animeId) {
   const list = $("#animeCommentList");
-  if (!Array.isArray(comments)) {
-    return api(`/api/animes/${comments}/comments`)
-      .then((result) => renderAnimeComments(result.comments || []))
-      .catch((error) => toast(error.message, "error"));
+  const request = ++detailCommentRequest;
+  const visibleTypes = new Set(detailCommentTypes());
+  list.replaceChildren();
+  list.classList.toggle("hidden", !visibleTypes.size);
+  if (!visibleTypes.size) return;
+  let response;
+  try {
+    response = await api(`/api/animes/${animeId}/comments?related=1`);
+  } catch (error) {
+    if (request === detailCommentRequest && state.progressAnime?.id === animeId) toast(error.message, "error");
     return;
   }
+  if (request !== detailCommentRequest || state.progressAnime?.id !== animeId) return;
+  const records = response.records || (response.comments || []).map(comment => ({
+    ...comment, event_type: "anime_comment", kinds: ["anime_comment"],
+  }));
+  const comments = records.filter(record => record.kinds.some(kind => visibleTypes.has(kind)));
   list.innerHTML = comments.length
-    ? comments.map((comment) => `
+    ? comments.map((comment) => {
+      const editable = comment.event_type === "anime_comment";
+      const label = comment.kinds.map(kind => kind === "other"
+        ? comment.themes?.filter(theme => theme !== "other").map(theme => eventTheme({theme}).name).join(" / ") || "关联感想"
+        : eventTheme({theme: kind}).name).join(" / ");
+      const keys = new Set((comment.episodes || []).map(key => episodeStorageKey(key, state.progressAnime)));
+      const matchedEpisodes = (state.progressAnime.episodes || []).filter(episode => keys.has(episodeStorageKey(episode.key, state.progressAnime)));
+      const episodeText = (comment.raw_directives && parseRecordDirectives(comment.raw_directives).episodeText)
+        || matchedEpisodes.map(episode => episode.display_label || `${episode.type_label || "本篇"} ${episode.label}`).join("、");
+      return `
         <article class="anime-comment-item" data-comment-id="${comment.id}">
           <div class="anime-comment-head">
-            <time>${formatTime(comment.created_at)}</time>
-            <div class="anime-comment-actions">
+            <span class="anime-comment-meta"><strong>${escapeHtml(label)}</strong>${episodeText ? `<span>${escapeHtml(episodeText)}</span>` : ""}<time>${detailCommentDate.format(new Date(comment.created_at))}</time></span>
+            ${editable ? `<div class="anime-comment-actions">
               <button type="button" class="anime-comment-action edit-anime-comment" data-comment-id="${comment.id}">编辑</button>
               <button type="button" class="anime-comment-action delete-anime-comment" data-comment-id="${comment.id}">删除</button>
-            </div>
+            </div>` : ""}
           </div>
-          <p>${escapeHtml(comment.content)}</p>
+          ${editable ? `<p>${escapeHtml(comment.content)}</p>` : `<div class="anime-comment-content">${renderRecordText(comment.content)}</div>`}
         </article>
-      `).join("")
-    : `<p class="muted-line">还没有番剧评论。</p>`;
+      `;
+    }).join("")
+    : `<p class="muted-line">暂无符合显示设置的记录。</p>`;
 
   list.querySelectorAll(".edit-anime-comment").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1194,6 +1225,9 @@ async function createEpisodeQuickRecord(episode, action) {
     try {
       await renderTimeline();
       await refreshEpisodeRecordAnnotations(anime.id);
+      if (state.progressAnime?.id === anime.id && detailCommentTypes().includes(definition.id === "oped" ? "other" : definition.id)) {
+        await renderAnimeComments(anime.id);
+      }
       toast(`${definition.label}已写入时间线`);
     } catch (refreshError) {
       toast(`记录已保存，刷新显示失败：${refreshError.message}`, "error");

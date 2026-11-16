@@ -294,6 +294,11 @@ def normalize_theme_ids(value: Any, fallback: str = "other") -> list[str]:
     return result or ([fallback] if fallback else [])
 
 
+DETAIL_COMMENT_DEFAULTS = ("anime_comment", "other")
+DETAIL_COMMENT_RATINGS = ("episode_review", "episode_rating", "anime_rating")
+DETAIL_COMMENT_KINDS = (*DETAIL_COMMENT_DEFAULTS, *DETAIL_COMMENT_RATINGS)
+
+
 def episode_type_label(type_value: int) -> str:
     return EPISODE_TYPE_NAMES.get(int(type_value), f"类型 {type_value}")
 
