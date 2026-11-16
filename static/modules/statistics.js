@@ -100,10 +100,14 @@ function renderStatisticsChart(series) {
   if (bars) requestAnimationFrame(() => { bars.scrollLeft = bars.scrollWidth; });
 }
 
+let statisticsRequest = 0;
+
 async function renderStatistics() {
+  const request = ++statisticsRequest;
   try {
     renderStatisticsTypeControls();
     const result = await api(`/api/statistics?period=${state.statisticsPeriod}&type=${state.statisticsType}`);
+    if (request !== statisticsRequest) return;
     const series = visibleStatisticsSeries(result.series);
     const metric = state.statisticsType === "watch" ? "episodes" : "records";
     const total = series.reduce((sum, item) => sum + Number(item[metric] || 0), 0);
@@ -114,6 +118,8 @@ async function renderStatistics() {
     $("#statisticsSummary").innerHTML = `<strong>${total}</strong><span>${statisticsMetricLabel()} · ${series.length} 个统计周期</span>${balanceHtml}`;
     renderStatisticsChart(series);
   } catch (error) {
+    if (request !== statisticsRequest) return;
+    $("#statisticsSummary").replaceChildren();
     $("#statisticsChart").innerHTML = `<div class="statistics-empty">${escapeHtml(error.message)}</div>`;
   }
 }

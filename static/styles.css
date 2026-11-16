@@ -6057,6 +6057,9 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   border-radius: 10px;
   pointer-events: none;
 }
+.lib-image-viewer .modal-frame:fullscreen #libImageLoadStatus {
+  bottom: calc(var(--image-control-inset) + 42px);
+}
 .lib-image-viewer .modal-frame:fullscreen :is(#libImageClose, #libImageFullscreen, .lib-image-nav, .lib-image-caption) {
   border: 1px solid rgb(255 255 255 / .24);
   background: rgb(20 22 25 / .82);

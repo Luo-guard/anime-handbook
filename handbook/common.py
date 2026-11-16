@@ -585,6 +585,13 @@ def with_initial_appearance(html: str, settings: dict[str, Any], account_id: str
     ).replace("<", "\\u003c")
     marker = '<script id="initialAppearance" type="application/json">{}</script>'
     html = html.replace(marker, f'<script id="initialAppearance" type="application/json">{payload}</script>', 1)
+    visibility = settings.get("sidebar_visibility")
+    schedule_hidden = isinstance(visibility, dict) and visibility.get("schedule") is False
+    if settings.get("default_view") == "schedule" and not schedule_hidden:
+        html = html.replace('class="view active" id="collectionView"', 'class="view" id="collectionView"', 1)
+        html = html.replace('class="view" id="scheduleView"', 'class="view active" id="scheduleView"', 1)
+        html = html.replace('class="nav-item active" data-view="collection"', 'class="nav-item" data-view="collection"', 1)
+        html = html.replace('class="nav-item" data-view="schedule"', 'class="nav-item active" data-view="schedule"', 1)
     return with_initial_visibility(html, settings)
 
 

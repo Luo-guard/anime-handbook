@@ -2,7 +2,7 @@ import re
 import unittest
 from pathlib import Path
 
-from handbook.common import INITIAL_VISIBILITY, with_initial_visibility
+from handbook.common import INITIAL_VISIBILITY, with_initial_appearance, with_initial_visibility
 
 INDEX_HTML = Path(__file__).resolve().parent.parent / "static" / "index.html"
 
@@ -15,6 +15,21 @@ def tag_for(html: str, element_id: str) -> str:
 
 
 class InitialVisibilityTest(unittest.TestCase):
+    def test_schedule_home_is_already_selected_in_the_html(self):
+        html = INDEX_HTML.read_text(encoding="utf-8")
+        rendered = with_initial_appearance(html, {"default_view": "schedule"}, "local")
+        self.assertIn('class="view active" id="scheduleView"', rendered)
+        self.assertIn('class="view" id="collectionView"', rendered)
+        self.assertIn('class="nav-item active" data-view="schedule"', rendered)
+        self.assertNotIn('class="nav-item active" data-view="collection"', rendered)
+
+    def test_hidden_schedule_home_keeps_collection_as_fallback(self):
+        html = INDEX_HTML.read_text(encoding="utf-8")
+        settings = {"default_view": "schedule", "sidebar_visibility": {"schedule": False}}
+        rendered = with_initial_appearance(html, settings, "local")
+        self.assertIn('class="view active" id="collectionView"', rendered)
+        self.assertIn('class="view" id="scheduleView"', rendered)
+
     def test_markup_ships_hidden(self):
         """元素默认必须是隐藏的，否则首屏会闪一下。"""
         html = INDEX_HTML.read_text(encoding="utf-8")

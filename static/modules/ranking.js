@@ -32,9 +32,19 @@ function renderRanking() {
   $("#rankingWorkspace").style.setProperty("--ranking-hover-delay", `${rankingHoverDelay()}s`);
 }
 
+let rankingBoardRequest = 0;
+
 async function loadRankingBoard(boardId) {
   if (state.rankingBoard && state.rankingDirtyBoards.has(state.rankingBoard.id) && !confirm("当前排行榜有未保存的排序，切换会丢失这些更改。确定切换吗？")) return;
-  try { const result = await api(`/api/rankings/${boardId}`); state.rankingBoard = result.board; renderRanking(); } catch (error) { toast(error.message, "error"); }
+  const request = ++rankingBoardRequest;
+  try {
+    const result = await api(`/api/rankings/${boardId}`);
+    if (request !== rankingBoardRequest) return;
+    state.rankingBoard = result.board;
+    renderRanking();
+  } catch (error) {
+    if (request === rankingBoardRequest) toast(error.message, "error");
+  }
 }
 
 async function createRankingBoard() {

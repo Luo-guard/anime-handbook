@@ -964,10 +964,10 @@ function refreshEpisodeAiringStatus() {
 let episodeDownloadKeys = new Set();
 let episodeMarkToken = 0;
 
-async function syncEpisodeDownloadMarks(files = null) {
+async function syncEpisodeDownloadMarks(animeId = Number(state.progressAnime?.id), files = null) {
   const anime = state.progressAnime;
-  const animeId = Number(anime?.id || 0);
-  if (!animeId || typeof episodeStorageKey !== "function") return;
+  const dialog = $("#progressModal");
+  if (!animeId || animeId !== Number(anime?.id) || !dialog.open || typeof episodeStorageKey !== "function") return;
   const token = ++episodeMarkToken;
   let list = Array.isArray(files) ? files : null;
   if (!list) {
@@ -980,12 +980,12 @@ async function syncEpisodeDownloadMarks(files = null) {
       return; // 离线服务没开就保持无标记
     }
   }
-  if (Number(state.progressAnime?.id || 0) !== animeId) return;
+  if (!dialog.open || Number(state.progressAnime?.id) !== animeId) return;
   episodeDownloadKeys = new Set(
     list.filter((item) => item && item.exists !== false)
       .map((item) => episodeStorageKey(item.episode_key, anime))
   );
-  $$(".episode-cell").forEach((cell) => {
+  $$(".episode-cell", dialog).forEach((cell) => {
     const on = episodeDownloadKeys.has(episodeStorageKey(cell.dataset.episodeKey, anime));
     cell.classList.toggle("downloaded", on);
     // 首次打开详情时格子已经渲染完、角标是异步补的，title 也要一起补；

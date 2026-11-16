@@ -842,14 +842,19 @@ async function deleteSelectedImages() {
 }
 
 let recordImageGallery = null;
+let imagePreviewRequest = 0;
+let visibleLibraryImage = null;
+let libraryImageDeleting = false;
 
 function openRecordImagePreview(images, index, folder, {fullscreen = true} = {}) {
+  if (libraryImageDeleting) return;
   recordImageGallery = { images, index, folder };
   openLibraryImage(index);
   if (fullscreen) $("#libImageFullscreen").click();
 }
 
-function openLibraryImage(index) {
+async function openLibraryImage(index) {
+  if (libraryImageDeleting) return;
   const flat = recordImageGallery?.images || librarySidebar.imageFlat || [];
   if (!flat.length) return;
   const total = flat.length;
@@ -857,37 +862,74 @@ function openLibraryImage(index) {
   if (recordImageGallery) recordImageGallery.index = current;
   else librarySidebar.imageIndex = current;
   const image = flat[current];
-  $("#libImageView").src = recordImageGallery && image.url ? image.url : libImageUrl(image.relative);
-  $("#libImageView").alt = image.name;
   const folder = recordImageGallery?.folder || image.folder;
-  $("#libImageCaption").textContent = `${folder} / ${image.name}　（${current + 1} / ${total}）`;
+  const caption = $("#libImageCaption");
+  const status = $("#libImageLoadStatus");
+  const deleteButton = $("#libImageDelete");
+  const request = ++imagePreviewRequest;
+  status.hidden = false;
+  status.textContent = "正在加载图片…";
   $("#libImagePrev").disabled = total <= 1;
   $("#libImageNext").disabled = total <= 1;
-  $("#libImageDelete").hidden = Boolean(recordImageGallery);
+  deleteButton.hidden = Boolean(recordImageGallery);
+  deleteButton.disabled = true;
   const dialog = $("#libImageViewer");
-  if (dialog && !dialog.open) {
+  if (!dialog.open) {
+    visibleLibraryImage = null;
+    caption.textContent = "";
+    $("#libImageView").removeAttribute("src");
     dialog.setAttribute("aria-label", recordImageGallery ? "记录图片预览" : "截图预览");
     dialog.showModal();
+  }
+  const preview = new Image();
+  preview.id = "libImageView";
+  preview.alt = image.name;
+  preview.src = recordImageGallery && image.url ? image.url : libImageUrl(image.relative);
+  try {
+    await preview.decode();
+    if (request !== imagePreviewRequest || !dialog.open) return;
+    $("#libImageView").replaceWith(preview);
+    visibleLibraryImage = image;
+    caption.textContent = `${folder} / ${image.name}　（${current + 1} / ${total}）`;
+    status.hidden = true;
+    deleteButton.disabled = false;
+  } catch (_) {
+    if (request === imagePreviewRequest && dialog.open) status.textContent = "图片加载失败，可以继续切换。";
   }
 }
 
 async function deleteLibraryImage() {
-  if (recordImageGallery) return;
-  const flat = librarySidebar.imageFlat || [];
-  const image = flat[librarySidebar.imageIndex];
+  const dialog = $("#libImageViewer");
+  const deleteButton = $("#libImageDelete");
+  if (!dialog.open || recordImageGallery || libraryImageDeleting || deleteButton.disabled) return;
+  const image = visibleLibraryImage;
   if (!image) return;
   // 截图删掉就找不回来了，先拦一下。
   if (!window.confirm(`删除「${image.name}」？删除后不可恢复。`)) return;
+  const request = imagePreviewRequest;
+  libraryImageDeleting = true;
+  deleteButton.disabled = true;
+  $("#libImagePrev").disabled = $("#libImageNext").disabled = true;
   try {
     await api("/api/offline/screenshot/delete", { method: "POST", body: JSON.stringify({ relative: image.relative }) });
     toast(`已删除 ${image.name}`);
-    $("#libImageViewer")?.close();
+    librarySidebar.imageFlat = (librarySidebar.imageFlat || []).filter(item => item.relative !== image.relative);
     librarySidebar.imagesLoaded = false;
     await loadLibraryImages();
-    if ((librarySidebar.imageFlat || []).length) openLibraryImage(Math.min(librarySidebar.imageIndex, librarySidebar.imageFlat.length - 1));
   } catch (error) {
     toast(`删除失败：${error.message || error}`, "error");
+    if (request === imagePreviewRequest && dialog.open) {
+      deleteButton.disabled = false;
+      $("#libImagePrev").disabled = $("#libImageNext").disabled = (librarySidebar.imageFlat || []).length <= 1;
+    }
+    return;
+  } finally {
+    libraryImageDeleting = false;
   }
+  if (request !== imagePreviewRequest || !dialog.open) return;
+  const length = (librarySidebar.imageFlat || []).length;
+  dialog.close();
+  if (length) openLibraryImage(Math.min(librarySidebar.imageIndex, length - 1));
 }
 
 // ---------- 初始化 ----------
@@ -980,6 +1022,8 @@ function initLibraryView() {
   imageViewer.addEventListener("close", () => {
     if (imageViewer.open) return;
     recordImageGallery = null;
+    imagePreviewRequest += 1;
+    visibleLibraryImage = null;
     clearTimeout(imageControlsTimer);
     if (document.fullscreenElement === imageFrame) document.exitFullscreen().catch(() => {});
   });
