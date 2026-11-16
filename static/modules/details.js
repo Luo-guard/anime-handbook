@@ -617,6 +617,27 @@ const detailCommentDate = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
 });
 
+function detailRecordImagesMarkup(images, removable = false) {
+  if (!images.length) return "";
+  return `<div class="detail-record-images">${images.map((image, index) => {
+    const name = image[1] || `图片 ${index + 1}`;
+    return `<div class="detail-record-image">
+      <button type="button" class="detail-record-thumb" data-preview-record-image="${index}" aria-label="查看${escapeHtml(name)}">
+        <img src="${escapeHtml(image[2])}" alt="${escapeHtml(name)}" loading="lazy" decoding="async">
+      </button>
+      ${removable ? `<button type="button" class="detail-record-remove" data-remove-record-image="${index}" aria-label="移除${escapeHtml(name)}">×</button>` : ""}
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function previewDetailRecordImage(event) {
+  const button = event.target.closest("[data-preview-record-image]");
+  if (!button) return;
+  const images = [...button.closest(".detail-record-images").querySelectorAll("img")]
+    .map(image => ({url: image.src, name: image.alt}));
+  openRecordImagePreview(images, Number(button.dataset.previewRecordImage), "记录图片", {fullscreen: false});
+}
+
 async function renderAnimeComments(animeId) {
   const list = $("#animeCommentList");
   const request = ++detailCommentRequest;
@@ -636,6 +657,7 @@ async function renderAnimeComments(animeId) {
     ...comment, event_type: "anime_comment", kinds: ["anime_comment"],
   }));
   const comments = records.filter(record => record.kinds.some(kind => visibleTypes.has(kind)));
+  list.onclick = previewDetailRecordImage;
   list.innerHTML = comments.length
     ? comments.map((comment) => {
       const editable = comment.event_type === "anime_comment";
@@ -646,6 +668,9 @@ async function renderAnimeComments(animeId) {
       const matchedEpisodes = (state.progressAnime.episodes || []).filter(episode => keys.has(episodeStorageKey(episode.key, state.progressAnime)));
       const episodeText = (comment.raw_directives && parseRecordDirectives(comment.raw_directives).episodeText)
         || matchedEpisodes.map(episode => episode.display_label || `${episode.type_label || "本篇"} ${episode.label}`).join("、");
+      const content = String(comment.content || "");
+      const images = recordImageMatches(content);
+      const text = recordTextWithoutImages(content, images);
       return `
         <article class="anime-comment-item" data-comment-id="${comment.id}">
           <div class="anime-comment-head">
@@ -655,7 +680,10 @@ async function renderAnimeComments(animeId) {
               <button type="button" class="anime-comment-action delete-anime-comment" data-comment-id="${comment.id}">删除</button>
             </div>` : ""}
           </div>
-          ${editable ? `<p>${escapeHtml(comment.content)}</p>` : `<div class="anime-comment-content">${renderRecordText(comment.content)}</div>`}
+          <div class="anime-comment-body">
+            ${text ? `<p>${escapeHtml(text)}</p>` : ""}
+            ${detailRecordImagesMarkup(images)}
+          </div>
         </article>
       `;
     }).join("")
@@ -675,14 +703,14 @@ async function renderAnimeComments(animeId) {
           <button type="submit" class="primary-button compact-button">保存</button>
         </div>
       `;
-      article.querySelector("p")?.classList.add("hidden");
+      article.querySelector(".anime-comment-body").classList.add("hidden");
       article.append(editor);
       const textarea = editor.querySelector("textarea");
       textarea.focus();
       textarea.setSelectionRange(textarea.value.length, textarea.value.length);
       editor.querySelector(".cancel-anime-comment-edit").addEventListener("click", () => {
         editor.remove();
-        article.querySelector("p")?.classList.remove("hidden");
+        article.querySelector(".anime-comment-body").classList.remove("hidden");
       });
       editor.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -883,7 +911,11 @@ function episodeAnnotationMarkup(annotations) {
     const names = annotation.themes
       .map((id) => eventTheme({ theme: id }).name)
       .join("、");
-    return `<div><strong>${escapeHtml(names)}</strong><span>${escapeHtml(annotation.content || "（无正文）")}</span></div>`;
+    const content = String(annotation.content || "");
+    const images = recordImageMatches(content);
+    const text = recordTextWithoutImages(content, images);
+    const summary = [text, images.length ? `${images.length} 张图片` : ""].filter(Boolean).join(" · ");
+    return `<div><strong>${escapeHtml(names)}</strong><span>${escapeHtml(summary || "（无正文）")}</span></div>`;
   }).join("");
 }
 
@@ -1173,7 +1205,13 @@ async function createEpisodeQuickRecord(episode, action) {
         <label for="episodeRecordContent">${escapeHtml(definition.prompt)}</label>
         ${action === "score"
           ? '<input id="episodeRecordContent" type="text" required autofocus />'
-          : '<textarea id="episodeRecordContent" rows="4" required autofocus></textarea>'}
+          : '<textarea id="episodeRecordContent" rows="4" autofocus></textarea>'}
+        <div class="episode-record-attachments">
+          <label class="secondary-button compact-button note-image-button">添加图片<input type="file" accept="image/png,image/jpeg,image/webp" multiple aria-label="添加图片" /></label>
+          <textarea data-episode-images hidden></textarea>
+          <div data-episode-image-previews></div>
+          <p class="episode-image-status" role="status" hidden></p>
+        </div>
         <p class="episode-record-error" role="alert" hidden></p>
       </div>
       <footer class="episode-record-footer">
@@ -1185,7 +1223,40 @@ async function createEpisodeQuickRecord(episode, action) {
   const error = dialog.querySelector(".episode-record-error");
   const form = dialog.querySelector("form");
   const submit = form.querySelector('button[type="submit"]');
-  const closeButtons = dialog.querySelectorAll('button[type="button"]');
+  const closeButtons = dialog.querySelectorAll(".episode-record-close, [data-cancel-record]");
+  const imageInput = dialog.querySelector('input[type="file"]');
+  const attachments = dialog.querySelector("[data-episode-images]");
+  const previews = dialog.querySelector("[data-episode-image-previews]");
+  const imageStatus = dialog.querySelector(".episode-image-status");
+  const setImageStatus = message => {
+    imageStatus.textContent = message;
+    imageStatus.hidden = !message;
+  };
+  const refreshPreviews = () => {
+    previews.innerHTML = detailRecordImagesMarkup(recordImageMatches(attachments.value), true);
+    attachments.setSelectionRange(attachments.value.length, attachments.value.length);
+  };
+  bindRecordImageInput(imageInput, attachments, () => anime.id, refreshPreviews, {
+    setUploading: uploading => {
+      imageInput.disabled = uploading;
+      submit.disabled = uploading;
+    },
+    onProgress: setImageStatus,
+    onError: setImageStatus,
+    onSuccess: () => setImageStatus(""),
+  });
+  previews.addEventListener("click", event => {
+    const button = event.target.closest("[data-remove-record-image]");
+    if (!button) {
+      previewDetailRecordImage(event);
+      return;
+    }
+    const image = recordImageMatches(attachments.value)[Number(button.dataset.removeRecordImage)];
+    if (!image) return;
+    attachments.setRangeText("", image.index, image.index + image[0].length, "end");
+    refreshPreviews();
+    imageInput.focus();
+  });
   field.value = definition.initial || "";
   for (const button of closeButtons) button.addEventListener("click", () => dialog.close());
   dialog.addEventListener("cancel", (event) => {
@@ -1195,15 +1266,19 @@ async function createEpisodeQuickRecord(episode, action) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (submit.disabled) return;
-    const text = field.value.trim();
-    if (!text) {
+    const value = field.value.trim();
+    const images = recordImageMatches(attachments.value).map(image => image[0]);
+    if (!value && (action === "score" || !images.length)) {
       error.textContent = action === "score" ? "单集评分不能为空" : "记录内容不能为空";
       error.hidden = false;
       field.focus();
       return;
     }
+    const text = [value, ...images].filter(Boolean).join("\n");
     error.hidden = true;
     submit.disabled = true;
+    imageInput.disabled = true;
+    previews.inert = true;
     field.readOnly = true;
     for (const button of closeButtons) button.disabled = true;
     try {
@@ -1222,6 +1297,8 @@ async function createEpisodeQuickRecord(episode, action) {
       error.textContent = requestError.message;
       error.hidden = false;
       submit.disabled = false;
+      imageInput.disabled = false;
+      previews.inert = false;
       field.readOnly = false;
       for (const button of closeButtons) button.disabled = false;
       field.focus();

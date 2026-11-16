@@ -182,9 +182,22 @@ function renderRecordContent(event, parts = eventRecordParts(event)) {
   return `${pills}${parts.content ? `<p>${renderRecordText(parts.content)}</p>` : ""}`;
 }
 
+function recordImageMatches(value) {
+  return [...String(value || "").matchAll(/!\[([^\]]*)\]\(((?:\/api\/(?:record-images\/[A-Za-z0-9_-]+\.(?:png|jpg|webp)|character-covers\/\d+\/\d+)|https?:\/\/[^\s)]+))\)/g)];
+}
+
+function recordTextWithoutImages(text, matches) {
+  let end = text.length;
+  let result = "";
+  for (const match of [...matches].reverse()) {
+    result = text.slice(match.index + match[0].length, end) + result;
+    end = match.index;
+  }
+  return (text.slice(0, end) + result).trim();
+}
+
 function renderRecordText(value) {
-  const imagePattern = /!\[([^\]]*)\]\(((?:\/api\/(?:record-images\/[A-Za-z0-9_-]+\.(?:png|jpg|webp)|character-covers\/\d+\/\d+)|https?:\/\/[^\s)]+))\)/g;
-  const matches = [...String(value || "").matchAll(imagePattern)];
+  const matches = recordImageMatches(value);
   let cursor = 0;
   let output = "";
   for (let index = 0; index < matches.length; index += 1) {

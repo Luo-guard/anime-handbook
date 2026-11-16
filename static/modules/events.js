@@ -317,31 +317,31 @@ async function createRecordTheme() {
 setupDismissibleMenu("#noteThemeButton", "#noteThemeMenu");
 setupAssociatedAnimeMenu();
 
-async function insertRecordImages(input, textarea) {
+async function insertRecordImages(input, textarea, options) {
   const files = [...(input.files || [])];
   input.value = "";
-  await insertRecordImageFiles(files, textarea);
+  await insertRecordImageFiles(files, textarea, options);
 }
 
-async function insertRecordImageFiles(files, textarea) {
+async function insertRecordImageFiles(files, textarea, {onError = message => toast(message, "error"), ...uploadOptions} = {}) {
   if (!files.length) return;
   if (files.length > 9) {
-    toast("一次最多插入 9 张图片", "error");
+    onError("一次最多插入 9 张图片");
     return;
   }
   const oversized = files.find(file => file.size > 8 * 1024 * 1024);
   if (oversized) {
-    toast(`图片「${oversized.name}」不能超过 8 MB`, "error");
+    onError(`图片「${oversized.name}」不能超过 8 MB`);
     return;
   }
   try {
-    await uploadRecordImageFiles(files, files.length, textarea);
+    await uploadRecordImageFiles(files, files.length, textarea, uploadOptions);
   } catch (error) {
-    toast(error.message, "error");
+    onError(error.message);
   }
 }
 
-async function uploadRecordImageFiles(files, total, textarea, { signal, onProgress = toast } = {}) {
+async function uploadRecordImageFiles(files, total, textarea, { signal, onProgress = toast, onSuccess = toast } = {}) {
   const inserts = [];
   for await (const file of files) {
     if (file.size > 8 * 1024 * 1024) throw new Error(`图片「${file.name}」不能超过 8 MB`);
@@ -362,21 +362,27 @@ async function uploadRecordImageFiles(files, total, textarea, { signal, onProgre
           signal,
         });
       })();
-    inserts.push(`![${file.name}](${result.url})`);
+    const label = file.name.replace(/[\[\]\r\n]/g, "-");
+    inserts.push(`![${label}](${result.url})`);
   }
   signal?.throwIfAborted();
   if (!textarea.isConnected) return;
   const insert = inserts.join("\n");
   textarea.setRangeText(insert, textarea.selectionStart, textarea.selectionEnd, "end");
   textarea.focus();
-  toast(total > 1 ? `${total} 张图片已插入记录` : "图片已插入记录");
+  onSuccess(total > 1 ? `${total} 张图片已插入记录` : "图片已插入记录");
 }
 
-function bindRecordImageInput(input, textarea, animeId, afterInsert = () => {}) {
+function bindRecordImageInput(input, textarea, animeId, afterInsert = () => {}, {setUploading = () => {}, ...options} = {}) {
   let nativePicker = false;
   input.addEventListener("change", async () => {
-    await insertRecordImages(input, textarea);
-    if (textarea.isConnected) afterInsert();
+    setUploading(true);
+    try {
+      await insertRecordImages(input, textarea, options);
+      if (textarea.isConnected) afterInsert();
+    } finally {
+      setUploading(false);
+    }
   });
   input.addEventListener("click", (event) => {
     if (nativePicker || window.handbookOnline) return;

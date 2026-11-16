@@ -827,10 +827,10 @@ async function deleteSelectedImages() {
 
 let recordImageGallery = null;
 
-function openRecordImagePreview(images, index, folder) {
+function openRecordImagePreview(images, index, folder, {fullscreen = true} = {}) {
   recordImageGallery = { images, index, folder };
   openLibraryImage(index);
-  $("#libImageFullscreen").click();
+  if (fullscreen) $("#libImageFullscreen").click();
 }
 
 function openLibraryImage(index) {
@@ -841,7 +841,7 @@ function openLibraryImage(index) {
   if (recordImageGallery) recordImageGallery.index = current;
   else librarySidebar.imageIndex = current;
   const image = flat[current];
-  $("#libImageView").src = libImageUrl(image.relative);
+  $("#libImageView").src = recordImageGallery && image.url ? image.url : libImageUrl(image.relative);
   $("#libImageView").alt = image.name;
   const folder = recordImageGallery?.folder || image.folder;
   $("#libImageCaption").textContent = `${folder} / ${image.name}　（${current + 1} / ${total}）`;
@@ -849,7 +849,10 @@ function openLibraryImage(index) {
   $("#libImageNext").disabled = total <= 1;
   $("#libImageDelete").hidden = Boolean(recordImageGallery);
   const dialog = $("#libImageViewer");
-  if (dialog && !dialog.open) dialog.showModal();
+  if (dialog && !dialog.open) {
+    dialog.setAttribute("aria-label", recordImageGallery ? "记录图片预览" : "截图预览");
+    dialog.showModal();
+  }
 }
 
 async function deleteLibraryImage() {

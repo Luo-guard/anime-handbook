@@ -2088,12 +2088,54 @@ input[type="number"] {
   color: #a65a5a;
 }
 
-.anime-comment-item :is(p, .anime-comment-content) {
+.anime-comment-item p {
   margin: 5px 0 0;
   color: #45516f;
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.detail-record-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 108px), 1fr));
+  gap: 8px;
+  max-width: 470px;
+  margin-top: 8px;
+}
+.anime-comment-body .detail-record-images:has(> :only-child) {
+  grid-template-columns: minmax(0, 230px);
+}
+.detail-record-image { position: relative; min-width: 0; }
+.detail-record-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  cursor: zoom-in;
+}
+.detail-record-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.detail-record-thumb:focus-visible, .detail-record-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.detail-record-remove {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(18 20 25 / .8);
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
 }
 
 .anime-comment-editor {
@@ -6248,6 +6290,17 @@ body.schedule-picking [data-floating-view="schedule"] {
   color: var(--ink);
 }
 .episode-record-body textarea { resize: vertical; }
+.episode-record-body:has(.episode-record-attachments) { grid-template-columns: minmax(0, 1fr); }
+.episode-record-attachments .note-image-button {
+  width: fit-content;
+  max-width: 100%;
+}
+.episode-record-attachments .note-image-button:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.episode-record-attachments .note-image-button:has(input:disabled) { opacity: .6; }
+.episode-image-status { margin: 6px 0 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .episode-record-error { margin: 0; color: var(--danger); font-size: 13px; }
 .episode-record-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--line); }
 .episode-record-footer button { min-height: 38px; padding: 6px 14px; }
@@ -6871,7 +6924,7 @@ body.schedule-picking [data-floating-view="schedule"] {
   border-color: var(--line);
 }
 [data-detail-background="artwork"] .age-related-card:hover { border-color: var(--accent); }
-[data-detail-background="artwork"] .anime-comment-item :is(p, .anime-comment-content) { color: var(--ink); }
+[data-detail-background="artwork"] .anime-comment-item p { color: var(--ink); }
 [data-detail-background="artwork"] .anime-comment-item time { color: var(--muted); }
 [data-detail-background="artwork"] :is(#saveProgress, #saveAnimeComment).primary-button:not(:disabled) {
   background: var(--accent);
