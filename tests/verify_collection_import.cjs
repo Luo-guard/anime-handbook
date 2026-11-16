@@ -95,6 +95,9 @@ await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/to
 // Parsers: plain lines, CSV with header, Excel-style tab paste, JSON objects.
 assert.deepEqual(await page.evaluate(()=>parseImportText('葬送的芙莉莲\n药屋少女的呢喃\n\n葬送的芙莉莲')),['葬送的芙莉莲','药屋少女的呢喃']);
 assert.deepEqual(await page.evaluate(()=>parseImportText('番剧,状态\n葬送的芙莉莲,看过\n药屋少女的呢喃,在看')),['葬送的芙莉莲','药屋少女的呢喃']);
+assert.deepEqual(await page.evaluate(() => parseImportText('\uFEFF"番剧",备注\r\n"Hello, World!","两行\r\n备注"\r\n"她说 ""你好""，然后转身",在看')), [
+  'Hello, World!', '她说 "你好"，然后转身',
+]);
 assert.deepEqual(await page.evaluate(()=>parseImportText('葬送的芙莉莲\t1\n药屋少女的呢喃\t2')),['葬送的芙莉莲','药屋少女的呢喃']);
 assert.deepEqual(await page.evaluate(()=>parseImportText('[{"name":"葬送的芙莉莲"},{"title":"药屋少女的呢喃"},"进击的巨人"]')),['葬送的芙莉莲','药屋少女的呢喃','进击的巨人']);
 // Large lists are capped at 2000 entries instead of the old 300.
@@ -138,10 +141,9 @@ await page.waitForFunction(()=>/xlsx/.test(document.querySelector('#importStatus
 assert.match(await page.locator('#importStatus').textContent(),/另存为/);
 
 // A picked file lands in the textarea, so the user can still edit it before importing.
-await page.locator('#importFile').setInputFiles({name:'list.csv',mimeType:'text/csv',buffer:Buffer.from('番剧,状态\n葬送的芙莉莲,看过','utf8')});
+await page.locator('#importFile').setInputFiles({name:'list.csv',mimeType:'text/csv',buffer:Buffer.from('番剧,状态\n葬送的芙莉莲,看过\n"Hello, World!",在看','utf8')});
 await page.waitForFunction(()=>document.querySelector('#importPaste').value.includes('葬送的芙莉莲'));
 assert.match(await page.locator('#importStatus').textContent(),/list\.csv/);
-await page.locator('#importPaste').fill('葬送的芙莉莲\n药屋少女的呢喃');
 await page.locator('#importParse').click();
 const work=page.locator('#importWork');
 assert.equal(await work.evaluate(node=>node.classList.contains('hidden')),false);
@@ -154,7 +156,8 @@ assert.deepEqual(await page.evaluate(()=>queries.slice(0,1)),['"葬送的芙莉�
 assert.match(await page.locator('#importSearched').textContent(),/完整标题匹配/);
 // 下一条 / 上一条 switch the entry and re-search
 await page.locator('#importNext').click();
-await page.waitForFunction(()=>document.querySelector('#importName').value==='药屋少女的呢喃');
+await page.waitForFunction(()=>document.querySelector('#importName').value==='Hello, World!');
+await page.waitForFunction(()=>queries.includes('"Hello, World!"'));
 assert.equal(await page.locator('#importCount').textContent(),'2 / 2');
 assert.equal(await page.locator('#importNext').isDisabled(),true);
 await page.locator('#importPrev').click();
@@ -163,7 +166,7 @@ assert.equal(await page.locator('#importPrev').isDisabled(),true);
 // Adding through the card advances to the next entry automatically
 await page.locator('#importResults [data-collect-trigger]').first().click();
 await page.locator('.collect-menu [data-collect-value="1"]').click();
-await page.waitForFunction(()=>document.querySelector('#importName').value==='药屋少女的呢喃');
+await page.waitForFunction(()=>document.querySelector('#importName').value==='Hello, World!');
 assert.deepEqual(await page.evaluate(()=>requests),[{anime_id:100,status:1}]);
 assert.match(await page.locator('#importProgress').textContent(),/已添加 1 条/);
 // Skip marks the entry

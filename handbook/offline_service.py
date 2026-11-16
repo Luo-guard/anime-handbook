@@ -106,13 +106,14 @@ _AUTO_CHECK_NEXT: dict[str, float] = {}
 
 
 def _release_episode(item: dict[str, Any]) -> int:
-    """条目对应第几集；标题里认不出来就是 0。
+    """条目对应的正片集数；特别篇或无法识别的标题返回 0。
 
     判新不能只看发布时间：蜜柑有的镜像不给 pubDate（历史 bug 就是因此永远判不出
     新集），但标题里的集数一直都有，所以以「集数是否超过已有最大集」为主判据。
     """
     try:
-        return int(media_tools.episode_number(str(item.get("title") or "")))
+        kind, number = media_tools.episode_identity(str(item.get("title") or ""))
+        return number if kind == 0 else 0
     except (TypeError, ValueError):
         return 0
 
@@ -993,17 +994,21 @@ class OfflineService:
         }
 
     def _known_episode_number(self, sub: dict[str, Any], items: list[dict[str, Any]]) -> int:
-        """这部番已经见过的最大集数：本地文件 / 下载任务 / 上次处理的那条种子。"""
+        """从本地文件、下载任务和上次处理的种子取最大的正片集数。"""
         numbers: list[int] = []
         anime_id = int(sub.get("anime_id") or 0)
         try:
             for row in self.store.files_for_anime(anime_id):
-                match = re.search(r":(\d+)$", str(row.get("episode_key") or ""))
-                if match:
-                    numbers.append(int(match.group(1)))
+                unknown, kind, number, _ = media_tools.key_sort_value(row.get("episode_key"))
+                if not unknown and kind == 0:
+                    numbers.append(number)
             for row in self.store.jobs_for_anime(anime_id):
-                title = str(row.get("source_title") or row.get("torrent_name") or "")
-                numbers.append(_release_episode({"title": title}))
+                unknown, kind, number, _ = media_tools.key_sort_value(row.get("episode_key"))
+                if unknown:
+                    title = row.get("source_title") or row.get("torrent_name")
+                    numbers.append(_release_episode({"title": title}))
+                elif kind == 0:
+                    numbers.append(number)
         except Exception:  # noqa: BLE001 - 读库出错不该让整轮检查挂掉
             pass
         last_torrent = str(sub.get("last_torrent") or "")

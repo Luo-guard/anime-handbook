@@ -173,6 +173,22 @@ class CheckLogicTest(unittest.TestCase):
         self.assertEqual(result["downloaded"], 1, f"漏掉的集要补下，实际 {result}")
         self.assertEqual(self.downloaded[0]["title"].rsplit(" ", 1)[-1], "e6")
 
+    def test_specials_do_not_block_the_next_main_episode(self):
+        old_special = dict(item("old-sp", "A", ""), title="[A] 测试番 [SP 12]")
+        self.run_check([old_special])
+        self.assertEqual(self.store.subscriptions()[0]["last_torrent"], old_special["id"])
+        self.store.replace_file(anime_id=7, episode_key="0:6", file_path=str(self.root / "episode06.mp4"))
+        self.store.replace_file(anime_id=7, episode_key="1:12", file_path=str(self.root / "special12.mp4"))
+        self.store.create_job(anime_id=7, episode_key="2:13", source_title="[A] 测试番 - 13")
+        self.store.create_job(anime_id=7, source_title="[A] 测试番 [OVA 14]")
+        current = dict(item("main-07", "A", ""), title="[A] 测试番 [07]")
+        new_special = dict(item("new-sp", "A", "2026-11-15T22:00:00"), title="[A] 测试番 [SP 15]")
+
+        _, result = self.run_check([old_special, current, new_special])
+        self.assertEqual(result["downloaded"], 1)
+        self.assertEqual(self.downloaded[0]["torrent_url"], current["torrent_url"])
+        self.assertEqual(self.store.subscriptions()[0]["last_torrent"], current["id"])
+
     def test_newer_entry_is_downloaded_once(self):
         sub, _ = self.run_check([item("t1", "A", "2026-11-01T10:00:00")])
         self.downloaded.clear()

@@ -32,11 +32,21 @@ function importFromRows(text) {
     .filter((name) => name && !IMPORT_HEADER_WORDS.has(name.toLowerCase()));
 }
 function importFromLines(text) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.split(/\t|,|;|，/)[0])
-    .map(importCleanName)
-    .filter((name) => name && !IMPORT_HEADER_WORDS.has(name.toLowerCase()));
+  const names = [];
+  // Scan every field to find the next record, including newlines inside quoted fields.
+  const field = / *(?:"((?:[^"]|"")*)" *(?=[\t,;，\r\n]|$)|([^\t,;，\r\n]*))/y;
+  let firstColumn = true;
+  while (field.lastIndex < text.length) {
+    const [, quoted, unquoted] = field.exec(text);
+    if (firstColumn) {
+      const name = importCleanName(quoted === undefined ? unquoted : quoted.replace(/""/g, '"'));
+      if (name && !IMPORT_HEADER_WORDS.has(name.toLowerCase())) names.push(name);
+    }
+    const delimiter = text[field.lastIndex];
+    firstColumn = delimiter === "\r" || delimiter === "\n";
+    field.lastIndex += delimiter === "\r" && text[field.lastIndex + 1] === "\n" ? 2 : 1;
+  }
+  return names;
 }
 function parseImportText(text, { verbatim = false } = {}) {
   const raw = String(text || "").replace(/^\uFEFF/, "").trim();
