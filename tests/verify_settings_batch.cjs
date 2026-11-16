@@ -2,10 +2,14 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 
+const { isolatedServer } = require('./isolated_server.cjs');
+
 (async () => {
+  const API = await isolatedServer();
+  if (!API) return;
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
-  await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
+  await page.goto(API, { waitUntil: 'domcontentloaded', timeout: 20000 });
   // bootstrap 拉全量数据，机器忙时要好几秒；固定 sleep 会在数据到位前就断言。
   await page.waitForFunction(() => (state?.animes || []).length > 0, null, { timeout: 40000 });
   await page.waitForTimeout(400);
@@ -130,7 +134,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   // 跑批时偶发 Failed to fetch（后端 ThreadingHTTPServer 高负载下拒连）；退避重试。
   let bootstrap = null;
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    try { bootstrap = await (await fetch('http://127.0.0.1:43127/api/bootstrap')).json(); break; }
+    try { bootstrap = await (await fetch(`${API}/api/bootstrap`)).json(); break; }
     catch (error) { if (attempt === 3) throw error; await new Promise((r) => setTimeout(r, 700)); }
   }
   const animeId = (bootstrap.animes || []).find((item) => item.collection_type !== 2)?.id;

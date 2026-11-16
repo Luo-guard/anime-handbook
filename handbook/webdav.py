@@ -26,9 +26,8 @@ class WebDAVSyncService:
 
     Credentials remain on this device in ``data/webdav.json``.  The remote
     file is a portable JSON account state, never a copy of Kazumi or our local
-    cover cache.  The central file is deliberately last-submit-wins: when both
-    sides changed since their last successful sync, the browser asks the user
-    which side should be submitted.
+    cover cache. Account writes are conditional on the version read for the
+    current sync, so another device can update the file safely.
     """
 
     ROOT = "AnimeHandbook-v1"
@@ -124,7 +123,12 @@ class WebDAVSyncService:
             raise ValueError("请输入坚果云账号")
         with self._lock:
             config = self._read()
-            config["url"] = base.rstrip("/") + "/"
+            url = base.rstrip("/") + "/"
+            if url != config.get("url") or username != config.get("username"):
+                for profile in config["profiles"].values():
+                    if isinstance(profile, dict):
+                        profile.pop("last_verified_etag", None)
+            config["url"] = url
             config["username"] = username
             supplied_password = str(password or "")
             if supplied_password:
@@ -133,7 +137,10 @@ class WebDAVSyncService:
                 raise ValueError("请输入坚果云应用密码")
             config["auto_sync"] = self._as_bool(auto_sync)
             item = self._profile_config(config)
-            item["account_id"] = self._account_id(account_id)
+            new_account_id = self._account_id(account_id)
+            if new_account_id != item.get("account_id"):
+                item.pop("last_verified_etag", None)
+            item["account_id"] = new_account_id
             self._write(config)
             # Wake the background worker so changing the checkbox takes effect
             # immediately instead of waiting for the current 30-minute sleep.
@@ -165,19 +172,17 @@ class WebDAVSyncService:
     @staticmethod
     def _remote_probe(config: dict[str, Any], account_id: str) -> tuple[int, str]:
         """Return the small WebDAV version marker without downloading account.json."""
-        token = base64.b64encode(f"{config['username']}:{config['password']}".encode("utf-8")).decode("ascii")
-        request = urllib.request.Request(
-            WebDAVSyncService._url(str(config["url"]), f"{WebDAVSyncService.ROOT}/{account_id}/account.json"),
-            headers={"Authorization": f"Basic {token}", "User-Agent": "AnimeHandbook/1.0"},
-            method="HEAD",
+        headers: dict[str, str] = {}
+        status, _ = WebDAVSyncService._request(
+            config, "HEAD", f"{WebDAVSyncService.ROOT}/{account_id}/account.json", response_headers=headers,
         )
-        try:
-            with urllib.request.urlopen(request, timeout=25) as response:
-                return int(response.status), str(response.headers.get("ETag") or "")
-        except urllib.error.HTTPError as error:
-            return int(error.code), ""
-        except urllib.error.URLError as error:
-            raise ValueError(f"无法连接坚果云：{error.reason}") from error
+        return status, WebDAVSyncService._account_etag(headers.get("etag", ""))
+
+    @staticmethod
+    def _account_etag(value: str) -> str:
+        # Nutstore may return a bare tag. Reject weak tags, wildcards and lists.
+        value = value.strip()
+        return value if re.fullmatch(r'"[^"\x00-\x20\x7f]*"|[A-Za-z0-9._~+/=:-]+', value) else ""
 
     @staticmethod
     def _state_hash(state: dict[str, Any]) -> str:
@@ -206,10 +211,11 @@ class WebDAVSyncService:
             self._ensure_remote_folder(config, self._account_id(item.get("account_id")))
         return {"ok": True, "message": "坚果云连接成功，已准备好同步目录"}
 
-    def _remote_state(self, config: dict[str, Any], account_id: str) -> tuple[dict[str, Any] | None, str]:
-        status, body = self._request(config, "GET", f"{self.ROOT}/{account_id}/account.json")
+    def _remote_state(self, config: dict[str, Any], account_id: str) -> tuple[dict[str, Any] | None, str, str]:
+        headers: dict[str, str] = {}
+        status, body = self._request(config, "GET", f"{self.ROOT}/{account_id}/account.json", response_headers=headers)
         if status == 404:
-            return None, ""
+            return None, "", ""
         if status != 200:
             raise ValueError(f"读取坚果云数据失败（HTTP {status}）")
         try:
@@ -220,17 +226,29 @@ class WebDAVSyncService:
         if not isinstance(payload, dict):
             raise ValueError("坚果云中的手账数据格式不正确")
         digest = self._state_hash(payload)
-        return state, digest
+        return state, digest, self._account_etag(headers.get("etag", ""))
 
-    def _upload_state(self, config: dict[str, Any], account_id: str, state: dict[str, Any]) -> str:
+    def _upload_state(
+        self, config: dict[str, Any], account_id: str, state: dict[str, Any], *, etag: str = "", missing: bool = False,
+    ) -> tuple[str, str]:
+        if not missing and not etag:
+            raise ValueError("坚果云未提供可用于安全上传的版本号，已保留两端数据")
+        condition = {"If-None-Match": "*"} if missing else {"If-Match": etag}
         # Include only a timestamp and payload. The timestamp is explanatory;
         # conflict detection uses the canonical payload hash instead.
         document = {"format": 1, "updated_at": now_iso(), "state": state}
         body = json_dumps(document).encode("utf-8")
-        status, _ = self._request(config, "PUT", f"{self.ROOT}/{account_id}/account.json", body, "application/json; charset=utf-8")
+        headers: dict[str, str] = {}
+        status, _ = self._request(
+            config, "PUT", f"{self.ROOT}/{account_id}/account.json", body, "application/json; charset=utf-8",
+            request_headers=condition, response_headers=headers,
+        )
+        if status in {409, 412}:
+            raise ValueError("另一台设备刚更新了坚果云数据，本次上传已停止。请重新同步")
         if status not in {200, 201, 204}:
             raise ValueError(f"上传坚果云数据失败（HTTP {status}）")
-        return self._state_hash(state)
+        # A later HEAD could see another device's write. Only trust this PUT's tag.
+        return self._state_hash(state), self._account_etag(headers.get("etag", ""))
 
     @staticmethod
     def _row_moment(row: dict[str, Any], field: str) -> datetime | None:
@@ -553,33 +571,32 @@ class WebDAVSyncService:
             local_state = database.export_cloud_state()
             local_hash = self._state_hash(local_state)
             known_hash = str(profile_item.get("last_hash") or "")
-            previous_etag = str(profile_item.get("last_etag") or "")
+            # Older checkpoints paired a PUT's hash with a later HEAD's tag.
+            # Re-read the document once before using the fast path again.
+            previous_etag = str(profile_item.get("last_verified_etag") or "")
+
+            def finish(action, message, digest, etag):
+                profile_item.update({
+                    "last_hash": digest, "last_etag": etag, "last_verified_etag": etag,
+                    "last_synced_at": now_iso(), "last_error": "",
+                })
+                self._write(config)
+                return {"ok": True, "action": action, "message": message}
+
             remote_status, remote_etag = self._remote_probe(config, account_id)
             if remote_status not in {200, 404}:
                 raise ValueError(f"读取坚果云数据失败（HTTP {remote_status}）")
-            if remote_status == 200 and previous_etag and remote_etag and remote_etag == previous_etag:
-                # The cloud file has not changed.  Avoid downloading megabytes
-                # every 30 minutes merely to discover that fact.
-                if known_hash and local_hash == known_hash:
-                    profile_item.update({"last_synced_at": now_iso(), "last_error": ""})
-                    self._write(config)
-                    return {"ok": True, "action": "unchanged", "message": "两边数据已经是最新"}
-                # The remote side is known unchanged, so a local edit can be
-                # submitted directly without a redundant full download.
-                uploaded = self._upload_state(config, account_id, local_state)
-                _, uploaded_etag = self._remote_probe(config, account_id)
-                profile_item.update({"last_hash": uploaded, "last_etag": uploaded_etag, "last_synced_at": now_iso(), "last_error": ""})
-                self._write(config)
-                return {"ok": True, "action": "uploaded", "message": "已将本机最新数据上传到坚果云"}
+            if not resolution and remote_status == 200 and known_hash and remote_etag and remote_etag == previous_etag:
+                if local_hash == known_hash:
+                    return finish("unchanged", "两边数据已经是最新", known_hash, remote_etag)
+                uploaded, etag = self._upload_state(config, account_id, local_state, etag=remote_etag)
+                return finish("uploaded", "已将本机最新数据上传到坚果云", uploaded, etag)
 
-            remote_document, remote_document_hash = self._remote_state(config, account_id)
+            remote_document, remote_document_hash, remote_etag = self._remote_state(config, account_id)
             remote_state = remote_document.get("state") if isinstance(remote_document, dict) else None
             if remote_document is None:
-                uploaded = self._upload_state(config, account_id, local_state)
-                _, uploaded_etag = self._remote_probe(config, account_id)
-                profile_item.update({"last_hash": uploaded, "last_etag": uploaded_etag, "last_synced_at": now_iso(), "last_error": ""})
-                self._write(config)
-                return {"ok": True, "action": "uploaded", "message": "已将当前账号首次上传到坚果云"}
+                uploaded, etag = self._upload_state(config, account_id, local_state, missing=True)
+                return finish("uploaded", "已将当前账号首次上传到坚果云", uploaded, etag)
             if not isinstance(remote_state, dict):
                 raise ValueError("坚果云中的手账数据格式不正确")
             # Existing installations stored a hash that included exported_at.
@@ -591,33 +608,23 @@ class WebDAVSyncService:
             # empty local profile.
             if not known_hash or resolution == "remote":
                 database.import_cloud_state(remote_state)
-                profile_item.update({"last_hash": remote_document_hash, "last_etag": remote_etag, "last_synced_at": now_iso(), "last_error": ""})
-                self._write(config)
-                return {"ok": True, "action": "downloaded", "message": "已从坚果云下载账号数据"}
+                return finish("downloaded", "已从坚果云下载账号数据", remote_document_hash, remote_etag)
+            if local_hash == remote_document_hash:
+                return finish("unchanged", "两边数据已经是最新", local_hash, remote_etag)
             local_changed = local_hash != known_hash
             remote_changed = remote_document_hash != known_hash
             if local_changed and remote_changed and resolution != "local":
                 merged_state = self.merge_record_states(local_state, remote_state)
-                merged_hash = self._upload_state(config, account_id, merged_state)
-                _, merged_etag = self._remote_probe(config, account_id)
+                merged_hash, etag = self._upload_state(config, account_id, merged_state, etag=remote_etag)
                 database.import_cloud_state(merged_state)
-                profile_item.update({"last_hash": merged_hash, "last_etag": merged_etag, "last_synced_at": now_iso(), "last_error": ""})
-                self._write(config)
-                return {"ok": True, "action": "merged", "message": "已自动合并新增记录；同一番剧同一集保留较早观看时间"}
+                return finish("merged", "已自动合并新增记录；同一番剧同一集保留较早观看时间", merged_hash, etag)
             if local_changed or resolution == "local":
-                uploaded = self._upload_state(config, account_id, local_state)
-                _, uploaded_etag = self._remote_probe(config, account_id)
-                profile_item.update({"last_hash": uploaded, "last_etag": uploaded_etag, "last_synced_at": now_iso(), "last_error": ""})
-                self._write(config)
-                return {"ok": True, "action": "uploaded", "message": "已将本机最新数据上传到坚果云"}
+                uploaded, etag = self._upload_state(config, account_id, local_state, etag=remote_etag)
+                return finish("uploaded", "已将本机最新数据上传到坚果云", uploaded, etag)
             if remote_changed:
                 database.import_cloud_state(remote_state)
-                profile_item.update({"last_hash": remote_document_hash, "last_etag": remote_etag, "last_synced_at": now_iso(), "last_error": ""})
-                self._write(config)
-                return {"ok": True, "action": "downloaded", "message": "已下载坚果云最新数据"}
-            profile_item.update({"last_hash": known_hash, "last_etag": remote_etag, "last_synced_at": now_iso(), "last_error": ""})
-            self._write(config)
-            return {"ok": True, "action": "unchanged", "message": "两边数据已经是最新"}
+                return finish("downloaded", "已下载坚果云最新数据", remote_document_hash, remote_etag)
+            return finish("unchanged", "两边数据已经是最新", known_hash, remote_etag)
 
     def start_background(self, database_getter: Any, *, profile_gate=None) -> None:
         if self._thread and self._thread.is_alive():

@@ -716,8 +716,8 @@ function closeOfflinePlayer() {
   if (!wasOnline) refreshOfflineLocal();
 }
 
-async function removeLocalFile(fileId) {
-  const file = offlineView.local.files.find((item) => Number(item.id) === Number(fileId));
+async function removeLocalFile(fileId, { animeId = offlineView.animeId, files = offlineView.local.files } = {}) {
+  const file = files.find((item) => Number(item.id) === Number(fileId));
   if (!file) return;
   const gone = file.exists === false;
   const label = episodeLabelOf(file.episode_key);
@@ -728,10 +728,10 @@ async function removeLocalFile(fileId) {
   try {
     await api("/api/offline/delete", {
       method: "POST",
-      body: JSON.stringify({ mode: "file", anime_id: offlineView.animeId, episode_key: file.episode_key }),
+      body: JSON.stringify({ mode: "file", anime_id: animeId, episode_key: file.episode_key }),
     });
     toast(gone ? "已删掉记录" : "已删除文件");
-    refreshOfflineLocal();
+    if (Number(offlineView.animeId) === Number(animeId)) refreshOfflineLocal();
   } catch (error) {
     toast(error.message || "删除失败", "error");
   }

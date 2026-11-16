@@ -24,6 +24,7 @@ const librarySidebar = {
   loaded: false,
   loadedAt: 0,        // 上次成功拉到列表的时间戳，用来做 30 秒缓存
   detail: null,       // 打开的番 { animeId, name }
+  playToken: 0,
   files: [],
   missing: 0,         // 详情里「记录还在、文件不在」的集数
   jobs: [],
@@ -87,6 +88,7 @@ function renderLibrarySidebarView() {
 }
 
 function switchLibraryTab(tab) {
+  librarySidebar.playToken += 1;
   librarySidebar.tab = tab;
   $$(".library-tab").forEach((item) => {
     const active = item.dataset.libraryTab === tab;
@@ -296,15 +298,20 @@ async function openLibraryDetail(animeId, name) {
   // episode_count 只有总览列表里带着，详情单独取一次 state 拿不到它，
   // 这里顺手带上，否则「全 N 集」永远显示不出来。
   const known = librarySidebar.items.find((entry) => Number(entry.anime_id) === Number(animeId));
-  librarySidebar.detail = {
+  const detail = {
     animeId: Number(animeId) || 0,
     name: String(name || ""),
     episodeCount: Number(known?.episode_count) || 0,
   };
+  if (librarySidebar.detail?.animeId !== detail.animeId) librarySidebar.sourceFilter = "";
+  librarySidebar.detail = detail;
+  librarySidebar.files = [];
+  librarySidebar.jobs = [];
+  librarySidebar.missing = 0;
   switchLibraryTab("media");
   const panel = $("#libraryDetailPanel");
   if (panel) panel.classList.remove("hidden");
-  $("#libDetailTitle").textContent = librarySidebar.detail.name || `番剧 ${animeId}`;
+  $("#libDetailTitle").textContent = detail.name || `番剧 ${animeId}`;
   $("#libDetailCover").src = `/api/covers/${animeId}`;
   $("#libDetailMeta").textContent = "加载中…";
   $("#libDetailHint").textContent = "";
@@ -313,7 +320,8 @@ async function openLibraryDetail(animeId, name) {
   // 从总览卡片进来时要滚到详情，否则停在原来的网格位置像没反应。
   panel?.scrollIntoView({ behavior: "smooth", block: "start" });
   try {
-    const data = await api(`/api/offline/state?anime_id=${Number(animeId)}`);
+    const data = await api(`/api/offline/state?anime_id=${detail.animeId}`);
+    if (librarySidebar.detail !== detail) return;
     const raw = data.files || [];
     librarySidebar.files = raw.filter((file) => file.exists !== false);
     // 记录还在、文件却没了的集数：卡片和详情现在都只数能播的，
@@ -323,6 +331,7 @@ async function openLibraryDetail(animeId, name) {
     librarySidebar.jobs = data.jobs || [];
     renderLibraryDetail();
   } catch (error) {
+    if (librarySidebar.detail !== detail) return;
     $("#libDetailMeta").textContent = `加载失败：${error.message || error}`;
   }
 }
@@ -390,28 +399,34 @@ function renderLibraryDetail() {
           </div>
           <div class="lib-ep-actions">
             <button type="button" class="pc-btn pc-text lib-play" data-id="${file.id}">${resume > 0 ? "继续" : "播放"}</button>
-            <button type="button" class="pc-btn pc-text lib-delete danger" data-id="${file.id}" data-label="${escapeHtml(episodeLabelOf(file.episode_key))}">删除</button>
+            <button type="button" class="pc-btn pc-text lib-delete danger" data-id="${file.id}">删除</button>
           </div>
         </div>`;
       }).join("")
     : '<p class="offline-empty">这一番的文件都不在磁盘上了</p>';
 }
 
-async function libPlay(fileId) {
-  // 播放/上一集/下一集/弹幕匹配都吃 offlineView 的上下文，先喂给它。
-  offlineView.animeId = librarySidebar.detail.animeId;
-  offlineView.animeName = librarySidebar.detail.name;
-  offlineView.local = { files: librarySidebar.files, jobs: librarySidebar.jobs };
-  playLocalFile(Number(fileId));
+function setLibraryPlaybackContext(animeId, name, files, jobs) {
+  offlineView.localToken += 1;
+  offlineView.animeId = animeId;
+  offlineView.animeName = name;
+  offlineView.local = { files, jobs };
 }
 
-async function libDelete(fileId, label) {
-  // removeLocalFile 自带确认提示（直接删文件）；把上下文对齐让它删完能刷新对地方。
-  offlineView.animeId = librarySidebar.detail.animeId;
-  offlineView.animeName = librarySidebar.detail.name;
-  offlineView.local = { files: librarySidebar.files, jobs: librarySidebar.jobs };
-  await removeLocalFile(Number(fileId));
-  openLibraryDetail(librarySidebar.detail.animeId, librarySidebar.detail.name);
+function libPlay(fileId) {
+  const { detail, files, jobs } = librarySidebar;
+  if (!detail || !files.some((file) => Number(file.id) === fileId)) return;
+  librarySidebar.playToken += 1;
+  setLibraryPlaybackContext(detail.animeId, detail.name, files, jobs);
+  playLocalFile(fileId);
+}
+
+async function libDelete(fileId) {
+  const { detail, files } = librarySidebar;
+  if (!detail || !files.some((file) => Number(file.id) === fileId)) return;
+  librarySidebar.playToken += 1;
+  await removeLocalFile(fileId, { animeId: detail.animeId, files });
+  if (librarySidebar.detail === detail) openLibraryDetail(detail.animeId, detail.name);
   loadLibrarySidebar(true);   // 删过文件，缓存作废
 }
 
@@ -605,6 +620,7 @@ async function libSubscribe(button) {
 // ---------- 图片库（播放器截图，和视频同在一个媒体库里） ----------
 
 function switchLibraryKind(kind) {
+  librarySidebar.playToken += 1;
   librarySidebar.kind = kind === "image" ? "image" : "video";
   const isImage = librarySidebar.kind === "image";
   $$("#libraryKindSwitch .library-kind-btn").forEach((button) => {
@@ -1020,9 +1036,9 @@ function initLibraryView() {
   });
   $("#libEpisodes")?.addEventListener("click", (event) => {
     const play = event.target.closest(".lib-play");
-    if (play) { libPlay(play.dataset.id); return; }
+    if (play) { libPlay(Number(play.dataset.id)); return; }
     const remove = event.target.closest(".lib-delete");
-    if (remove) libDelete(remove.dataset.id, remove.dataset.label);
+    if (remove) libDelete(Number(remove.dataset.id));
   });
   $("#libAutoFollow")?.addEventListener("change", saveSubscriptionAutoDownload);
   $("#libCheckSubs")?.addEventListener("click", libCheckSubs);
@@ -1071,15 +1087,22 @@ function initLibraryView() {
 // 从总览卡片直接续播：上下文喂给 offlineView 再开播放器。
 async function libPlayFromItem(item, fileId) {
   if (!item) return;
-  offlineView.animeId = item.anime_id;
-  offlineView.animeName = item.name;
+  const token = ++librarySidebar.playToken;
   try {
     const data = await api(`/api/offline/state?anime_id=${item.anime_id}`);
-    offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
+    if (token !== librarySidebar.playToken || state.activeView !== "library") return;
+    const files = data.files || [];
+    if (!files.some((file) => Number(file.id) === fileId)) {
+      toast("本地文件已不存在，请刷新媒体库", "error");
+      return;
+    }
+    setLibraryPlaybackContext(item.anime_id, item.name, files, data.jobs || []);
+    playLocalFile(fileId);
   } catch (error) {
-    offlineView.local = { files: [], jobs: [] };
+    if (token === librarySidebar.playToken && state.activeView === "library") {
+      toast(error.message || "读取本地文件失败", "error");
+    }
   }
-  playLocalFile(Number(fileId));
 }
 
 initLibraryView();

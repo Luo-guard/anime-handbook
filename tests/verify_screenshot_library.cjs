@@ -1,7 +1,6 @@
 // 截图入库 + 媒体库图片视图：保存路径/命名模板/列表/大图/删除。
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-const API = process.env.HANDBOOK_TEST_URL || 'http://127.0.0.1:43127';
 
 function tinyPng() {
   // 2x2 红点 PNG（固定字节，不依赖第三方库）
@@ -9,17 +8,27 @@ function tinyPng() {
   return b64;
 }
 
-const post = (path, body) => fetch(`${API}${path}`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json', Origin: API }, body: JSON.stringify(body),
-});
+const { isolatedServer } = require('./isolated_server.cjs');
 
 (async () => {
+  const API = await isolatedServer();
+  if (!API) return;
+  const post = (path, body) => fetch(`${API}${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Origin: API }, body: JSON.stringify(body),
+  });
   const before = await (await fetch(`${API}/api/offline/settings`)).json();
   const originalFormat = before.config?.screenshot_name_format || '';
+  const setLibraryVisibility = (mode) => fetch(`${API}/api/settings`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Origin: API },
+    body: JSON.stringify({ library_sidebar: mode }),
+  });
+  const originalVisibility = (await (await fetch(`${API}/api/bootstrap`)).json()).settings.library_sidebar;
   const created = [];
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1360, height: 860 } });
   try {
+    assert.equal((await setLibraryVisibility('show')).status, 200);
     // 1) 保存一张：默认模板 + 按番名建文件夹
     let res = await post('/api/offline/screenshot', { anime: '回归测试番', episode: '第07集', seconds: 754.2, data: `data:image/png;base64,${tinyPng()}` });
     assert.equal(res.status, 200, `保存截图应成功，实际 ${res.status}`);
@@ -140,6 +149,7 @@ const post = (path, body) => fetch(`${API}${path}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Origin: API },
       body: JSON.stringify({ ...before.config, screenshot_name_format: originalFormat }),
     }).catch(() => {});
+    await setLibraryVisibility(originalVisibility).catch(() => {});
     await browser.close();
   }
 })().catch((error) => { console.error(error); process.exit(1); });

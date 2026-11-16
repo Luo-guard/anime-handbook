@@ -124,6 +124,15 @@ python -m unittest discover -s tests -v
 for f in tests/verify_*.cjs; do node "$f"; done
 ```
 
+会写入设置、播放进度或图片库的回归脚本默认跳过。请在单独的 PowerShell 窗口启动本机测试实例，再在另一个窗口设置 `$env:HANDBOOK_TEST_URL = 'http://127.0.0.1:43682'` 并执行脚本。有视频、字幕或周表数据要求的脚本需在测试目录里准备独立样本。
+
+```powershell
+$env:ANIME_HANDBOOK_PORT = '43682'
+$env:ANIME_HANDBOOK_DATA_DIR = Join-Path $env:TEMP ('handbook-test-' + [guid]::NewGuid().ToString('N'))
+$env:ANIME_HANDBOOK_SANDBOX = '1'
+python app.py --no-browser
+```
+
 当前基线：后端 478 项、前端 51 个脚本。`test_hardening` 中有一个已知的并发写只读缺陷（`attempt to write a readonly database`）尚未修复，其余全部通过。
 
 ## 许可证

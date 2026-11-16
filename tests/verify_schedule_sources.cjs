@@ -1,9 +1,12 @@
 // 周表三来源独立排序/筛选 + 隐藏番剧 回归
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-const base = process.env.HANDBOOK_TEST_URL || 'http://127.0.0.1:43127';
+
+const { isolatedServer } = require('./isolated_server.cjs');
 
 (async () => {
+  const base = await isolatedServer();
+  if (!base) return;
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   const original = await (await fetch(base + '/api/bootstrap')).json().then((d) => ({

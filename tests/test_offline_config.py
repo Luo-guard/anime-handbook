@@ -1,9 +1,11 @@
 """离线配置：默认值、类型收敛、落盘往返。"""
 import json
+import os
 import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from handbook import offline_config as cfg
 
@@ -58,6 +60,14 @@ class ResolveTest(unittest.TestCase):
         paths = cfg.resolved({"media_root": "D:/media", "download_root": ""})
         self.assertEqual(paths["media_root"], "D:/media")
         self.assertEqual(paths["download_root"], "D:/media/_incoming")
+
+    def test_sandbox_defaults_keep_files_and_screenshots_inside_test_data(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.dict(os.environ, {"ANIME_HANDBOOK_SANDBOX": "1", "ANIME_HANDBOOK_DATA_DIR": folder}):
+                paths = cfg.resolved({})
+            self.assertEqual(Path(paths["media_root"]), Path(folder) / "media")
+            self.assertEqual(Path(paths["download_root"]), Path(folder) / "media" / "_incoming")
+            self.assertEqual(Path(paths["screenshot_root"]), Path(folder) / "media" / "截图")
 
     def test_explicit_download_root_wins(self):
         paths = cfg.resolved({"media_root": "D:/media", "download_root": "E:/incoming"})

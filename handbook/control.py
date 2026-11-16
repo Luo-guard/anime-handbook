@@ -17,7 +17,10 @@ UNLOCKED_WRITES = {'/api/webdav/sync', '/api/collection-status', '/api/link-rule
 class DesktopRequestHandler(RequestHandler):
     def do_GET(self):
         if urlparse(self.path).path == '/api/health':
-            return self.send_json({'ok': True, 'features': {'schedule_sorting': 2, 'keyboard_shortcuts': 1, 'desktop_shutdown': 1}, 'shutdown_token': self.server.shutdown_token})
+            features = {'schedule_sorting': 2, 'keyboard_shortcuts': 1, 'desktop_shutdown': 1}
+            if self.server.isolated_regression:
+                features['isolated_regression'] = 1
+            return self.send_json({'ok': True, 'features': features, 'shutdown_token': self.server.shutdown_token})
         return super().do_GET()
 
     def _write(self, method):
@@ -64,11 +67,12 @@ class DesktopHTTPServer(ThreadingHTTPServer):
     # 三次握手的连接会因 backlog 溢出被直接重置（前端表现为偶发 Failed to fetch）。
     request_queue_size = 128
 
-    def __init__(self, address, busy=lambda: False):
+    def __init__(self, address, busy=lambda: False, *, isolated_regression=False):
         if address[0] not in {'127.0.0.1', 'localhost'}:
             raise ValueError('桌面后台仅允许监听本机')
         self.write_gate = threading.Lock()
         self.shutdown_token = secrets.token_urlsafe(32)
         self.stopping = False
         self.busy = busy
+        self.isolated_regression = isolated_regression
         super().__init__(address, DesktopRequestHandler)

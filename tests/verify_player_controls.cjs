@@ -2,8 +2,12 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 
+const { isolatedServer } = require('./isolated_server.cjs');
+
 (async () => {
-  const bootstrap = await (await fetch('http://127.0.0.1:43127/api/offline/state?anime_id=554779')).json();
+  const API = await isolatedServer();
+  if (!API) return;
+  const bootstrap = await (await fetch(`${API}/api/offline/state?anime_id=554779`)).json();
   const files = (bootstrap.files || []).filter((f) => f.exists !== false);
   assert.ok(files.length >= 1, '测试要有至少一集本地文件');
   const first = files[0];
@@ -12,16 +16,16 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
   const downloads = [];
   page.on('download', (item) => downloads.push(item));
-  await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
+  await page.goto(API, { waitUntil: 'domcontentloaded', timeout: 20000 });
   await page.waitForTimeout(1400);
 
   // 打开播放器（真实流）
-  await page.evaluate(({ animeId, fileId, stateFiles }) => {
+  await page.evaluate(({ animeId, fileId, stateFiles, jobs }) => {
     offlineView.animeId = animeId;
     offlineView.animeName = '学生会也有洞！';
-    offlineView.local = { files: stateFiles, jobs: bootstrap.jobs || [] };
+    offlineView.local = { files: stateFiles, jobs };
     playLocalFile(fileId);
-  }, { animeId: 554779, fileId: first.id, stateFiles: bootstrap.files || [] });
+  }, { animeId: 554779, fileId: first.id, stateFiles: bootstrap.files || [], jobs: bootstrap.jobs || [] });
   await page.waitForFunction(() => {
     const v = document.querySelector('#offlineVideo');
     return v && Number.isFinite(v.duration) && v.duration > 0;
@@ -173,18 +177,18 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     v.currentTime = Math.min(3, Math.max(0.5, v.duration * 0.1));
   });
   await page.waitForTimeout(900);
-  const shotsBefore = (await (await fetch('http://127.0.0.1:43127/api/offline/screenshots')).json()).count;
+  const shotsBefore = (await (await fetch(`${API}/api/offline/screenshots`)).json()).count;
   await page.click('#pcScreenshot');
   await page.waitForTimeout(1600);
-  const shotList = await (await fetch('http://127.0.0.1:43127/api/offline/screenshots')).json();
+  const shotList = await (await fetch(`${API}/api/offline/screenshots`)).json();
   assert.equal(shotList.count, shotsBefore + 1, `截图要入库到媒体库：${shotsBefore} → ${shotList.count}`);
   assert.ok(downloads.length === 0, '入库成功后不该再触发浏览器下载');
   const newest = shotList.groups?.[0];
   assert.ok(/学生会/.test(newest?.folder || ''), `截图要按番名建文件夹，实际 ${newest?.folder}`);
   assert.ok(/\.png$/.test(newest?.images?.[0]?.name || ''), `截图文件名：${newest?.images?.[0]?.name}`);
   // 清理这张测试截图，别污染真实媒体库
-  await fetch('http://127.0.0.1:43127/api/offline/screenshot/delete', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:43127' },
+  await fetch(`${API}/api/offline/screenshot/delete`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Origin: API },
     body: JSON.stringify({ relative: newest.images[0].relative }),
   }).catch(() => {});
 

@@ -10,10 +10,14 @@ const BILI_XML = `<i>
 <d p="3.0,1,25,16777215,0,0,a,5">这条含屏蔽词 剧透</d>
 </i>`;
 
+const { isolatedServer } = require('./isolated_server.cjs');
+
 (async () => {
+  const API = await isolatedServer();
+  if (!API) return;
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
-  await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
+  await page.goto(API, { waitUntil: 'domcontentloaded', timeout: 20000 });
   await page.waitForTimeout(1400);
 
   // 1) 播放器里该有的东西一件不少

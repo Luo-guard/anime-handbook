@@ -59,7 +59,10 @@ def default_media_root() -> str:
     视频不会被推到 GitHub——auto_sync 只收显式 --paths 里的代码/文档，
     且 mp4/mkv/png 这类二进制类型直接拒绝。
     """
-    return str(project_root() / "media").replace("\\", "/")
+    sandbox_root = os.environ.get("ANIME_HANDBOOK_DATA_DIR")
+    if os.environ.get("ANIME_HANDBOOK_SANDBOX") == "1" and sandbox_root:
+        return (Path(sandbox_root) / "media").as_posix()
+    return (project_root() / "media").as_posix()
 
 
 def config_path(asset_root: Path) -> Path:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from http.server import ThreadingHTTPServer
 import os
@@ -10,7 +11,7 @@ import webbrowser
 from .concurrency import ReadWriteGate
 from .observability import configure_logging, close_logging, record_failure
 from .assets import run_housekeeping
-from .common import (DATA_ROOT, HOST, PORT, migrate_legacy_backgrounds, path_identity)
+from .common import (DATA_ROOT, DEFAULT_DATA_ROOT, HOST, PORT, migrate_legacy_backgrounds, path_identity)
 from .database import HandbookDB
 from .metadata import SyncService
 from .related import AgeRelatedService
@@ -163,13 +164,19 @@ def main(*, open_browser: bool = True) -> None:
             webbrowser.open(url)
         close_logging()
         return
-    server = DesktopHTTPServer((HOST, PORT), busy=lambda: bool(SYNC.status.get("running")))
-    from .kazumi_writeback import start_worker
-    writeback_stop = threading.Event()
     # ANIME_HANDBOOK_SANDBOX=1：测试/临时实例开关。复制正式数据做验证时，
     # 复制出来的待写回队列和坚果云凭据会把测试改动写进真实的 Kazumi 与云端，
     # 所以沙箱里既不写回 Kazumi，也不做 WebDAV 自动同步。
     sandbox = os.environ.get("ANIME_HANDBOOK_SANDBOX") == "1"
+    data_root, default_root = DATA_ROOT.resolve(), DEFAULT_DATA_ROOT.resolve()
+    isolated = sandbox and not data_root.is_relative_to(default_root) and not default_root.is_relative_to(data_root)
+    if isolated:
+        from . import offline_config
+        paths = offline_config.resolved(offline_config.load(DATA_ROOT))
+        isolated = all(Path(path).resolve().is_relative_to(data_root) for path in paths.values())
+    server = DesktopHTTPServer((HOST, PORT), busy=lambda: bool(SYNC.status.get("running")), isolated_regression=isolated)
+    from .kazumi_writeback import start_worker
+    writeback_stop = threading.Event()
     if not sandbox:
         start_worker(writeback_stop)
     from .offline_service import start_background_worker as start_offline_worker

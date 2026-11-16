@@ -36,6 +36,7 @@ class DesktopShutdownTest(unittest.TestCase):
         status, health = self.call('GET', '/api/health')
         self.assertEqual(status, 200)
         self.assertEqual(health['features']['desktop_shutdown'], 1)
+        self.assertNotIn('isolated_regression', health['features'])
         for headers in [{}, {'Origin':'https://other.example','X-Handbook-Shutdown':health['shutdown_token']}, {'Origin':self.origin,'X-Handbook-Shutdown':'invalid'}]:
             self.assertEqual(self.call('POST', '/api/desktop/shutdown', headers)[0], 403)
         self.assertFalse(self.server.stopping)

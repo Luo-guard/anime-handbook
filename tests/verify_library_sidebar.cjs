@@ -2,7 +2,11 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 
+const { isolatedServer } = require('./isolated_server.cjs');
+
 (async () => {
+  const API = await isolatedServer();
+  if (!API) return;
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   // 这个测试读取本机媒体库，但显隐的测试值只留在当前浏览器页。
@@ -18,7 +22,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     settings = { ...settings, ...route.request().postDataJSON() };
     await route.fulfill({ json: { settings } });
   });
-  await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
+  await page.goto(API, { waitUntil: 'domcontentloaded', timeout: 20000 });
   // bootstrap 拉全量数据，后台刚重启时要几秒；固定 sleep 会假失败。
   await page.waitForFunction(() => (state?.animes || []).length > 0, null, { timeout: 40000 });
 
