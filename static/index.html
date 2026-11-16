@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261116-detail-size" />
+  <link rel="stylesheet" href="/styles.css?v=20261116-full-artwork" />
   </head>
   <body>
     <div class="app-shell">
@@ -1036,11 +1036,12 @@
             <select id="detailSizeInput"><option value="small">小版</option><option value="large">大版</option></select>
           </label>
           <div class="setting-row stacked">
-            <span><strong id="detailBackgroundLabel">详情背景</strong><small>主题色用于页首。番剧图片会延伸到剧集区，找不到横版壁纸时用封面。</small></span>
+            <span><strong id="detailBackgroundLabel">详情背景</strong><small>「番剧图片」延伸至剧集区。「全幅番剧图片」从顶部铺满宽度，图片结束处自然渐隐。缺少壁纸时用封面。</small></span>
             <div class="detail-background-options" role="radiogroup" aria-labelledby="detailBackgroundLabel">
               <label><input type="radio" name="detailBackground" value="classic" checked /><span class="detail-background-swatch" aria-hidden="true"></span><span>白色</span></label>
               <label><input type="radio" name="detailBackground" value="modern" /><span class="detail-background-swatch" aria-hidden="true"></span><span>主题色</span></label>
               <label><input type="radio" name="detailBackground" value="artwork" /><span class="detail-background-swatch" aria-hidden="true"></span><span>番剧图片</span></label>
+              <label><input type="radio" name="detailBackground" value="artwork-full" /><span class="detail-background-swatch" aria-hidden="true"></span><span>全幅番剧图片</span></label>
             </div>
           </div>
           <div class="setting-row">
@@ -1864,7 +1865,7 @@
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261115-detail-background" defer></script>
-    <script src="/modules/details.js?v=20261116-detail-size" defer></script>
+    <script src="/modules/details.js?v=20261116-full-artwork" defer></script>
     <script src="/modules/records.js?v=20261116-record-episode-name" defer></script>
     <script src="/modules/ranking.js?v=20261023-modules" defer></script>
     <script src="/modules/statistics.js?v=20261102-week-range" defer></script>
