@@ -229,19 +229,22 @@ function applyDetailAppearance() {
   syncDetailCornerActions();
 }
 
+function setDetailArtworkSource(image, source) {
+  if (!image || image.getAttribute("src") === (source || null)) return;
+  image.classList.remove("loaded", "unavailable");
+  if (source) image.src = source;
+  else image.removeAttribute("src");
+}
+
 function updateDetailArtwork() {
   const dialog = $("#progressModal");
   const anime = dialog.open && dialog.dataset.detailBackground === "artwork" ? state.progressAnime : null;
-  for (const [selector, url] of [
-    ["#detailArtworkCover", anime?.cover_url],
-    ["#detailArtwork", anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=3`],
-  ]) {
-    const image = $(selector);
-    if (!image || image.getAttribute("src") === (url || null)) continue;
-    image.classList.remove("loaded");
-    if (url) image.src = url;
-    else image.removeAttribute("src");
-  }
+  const artwork = $("#detailArtwork");
+  setDetailArtworkSource(artwork, anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=3`);
+  // Keep the dark background while artwork is loading. Only use the cover
+  // after the artwork request has finished without a usable image.
+  const cover = artwork?.classList.contains("unavailable") ? anime?.cover_url : null;
+  setDetailArtworkSource($("#detailArtworkCover"), cover);
 }
 
 function updateDetailRecordActions() {
@@ -342,11 +345,16 @@ function refreshDetailHeader() {
 document.addEventListener("DOMContentLoaded", () => {
   const dialog = $("#progressModal");
   $$(".detail-artwork img").forEach(image => {
-    image.addEventListener("load", () => image.classList.toggle("loaded", image.naturalWidth > 0));
-    image.addEventListener("error", () => {
-      image.classList.remove("loaded");
-      image.removeAttribute("src");
+    image.addEventListener("load", () => {
+      if (image.complete && image.naturalWidth > 0) image.classList.add("loaded");
     });
+  });
+  const artwork = $("#detailArtwork");
+  artwork?.addEventListener("error", () => {
+    if (!dialog?.open || !artwork.hasAttribute("src") || !artwork.complete || artwork.naturalWidth > 0) return;
+    artwork.classList.remove("loaded");
+    artwork.classList.add("unavailable");
+    updateDetailArtwork();
   });
   $("#modernFullTitle")?.addEventListener("click", () => $("#detailFullTitleDialog").showModal());
   dialog?.addEventListener("keydown", event => {
