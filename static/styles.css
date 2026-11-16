@@ -6836,7 +6836,7 @@ body.schedule-picking [data-floating-view="schedule"] {
 [data-detail-background="artwork"] .comment-trigger { min-height: 32px; }
 [data-detail-background="artwork"] .episode-group-meta { flex-wrap: wrap; gap: 4px 9px; }
 [data-detail-background="artwork"] .episode-group-grid {
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: repeat(13, minmax(0, 1fr));
   gap: 7px;
 }
 [data-detail-background="artwork"] .episode-cell {
