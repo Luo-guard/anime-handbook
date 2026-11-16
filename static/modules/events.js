@@ -603,6 +603,7 @@ function prepareHandbookSettings() {
   $("#showEpisodeBalanceInput").checked = state.settings.show_episode_balance !== false;
   $("#episodeBalanceInitialInput").value = Number(state.settings.episode_balance_initial ?? 237);
   $("#episodeBalanceDailyTargetInput").value = Number(state.settings.episode_balance_daily_target ?? 8);
+  renderStatisticsPlanPreview();
   $("#statisticsDefaultThemeInput").innerHTML = [
     '<option value="all">全部记录</option>',
     ...allRecordThemes().map((theme) => `<option value="${escapeHtml(theme.id)}">${escapeHtml(theme.name)}</option>`),
@@ -615,6 +616,22 @@ function prepareHandbookSettings() {
   initSettingsSearch();
   initAutoOpenOfflineSetting();
 }
+
+function renderStatisticsPlanPreview() {
+  const target = $("#episodeBalanceDailyTargetInput");
+  const preview = $("#episodeBalanceDailyPreview");
+  const amount = target.valueAsNumber;
+  preview.textContent = !target.validity.valid || !Number.isInteger(amount)
+    ? "填写计划集数"
+    : amount === 0 ? "不增加" : `+${amount} 集`;
+  const hour = $("#dayStartInput").valueAsNumber;
+  const time = Number.isInteger(hour) && hour >= 0 && hour < 24 ? `${String(hour).padStart(2, "0")}:00` : "";
+  $("#episodeBalanceDayStartLink").textContent = time ? `一天从 ${time} 开始 · 调整` : "调整一天的起始时间";
+}
+
+$("#episodeBalanceDailyTargetInput").addEventListener("input", renderStatisticsPlanPreview);
+$("#dayStartInput").addEventListener("input", renderStatisticsPlanPreview);
+$("#episodeBalanceDayStartLink").addEventListener("click", () => showSettingsSection("record", "#dayStartInput"));
 
 $("#settingsButton").addEventListener("click", () => {
   if (ThemeSettingsSession.suspended) ThemeSettingsSession.resume();

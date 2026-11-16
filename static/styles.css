@@ -3299,6 +3299,71 @@ dialog::backdrop {
 /* 说明文字默认收起，只保留标题右侧的问号；内容仍在 DOM 里，供弹层读取。 */
 .setting-row small.setting-help-source { display: none; }
 
+.statistics-settings-heading {
+  padding-block: 12px 9px;
+  color: var(--green-800);
+  background: var(--green-50);
+}
+.statistics-settings-row { padding-block: 13px; }
+.statistics-settings-row .switch-row { flex: none; }
+.statistics-setting-description {
+  display: block;
+  max-width: 38em;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.statistics-default-row select { flex: none; width: min(100%, 11em); }
+.statistics-number {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.statistics-number input { width: 6em; font-variant-numeric: tabular-nums; }
+.statistics-plan-row { gap: 10px; }
+.statistics-plan-field {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+}
+.statistics-plan-field > span:first-child { min-width: 0; }
+.statistics-plan-flow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--green-50);
+}
+.statistics-plan-flow > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 3px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.statistics-plan-flow > div + div { margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--line); }
+.statistics-plan-flow :is(output, strong) {
+  color: var(--green-800);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.statistics-day-start.text-button {
+  justify-self: start;
+  padding: 0;
+  color: var(--green-800);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .setting-row.airing-source-guide { display: block; }
 .airing-source-guide > summary {
   display: flex;

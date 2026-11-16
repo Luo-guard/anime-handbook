@@ -4,6 +4,16 @@ const HandbookSettings = (() => {
   async function save() {
     const button = $("#saveSettings");
     if (saving) return;
+    const invalidBalanceInput = ["episodeBalanceDailyTargetInput", "episodeBalanceInitialInput"]
+      .map(id => document.getElementById(id))
+      .find(input => !input.validity.valid || !Number.isSafeInteger(input.valueAsNumber));
+    if (invalidBalanceInput) {
+      showSettingsSection("statistics", `#${invalidBalanceInput.id}`);
+      toast(invalidBalanceInput.id === "episodeBalanceDailyTargetInput"
+        ? "每日计划请输入 0 到 100 之间的整数。"
+        : "手动校准追番余额时，请填写整数。", "error");
+      return;
+    }
     saving = true;
     button.disabled = true;
     ThemeSettingsSession.lock(true);

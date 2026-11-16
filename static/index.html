@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261116-flexible-wheel" />
+  <link rel="stylesheet" href="/styles.css?v=20261116-statistics-settings" />
   </head>
   <body>
     <div class="app-shell">
@@ -1333,50 +1333,54 @@
             <div class="timeline-default-grid" id="timelineDefaultThemesMenu" role="group" aria-label="默认展示的记录类型"></div>
           </div>
           <div class="settings-section-title" data-settings-section="statistics" data-page-label="statistics">记录统计</div>
-          <h3 class="settings-subsection-title">统计默认选项</h3>
-          <label class="setting-row">
+          <h3 class="settings-subsection-title statistics-settings-heading">图表显示</h3>
+          <label class="setting-row statistics-settings-row statistics-default-row">
             <span>
-              <strong>统计页默认记录筛选</strong>
-              <small data-page-text="每次打开{statistics}时，自动显示这个主题的数据。">每次打开记录统计时，自动显示这个主题的数据。</small>
+              <strong>打开时统计哪类记录</strong>
+              <span class="statistics-setting-description">进入统计页后，仍可临时切换记录类型。</span>
             </span>
             <select id="statisticsDefaultThemeInput"></select>
           </label>
-          <label class="setting-row">
-            <span><strong>显示数量为 0 的统计周期</strong><small>关闭后，跳过当前筛选下数量为 0 的日期、周、月和年；不影响记录数据和统计总数。</small></span>
+          <label class="setting-row statistics-settings-row">
+            <span><strong>显示没有记录的时段</strong><span class="statistics-setting-description">例如按周统计观看记录时，没看番的那周也会显示。</span></span>
             <span class="switch-row compact">
               <input type="checkbox" id="showZeroStatisticsInput" />
               <span class="switch"></span>
             </span>
           </label>
-          <h3 class="settings-subsection-title">追番计划与余额</h3>
-          <label class="setting-row">
+          <h3 class="settings-subsection-title statistics-settings-heading">追番计划</h3>
+          <label class="setting-row statistics-settings-row">
             <span>
-              <strong>显示追番余额</strong>
-              <small>按每日计划累加应看集数；每记录一集观看，余额就减少一集。</small>
+              <strong>在统计页显示追番余额</strong>
+              <span class="statistics-setting-description">看还差几集达标，或已超过计划几集。</span>
             </span>
             <span class="switch-row compact">
               <input type="checkbox" id="showEpisodeBalanceInput" />
               <span class="switch"></span>
             </span>
           </label>
-          <label class="setting-row">
+          <div class="setting-row stacked statistics-settings-row statistics-plan-row">
+            <label class="statistics-plan-field">
+              <span><strong>每天计划看几集</strong><span class="statistics-setting-description">填 0 就暂停每天增加计划集数。</span></span>
+              <span class="inline-input statistics-number">
+                <input id="episodeBalanceDailyTargetInput" type="number" min="0" max="100" step="1" required />
+                <span aria-hidden="true">集</span>
+              </span>
+            </label>
+            <div class="statistics-plan-flow" aria-label="余额怎么算">
+              <div><span>每到新的一天</span><output id="episodeBalanceDailyPreview" for="episodeBalanceDailyTargetInput"></output></div>
+              <div><span>每记录一集已看</span><strong>−1 集</strong></div>
+            </div>
+            <button type="button" id="episodeBalanceDayStartLink" class="text-button statistics-day-start">调整一天的起始时间</button>
+          </div>
+          <label class="setting-row statistics-settings-row">
             <span>
-              <strong>当前追番余额</strong>
-              <small>正数表示还欠多少集，负数表示已经超出计划多少集。</small>
+              <strong>手动校准追番余额</strong>
+              <span class="statistics-setting-description" id="episodeBalanceInitialHint">填正数表示还差几集，填负数表示超出几集。更改后会从当天重新计算，并扣除当天已记录的集数。</span>
             </span>
-            <span class="inline-input">
-              <input id="episodeBalanceInitialInput" type="number" step="1" />
-              集
-            </span>
-          </label>
-          <label class="setting-row">
-            <span>
-              <strong>每日计划集数</strong>
-              <small>每到新的一天自动加入计划；分界时间在“观看记录”中设置。</small>
-            </span>
-            <span class="inline-input">
-              <input id="episodeBalanceDailyTargetInput" type="number" min="0" max="100" step="1" />
-              集
+            <span class="inline-input statistics-number">
+              <input id="episodeBalanceInitialInput" type="number" step="1" required aria-describedby="episodeBalanceInitialHint" />
+              <span aria-hidden="true">集</span>
             </span>
           </label>
           <div class="settings-section-title" data-settings-section="ranking" data-page-label="ranking">排名</div>
@@ -1923,8 +1927,8 @@
     <script src="/modules/settings.js?v=20261116-comment-tab" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261114-bgm-source-cards" defer></script>
-    <script src="/modules/settings-save.js?v=20261116-flexible-wheel" defer></script>
-    <script src="/modules/events.js?v=20261116-episode-images" defer></script>
+    <script src="/modules/settings-save.js?v=20261116-statistics-settings" defer></script>
+    <script src="/modules/events.js?v=20261116-statistics-settings" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
