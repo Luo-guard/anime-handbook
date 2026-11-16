@@ -22,6 +22,8 @@ DOCUMENT_BYTES = 2 * 1024 * 1024
 ERRORS = (OSError, HTTPException, ValueError, TypeError, KeyError, etree.LxmlError, Image.DecompressionBombError)
 SEARCH_SLOTS = threading.BoundedSemaphore(3)
 CACHE_LOCKS = tuple(threading.Lock() for _ in range(32))
+CACHE_VERSION = "v2"
+CROSSOVER_TAGS = {"crossover", "crossovers", "クロスオーバー", "跨作品"}
 HOSTS = {
     "alphacoders.com", "wall.alphacoders.com", "wallhaven.cc", "w.wallhaven.cc",
     "api.anime-pictures.net", "opreviews.anime-pictures.net", "www.pixiv.net", "i.pximg.net",
@@ -115,12 +117,11 @@ def _alpha(lookup, titles):
     for title in names[:2]:
         query = urlencode({"q": title, "type": "wallpaper"})
         page, address = lookup.page(f"https://alphacoders.com/search/view?{query}")
-        # Search redirects an exact collection hit to its desktop gallery.
-        collection = urlsplit(address).path.endswith("-wallpapers")
         candidates = []
         for card in page.xpath('//*[contains(concat(" ", @class, " "), " thumb-container-wallpaper-desktop ")]'):
-            tags = card.xpath('.//a[contains(@class,"thumb-tag-masonry")]/text()')
-            if not collection and not expected.intersection(_key(tag) for tag in tags):
+            tags = {_key(tag) for tag in card.xpath('.//a[contains(@class,"thumb-tag-masonry")]//text()')}
+            # Search can redirect on a partial word. The gallery URL alone says nothing about a card.
+            if not expected.intersection(tags) or tags & CROSSOVER_TAGS:
                 continue
             info = " ".join(card.xpath('.//*[contains(@class,"thumb-info-masonry")]//text()'))
             if not _landscape(*_dimensions(info)):
@@ -150,8 +151,14 @@ def _wallhaven(lookup, titles):
                 continue
             detail = lookup.json(f"https://wallhaven.cc/api/v1/w/{wallpaper_id}")["data"]
             tags = {_key(tag["name"]) for tag in detail.get("tags", [])}
-            if detail.get("purity") == "sfw" and tags & expected and "animescreenshot" not in tags:
+            if detail.get("purity") == "sfw" and tags & expected and not tags & (CROSSOVER_TAGS | {"animescreenshot"}):
                 yield detail["path"], ""
+
+
+def _anime_picture_tag_matches(tag, expected):
+    return tag.get("type") == 3 and any(
+        _key(tag.get(field) or "") in expected for field in ("tag", "tag_jp", "tag_ru")
+    )
 
 
 def _anime_pictures(lookup, titles):
@@ -167,9 +174,7 @@ def _anime_pictures(lookup, titles):
                 continue
             raise
         tag = data.get("exclusive_tag") or {}
-        if tag.get("type") != 3 or not expected.intersection(
-            _key(tag.get(field) or "") for field in ("tag", "tag_jp", "tag_ru")
-        ):
+        if not _anime_picture_tag_matches(tag, expected):
             continue
         rows = [
             row for row in data.get("posts", []) if row.get("erotics") == 0
@@ -178,6 +183,11 @@ def _anime_pictures(lookup, titles):
         rows.sort(key=lambda row: (row["score"], row["score_number"], row["download_count"]), reverse=True)
         for row in rows[:5]:
             detail = lookup.json(f"{sources}/{int(row['id'])}")
+            tags = [entry["tag"] for entry in detail.get("tags", []) if isinstance(entry.get("tag"), dict)]
+            works = [entry for entry in tags if entry.get("type") == 3]
+            if (not works or not all(_anime_picture_tag_matches(work, expected) for work in works)
+                    or any(_key(entry.get("tag") or "") in CROSSOVER_TAGS for entry in tags)):
+                continue
             yield detail["post"]["big_preview"], "https://anime-pictures.net/"
         if rows:
             return
@@ -185,6 +195,7 @@ def _anime_pictures(lookup, titles):
 
 def _pixiv(lookup, titles):
     titles = [unicodedata.normalize("NFKC", title) for title in titles]
+    expected = {_key(title) for title in titles}
     terms = list(dict.fromkeys([titles[0], titles[0].rstrip("!"), *titles]))[:2]
     candidates = []
     seen = set()
@@ -212,7 +223,8 @@ def _pixiv(lookup, titles):
                     detail = lookup.json(f"https://www.pixiv.net/ajax/illust/{work_id}", referer=referer)["body"]
                 except ERRORS:
                     continue
-                if detail.get("xRestrict") == 0:
+                tags = {_key(tag.get("tag") or "") for tag in (detail.get("tags") or {}).get("tags", [])}
+                if detail.get("xRestrict") == 0 and tags & expected and not tags & CROSSOVER_TAGS:
                     candidates.append((detail.get("bookmarkCount", 0), detail["urls"]["original"], referer))
                 if len(candidates) >= 6:
                     break
@@ -259,7 +271,7 @@ def _find(titles):
 
 def get_artwork(root, anime, aliases=()):
     anime_id = int(anime["id"])
-    path = root / "detail-artwork" / f"{anime_id}.webp"
+    path = root / "detail-artwork" / CACHE_VERSION / f"{anime_id}.webp"
     lock = CACHE_LOCKS[anime_id % len(CACHE_LOCKS)]
     with lock:
         previous = b""
