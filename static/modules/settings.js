@@ -213,6 +213,7 @@ function renderSettingsPanels() {
   (background || $('input[name="detailBackground"][value="classic"]')).checked = true;
   $("#detailSizeInput").value = detailSize();
   const artworkRetry = $("#detailArtworkRetryInput");
+  $("#detailCustomWallpaperInput").checked = state.settings.detail_custom_wallpaper_enabled !== false;
   const artworkHours = state.settings.detail_artwork_miss_hours ?? 168;
   artworkRetry.value = [...artworkRetry.options].some(option => option.value === String(artworkHours))
     ? String(artworkHours) : "custom";

@@ -236,11 +236,14 @@ function setDetailArtworkSource(image, source) {
   else image.removeAttribute("src");
 }
 
+let detailArtworkRevision = 0;
+
 function updateDetailArtwork() {
   const dialog = $("#progressModal");
   const anime = dialog.open && dialog.dataset.detailBackground === "artwork" ? state.progressAnime : null;
   const artwork = $("#detailArtwork");
-  setDetailArtworkSource(artwork, anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=3`);
+  const custom = state.settings.detail_custom_wallpaper_enabled !== false;
+  setDetailArtworkSource(artwork, anime && `/api/detail-artwork/${encodeURIComponent(anime.id)}?v=4&custom=${Number(custom)}&rev=${detailArtworkRevision}`);
   // Keep the dark background while artwork is loading. Only use the cover
   // after the artwork request has finished without a usable image.
   const cover = artwork?.classList.contains("unavailable") ? anime?.cover_url : null;
@@ -411,6 +414,7 @@ function openProgress(animeId) {
   $("#savedVideoSection").open = false;
   renderVideoLinks(anime.id);
   $("#openAgeRelated").classList.toggle("hidden", !showAgeRelatedButton());
+  $("#openDetailWallpaper").classList.toggle("hidden", Boolean(state.user?.read_only));
   applyCharacterTabVisibility();
   switchDetailTab("overview");
   $("#ageRelatedSection").classList.add("hidden");

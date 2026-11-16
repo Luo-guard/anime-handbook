@@ -7,6 +7,7 @@ from .common import MAX_DETAIL_LINKS, MAX_SCREENSHOT_BODY_BYTES
 from .link_rules import RuleFetchError, cache_path, payload as rules_payload, refresh as refresh_rules
 from . import offline_config
 from . import screenshots as screenshot_tools
+from . import detail_wallpapers
 from . import danmaku as danmaku_tools
 from . import playback_rules, xifan_preview
 from .offline_service import OfflineError, OfflineService
@@ -65,6 +66,10 @@ class PostRoutes:
                     self.send_json({"ok": False, "error": str(error), "items": [], "limit": MAX_DETAIL_LINKS}, 502)
                     return
                 self.send_json(rules_payload(document, MAX_DETAIL_LINKS))
+            elif match := detail_wallpapers.ROUTE.fullmatch(path):
+                self.send_json(detail_wallpapers.change_wallpaper(
+                    self.database, int(match[1]), body, allow_gallery=not hasattr(self, "services"),
+                ))
             elif path == "/api/offline/settings":
                 config = offline_config.save_settings(self.database.asset_root, body)
                 self.send_json({

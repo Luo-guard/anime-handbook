@@ -95,6 +95,7 @@ const HandbookSettings = (() => {
           detail_airtime_source: detailAirtimeSource,
           ...detailSettings,
           detail_artwork_miss_hours: artworkMissHours,
+          detail_custom_wallpaper_enabled: $("#detailCustomWallpaperInput").checked,
           detail_comment_types: commentTypes,
           hide_missing_as_schedule: $("#hideMissingAsScheduleInput").checked,
           show_schedule_source_switch: $("#scheduleSourceSwitchInput").checked,
@@ -173,6 +174,9 @@ const HandbookSettings = (() => {
       }
       if ((payload.settings.detail_artwork_miss_hours ?? 168) !== artworkMissHours) {
         throw new Error("后台未保存壁纸查找间隔，请重启后台并刷新后重试。");
+      }
+      if ((payload.settings.detail_custom_wallpaper_enabled !== false) !== $("#detailCustomWallpaperInput").checked) {
+        throw new Error("后台未保存自定义壁纸设置，请重启后台并刷新后重试。");
       }
       if ((payload.settings.show_episode_review_rating_marks !== false) !== $("#showEpisodeReviewRatingMarksInput").checked) {
         throw new Error("后台未保存单集标记设置，请重启后台并刷新后重试。");

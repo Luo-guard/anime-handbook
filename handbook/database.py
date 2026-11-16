@@ -673,6 +673,7 @@ class HandbookDB:
                 "detail_airtime_source": "yuc",
                 "detail_layout": "classic",
                 "detail_artwork_miss_hours": DEFAULT_ARTWORK_MISS_HOURS,
+                "detail_custom_wallpaper_enabled": True,
                 "detail_modern_original_title": True,
                 "detail_modern_compact_credits": True,
                 "detail_classic_record_on_change": False,

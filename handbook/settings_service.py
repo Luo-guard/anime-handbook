@@ -131,6 +131,7 @@ def _normalize_settings(body, settings):
         "detail_layout",
         "detail_size",
         "detail_artwork_miss_hours",
+        "detail_custom_wallpaper_enabled",
         "detail_record_on_change",
         "detail_comment_types",
         "detail_wheel_style",
@@ -268,7 +269,7 @@ def _normalize_settings(body, settings):
             elif key in {
                 "detail_modern_original_title", "detail_modern_compact_credits",
                 "detail_classic_record_on_change", "detail_modern_record_on_change",
-                "detail_record_on_change", "detail_compact_credits",
+                "detail_record_on_change", "detail_compact_credits", "detail_custom_wallpaper_enabled",
             }:
                 if type(value) is not bool:
                     raise ValueError("番剧详情显示选项无效")

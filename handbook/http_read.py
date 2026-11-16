@@ -8,6 +8,7 @@ from urllib.parse import quote, unquote
 from . import media as media_tools
 from . import offline_config
 from . import screenshots as screenshot_tools
+from . import detail_wallpapers
 from . import danmaku as danmaku_tools
 from . import xifan_preview
 from . import playback_rules
@@ -463,6 +464,16 @@ class ReadRoutes:
                         "custom_collections": self.database.list_custom_collections(),
                     }
                 )
+            elif match := detail_wallpapers.ROUTE.fullmatch(path):
+                anime_id = int(match[1])
+                if query.get("image") == ["1"]:
+                    body = detail_wallpapers.read_wallpaper(self.database, anime_id)
+                    if body is None:
+                        self.send_error_json(404, "找不到自定义壁纸")
+                    else:
+                        send_asset(self, body, "image/webp")
+                else:
+                    self.send_json({"ok": True, "custom": detail_wallpapers.wallpaper_path(self.database, anime_id).is_file()})
             elif re.fullmatch(r"/api/detail-artwork/[1-9]\d{0,9}", path):
                 anime_id = int(path.rsplit("/", 1)[1])
                 with self.database.connect() as db:
@@ -471,11 +482,16 @@ class ReadRoutes:
                     self.send_error(HTTPStatus.NOT_FOUND)
                     return
                 anime = dict(row)
-                aliases = self.animeschedule.cached_titles(anime_id, (anime["name"], anime["name_cn"]))
-                miss_hours = self.database.get_settings().get("detail_artwork_miss_hours", DEFAULT_ARTWORK_MISS_HOURS)
-                body = get_artwork(self.database.asset_root, anime, aliases, miss_hours=miss_hours)
+                settings = self.database.get_settings()
+                body = None
+                if settings.get("detail_custom_wallpaper_enabled", True):
+                    body = detail_wallpapers.read_wallpaper(self.database, anime_id)
+                if body is None:
+                    aliases = self.animeschedule.cached_titles(anime_id, (anime["name"], anime["name_cn"]))
+                    miss_hours = settings.get("detail_artwork_miss_hours", DEFAULT_ARTWORK_MISS_HOURS)
+                    body = get_artwork(self.database.asset_root, anime, aliases, miss_hours=miss_hours)
                 if body:
-                    send_asset(self, body, "image/webp", cache="private, max-age=86400")
+                    send_asset(self, body, "image/webp")
                 else:
                     self.send_response(HTTPStatus.NO_CONTENT)
                     self.send_header("Cache-Control", "private, no-store")
