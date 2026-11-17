@@ -409,14 +409,14 @@ function renderSettingsPanels() {
   if (typeof setupSettingHelp === "function") setupSettingHelp();
 }
 
-function renderSharingSettings() {
+function renderSharingSettings(preserveFolder = false) {
   const sharing = state.sharing || {};
   const profiles = Array.isArray(state.profiles) ? state.profiles : [];
   const active = state.active_profile?.id || profiles.find((item) => item.active)?.id || "";
   const folder = $("#sharingFolderInput");
-  if (folder) folder.value = sharing.shared_folder || "";
+  if (folder && !preserveFolder) folder.value = sharing.shared_folder || "";
   const autoPublish = $("#autoPublishSharingInput");
-  if (autoPublish) autoPublish.checked = sharing.auto_publish !== false;
+  if (autoPublish && !autoPublish.disabled) autoPublish.checked = sharing.auto_publish !== false;
   const status = $("#sharingStatus");
   if (status) {
     status.textContent = sharing.configured ? `共享目录：${sharing.shared_folder}` : "未设置共享目录";
@@ -442,16 +442,16 @@ function renderSharingSettings() {
     : "<p class=\"empty-settings\">共享目录中暂未发现其他账号的已发布快照。</p>";
 }
 
-function renderWebdavSettings() {
+function renderWebdavSettings(form = null) {
   const webdav = state.webdav || {};
   const url = $("#webdavUrlInput");
   const username = $("#webdavUsernameInput");
   const account = $("#webdavAccountIdInput");
   const auto = $("#autoWebdavSyncInput");
-  if (url) url.value = webdav.url || "https://dav.jianguoyun.com/dav/";
-  if (username) username.value = webdav.username || "";
-  if (account) account.value = webdav.account_id || state.active_profile?.sharing_id || "";
-  if (auto) auto.checked = webdav.auto_sync !== false;
+  if (url && (!form || url.value === form[url.id])) url.value = webdav.url || "https://dav.jianguoyun.com/dav/";
+  if (username && (!form || username.value === form[username.id])) username.value = webdav.username || "";
+  if (account && (!form || account.value === form[account.id])) account.value = webdav.account_id || state.active_profile?.sharing_id || "";
+  if (auto && (!form || auto.checked === form[auto.id])) auto.checked = webdav.auto_sync !== false;
   const status = $("#webdavStatus");
   if (!status) return;
   status.classList.toggle("is-ok", Boolean(webdav.configured && !webdav.last_error));

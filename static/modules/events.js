@@ -49,25 +49,38 @@ $("#ccDone")?.addEventListener("click", () => {
   $("#collectionFloatingPanel").close();
 });
 
+let collectionSettingsWrite = Promise.resolve();
+function queueCollectionSettings(fields, onSaved, onError = () => {}) {
+  collectionSettingsWrite = collectionSettingsWrite.then(async () => {
+    try {
+      const payload = await api("/api/settings", { method: "PATCH", body: JSON.stringify(fields()) });
+      state.settings = ThemeSettingsSession.incoming(payload.settings);
+      onSaved(payload);
+    } catch (error) {
+      onError();
+      toast(error.message, "error");
+    }
+  });
+}
+
 // 「恢复默认」= 清空季度筛选 + 当前收藏夹排序回名称升序。
 // 只动当前夹，不动别的收藏夹已经单独设好的排序。
-$("#ccResetAll")?.addEventListener("click", async () => {
-  try {
-    state.seasonFilters.clear();
-    renderSeasonFilter();
-    const key = activeVisibilityKey();
-    const modes = { ...(state.settings.collection_sort_modes || {}), [key]: "name" };
-    const directions = { ...(state.settings.collection_sort_directions || {}), [key]: "asc" };
-    const payload = await api("/api/settings", {
-      method: "PATCH",
-      body: JSON.stringify({ collection_sort_modes: modes, collection_sort_directions: directions }),
-    });
-    state.settings = ThemeSettingsSession.incoming(payload.settings);
+$("#ccResetAll")?.addEventListener("click", () => {
+  const key = activeVisibilityKey();
+  const seasons = [...state.seasonFilters];
+  queueCollectionSettings(() => ({
+    collection_sort_modes: { ...state.settings.collection_sort_modes, [key]: "name" },
+    collection_sort_directions: { ...state.settings.collection_sort_directions, [key]: "asc" },
+  }), () => {
+    const sameFilter = key === activeVisibilityKey() && seasons.length === state.seasonFilters.size
+      && seasons.every(season => state.seasonFilters.has(season));
+    if (sameFilter) {
+      state.seasonFilters.clear();
+      renderSeasonFilter();
+    }
     renderCollection();
-    toast("已恢复默认筛选与排序");
-  } catch (error) {
-    toast(error.message, "error");
-  }
+    toast(sameFilter ? "已恢复默认筛选与排序" : "已恢复默认排序");
+  });
 });
 
 let timelineSearchTimer = null;
@@ -90,59 +103,37 @@ $("#emptySyncButton").addEventListener("click", startSync);
 $("#createCollectionButton").addEventListener("click", createCustomCollection);
 $("#createRankingButton").addEventListener("click", createRankingBoard);
 
-$("#collectionRatingToggle").addEventListener("change", async (event) => {
-  try {
-    const visibility = {
-      ...(state.settings.category_rating_visibility || {}),
-      [activeVisibilityKey()]: event.target.checked,
-    };
-    const payload = await api("/api/settings", {
-      method: "PATCH",
-      body: JSON.stringify({ category_rating_visibility: visibility }),
+for (const [selector, setting] of [
+  ["#collectionRatingToggle", "category_rating_visibility"],
+  ["#progressBarToggle", "category_progress_visibility"],
+]) {
+  $(selector).addEventListener("change", event => {
+    const input = event.currentTarget;
+    const key = activeVisibilityKey();
+    const checked = input.checked;
+    queueCollectionSettings(() => ({
+      [setting]: { ...state.settings[setting], [key]: checked },
+    }), payload => {
+      if (setting === "category_progress_visibility") {
+        state.stats = payload.stats || state.stats;
+        commitAnimes(payload.animes || state.animes, { render: false });
+        state.custom_collections = payload.custom_collections || state.custom_collections;
+      }
+      renderCollection();
+    }, () => {
+      input.checked = state.settings[setting]?.[activeVisibilityKey()] !== false;
     });
-    state.settings = ThemeSettingsSession.incoming(payload.settings);
-    renderCollection();
-  } catch (error) {
-    toast(error.message, "error");
-  }
-});
+  });
+}
 
-$("#progressBarToggle").addEventListener("change", async (event) => {
-  try {
-    const visibility = {
-      ...(state.settings.category_progress_visibility || {}),
-      [activeVisibilityKey()]: event.target.checked,
-    };
-    const payload = await api("/api/settings", {
-      method: "PATCH",
-      body: JSON.stringify({ category_progress_visibility: visibility }),
-    });
-    state.settings = ThemeSettingsSession.incoming(payload.settings);
-    state.stats = payload.stats || state.stats;
-    commitAnimes(payload.animes || state.animes, { render: false });
-    state.custom_collections = payload.custom_collections || state.custom_collections;
-    renderCollection();
-  } catch (error) {
-    toast(error.message, "error");
-  }
-});
-
-$$("[data-sort-mode]").forEach((row) => row.addEventListener("click", async (event) => {
-  try {
-    const mode = row.dataset.sortMode;
-    const direction = event.target.dataset.sortDirection || collectionSortDirection();
-    const modes = { ...(state.settings.collection_sort_modes || {}), [activeVisibilityKey()]: mode };
-    const directions = { ...(state.settings.collection_sort_directions || {}) };
-    directions[activeVisibilityKey()] = direction;
-    const payload = await api("/api/settings", {
-      method: "PATCH",
-      body: JSON.stringify({ collection_sort_modes: modes, collection_sort_directions: directions }),
-    });
-    state.settings = ThemeSettingsSession.incoming(payload.settings);
-    renderCollection();
-  } catch (error) {
-    toast(error.message, "error");
-  }
+$$("[data-sort-mode]").forEach(row => row.addEventListener("click", event => {
+  const key = activeVisibilityKey();
+  const mode = row.dataset.sortMode;
+  const direction = event.target.dataset.sortDirection || collectionSortDirection();
+  queueCollectionSettings(() => ({
+    collection_sort_modes: { ...state.settings.collection_sort_modes, [key]: mode },
+    collection_sort_directions: { ...state.settings.collection_sort_directions, [key]: direction },
+  }), renderCollection);
 }));
 
 $("#sidebarToggle").addEventListener("click", () => setSidebarCollapsed(true));
@@ -638,33 +629,54 @@ $("#settingsButton").addEventListener("click", () => {
   else openHandbookSettings();
 });
 
+let sharingSettingsRequest = 0;
+let webdavSettingsRequest = 0;
+
 async function refreshSharingSettings() {
+  const request = ++sharingSettingsRequest;
+  const folder = $("#sharingFolderInput").value;
   const payload = await api("/api/sharing");
+  if (request !== sharingSettingsRequest) return;
   state.sharing = payload.sharing || {};
   state.sharing_available_profiles = payload.available_profiles || [];
-  renderSharingSettings();
+  renderSharingSettings($("#sharingFolderInput").value !== folder);
+}
+
+const WEBDAV_FORM_FIELDS = ["webdavUrlInput", "webdavUsernameInput", "webdavAccountIdInput", "autoWebdavSyncInput"];
+function readWebdavForm() {
+  return Object.fromEntries(WEBDAV_FORM_FIELDS.map(id => {
+    const input = document.getElementById(id);
+    return [id, input.type === "checkbox" ? input.checked : input.value];
+  }));
 }
 
 async function refreshWebdavSettings() {
+  const request = ++webdavSettingsRequest;
+  const form = readWebdavForm();
   const payload = await api("/api/webdav");
+  if (request !== webdavSettingsRequest) return;
   state.webdav = payload.webdav || {};
-  renderWebdavSettings();
+  renderWebdavSettings(form);
 }
 
 async function saveWebdavSettings() {
+  webdavSettingsRequest += 1;
+  const form = readWebdavForm();
+  const password = $("#webdavPasswordInput").value;
   const payload = await api("/api/webdav/configure", {
     method: "POST",
     body: JSON.stringify({
-      url: $("#webdavUrlInput").value.trim(),
-      username: $("#webdavUsernameInput").value.trim(),
-      password: $("#webdavPasswordInput").value,
-      account_id: $("#webdavAccountIdInput").value.trim(),
-      auto_sync: $("#autoWebdavSyncInput").checked,
+      url: form.webdavUrlInput.trim(),
+      username: form.webdavUsernameInput.trim(),
+      password,
+      account_id: form.webdavAccountIdInput.trim(),
+      auto_sync: form.autoWebdavSyncInput,
     }),
   });
+  webdavSettingsRequest += 1;
   state.webdav = payload.webdav || {};
-  $("#webdavPasswordInput").value = "";
-  renderWebdavSettings();
+  if ($("#webdavPasswordInput").value === password) $("#webdavPasswordInput").value = "";
+  renderWebdavSettings(form);
   return payload;
 }
 
@@ -748,16 +760,26 @@ $("#publishSharingButton").addEventListener("click", async () => {
 });
 
 $("#autoPublishSharingInput").addEventListener("change", async (event) => {
+  const input = event.currentTarget;
+  if (input.disabled) return;
+  const enabled = input.checked;
+  const previous = state.sharing?.auto_publish !== false;
+  input.disabled = true;
+  sharingSettingsRequest += 1;
   try {
     const payload = await api("/api/sharing/auto-publish", {
       method: "POST",
-      body: JSON.stringify({ enabled: event.target.checked }),
+      body: JSON.stringify({ enabled }),
     });
     state.sharing = payload.sharing || state.sharing;
-    toast(event.target.checked ? "已开启每 30 分钟自动发布" : "已关闭自动发布");
+    input.checked = state.sharing?.auto_publish !== false;
+    toast(input.checked ? "已开启每 30 分钟自动发布" : "已关闭自动发布");
   } catch (error) {
-    event.target.checked = !event.target.checked;
+    input.checked = previous;
     toast(error.message, "error");
+  } finally {
+    sharingSettingsRequest += 1;
+    input.disabled = false;
   }
 });
 
