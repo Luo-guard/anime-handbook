@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from handbook.airing import BEIJING
 from handbook.database import HandbookDB
@@ -10,6 +11,34 @@ from handbook.metadata import SyncService
 
 
 class EpisodeTitleRefreshTest(unittest.TestCase):
+    def test_overdue_missing_title_does_not_wait_for_next_episode(self):
+        item = {"episodes": [
+            {"type": 0, "sort": 22, "airdate": "2026-11-19", "name": ""},
+            {"type": 0, "sort": 21, "airdate": "2026-11-12", "name": ""},
+        ]}
+        now = datetime(2026, 11, 19, 16, tzinfo=BEIJING)
+        airtimes = {22: datetime(2026, 11, 19, 22, tzinfo=BEIJING)}
+        self.assertIsNone(SyncService._episode_check_after(item, {}, now, airtimes))
+
+    def test_subject_failure_does_not_skip_scheduled_episode_refresh(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = HandbookDB(root / "handbook.db", asset_root=root)
+            db.import_kazumi([{"id": 12, "type": 1, "name": "作品"}])
+            episode = {"id": 721, "type": 0, "sort": 21, "name": ""}
+            db.update_bgm_metadata(12, episode_count=1, episodes=[episode],
+                                   episode_titles_synced=True, rating_synced=True, rating_score=7.5)
+            service = SyncService(db)
+            with patch.object(service._airtime_schedule, "airtime_index", return_value={}), patch.object(
+                service, "fetch_bgm", side_effect=HTTPError("https://api.bgm.tv", 503, "unavailable", {}, None),
+            ), patch.object(service, "fetch_bgm_episodes", return_value=[{**episode, "name": "無理解", "name_cn": "误会"}]) as fetch:
+                self.assertEqual(service.enrich_missing(), 1)
+                fetch.assert_called_once_with(12)
+            anime = db.get_anime(12)
+            self.assertEqual(anime["episodes"][0]["name_cn"], "误会")
+            self.assertEqual(anime["bgm_score"], 7.5)
+            self.assertTrue(anime["episode_release_synced_at"])
+
     def test_waits_one_hour_after_cached_airtime(self):
         item = {"episodes": [{"type": 0, "airdate": "2026-11-15", "name": "", "name_cn": ""}]}
         slot = {"source_weekday": 7, "source_time": "24:00"}

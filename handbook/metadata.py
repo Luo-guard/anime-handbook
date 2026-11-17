@@ -71,6 +71,7 @@ class SyncService:
     def _episode_check_after(item, slot, now, as_airtimes=None):
         if not slot and not as_airtimes:
             return None
+        deferred_until = None
         for episode in item.get("episodes") or []:
             if episode.get("type") != 0 or any(str(episode.get(field) or "").strip() for field in ("name_cn", "name")):
                 continue
@@ -78,12 +79,17 @@ class SyncService:
             if at is None:
                 at, precision = airing_at(episode, slot or {})
                 if precision != "minute":
+                    # 日期已过的空标题可以先补，无须等同一部番的下一集。
+                    if precision == "date" and at < now.date():
+                        return None
                     continue
             at = at.astimezone(now.tzinfo)
             due = at + timedelta(hours=1)
+            if now >= due:
+                return None
             if at.date() <= now.date() <= due.date() and now < due:
-                return due
-        return None
+                deferred_until = min(deferred_until, due) if deferred_until else due
+        return deferred_until
 
     def start_due_episode_checks(self):
         """Resume checks deferred by the usual collection sync, via the existing airing poll."""
@@ -291,7 +297,7 @@ class SyncService:
                         rating_score=metadata.get("_rating_score"),
                         rating_rank=metadata.get("_rating_rank"),
                         rating_total=metadata.get("_rating_total"),
-                        rating_synced=True,
+                        rating_synced=metadata.get("_rating_synced", True),
                         episode_titles_synced=bool(
                             metadata.get("_episode_titles_synced")
                         ),
@@ -554,19 +560,30 @@ class SyncService:
     def fetch_bgm_bundle(
         self, anime_id: int, existing: dict[str, Any] | None = None, *, refresh_all: bool = False
     ) -> dict[str, Any]:
-        metadata = self.fetch_bgm(anime_id)
+        existing = existing or {}
+        fetch_titles = bool(self.database.get_settings().get("show_episode_titles_on_hover"))
+        initial_titles = fetch_titles and not existing.get("episode_titles_synced")
+        subject_error = None
+        try:
+            metadata = self.fetch_bgm(anime_id)
+        except OSError as error:
+            if not existing:
+                raise
+            # Subject and episode endpoints can fail independently. Keep the
+            # saved subject metadata and proceed with any due episode check.
+            subject_error = error
+            metadata = {
+                "id": anime_id,
+                "total_episodes": existing.get("episode_count"),
+                "_rating_synced": False,
+            }
         rating = metadata.get("rating") or {}
         metadata["_rating_score"] = rating.get("score")
         metadata["_rating_rank"] = rating.get("rank")
         metadata["_rating_total"] = rating.get("total")
-        fetch_titles = bool(
-            self.database.get_settings().get("show_episode_titles_on_hover")
-        )
-        existing = existing or {}
         daily = self._should_track_release_count(existing, metadata.get("date")) and not self._release_count_is_current(existing)
         deferred = self._deferred_episode_checks.get(anime_id)
         should_refresh_release = daily and (not deferred or datetime.now().astimezone() >= deferred)
-        initial_titles = fetch_titles and not existing.get("episode_titles_synced")
         if initial_titles or should_refresh_release or (refresh_all and fetch_titles):
             try:
                 synced_episodes = normalize_episodes(self.fetch_bgm_episodes(anime_id))
@@ -589,6 +606,10 @@ class SyncService:
             metadata["_episodes"] = None
             metadata["_episode_titles_synced"] = False
             metadata["_episode_release_synced"] = False
+        if subject_error:
+            if not metadata["_episodes"]:
+                raise subject_error
+            record_failure("metadata_fallback", subject_error)
         return metadata
 
     def enrich_episode_titles(self, anime_id: int) -> dict[str, Any]:
