@@ -96,17 +96,32 @@ function render(){rendering=true;try{if(selected!==null)return detail();if(compo
 function setCat(c){persistUi();category=c;render();restorePosition();persistUi()}
 function openAnime(id){persistUi();selected=id;composerOpen=false;render();restorePosition();persistUi()}
 function backHome(){persistUi();selected=null;page='home';render();syncNav();restorePosition();persistUi()}
-function handleBack(){if(selected!==null){backHome();return true}if(composerOpen){showPage('records');return true}if(page!=='home'){showPage('home');return true}return false}
+function handleBack(){
+ const conflict = document.querySelector('#syncConflict');
+ if (conflict.open) { conflict.close(); return true; }
+ if(selected!==null){backHome();return true}if(composerOpen){showPage('records');return true}if(page!=='home'){showPage('home');return true}return false;
+}
 function toggleEpisode(id,key){const a=animes().find(x=>x.id===id);let w=JSON.parse(a.watched_episodes||'[]'), watched=!w.includes(key);w=watched?[...w,key]:w.filter(x=>x!==key);a.watched_episodes=JSON.stringify(w);a.updated_at=nowIso();const events=tables().events;if(watched){events.push({...recordIdentity(),id:Date.now(),event_type:'watch',anime_id:id,episodes:JSON.stringify([key]),content:'',theme:'watch',themes:'["watch"]',rating:null,raw_directives:'',created_at:nowIso()})}else{const index=[...events].reverse().findIndex(e=>e.event_type==='watch'&&Number(e.anime_id)===Number(id)&&(()=>{try{return JSON.parse(e.episodes||'[]').includes(key)}catch(_){return false}})());if(index>=0){const actual=events.length-1-index,event=events[actual],remaining=JSON.parse(event.episodes||'[]').filter(item=>item!==key);if(remaining.length)event.episodes=JSON.stringify(remaining);else events.splice(actual,1)}}save();updateEpisodeButtons();persistUi()}
 function addNote(){const content=document.querySelector('#content').value.trim();if(!content)return;const events=tables().events;events.push({...recordIdentity(),id:Date.now(),event_type:'note',anime_id:null,episodes:'[]',content,theme:'other',themes:'["other"]',rating:null,raw_directives:'',created_at:nowIso()});if(save()){ui.noteDraft='';document.querySelector('#content').value='';showPage('records')}}
 function saveConfig(){if(native.saveConfig(JSON.stringify(readConfigForm()))===false){alert('配置保存失败，请重试');return}ui.configDraft=null;document.querySelector('#password').value='';configInitial=JSON.stringify(readConfigForm(false));persistUi();alert('坚果云配置已保存')}
-function requestSync(resolution=''){native.sync(resolution)} window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if(r.error){if(!silent)alert(r.error);return}if(r.conflict){if(silent)return;if(confirm('手机和云端都修改过。确定：以手机为准；取消：以云端为准。'))requestSync('local');else requestSync('remote');return}if(r.state){
+function requestSync(resolution=''){native.sync(resolution)}
+window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if(r.error){if(!silent)alert(r.error);return}if(r.conflict){
+ const dialog = document.querySelector('#syncConflict');
+ if (!silent && !dialog.open) dialog.showModal();
+ return;
+}if(r.state){
  // Read the latest persisted snapshot, including edits made after the network finished.
  persistedState=native.state();state=JSON.parse(persistedState);
  const editing=!!document.querySelector('#content')||!!document.querySelector('#url');
  if(!editing){const y=window.scrollY;if(selected!==null)updateEpisodeButtons();else render();window.scrollTo(0,y)}
  }if(!silent)alert(r.pendingLocal?'同步已完成；期间的新修改已保留在手机，等待下次同步。':r.message||'同步完成')}};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelector('#sync').onclick=()=>requestSync();
+document.querySelector('#syncConflict form').addEventListener('submit', event => {
+ event.preventDefault();
+ const resolution = event.submitter?.value;
+ event.currentTarget.closest('dialog').close();
+ if (resolution === 'local' || resolution === 'remote') requestSync(resolution);
+});
 app.addEventListener('input',persistUi);app.addEventListener('change',persistUi);
 let scrollTimer;window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);scrollTimer=setTimeout(persistUi,100)},{passive:true});
 window.addEventListener('pagehide',persistUi);

@@ -2,4 +2,13 @@
 <header><div><small>ANIME HANDBOOK</small><h1>动漫手账</h1></div><button id="sync">同步</button></header>
 <main id="app"></main>
 <nav><button data-page="home" class="active">收藏</button><button data-page="records">记录</button><button data-page="settings">设置</button></nav>
+<dialog id="syncConflict" aria-labelledby="syncConflictTitle" aria-describedby="syncConflictIntro">
+  <form method="dialog">
+    <h2 id="syncConflictTitle">选择同步版本</h2>
+    <p id="syncConflictIntro">手机和云端都改过，暂时无法自动合并。</p>
+    <button type="submit" value="local"><strong>保留手机版本</strong><span>用手机数据覆盖云端。</span></button>
+    <button type="submit" value="remote"><strong>使用云端版本</strong><span>用云端数据替换本机。</span></button>
+    <button type="submit" value="cancel" autofocus>暂不同步</button>
+  </form>
+</dialog>
 <script src="app.js"></script></body></html>

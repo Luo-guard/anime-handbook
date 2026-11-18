@@ -840,13 +840,17 @@ $("#deleteHandbookProfileButton").addEventListener("click", async () => {
 
 $("#activateHandbookProfileButton").addEventListener("click", async () => {
   const profileId = $("#handbookProfileInput").value;
+  const switchingProfile = profileId !== String(state.active_profile?.id ?? "");
+  if (switchingProfile && state.rankingDirtyBoards.size && !confirm("切换账号将放弃当前账号的未保存榜单排序。确定切换吗？")) return;
   try {
     const payload = await api("/api/profiles/activate", { method: "POST", body: JSON.stringify({ profile_id: profileId }) });
+    if (switchingProfile) resetRankingWorkspace();
     ThemeSettingsSession.finish(false);
     Object.assign(state, payload);
     ThemeSettingsSession.begin();
     applyTheme();
     renderStats(); renderTabs(); renderCollection(); renderSettingsPanels();
+    if (state.activeView === "ranking") renderRanking();
     toast("已切换手账账号");
   } catch (error) { toast(error.message, "error"); }
 });

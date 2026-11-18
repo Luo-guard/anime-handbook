@@ -7,6 +7,24 @@ function rankingPeriodOptions() {
   return [`<option value="all">全部时间</option>`, ...years.map((year) => `<option value="year:${year}">${year} 全年</option>`), ...years.flatMap((year) => SEASONS.map((season) => `<option value="season:${year}-${season.month}">${year} ${season.name}</option>`))].join("");
 }
 
+function rankingItemsByTier(board) {
+  const groups = new Map([...board.tiers.map(tier => [String(tier.id), []]), ["unranked", []]]);
+  const remaining = new Map(board.items.map(item => [Number(item.anime_id), item]));
+  const draft = state.rankingDirtyBoards.get(board.id);
+  // Keep draft order for items that still exist. Newly imported items and new
+  // tiers come from the server, and a deleted item must not reappear.
+  for (const [tier, items] of groups) {
+    for (const id of draft?.[tier] || []) {
+      if (remaining.has(id)) items.push(remaining.get(id));
+      remaining.delete(id);
+    }
+  }
+  for (const item of remaining.values()) {
+    (groups.get(String(item.tier_id)) || groups.get("unranked")).push(item);
+  }
+  return groups;
+}
+
 function renderRanking() {
   const list = $("#rankingBoardList");
   list.innerHTML = state.ranking_boards.length
@@ -19,7 +37,8 @@ function renderRanking() {
     $("[data-create-ranking]")?.addEventListener("click", createRankingBoard);
     return;
   }
-  const itemsFor = (tierId) => board.items.filter((item) => String(item.tier_id ?? "unranked") === String(tierId));
+  const groups = rankingItemsByTier(board);
+  const itemsFor = (tierId) => groups.get(String(tierId));
   const cards = (items) => items.map((item) => `<button type="button" draggable="true" class="ranking-anime-card" data-ranking-anime="${item.anime_id}" data-title="${escapeHtml(rankingTitle(item))}" aria-label="${escapeHtml(rankingTitle(item))}"><img src="/api/covers/${item.anime_id}" alt="" /></button>`).join("");
   $("#rankingWorkspace").innerHTML = `
     <div class="ranking-heading"><h2>${escapeHtml(board.name)}</h2><span><button class="secondary-button compact-button" id="renameRankingBoard">重命名</button><button class="secondary-button compact-button" id="saveRankingTemplate">保存为模板</button><button class="secondary-button compact-button" id="addRankingTier">新增等级</button><button class="secondary-button compact-button ${state.rankingDirtyBoards.has(board.id) ? '' : 'hidden'}" id="saveRankingBoard">保存</button><button class="text-button danger" id="deleteRankingBoard">删除</button></span></div>
@@ -33,9 +52,16 @@ function renderRanking() {
 }
 
 let rankingBoardRequest = 0;
+let rankingWritePending = false;
+
+function resetRankingWorkspace() {
+  ++rankingBoardRequest;
+  state.rankingBoard = null;
+  state.rankingDirtyBoards.clear();
+}
 
 async function loadRankingBoard(boardId) {
-  if (state.rankingBoard && state.rankingDirtyBoards.has(state.rankingBoard.id) && !confirm("当前排行榜有未保存的排序，切换会丢失这些更改。确定切换吗？")) return;
+  if (rankingWritePending) { toast("正在保存榜单，请稍候"); return; }
   const request = ++rankingBoardRequest;
   try {
     const result = await api(`/api/rankings/${boardId}`);
@@ -48,6 +74,7 @@ async function loadRankingBoard(boardId) {
 }
 
 async function createRankingBoard() {
+  if (rankingWritePending) return;
   const name = prompt("请输入排名表单名称", "我的动漫排名");
   if (name === null) return;
   const templates = state.ranking_templates || [];
@@ -55,19 +82,52 @@ async function createRankingBoard() {
   const choice = prompt(`选择模板编号（默认 1）：\n${choices}`, "1");
   if (choice === null) return;
   const template = templates[Math.max(0, Number(choice || 1) - 1)] || templates[0];
-  try { const result = await api("/api/rankings", {method:"POST", body:JSON.stringify({name, template_id: template?.id || null})}); state.ranking_boards = result.boards; state.rankingBoard = result.board; renderRanking(); } catch (error) { toast(error.message, "error"); }
+  await writeRanking("/api/rankings", "POST", {name, template_id: template?.id || null});
 }
 
 function collectRankingPlacements() {
   return Object.fromEntries($$(".ranking-dropzone").map((zone) => [zone.dataset.tierId, $$("[data-ranking-anime]", zone).map((card) => Number(card.dataset.rankingAnime))]));
 }
 
+async function writeRanking(path, method, body, onSaved) {
+  if (rankingWritePending) { toast("正在保存榜单，请稍候再试"); return; }
+  rankingWritePending = true;
+  const request = ++rankingBoardRequest;
+  try {
+    const result = await api(path, {method, ...(body ? {body: JSON.stringify(body)} : {})});
+    if (request !== rankingBoardRequest) return;
+    state.ranking_boards = result.boards;
+    state.rankingBoard = result.board || null;
+    onSaved?.();
+    renderRanking();
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    rankingWritePending = false;
+  }
+}
+
 function bindRankingInteractions() {
-  $("#addRankingTier").addEventListener("click", async () => { const result = await api(`/api/rankings/${state.rankingBoard.id}/tiers`, {method:"POST", body:JSON.stringify({name:"新等级"})}); state.ranking_boards=result.boards; state.rankingBoard=result.board; renderRanking(); });
+  $("#addRankingTier").addEventListener("click", () => writeRanking(`/api/rankings/${state.rankingBoard.id}/tiers`, "POST", {name:"新等级"}));
   $("#renameRankingBoard").addEventListener("click", renameRankingBoard);
   $("#saveRankingTemplate").addEventListener("click", saveRankingTemplate);
-  $$("[data-tier-name]").forEach((input) => input.addEventListener("change", async () => { const result=await api(`/api/rankings/${state.rankingBoard.id}/tiers/${input.dataset.tierName}`,{method:"PATCH",body:JSON.stringify({name:input.value})}); state.ranking_boards=result.boards; state.rankingBoard=result.board; renderRanking(); }));
-  $("#rankingImportButton").addEventListener("click", async () => { const category=$("#rankingImportCategory").value, period=$("#rankingImportPeriod").value, lowRaw=$("#rankingScoreMin").value, highRaw=$("#rankingScoreMax").value, low=lowRaw === "" ? null : Number(lowRaw), high=highRaw === "" ? null : Number(highRaw); const ids=state.animes.filter((anime)=> (category==="all"||Number(anime.collection_type)===Number(category)) && (period==="all" || (period.startsWith("year:") ? String(anime.air_date||"").startsWith(period.slice(5)) : animeSeasonKey(anime)===period.slice(7))) && (low === null || Number(anime.bgm_score)>=low) && (high === null || Number(anime.bgm_score)<=high)).map((anime)=>anime.id); const result=await api(`/api/rankings/${state.rankingBoard.id}/import`,{method:"POST",body:JSON.stringify({anime_ids:ids})}); state.ranking_boards=result.boards; state.rankingBoard=result.board; renderRanking(); toast(`已导入 ${ids.length} 部动漫`); });
+  $$("[data-tier-name]").forEach(input => input.addEventListener("change", () =>
+    writeRanking(`/api/rankings/${state.rankingBoard.id}/tiers/${input.dataset.tierName}`, "PATCH", {name: input.value})));
+  $("#rankingImportButton").addEventListener("click", () => {
+    const category = $("#rankingImportCategory").value;
+    const period = $("#rankingImportPeriod").value;
+    const low = $("#rankingScoreMin").value;
+    const high = $("#rankingScoreMax").value;
+    const ids = state.animes.filter(anime => {
+      if (category !== "all" && Number(anime.collection_type) !== Number(category)) return false;
+      if (period.startsWith("year:") && !String(anime.air_date || "").startsWith(period.slice(5))) return false;
+      if (period.startsWith("season:") && animeSeasonKey(anime) !== period.slice(7)) return false;
+      return (low === "" || Number(anime.bgm_score) >= Number(low))
+        && (high === "" || Number(anime.bgm_score) <= Number(high));
+    }).map(anime => anime.id);
+    return writeRanking(`/api/rankings/${state.rankingBoard.id}/import`, "POST", {anime_ids: ids},
+      () => toast(`已导入 ${ids.length} 部动漫`));
+  });
   $("#saveRankingBoard").addEventListener("click", saveRankingPlacements);
   $("#deleteRankingBoard").addEventListener("click", deleteRankingBoard);
   let dragged=null;
@@ -83,12 +143,9 @@ function bindRankingInteractions() {
     const canDelete = canDeleteDraggedAnime;
     trash.classList.remove("active"); hideTrash();
     if (!canDelete || !animeId) return;
-    try {
-      const result = await api(`/api/rankings/${state.rankingBoard.id}/items/${animeId}`, {method:"DELETE"});
-      state.ranking_boards = result.boards; state.rankingBoard = result.board; renderRanking(); toast("已从待排名区删除");
-    } catch (error) { toast(error.message, "error"); }
+    await writeRanking(`/api/rankings/${state.rankingBoard.id}/items/${animeId}`, "DELETE", null,
+      () => toast("已从待排名区删除"));
   });
-  $$(".ranking-dropzone").forEach((zone)=>{ zone.addEventListener("dragover",(event)=>event.preventDefault()); zone.addEventListener("drop",(event)=>{event.preventDefault(); if(!dragged)return; const cards=$$("[data-ranking-anime]", zone).filter((card)=>card!==dragged); const target=cards.find((card)=>{const rect=card.getBoundingClientRect(); return event.clientY < rect.top + rect.height/2 || (event.clientY < rect.bottom && event.clientX < rect.left + rect.width/2);}); zone.insertBefore(dragged, target || zone.querySelector(".ranking-drop-hint")); $$(".ranking-dropzone").forEach((dropzone) => { const hint=$(".ranking-drop-hint", dropzone); if ($$("[data-ranking-anime]", dropzone).length) hint?.remove(); else if (!hint) dropzone.insertAdjacentHTML("beforeend", `<span class="ranking-drop-hint">${dropzone.dataset.tierId === "unranked" ? "从这里拖到上方等级" : "拖放封面到这里"}</span>`); }); state.rankingDirtyBoards.add(state.rankingBoard.id); $("#saveRankingBoard").classList.remove("hidden"); const label=$(`.ranking-board-button[data-board-id="${state.rankingBoard.id}"] strong`); if (label && !$(".ranking-dirty-dot", label)) label.insertAdjacentHTML("beforeend", '<i class="ranking-dirty-dot"></i>');}); });
   let preview = null;
   const clearPreview = () => { preview?.remove(); preview = null; };
   const updatePreview = (zone, event) => {
@@ -104,10 +161,13 @@ function bindRankingInteractions() {
     zone.addEventListener("drop", (event) => {
       event.preventDefault(); event.stopPropagation();
       if (!dragged) return;
-      zone.insertBefore(dragged, preview || $(".ranking-drop-hint", zone));
+      zone.insertBefore(dragged, preview?.parentElement === zone ? preview : $(".ranking-drop-hint", zone));
       clearPreview();
       $$(".ranking-dropzone").forEach((dropzone) => { const hint = $(".ranking-drop-hint", dropzone); if ($$("[data-ranking-anime]", dropzone).length) hint?.remove(); else if (!hint) dropzone.insertAdjacentHTML("beforeend", `<span class="ranking-drop-hint">${dropzone.dataset.tierId === "unranked" ? "从这里拖到上方等级" : "拖放封面到这里"}</span>`); });
-      state.rankingDirtyBoards.add(state.rankingBoard.id);
+      const boardId = state.rankingBoard.id;
+      state.rankingDirtyBoards.set(boardId, collectRankingPlacements());
+      const label = $(`.ranking-board-button[data-board-id="${boardId}"] strong`);
+      if (label && !$(".ranking-dirty-dot", label)) label.insertAdjacentHTML("beforeend", '<i class="ranking-dirty-dot"></i>');
       $("#saveRankingBoard").classList.remove("hidden");
     }, true);
   });
@@ -116,10 +176,7 @@ function bindRankingInteractions() {
 async function renameRankingBoard() {
   const name = prompt("请输入新的表单名称", state.rankingBoard.name);
   if (name === null) return;
-  try {
-    const result = await api(`/api/rankings/${state.rankingBoard.id}`, {method:"PATCH", body:JSON.stringify({name})});
-    state.ranking_boards = result.boards; state.rankingBoard = result.board; renderRanking();
-  } catch (error) { toast(error.message, "error"); }
+  await writeRanking(`/api/rankings/${state.rankingBoard.id}`, "PATCH", {name});
 }
 
 async function saveRankingTemplate() {
@@ -132,12 +189,22 @@ async function saveRankingTemplate() {
 }
 
 async function saveRankingPlacements() {
-  try { const result=await api(`/api/rankings/${state.rankingBoard.id}/move`,{method:"POST",body:JSON.stringify({placements:collectRankingPlacements()})}); state.ranking_boards=result.boards; state.rankingBoard=result.board; state.rankingDirtyBoards.delete(result.board.id); renderRanking(); toast("排行榜已保存"); } catch(error) { toast(error.message,"error"); }
+  const boardId = state.rankingBoard.id;
+  const draft = state.rankingDirtyBoards.get(boardId);
+  await writeRanking(`/api/rankings/${boardId}/move`, "POST", {placements: collectRankingPlacements()}, () => {
+    if (state.rankingDirtyBoards.get(boardId) === draft) {
+      state.rankingDirtyBoards.delete(boardId);
+      toast("排行榜已保存");
+    } else {
+      toast("已保存提交时的排序，还有新的改动待保存");
+    }
+  });
 }
 
 async function deleteRankingBoard() {
   if (!confirm(`删除排行榜“${state.rankingBoard.name}”？`)) return;
-  try { const result=await api(`/api/rankings/${state.rankingBoard.id}`,{method:"DELETE"}); state.ranking_boards=result.boards; state.rankingDirtyBoards.delete(state.rankingBoard.id); state.rankingBoard=null; renderRanking(); } catch(error) { toast(error.message,"error"); }
+  const boardId = state.rankingBoard.id;
+  await writeRanking(`/api/rankings/${boardId}`, "DELETE", null, () => state.rankingDirtyBoards.delete(boardId));
 }
 
 window.addEventListener("beforeunload", (event) => { if (state.rankingDirtyBoards.size) { event.preventDefault(); event.returnValue="排行榜有未保存的更改"; } });

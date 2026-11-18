@@ -12,7 +12,7 @@ const state = {
   ranking_boards: [],
   ranking_templates: [],
   rankingBoard: null,
-  rankingDirtyBoards: new Set(),
+  rankingDirtyBoards: new Map(),
   settings: {},
   stats: {},
   sync: {},

@@ -215,9 +215,12 @@ class PostRoutes:
                 self.send_json({
                     "ok": True,
                     "profile": profile,
+                    "active_profile": profile,
                     "profiles": self.profiles.list_profiles(),
                     "settings": self.database.get_settings(),
                     "animes": self.database.list_anime(),
+                    "ranking_boards": self.database.list_ranking_boards(),
+                    "ranking_templates": self.database.list_ranking_templates(),
                     "stats": self.database.stats(),
                 })
             elif path == "/api/sharing/configure":
