@@ -3,6 +3,18 @@ window.playbackHistory = (() => {
   let opening = false;
   const limit = 200;
   const profileKey = () => `handbook:playback-history:${state.active_profile?.id || "default"}`;
+  const layoutKey = () => `${profileKey()}:layout`;
+  const sessionLayouts = new Map();
+  const dateLabel = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long", day: "numeric" });
+  const timeLabel = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const shortDate = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" });
+
+  function currentLayout() {
+    const key = layoutKey();
+    if (sessionLayouts.has(key)) return sessionLayouts.get(key);
+    try { return localStorage.getItem(key) === "grid" ? "grid" : "list"; }
+    catch { return "list"; }
+  }
 
   function read() {
     try {
@@ -39,53 +51,107 @@ window.playbackHistory = (() => {
     playLocalFile(file.id);
   }
 
+  function subjectKey(item) {
+    if (Number(item.animeId) > 0) return `anime:${Number(item.animeId)}`;
+    if (item.providerId) return `provider:${item.rule || "xfdmnext"}:${item.providerId}`;
+    const title = String(item.animeTitle || "").trim().toLocaleLowerCase();
+    return title ? `title:${title}` : historyKey(item);
+  }
+
+  function renderEntry(item, layout) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "jump-row playback-history-row";
+    const cover = document.createElement("span");
+    cover.className = "playback-history-cover";
+    cover.setAttribute("aria-hidden", "true");
+    cover.textContent = "▶";
+    if (Number.isSafeInteger(Number(item.animeId)) && Number(item.animeId) > 0) {
+      const image = document.createElement("img");
+      image.alt = "";
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.addEventListener("error", () => image.remove(), { once: true });
+      image.src = `/api/covers/${Number(item.animeId)}`;
+      cover.append(image);
+    }
+    const copy = document.createElement("span");
+    copy.className = "jump-copy";
+    const title = document.createElement("strong");
+    title.className = "jump-title";
+    title.textContent = item.animeTitle || "未命名番剧";
+    title.title = title.textContent;
+    const subtitle = document.createElement("small");
+    subtitle.className = "jump-meta";
+    subtitle.textContent = [item.kind === "online" ? "在线" : "缓存", item.episode].filter(Boolean).join(" · ");
+    subtitle.title = subtitle.textContent;
+    copy.append(title, subtitle);
+    const time = document.createElement("span");
+    time.className = "jump-time";
+    const played = new Date(item.playedAt);
+    if (Number.isFinite(played.getTime())) time.textContent = (layout === "grid" ? shortDate : timeLabel).format(played);
+    row.append(cover, copy, time);
+    row.addEventListener("click", async () => {
+      if (opening) return;
+      opening = true;
+      row.disabled = true;
+      try {
+        if (item.kind === "online") await window.onlinePlayback.resume(item);
+        else await resumeLocal(item);
+      } catch (error) {
+        $("#jumpHistoryStatus").textContent = error.message;
+      } finally {
+        opening = false;
+        row.disabled = false;
+      }
+    });
+    return row;
+  }
+
   function render() {
-    const items = read();
+    const items = read().sort((a, b) => (Number(b.playedAt) || 0) - (Number(a.playedAt) || 0));
     const visible = filter === "all" ? items : items.filter(item => item.kind === filter);
+    const layout = currentLayout();
     const list = $("#jumpHistoryList");
-    list.replaceChildren(...visible.map(item => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "jump-row playback-history-row";
-      const icon = document.createElement("span");
-      icon.className = "jump-icon";
-      icon.setAttribute("aria-hidden", "true");
-      icon.textContent = "▶";
-      const copy = document.createElement("span");
-      copy.className = "jump-copy";
-      const title = document.createElement("strong");
-      title.className = "jump-title";
-      title.textContent = item.animeTitle;
-      const subtitle = document.createElement("small");
-      subtitle.className = "jump-meta";
-      subtitle.textContent = [item.kind === "online" ? "在线" : "缓存", item.episode].filter(Boolean).join(" · ");
-      copy.append(title, subtitle);
-      const time = document.createElement("span");
-      time.className = "jump-time";
-      time.textContent = new Date(item.playedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
-      row.append(icon, copy, time);
-      row.addEventListener("click", async () => {
-        if (opening) return;
-        opening = true;
-        row.disabled = true;
-        try {
-          if (item.kind === "online") await window.onlinePlayback.resume(item);
-          else await resumeLocal(item);
-        } catch (error) {
-          $("#jumpHistoryStatus").textContent = error.message;
-        } finally {
-          opening = false;
-          row.disabled = false;
-        }
-      });
-      return row;
-    }));
+    list.dataset.layout = layout;
+    $$("[data-history-layout]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.historyLayout === layout)));
+    if (layout === "grid") {
+      const seen = new Set();
+      const cards = [];
+      for (const item of visible) {
+        const key = subjectKey(item);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        cards.push(renderEntry(item, layout));
+      }
+      list.replaceChildren(...cards);
+    } else {
+      const groups = new Map();
+      for (const item of visible) {
+        const date = new Date(item.playedAt);
+        const key = Number.isFinite(date.getTime()) ? dateLabel.format(date) : "日期未知";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(renderEntry(item, layout));
+      }
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const todayKey = dateLabel.format(today);
+      const yesterdayKey = dateLabel.format(yesterday);
+      list.replaceChildren(...[...groups].flatMap(([key, rows]) => {
+        const heading = document.createElement("h3");
+        heading.className = "jump-day";
+        heading.textContent = key === todayKey ? `今天 · ${key}` : key === yesterdayKey ? `昨天 · ${key}` : key;
+        return [heading, ...rows];
+      }));
+    }
     if (!visible.length) {
       const empty = document.createElement("p");
-      empty.className = "collect-search-hint";
+      empty.className = "jump-empty";
       empty.textContent = "还没有这类播放记录。";
       list.append(empty);
     }
+    list.scrollTop = 0;
     $("#clearJumpHistory").disabled = items.length === 0;
     $("#jumpHistoryStatus").textContent = "";
   }
@@ -99,6 +165,14 @@ window.playbackHistory = (() => {
       if (!modal.open) modal.showModal();
     });
     $("#jumpHistoryClose").addEventListener("click", () => modal.close());
+    $("#playbackHistoryLayouts").addEventListener("click", event => {
+      const button = event.target.closest("[data-history-layout]");
+      if (!button || button.dataset.historyLayout === currentLayout()) return;
+      const layout = button.dataset.historyLayout;
+      sessionLayouts.set(layoutKey(), layout);
+      try { localStorage.setItem(layoutKey(), layout); } catch { /* Session choice remains available. */ }
+      render();
+    });
     $("#playbackHistoryFilters").addEventListener("click", event => {
       const button = event.target.closest("[data-history-kind]");
       if (!button) return;

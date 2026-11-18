@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261118-import-resume" />
+  <link rel="stylesheet" href="/styles.css?v=20261118-history-layout" />
   </head>
   <body>
     <div class="app-shell">
@@ -1854,12 +1854,18 @@
         <header class="collect-search-head">
           <h2 id="playbackHistoryTitle">历史记录</h2>
         </header>
-        <div class="library-tabs" aria-label="播放记录分类" id="playbackHistoryFilters">
-          <button type="button" class="library-tab active" data-history-kind="all" aria-pressed="true">全部</button>
-          <button type="button" class="library-tab" data-history-kind="online" aria-pressed="false">在线</button>
-          <button type="button" class="library-tab" data-history-kind="local" aria-pressed="false">缓存</button>
+        <div class="playback-history-toolbar">
+          <div class="library-tabs" role="group" aria-label="播放记录分类" id="playbackHistoryFilters">
+            <button type="button" class="library-tab active" data-history-kind="all" aria-pressed="true">全部</button>
+            <button type="button" class="library-tab" data-history-kind="online" aria-pressed="false">在线</button>
+            <button type="button" class="library-tab" data-history-kind="local" aria-pressed="false">缓存</button>
+          </div>
+          <div class="playback-layout-switch" role="group" aria-label="历史记录布局" id="playbackHistoryLayouts">
+            <button type="button" data-history-layout="list" aria-pressed="true">时间列表</button>
+            <button type="button" data-history-layout="grid" aria-pressed="false">封面网格</button>
+          </div>
         </div>
-        <div id="jumpHistoryList" class="jump-list"></div>
+        <div id="jumpHistoryList" class="jump-list" tabindex="0" role="region" aria-label="播放记录"></div>
         <div class="jump-actions"><button type="button" class="secondary-button compact-button" id="clearJumpHistory">清空记录</button><p id="jumpHistoryStatus" role="status"></p></div>
       </div>
     </dialog>
@@ -2010,7 +2016,7 @@
     <script src="/modules/collection-edit.js?v=20261118-import-resume" defer></script>
     <script src="/modules/collection-search-history.js?v=20261118" defer></script>
     <script src="/modules/collection-import.js?v=20261118-import-resume" defer></script>
-    <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
+    <script src="/modules/jump-history.js?v=20261118-history-layout" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
     <script src="/modules/offline.js?v=20261118-player-titles" defer></script>
     <script src="/modules/online-playback.js?v=20261115-episode-metadata" defer></script>
