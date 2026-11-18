@@ -171,7 +171,48 @@ function scriptUrls() {
       online: '第 8 集 · 刚同步的标题',
     });
 
-    console.log('App boot smoke: real script order loads clean, boot completes, toolbar/help/empty state wired, no collection refetch without writes, detail modal closes on outside click.');
+    // An already-known Japanese title must switch to Chinese on ANY collection
+    // response, even when it did not come through the status-polling code path.
+    let labelRequests = 0;
+    const trackLabelRequest = request => { if (request.url().includes('/api/')) labelRequests++; };
+    page.on('request', trackLabelRequest);
+    const refreshedLabels = await page.evaluate(() => {
+      clearInterval(airingRefreshTimer);
+      const japanese = {id:12, episodes:[{key:'0:8',type:0,sort:8,name:'日本語のタイトル',name_cn:''}]};
+      commitAnimes([japanese], {render:false});
+      const before = $('#pcStageTitle').textContent;
+      const chinese = {...japanese, episodes:[{...japanese.episodes[0],name_cn:'补齐的中文标题'}]};
+      commitAnimes([chinese], {render:false});
+      const after = $('#pcStageTitle').textContent;
+      const localPlaylist = $('#pcPlaylistMenu button').textContent;
+      const originalPlayback = window.onlinePlayback;
+      window.onlinePlayback = {current:{animeId:12,episode:{id:1,number:8},source:{name:'线路一',episodes:[{id:1,number:8}]},catalogue:{title:'测试番剧',ruleName:'测试规则'}}};
+      offlineView.playing = null;
+      commitAnimes([japanese], {render:false});
+      const onlineBefore = $('#pcStageTitle').textContent;
+      commitAnimes([chinese], {render:false});
+      const onlineAfter = $('#pcStageTitle').textContent;
+      const onlinePlaylist = $('#pcPlaylistMenu button').textContent;
+      const button = $('#pcPlaylistMenu button');
+      commitAnimes([chinese,{id:99,name:'其他番剧'}], {render:false});
+      const retained = button === $('#pcPlaylistMenu button');
+      window.onlinePlayback = originalPlayback;
+      $('#offlinePlayer').close();
+      commitAnimes([japanese], {render:false});
+      return {before,after,localPlaylist,onlineBefore,onlineAfter,onlinePlaylist,retained};
+    });
+    page.off('request', trackLabelRequest);
+    assert.equal(labelRequests, 0, 'label updates add no network requests');
+    assert.deepEqual(refreshedLabels, {
+      before:'测试番剧 · 第 08 集 · 日本語のタイトル',
+      after:'测试番剧 · 第 08 集 · 补齐的中文标题',
+      localPlaylist:'● 第 08 集 · 补齐的中文标题',
+      onlineBefore:'测试番剧 · 第 8 集 · 日本語のタイトル',
+      onlineAfter:'测试番剧 · 第 8 集 · 补齐的中文标题',
+      onlinePlaylist:'● 第 8 集 · 补齐的中文标题',
+      retained:true,
+    });
+    console.log('App boot smoke: real script order, startup, collection revision, modal interactions, and live local/online episode translations passed with no added requests.');
   } finally {
     await browser.close();
     server.close();

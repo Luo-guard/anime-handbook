@@ -66,7 +66,6 @@ function applySyncedCollection(fresh, revision) {
   state.dataRevision = revision;
   const detail = state.animes.find(item => item.id === state.progressAnime?.id);
   if (detail) refreshDetailEpisodeMetadata(detail);
-  pcSyncEpisodeLabels();
   renderTabs();
   renderCollection();
   renderSeasonFilter();

@@ -556,6 +556,9 @@ function commitAnimes(animes, options = {}) {
   if (!Array.isArray(animes)) return state.animes;
   // 复制后再排序，不改变调用方持有的数组；重复提交结果相同。
   state.animes = [...animes].sort(collectionComparator());
+  // Every existing response that replaces collection data must also refresh
+  // an open player's labels. This consumes the received metadata, never an API.
+  if (typeof pcSyncEpisodeLabels === "function") pcSyncEpisodeLabels();
   if (options.render !== false && typeof renderCollection === "function") {
     renderCollection();
   }

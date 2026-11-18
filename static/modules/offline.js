@@ -1129,13 +1129,20 @@ function pcRenderPlaylist() {
   if (!menu) return;
   const online = window.onlinePlayback?.current;
   const { files, index } = pcPlaylist();
-  menu.innerHTML = files.length
+  const markup = files.length
     ? files.map((file, position) => {
         const current = index === position;
         const label = online ? onlineEpisodeLabel(online, file) : pcLocalEpisodeLabel(file.episode_key);
         return `<button type="button" data-id="${escapeHtml(String(file.id))}" class="${current ? "active" : ""}">${current ? "● " : ""}${escapeHtml(label)}</button>`;
       }).join("")
     : '<p class="pc-menu-empty">还没有可播放的集</p>';
+  // Avoid replacing focused playlist buttons when unrelated collection data
+  // changes. Preserve scroll position when titles actually become available.
+  if (menu.innerHTML !== markup) {
+    const scroll = menu.scrollTop;
+    menu.innerHTML = markup;
+    menu.scrollTop = scroll;
+  }
 }
 
 function pcRefreshEpisodes() {

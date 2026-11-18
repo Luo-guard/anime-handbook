@@ -622,7 +622,6 @@ async function ensureEpisodeTitles(anime) {
     if (!latest) return;
     commitAnimes(state.animes.map((item) => item.id === latest.id ? latest : item), { render: false });
     refreshDetailEpisodeMetadata(latest);
-    pcSyncEpisodeLabels();
   } catch (error) {
     toast(`单集名称暂未补全：${error.message}`, "error");
   }
