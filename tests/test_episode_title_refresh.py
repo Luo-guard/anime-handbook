@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from io import BytesIO
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -50,6 +52,51 @@ class EpisodeTitleRefreshTest(unittest.TestCase):
         item["episodes"][0]["sort"] = 8
         earlier = datetime(2026, 11, 15, 22, tzinfo=BEIJING)
         self.assertEqual(SyncService._episode_check_after(item, slot, before, {8: earlier}), earlier + timedelta(hours=1))
+
+    def test_original_only_new_episode_uses_same_deferred_check(self):
+        now = datetime(2026, 11, 19, 18, tzinfo=BEIJING)
+        item = {"episodes": [
+            {"type": 0, "sort": 6, "airdate": "2026-11-12", "name": "前回"},
+            {"type": 0, "sort": 7, "airdate": "2026-11-19", "name": "新しい話"},
+        ]}
+        air = now.replace(hour=22)
+        airtimes = {6: air - timedelta(days=7), 7: air}
+        due = air + timedelta(hours=1)
+        self.assertEqual(SyncService._episode_check_after(item, {}, now, airtimes), due)
+        self.assertIsNone(SyncService._episode_check_after(item, {}, due, airtimes))
+        item["episodes"][1]["name_cn"] = "新一集"
+        self.assertIsNone(SyncService._episode_check_after(item, {}, now, airtimes))
+
+    def test_empty_result_does_not_replace_episodes_or_mark_release_current(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = HandbookDB(root / "handbook.db", asset_root=root)
+            db.import_kazumi([{"id": 12, "type": 1, "name": "作品"}])
+            episode = {"id": 701, "type": 0, "sort": 7, "name_cn": "已保存的集名"}
+            db.update_bgm_metadata(12, episode_count=7, episodes=[episode], aired_episode_count=7)
+            service = SyncService(db)
+            saved = db.get_anime(12)
+            with patch.object(service._airtime_schedule, "airtime_index", return_value={}), patch.object(
+                service, "fetch_bgm", return_value={"id": 12, "total_episodes": 7},
+            ), patch.object(service, "fetch_bgm_episodes", return_value=[]) as fetch:
+                service.enrich_missing()
+                fetch.assert_called_once_with(12)
+                self.assertFalse(service.enrich_episode_titles(12)["episode_titles_synced"])
+            current = db.get_anime(12)
+            for field in ("episodes", "episode_release_synced_at", "aired_episode_count"):
+                self.assertEqual(current[field], saved[field])
+
+    def test_interrupted_pagination_is_not_accepted_as_a_complete_episode_list(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = SyncService(HandbookDB(root / "handbook.db", asset_root=root))
+            pages = [{"total": 2, "data": [{"id": 701}]}, {"total": 2, "data": []}]
+            with patch.object(service, "_wait_for_episode_request_slot"), patch(
+                "urllib.request.urlopen", side_effect=[BytesIO(json.dumps(page).encode()) for page in pages],
+            ) as request:
+                with self.assertRaisesRegex(ValueError, "章节列表不完整"):
+                    service.fetch_bgm_episodes(12)
+                self.assertEqual(request.call_count, 2)
 
     def test_daily_request_supplies_titles_without_repeating_when_current(self):
         with TemporaryDirectory() as directory:

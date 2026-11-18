@@ -73,20 +73,25 @@ class SyncService:
             return None
         deferred_until = None
         for episode in item.get("episodes") or []:
-            if episode.get("type") != 0 or any(str(episode.get(field) or "").strip() for field in ("name_cn", "name")):
+            if episode.get("type") != 0 or str(episode.get("name_cn") or "").strip():
                 continue
+            missing_original = not str(episode.get("name") or "").strip()
             at = (as_airtimes or {}).get(episode.get("sort"))
             if at is None:
                 at, precision = airing_at(episode, slot or {})
                 if precision != "minute":
                     # 日期已过的空标题可以先补，无须等同一部番的下一集。
-                    if precision == "date" and at < now.date():
+                    if missing_original and precision == "date" and at < now.date():
                         return None
                     continue
             at = at.astimezone(now.tzinfo)
             due = at + timedelta(hours=1)
             if now >= due:
-                return None
+                if missing_original:
+                    return None
+                # An older episode with only its original title should not
+                # use up today's check before the new episode has aired.
+                continue
             if at.date() <= now.date() <= due.date() and now < due:
                 deferred_until = min(deferred_until, due) if deferred_until else due
         return deferred_until
@@ -481,14 +486,16 @@ class SyncService:
                     break
             if payload is None:
                 raise RuntimeError("章节数据暂不可用")
-            batch = payload.get("data") or []
-            if not isinstance(batch, list):
-                break
-            episodes.extend(item for item in batch if isinstance(item, dict))
+            batch = payload.get("data")
+            if not isinstance(batch, list) or any(not isinstance(item, dict) for item in batch):
+                raise ValueError("章节列表格式无效")
+            episodes.extend(batch)
             total = int(payload.get("total") or len(episodes))
             offset += len(batch)
-            if not batch or offset >= total:
+            if offset >= total:
                 break
+            if not batch:
+                raise ValueError("章节列表不完整")
         return episodes
 
     def fetch_bgm_characters(self, anime_id: int) -> list[dict[str, Any]]:
@@ -588,9 +595,9 @@ class SyncService:
                 # The episode request is already needed to calculate the aired
                 # count. Keep that structural list too, so OP/ED groups remain
                 # intact even when hover titles themselves stay disabled.
-                metadata["_episodes"] = synced_episodes
-                metadata["_episode_titles_synced"] = bool(synced_episodes) or fetch_titles
-                if daily:
+                metadata["_episodes"] = synced_episodes or None
+                metadata["_episode_titles_synced"] = bool(synced_episodes)
+                if daily and synced_episodes:
                     metadata["_aired_episode_count"] = aired_main_episode_count(
                         synced_episodes
                     )
@@ -617,6 +624,8 @@ class SyncService:
         if anime.get("episode_titles_synced"):
             return anime
         episodes = normalize_episodes(self.fetch_bgm_episodes(anime_id))
+        if not episodes:
+            return anime
         self.database.update_bgm_metadata(
             anime_id,
             episode_count=max(int(anime.get("episode_count") or 0), len(episodes)),
