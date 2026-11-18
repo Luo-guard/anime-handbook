@@ -320,23 +320,11 @@ class SyncService:
 
     def fetch_bgm(self, anime_id: int) -> dict[str, Any]:
         base = str(self.database.get_settings()["bgm_api_base"]).rstrip("/")
-        request = urllib.request.Request(
-            f"{base}/v0/subjects/{anime_id}",
-            headers={
-                "User-Agent": "AnimeHandbook/1.0 "
-                "(local personal collection manager)",
-                "Accept": "application/json",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=15) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError:
-            raise
-        except OSError:
-            # Search and calendars already support the system proxy. Reuse
-            # that transport if a direct subject connection fails.
-            return json.loads(ScheduleService.fetch(request.full_url, timeout=15).decode("utf-8"))
+        # Search has already learned which proxy works. Use that same transport
+        # immediately instead of spending another 15s on a failing direct route.
+        # Its fallback may try up to three routes; keep their socket budgets below
+        # the UI's 30s deadline, including the first lookup after a backend restart.
+        return json.loads(ScheduleService.fetch(f"{base}/v0/subjects/{anime_id}", timeout=8))
 
     def _wait_for_episode_request_slot(self) -> None:
         with self._episode_request_lock:

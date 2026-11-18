@@ -7,6 +7,29 @@ from handbook.database import HandbookDB
 from handbook.collection import save_collection
 
 class CollectionTests(unittest.TestCase):
+    def test_subject_uses_proxy_learned_by_search_without_another_direct_attempt(self):
+        from handbook.metadata import SyncService
+        from schedule import ScheduleService
+        from urllib.error import URLError
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            service = SyncService(HandbookDB(root / "test.db", asset_root=root))
+            calls = []
+            subject = {"id": 123, "type": 2, "name": "Test"}
+            def read(request, timeout, proxy=""):
+                calls.append((request.full_url, timeout, proxy))
+                if not proxy:
+                    raise URLError("direct route blocked")
+                return json.dumps({"data": [subject]} if "search" in request.full_url else subject).encode()
+            with patch.object(ScheduleService, "_prefer_system_proxy", False), patch.object(
+                ScheduleService, "_system_proxy", return_value="http://proxy.test:8080",
+            ), patch.object(ScheduleService, "_read", side_effect=read):
+                ScheduleService.fetch("https://api.bgm.tv/v0/search/subjects", body={"keyword": "test"})
+                self.assertTrue(ScheduleService._prefer_system_proxy)
+                calls.clear()
+                self.assertEqual(service.fetch_bgm(123), subject)
+                self.assertEqual(calls, [("https://api.bgm.tv/v0/subjects/123", 8, "http://proxy.test:8080")])
+
     def test_subject_and_episodes_reuse_search_transport_on_connection_failure(self):
         from handbook.metadata import SyncService
         from urllib.error import URLError, HTTPError
@@ -14,23 +37,25 @@ class CollectionTests(unittest.TestCase):
             root = Path(folder)
             service = SyncService(HandbookDB(root / "test.db", asset_root=root))
             subject = {"id": 123, "type": 2, "name": "Test"}
-            with patch("urllib.request.urlopen", side_effect=URLError("direct connection failed")), patch(
+            with patch("urllib.request.urlopen") as direct, patch(
                 "schedule.ScheduleService.fetch", return_value=json.dumps(subject).encode(),
             ) as fallback:
                 self.assertEqual(service.fetch_bgm(123), subject)
                 self.assertIn("/v0/subjects/123", fallback.call_args.args[0])
+                self.assertEqual(fallback.call_args.kwargs["timeout"], 8)
+                direct.assert_not_called()
             episodes = [{"id": 7, "type": 0, "sort": 1, "name": "Episode"}]
             with patch("urllib.request.urlopen", side_effect=URLError("direct connection failed")), patch(
                 "schedule.ScheduleService.fetch", return_value=json.dumps({"data": episodes, "total": 1}).encode(),
             ) as fallback:
                 self.assertEqual(service.fetch_bgm_episodes(123), episodes)
                 fallback.assert_called_once()
-            with patch("urllib.request.urlopen", side_effect=HTTPError("https://api.bgm.tv", 404, "missing", {}, None)), patch(
-                "schedule.ScheduleService.fetch",
+            with patch(
+                "schedule.ScheduleService.fetch", side_effect=HTTPError("https://api.bgm.tv", 404, "missing", {}, None),
             ) as fallback:
                 with self.assertRaises(HTTPError):
                     service.fetch_bgm(123)
-                fallback.assert_not_called()
+                fallback.assert_called_once()
 
     def test_add_edit_outbox_survives_import(self):
         with tempfile.TemporaryDirectory() as folder, patch("pathlib.Path.is_file", return_value=True):
