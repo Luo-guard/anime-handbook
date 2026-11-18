@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261118-search-scroll" />
+  <link rel="stylesheet" href="/styles.css?v=20261118-library-target" />
   </head>
   <body>
     <div class="app-shell">
@@ -407,7 +407,7 @@
           <div class="library-shell library-panel hidden" id="librarySearchPanel">
             <div class="lib-search-head">
               <h2 class="lib-panel-title">找资源</h2>
-              <p class="library-meta">从蜜柑计划搜索，命中收藏里同名的番才能直接下载或订阅。</p>
+              <p class="library-meta">从蜜柑计划搜索，选定收藏里的番剧后即可下载或订阅。</p>
             </div>
             <div class="lib-search-bar">
               <label class="search-box lib-search-lg">
@@ -415,6 +415,11 @@
                 <input type="search" id="libSearchQuery" placeholder="输入番名或关键词搜索资源" autocomplete="off" />
               </label>
               <button type="button" class="primary-button" id="libSearchGo">搜索</button>
+            </div>
+            <div id="libSearchTarget" class="lib-search-target" hidden>
+              <label for="libSearchAnime">关联番剧</label>
+              <select id="libSearchAnime" aria-describedby="libSearchTargetHint"></select>
+              <p id="libSearchTargetHint" role="status"></p>
             </div>
             <p class="library-meta" id="libSearchStatus" role="status"></p>
             <div class="lib-search-results" id="libSearchResults"></div>
@@ -1984,7 +1989,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261116-library-settings" defer></script>
     <script src="/modules/settings-save.js?v=20261116-statistics-settings" defer></script>
-    <script src="/modules/events.js?v=20261118-ranking-drafts" defer></script>
+    <script src="/modules/events.js?v=20261118-library-target" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
@@ -1995,7 +2000,7 @@
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
     <script src="/modules/offline.js?v=20261118-player-titles" defer></script>
     <script src="/modules/online-playback.js?v=20261115-episode-metadata" defer></script>
-    <script src="/modules/library-view.js?v=20261116-library-settings" defer></script>
+    <script src="/modules/library-view.js?v=20261118-library-target" defer></script>
     <script src="/app.js?v=20261023-modules" defer></script>
   </body>
 </html>

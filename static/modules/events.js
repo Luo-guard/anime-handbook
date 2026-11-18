@@ -844,7 +844,10 @@ $("#activateHandbookProfileButton").addEventListener("click", async () => {
   if (switchingProfile && state.rankingDirtyBoards.size && !confirm("切换账号将放弃当前账号的未保存榜单排序。确定切换吗？")) return;
   try {
     const payload = await api("/api/profiles/activate", { method: "POST", body: JSON.stringify({ profile_id: profileId }) });
-    if (switchingProfile) resetRankingWorkspace();
+    if (switchingProfile) {
+      resetRankingWorkspace();
+      resetLibResourceSearch();
+    }
     ThemeSettingsSession.finish(false);
     Object.assign(state, payload);
     ThemeSettingsSession.begin();

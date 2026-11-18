@@ -31,7 +31,7 @@ const librarySidebar = {
   sourceFilter: "",   // 选中的字幕组（多来源时）
   subs: [],
   subsLoaded: false,
-  searching: false,
+  resourceSearch: null,
   heroKey: "",        // 已经渲染过的续看横幅（避免搜索时反复重建图片）
 };
 
@@ -516,58 +516,113 @@ async function libCheckSubs() {
 // ---------- 找资源 ----------
 
 // 库视图的搜索没有详情页上下文：用关键词匹配收藏里的番，命中才能下载/订阅。
-function libResolveAnime(query) {
-  const q = String(query || "").trim().toLowerCase();
-  if (!q) return null;
-  return state.animes.find((anime) =>
+function libResourceLabel(anime) {
+  const name = anime.display_name || anime.name_cn || anime.name || `Bangumi #${anime.id}`;
+  const date = String(anime.air_date || "");
+  const premiere = /^\d{4}-\d{2}/.exec(date)?.[0];
+  const original = anime.name && anime.name !== name ? ` · ${anime.name}` : "";
+  return `${name}${premiere ? ` · ${premiere} 首播` : ""}${original} · #${anime.id}`;
+}
+
+function resetLibResourceSearch() {
+  librarySidebar.resourceSearch = null;
+  $("#libSearchTarget").hidden = true;
+  $("#libSearchStatus").textContent = "";
+  $("#libSearchResults").replaceChildren();
+}
+
+function libSetupResourceTarget(search) {
+  const q = search.query.toLocaleLowerCase();
+  const matches = state.animes.filter((anime) =>
     [anime.display_name, anime.name_cn, anime.name]
-      .some((name) => name && name.toLowerCase().includes(q))) || null;
+      .some((name) => name && name.toLocaleLowerCase().includes(q)));
+  const select = $("#libSearchAnime");
+  select.replaceChildren(new Option("请选择收藏里的番剧", ""));
+  const matchingIds = new Set(matches.map(anime => anime.id));
+  const other = state.animes.filter(anime => !matchingIds.has(anime.id));
+  for (const [label, rows] of [["匹配的番剧", matches], ["其他收藏", other]]) {
+    if (!rows.length) continue;
+    const group = document.createElement("optgroup");
+    group.label = label;
+    const options = rows.map(anime => new Option(libResourceLabel(anime), String(anime.id)));
+    group.append(...options.sort((a, b) => a.text.localeCompare(b.text, "zh-CN")));
+    select.append(group);
+  }
+  search.matches = matches.length;
+  if (matches.length === 1) select.value = String(matches[0].id);
+  $("#libSearchTarget").hidden = false;
+  libUpdateResourceActions();
+}
+
+function libResourceAnimeId() {
+  const search = librarySidebar.resourceSearch;
+  if (!search || search.profile !== state.active_profile?.id) return 0;
+  const id = Number($("#libSearchAnime").value);
+  return state.animes.some(anime => Number(anime.id) === id) ? id : 0;
+}
+
+function libUpdateResourceActions() {
+  const search = librarySidebar.resourceSearch;
+  if (!search) return;
+  const id = libResourceAnimeId();
+  $("#libSearchTargetHint").textContent = id ? "下载和订阅将关联到所选番剧，可随时更换。"
+    : search.matches > 1 ? `匹配到 ${search.matches} 部番剧，请核对标题和首播时间后选择。`
+    : search.matches === 1 ? "请选择关联番剧后再下载或订阅。"
+    : "关键词未匹配到收藏，请手动选择关联番剧。";
+  $$(".lib-download, .lib-subscribe", $("#libSearchResults")).forEach(button => {
+    if (button.dataset.pending) return;
+    const done = id && button.dataset.completedFor === String(id);
+    const download = button.classList.contains("lib-download");
+    button.disabled = !id || Boolean(done);
+    button.textContent = download ? (done ? "已提交" : "下载") : (done ? "已订阅" : "订阅");
+  });
 }
 
 async function libSearch() {
   const query = String($("#libSearchQuery")?.value || "").trim();
   const status = $("#libSearchStatus");
   const host = $("#libSearchResults");
-  if (!query || librarySidebar.searching) return;
-  librarySidebar.searching = true;
+  if (!query || librarySidebar.resourceSearch?.loading) return;
+  const search = {query, profile: state.active_profile?.id, loading: true};
+  librarySidebar.resourceSearch = search;
+  libSetupResourceTarget(search);
   if (status) status.textContent = "正在搜索蜜柑计划…";
   if (host) host.innerHTML = "";
   try {
-    const anime = libResolveAnime(query);
-    const data = await api(`/api/offline/search?q=${encodeURIComponent(query)}&anime_id=${anime ? anime.id : 0}&limit=60`);
+    const data = await api(`/api/offline/search?q=${encodeURIComponent(query)}&anime_id=${libResourceAnimeId()}&limit=60`);
+    if (librarySidebar.resourceSearch !== search || search.profile !== state.active_profile?.id) return;
     const items = data.items || [];
     if (status) {
       status.textContent = items.length
-        ? `找到 ${items.length} 条资源${anime ? ` · 将关联到收藏里的「${anime.display_name || anime.name_cn}」` : " · 没匹配到收藏番剧，只能看不能下"}`
+        ? `找到 ${items.length} 条资源 · 下载或订阅前请核对关联番剧`
         : "没有找到资源，换个关键词试试";
     }
     host.innerHTML = items.map((item) => {
       const bits = [item.group, item.resolution, item.codec, item.publish_date]
         .filter(Boolean).map((bit) => `<i>${escapeHtml(String(bit))}</i>`).join("");
-      const canDownload = Boolean(anime);
       return `<div class="lib-search-item">
         <div class="lib-search-info">
           <b title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</b>
           <small>${bits}</small>
         </div>
         <div class="lib-ep-actions">
-          <button type="button" class="pc-btn pc-text lib-subscribe" data-url="${escapeHtml(item.torrent_url)}" title="订阅这个关键词+字幕组"${canDownload ? "" : " disabled"}>订阅</button>
-          <button type="button" class="pc-btn pc-text lib-download" data-url="${escapeHtml(item.torrent_url)}" data-title="${escapeHtml(item.title)}" data-group="${escapeHtml(item.group || "")}" data-resolution="${escapeHtml(item.resolution || "")}" data-codec="${escapeHtml(item.codec || "")}"${canDownload ? "" : " disabled title=\"没匹配到收藏番剧，请在番剧详情页的「找资源」里下载\""}>下载</button>
+          <button type="button" class="pc-btn pc-text lib-subscribe" title="订阅这个关键词和字幕组">订阅</button>
+          <button type="button" class="pc-btn pc-text lib-download" data-url="${escapeHtml(item.torrent_url)}" data-title="${escapeHtml(item.title)}" data-group="${escapeHtml(item.group || "")}" data-resolution="${escapeHtml(item.resolution || "")}" data-codec="${escapeHtml(item.codec || "")}">下载</button>
         </div>
       </div>`;
     }).join("") || "";
-    if (anime) $("#libSearchResults").dataset.animeId = anime.id;
-    else delete $("#libSearchResults")?.dataset.animeId;
+    libUpdateResourceActions();
   } catch (error) {
-    if (status) status.textContent = `搜索失败：${error.message || error}`;
+    if (librarySidebar.resourceSearch === search) status.textContent = `搜索失败：${error.message || error}`;
   } finally {
-    librarySidebar.searching = false;
+    search.loading = false;
   }
 }
 
 async function libDownload(button) {
-  const animeId = Number($("#libSearchResults")?.dataset.animeId || 0);
+  const animeId = libResourceAnimeId();
   if (!animeId) return;
+  button.dataset.pending = "true";
   button.disabled = true;
   button.textContent = "提交中";
   try {
@@ -583,37 +638,41 @@ async function libDownload(button) {
         codec: button.dataset.codec,
       }),
     });
-    button.textContent = "已提交";
+    button.dataset.completedFor = String(animeId);
     toast("已交给 qBittorrent");
     // 下载会改变媒体库内容与磁盘占用，别让用户切回总览时还看 30 秒前的旧数据。
     librarySidebar.loadedAt = 0;
   } catch (error) {
-    button.disabled = false;
-    button.textContent = "下载";
     toast(`下载没提交上：${error.message || error}`, "error");
+  } finally {
+    delete button.dataset.pending;
+    libUpdateResourceActions();
   }
 }
 
 async function libSubscribe(button) {
-  const animeId = Number($("#libSearchResults")?.dataset.animeId || 0);
+  const animeId = libResourceAnimeId();
   if (!animeId) return;
-  const anime = state.animes.find((item) => item.id === animeId);
-  const keyword = String($("#libSearchQuery")?.value || "").trim();
+  const keyword = librarySidebar.resourceSearch.query;
+  button.dataset.pending = "true";
   button.disabled = true;
+  button.textContent = "提交中";
   try {
     await api("/api/offline/subscribe", {
       method: "POST",
       body: JSON.stringify({
         anime_id: animeId,
-        keyword: keyword || anime?.display_name || anime?.name_cn || "",
+        keyword,
         group_name: button.closest(".lib-search-item")?.querySelector("[data-group]")?.dataset.group || "",
       }),
     });
-    button.textContent = "已订阅";
+    button.dataset.completedFor = String(animeId);
     toast("已订阅，开启「自动下载订阅的新集」后，新集会自动下载");
   } catch (error) {
-    button.disabled = false;
     toast(`订阅失败：${error.message || error}`, "error");
+  } finally {
+    delete button.dataset.pending;
+    libUpdateResourceActions();
   }
 }
 
@@ -1095,6 +1154,8 @@ function initLibraryView() {
     if (toggle) libToggleSub(toggle.dataset.id, toggle.checked);
   });
   $("#libSearchGo")?.addEventListener("click", libSearch);
+  $("#libSearchQuery")?.addEventListener("input", resetLibResourceSearch);
+  $("#libSearchAnime")?.addEventListener("change", libUpdateResourceActions);
   $("#libSearchQuery")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") { event.preventDefault(); libSearch(); }
   });

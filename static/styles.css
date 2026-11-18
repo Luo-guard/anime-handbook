@@ -6046,6 +6046,23 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 14px 18px 10px;
 }
+.lib-search-target {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 7px 12px;
+  margin: 0 18px 12px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 11px; background: var(--paper);
+}
+.lib-search-target[hidden] { display: none; }
+.lib-search-target label { font-size: 13px; font-weight: 700; }
+.lib-search-target select {
+  width: 100%; min-width: 0; min-height: 36px; padding: 5px 9px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink);
+  font: inherit; font-size: 13px; text-overflow: ellipsis;
+}
+.lib-search-target p { grid-column: 2; margin: 0; color: var(--muted); font-size: 12px; }
+@media (max-width: 520px) {
+  .lib-search-target { grid-template-columns: minmax(0, 1fr); }
+  .lib-search-target p { grid-column: 1; }
+}
 .lib-search-results { display: flex; flex-direction: column; gap: 6px; padding: 0 18px 18px; }
 .lib-search-item {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
