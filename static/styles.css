@@ -1157,6 +1157,7 @@ h1 {
   position: absolute;
   bottom: 0;
   left: 12%;
+  right: 12%;
   min-height: 5px;
   border-radius: 9px 9px 3px 3px;
   background: linear-gradient(180deg, #7fb697, var(--green-700));
