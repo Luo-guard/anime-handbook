@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261118-search-history" />
+  <link rel="stylesheet" href="/styles.css?v=20261118-search-scroll" />
   </head>
   <body>
     <div class="app-shell">
@@ -1774,16 +1774,15 @@
     <dialog class="modal schedule-dialog" id="scheduleDetailModal"><div class="modal-frame"><button type="button" class="modal-close" id="scheduleCloseDetail" aria-label="关闭">×</button><div id="scheduleDetail"></div></div></dialog>
 
     <dialog class="modal backend-closed-dialog" id="backendClosedDialog"><div class="modal-frame"><h2 id="backendClosedTitle">后台已关闭</h2><p id="backendClosedMessage">再次使用时，请运行“启动动漫手账”快捷方式，然后刷新此页面。</p></div></dialog>
-    <dialog class="modal collect-search-modal" id="collectionSearchModal">
+    <dialog class="modal collect-search-modal" id="collectionSearchModal" aria-labelledby="collectionSearchTitle">
       <div class="modal-frame">
         <button type="button" class="modal-close" id="collectionSearchClose" aria-label="关闭">×</button>
         <header class="collect-search-head">
-          <p class="eyebrow">BANGUMI</p>
-          <h2>搜索添加番剧</h2>
           <div class="collect-search-head-row">
-            <p class="collect-search-hint">选择收藏状态即可加入手账，Kazumi 关闭后自动写回。</p>
+            <h2 id="collectionSearchTitle">搜索添加番剧</h2>
             <button type="button" class="secondary-button compact-button" id="collectionImportButton">批量搜索</button>
           </div>
+          <p class="collect-search-hint">选择收藏状态即可加入手账，Kazumi 关闭后自动写回。</p>
         </header>
         <form id="collectionSearchForm" class="collect-search-form" role="search">
           <span class="collect-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>
@@ -1797,20 +1796,22 @@
           </select>
           <button class="primary-button" type="submit" id="collectionSearchSubmit">搜索</button>
         </form>
-        <section class="collect-history" id="collectionSearchHistory" aria-label="搜索历史" hidden>
-          <div class="collect-history-head">
-            <h3>搜索历史</h3>
-            <span id="collectionHistoryStatus" role="status"></span>
-            <div class="collect-history-tools">
-              <button type="button" id="collectionHistoryManage" aria-pressed="false">管理</button>
-              <button type="button" id="collectionHistoryClear">清空</button>
-              <button type="button" id="collectionHistoryPause" aria-pressed="false">暂停记录</button>
+        <div class="collect-search-content" id="collectionSearchContent" role="region" aria-label="搜索历史与结果" tabindex="0">
+          <section class="collect-history" id="collectionSearchHistory" aria-label="搜索历史" hidden>
+            <div class="collect-history-head">
+              <h3>搜索历史</h3>
+              <span id="collectionHistoryStatus" role="status"></span>
+              <div class="collect-history-tools">
+                <button type="button" id="collectionHistoryManage" aria-pressed="false">管理</button>
+                <button type="button" id="collectionHistoryClear">清空</button>
+                <button type="button" id="collectionHistoryPause" aria-pressed="false">暂停记录</button>
+              </div>
             </div>
-          </div>
-          <div class="collect-history-list" id="collectionHistoryList"></div>
-          <button type="button" class="collect-history-expand" id="collectionHistoryExpand" aria-expanded="false" aria-controls="collectionHistoryList" hidden>展开全部</button>
-        </section>
-        <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
+            <div class="collect-history-list" id="collectionHistoryList"></div>
+            <button type="button" class="collect-history-expand" id="collectionHistoryExpand" aria-expanded="false" aria-controls="collectionHistoryList" hidden>展开全部</button>
+          </section>
+          <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
+        </div>
       </div>
     </dialog>
     <dialog class="episode-record-dialog" id="onlineRuleEditor" aria-labelledby="onlineRuleEditorTitle">
@@ -1987,7 +1988,7 @@
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/collection-edit.js?v=20261118-search-history" defer></script>
+    <script src="/modules/collection-edit.js?v=20261118-search-scroll" defer></script>
     <script src="/modules/collection-search-history.js?v=20261118" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>

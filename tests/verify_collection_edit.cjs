@@ -62,6 +62,23 @@ assert.equal(await page.locator('.collect-result[data-result-id]:visible').count
 assert.equal(await moreList.evaluate(node=>node.hidden),false);
 assert.equal(await more.getAttribute('aria-expanded'),'true');
 assert.match(await more.textContent(),/收起其他 1 条相关结果/);
+const scrollContent = page.locator('#collectionSearchContent');
+for (const viewport of [{width:1100,height:820},{width:360,height:300}]) {
+  await page.setViewportSize(viewport);
+  const searchBox = await page.locator('#collectionSearchForm').boundingBox();
+  const scrollers = await page.locator('#collectionSearchModal').evaluate(dialog =>
+    [dialog, ...dialog.querySelectorAll('*')].filter(node => ['auto','scroll'].includes(getComputedStyle(node).overflowY)
+      && node.scrollHeight > node.clientHeight + 1).map(node => node.id));
+  assert.deepEqual(scrollers, ['collectionSearchContent']);
+  await scrollContent.hover();
+  await page.mouse.wheel(0, 450);
+  await page.waitForFunction(() => document.querySelector('#collectionSearchContent').scrollTop > 0);
+  assert.deepEqual(await page.locator('#collectionSearchForm').boundingBox(), searchBox, 'search stays fixed while results scroll');
+  await page.locator('#collectionSearchSubmit').click();
+  await more.click();
+  await scrollContent.evaluate(node => { node.scrollTop = 0; });
+}
+await page.setViewportSize({width:1100,height:820});
 await more.click();
 assert.equal(await page.locator('.collect-result[data-result-id]:visible').count(),2);
 const bgmLink=result.locator('.collect-result-link');

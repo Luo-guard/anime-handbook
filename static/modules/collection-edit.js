@@ -325,6 +325,7 @@ if ($("#collectionSearchButton")) {
     const button = $("#collectionSearchSubmit");
     const sort = $("#collectionSearchSort")?.value || "match";
     button.disabled = true;
+    $("#collectionSearchContent").scrollTop = 0;
     results.innerHTML = collectionSearchSkeleton();
     results.setAttribute("aria-busy", "true");
     try {

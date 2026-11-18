@@ -4235,12 +4235,17 @@ dialog::backdrop {
 .collection-add-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 
 /* —— 搜索添加番剧：封面 + 信息 + 状态按钮的结果行 —— */
-.collect-search-modal > .modal-frame { display: flex; flex-direction: column; gap: 18px; }
-.collect-search-head h2 { margin: 6px 0 7px; font-size: 25px; }
+.collect-search-modal > .modal-frame {
+  --search-inset: clamp(16px, 4vw, 32px);
+  display: flex; flex-direction: column; gap: 14px;
+  max-height: calc(100dvh - 28px); padding: 20px 0 0;
+}
+.collect-search-head, .collect-search-form { flex: none; margin-inline: var(--search-inset); }
+.collect-search-head h2 { margin: 0; font-size: clamp(17px, 3vw, 25px); }
 .collect-search-hint { margin: 0; max-width: 46ch; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
-.collect-search-head-row { display: flex; align-items: flex-start; gap: 14px; justify-content: space-between; flex-wrap: wrap; }
-.collect-search-head-row .collect-search-hint { flex: 1 1 260px; }
-.collect-search-head-row .compact-button { margin-top: -2px; white-space: nowrap; }
+.collect-search-head-row { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding-right: 40px; min-height: 36px; margin-bottom: 4px; }
+.collect-search-head-row .compact-button { flex: none; padding: 6px 10px; white-space: nowrap; }
+.collect-search-modal .modal-close { top: 20px; right: var(--search-inset); }
 .collect-search-form {
   display: flex; align-items: center; gap: 10px;
   padding: 5px 5px 5px 14px;
@@ -4260,7 +4265,19 @@ dialog::backdrop {
   font: inherit; font-size: 12.5px; cursor: pointer;
 }
 .collect-search-sort:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
-.collect-search-modal { width: min(880px, calc(100vw - 28px)); }
+html:has(.collect-search-modal[open]) { overflow: hidden; }
+dialog.modal.collect-search-modal { width: min(880px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow: clip; }
+.collect-search-content {
+  min-height: 0; overflow: auto; overscroll-behavior: contain;
+  padding: 12px var(--search-inset) 20px;
+  border-top: 1px solid var(--line);
+  scrollbar-width: thin;
+  scrollbar-color: var(--active-inset) transparent;
+}
+.collect-search-content:focus-visible { outline: 2px solid var(--active-inset); outline-offset: -2px; }
+.collect-search-content .collect-results { max-height: none; min-height: 0; overflow: visible; padding: 2px; }
+.collect-search-content .collect-results:empty { display: none; }
+.collect-search-content .collect-history:not([hidden]) + .collect-results:not(:empty) { margin-top: 14px; }
 .collect-history[hidden], .collect-history-expand[hidden] { display: none; }
 .collect-history { flex: none; min-width: 0; }
 .collect-history-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 9px; }
@@ -4271,7 +4288,7 @@ dialog::backdrop {
 .collect-history-tools button:hover, .collect-history-expand:hover { color: var(--green-700); }
 .collect-history-tools button:disabled { opacity: .4; cursor: default; }
 .collect-history-tools button[aria-pressed="true"] { color: var(--green-700); }
-.collect-history-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 146px; overflow: auto; padding: 2px; }
+.collect-history-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px; }
 .collect-history-chip { display: inline-flex; align-items: center; min-width: 0; max-width: min(100%, 240px); border-radius: 8px; background: var(--paper); }
 .collect-history-chip:hover { background: var(--green-50); }
 .collect-history-query { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; border: 0; border-radius: 8px; padding: 7px 11px; color: var(--ink); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
@@ -4282,7 +4299,8 @@ dialog::backdrop {
 @media (max-width: 480px) {
   .collect-history-tools { gap: 10px; }
   .collect-history-chip { max-width: 100%; }
-  .collect-history-list { max-height: 118px; }
+  .collect-search-form .primary-button { padding-inline: 12px; }
+  .collect-search-form { gap: 6px; }
 }
 .collect-results { display: grid; gap: 14px; align-content: start; min-height: 148px; max-height: min(58vh, 560px); overflow: auto; padding: 2px 6px 2px 2px; overscroll-behavior: contain; }
 .collect-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -4293,6 +4311,7 @@ dialog::backdrop {
 }
 .collect-result:hover { background: var(--surface); border-color: var(--line); box-shadow: 0 10px 26px rgb(11 34 23 / .08); }
 .collect-result-cover { position: relative; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 12px; background: var(--green-50); }
+.collect-search-content .collect-result-cover { aspect-ratio: 4 / 5; }
 .collect-result-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .collect-result-cover.is-empty::before { content: "番"; display: grid; place-items: center; width: 100%; height: 100%; background: var(--green-50); color: var(--green-500); font-size: 22px; font-weight: 700; }
 .collect-result-score { position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 6px; background: rgb(11 34 23 / .78); color: #fff; font-size: 11px; font-weight: 700; }
@@ -4384,6 +4403,11 @@ dialog::backdrop {
   .collect-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
   .collect-search-modal > .modal-frame { gap: 14px; }
   .collect-results { max-height: 54vh; }
+}
+@media (max-height: 430px) {
+  .collect-search-modal > .modal-frame { padding-top: 10px; gap: 8px; }
+  .collect-search-modal .modal-close { top: 10px; }
+  .collect-search-hint { display: none; }
 }
 @media (max-width: 430px) {
   .collect-result { padding: 8px; border-radius: 15px; }
