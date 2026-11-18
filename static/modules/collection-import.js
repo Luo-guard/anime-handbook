@@ -3,7 +3,43 @@
 const IMPORT_HEADER_WORDS = new Set(["name", "title", "name_cn", "番剧", "番名", "番剧名", "名称", "标题", "动画", "动画名", "动画名称", "作品", "作品名", "anime", "subject"]);
 const IMPORT_JSON_KEYS = ["name", "title", "name_cn", "番剧", "名称", "标题", "番名", "anime", "subject"];
 const IMPORT_LIMIT = 2000;
-const importState = { names: [], index: 0, added: new Set(), skipped: new Set(), cache: new Map(), token: 0 };
+let importState = null;
+let importToken = 0;
+let importFilter = "all";
+const importOrigins = new WeakMap();
+const importStorageKey = () => `handbook:collection-import:${state.active_profile?.id || "default"}`;
+
+function importLoadBatch(key) {
+  if (importState?.key === key) return importState;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key));
+    if (!Array.isArray(saved?.names) || !saved.names.length || saved.names.length > IMPORT_LIMIT
+        || saved.names.some(name => typeof name !== "string" || !name.trim())) return null;
+    const valid = values => (Array.isArray(values) ? values : [])
+      .filter(index => Number.isInteger(index) && index >= 0 && index < saved.names.length);
+    const added = new Set(valid(saved.added));
+    const skipped = new Set(valid(saved.skipped).filter(index => !added.has(index)));
+    const index = valid([saved.index])[0] ?? 0;
+    return {key, names:saved.names, index, added, skipped, cache:new Map()};
+  } catch { return null; }
+}
+
+function importSaveBatch(batch = importState) {
+  const {key, names, index, added, skipped} = batch;
+  try { localStorage.setItem(key, JSON.stringify({names, index, added:[...added], skipped:[...skipped]})); }
+  catch { /* Keep the current batch usable when browser storage is unavailable. */ }
+}
+
+function importVisibleIndices(filter = importFilter) {
+  return (importState?.names || []).map((_, index) => index).filter(index =>
+    filter === "all" || (filter === "skipped" ? importState.skipped.has(index)
+      : !importState.added.has(index) && !importState.skipped.has(index)));
+}
+
+function importBatchSummary() {
+  const {names, added, skipped} = importState;
+  return `已添加 ${added.size} 条 · 已跳过 ${skipped.size} 条 · 未处理 ${names.length - added.size - skipped.size} 条 · 共 ${names.length} 条`;
+}
 // Excel 读出来的一行就是一整条番名，不能再按逗号切（「就算是哥哥，有爱就没问题了，对吧」）。
 let importRowsAreVerbatim = false;
 
@@ -72,11 +108,13 @@ function importSetStatus(message, isError = false) {
   node.classList.toggle("is-error", isError);
 }
 function importProgress() {
-  const name = importState.names[importState.index] || "";
-  $("#importCount").textContent = name ? `${importState.index + 1} / ${importState.names.length}` : `0 / ${importState.names.length}`;
-  $("#importProgress").textContent = `已添加 ${importState.added.size} 条 · 已跳过 ${importState.skipped.size} 条 · 共 ${importState.names.length} 条`;
-  $("#importPrev").disabled = importState.index <= 0;
-  $("#importNext").disabled = importState.index >= importState.names.length - 1;
+  const indices = importVisibleIndices();
+  const position = indices.indexOf(importState.index);
+  $("#importCount").textContent = `${position + 1} / ${indices.length}`;
+  $("#importProgress").textContent = importBatchSummary();
+  $("#importPrev").disabled = position <= 0;
+  $("#importNext").disabled = position < 0 || position >= indices.length - 1;
+  $("#importSkip").disabled = position < 0 || importState.added.has(importState.index) || importState.skipped.has(importState.index);
   const done = importState.added.size + importState.skipped.size;
   if (done >= importState.names.length && importState.names.length) $("#importProgress").textContent = `全部处理完成：已添加 ${importState.added.size} 条 · 已跳过 ${importState.skipped.size} 条`;
 }
@@ -88,6 +126,9 @@ function importRenderResults(rows) {
     return;
   }
   box.innerHTML = `<div class="collect-card-grid">${rows.map(collectionSearchCard).join("")}</div>`;
+  box.querySelectorAll(".collect-control").forEach(control => {
+    importOrigins.set(control, {batch:importState, index:importState.index});
+  });
 }
 function importSearchedLabel(name, strict) {
   const node = $("#importSearched");
@@ -100,75 +141,91 @@ async function importSearchByName(name, token) {
   let rows = [];
   try {
     const strict = await api(`/api/collection-search?q=${encodeURIComponent(quoted)}&sort=match`);
-    if (token !== importState.token) return null;
+    if (token !== importToken) return null;
     rows = strict.items || [];
   } catch (error) {
-    if (token !== importState.token) return null;
+    if (token !== importToken) return null;
     throw error;
   }
   if (rows.length) {
-    importSearchedLabel(name, true);
-    return rows;
+    return {rows, strict:true};
   }
   const loose = await api(`/api/collection-search?q=${encodeURIComponent(name)}&sort=match`);
-  if (token !== importState.token) return null;
-  importSearchedLabel(name, false);
-  return loose.items || [];
+  if (token !== importToken) return null;
+  return {rows:loose.items || [], strict:false};
 }
 async function importSearchCurrent() {
-  const token = ++importState.token;
+  const token = ++importToken;
   const name = importCleanName($("#importName").value) || importState.names[importState.index] || "";
   if (!name) return;
   importState.names[importState.index] = name;
+  importSaveBatch();
   const cached = importState.cache.get(name);
   if (cached) {
-    importRenderResults(cached);
+    importSearchedLabel(name, cached.strict);
+    importRenderResults(cached.rows);
     importProgress();
     return;
   }
   const box = $("#importResults");
   box.innerHTML = collectionSearchSkeleton();
+  $("#importSearched").textContent = "";
   box.setAttribute("aria-busy", "true");
   try {
-    const rows = await importSearchByName(name, token);
-    if (rows === null) return;
-    importState.cache.set(name, rows);
-    importRenderResults(rows);
+    const result = await importSearchByName(name, token);
+    if (token !== importToken || !result) return;
+    importState.cache.set(name, result);
+    importSearchedLabel(name, result.strict);
+    importRenderResults(result.rows);
   } catch (error) {
-    if (token !== importState.token) return;
+    if (token !== importToken) return;
     box.removeAttribute("aria-busy");
     box.innerHTML = `<div class="collect-search-empty">${COLLECT_SEARCH_ICON}<strong>搜索没有完成</strong><p>${escapeHtml(error.message)}</p></div>`;
   }
   importProgress();
 }
 function importGoTo(index) {
-  if (!importState.names.length) return;
-  importState.index = Math.min(importState.names.length - 1, Math.max(0, index));
-  $("#importName").value = importState.names[importState.index];
+  const empty = index == null;
+  $("#importSearchForm").classList.toggle("hidden", empty);
+  if (!empty) importState.index = index;
   importProgress();
+  if (empty) {
+    ++importToken;
+    $("#importSearched").textContent = importFilter === "skipped" ? "没有跳过的条目。" : "没有未处理的条目。";
+    $("#importResults").replaceChildren();
+    $("#importResults").removeAttribute("aria-busy");
+    return;
+  }
+  $("#importName").value = importState.names[index];
   importSearchCurrent();
 }
-function importStart(names) {
-  importState.names = names;
-  importState.index = 0;
-  importState.added = new Set();
-  importState.skipped = new Set();
-  importState.cache = new Map();
-  importState.token = 0;
+function importShowWork(filter) {
+  importFilter = filter;
+  if (filter === "skipped") {
+    for (const index of importState.skipped) importState.cache.delete(importState.names[index]);
+  }
+  $("#importFilter").value = filter;
   $("#importSetup").classList.add("hidden");
   $("#importWork").classList.remove("hidden");
-  $("#importName").value = names[0];
-  importProgress();
-  importSearchCurrent();
+  const indices = importVisibleIndices();
+  importGoTo(indices.includes(importState.index) ? importState.index : indices[0]);
 }
-function importMarkDone(kind) {
-  const name = importState.names[importState.index];
-  if (!name) return;
-  importState.skipped.delete(name);
-  importState.added.delete(name);
-  (kind === "added" ? importState.added : importState.skipped).add(name);
+function importMarkDone(kind, index = importState.index) {
+  if (kind === "skipped" && importState.added.has(index)) return;
+  importState.skipped.delete(index);
+  importState[kind].add(index);
+  importSaveBatch();
+  if (!$("#collectionImportModal").open || $("#importWork").classList.contains("hidden")) return;
+  if (index === importState.index) {
+    const indices = importVisibleIndices();
+    const next = indices.find(value => value > index && (importFilter !== "all"
+      || (!importState.added.has(value) && !importState.skipped.has(value))));
+    if (next !== undefined || importFilter !== "all") {
+      importGoTo(next ?? indices[0]);
+      return;
+    }
+  }
   importProgress();
-  if (importState.index < importState.names.length - 1) importGoTo(importState.index + 1);
 }
 // —— Excel(.xlsx) 读取 ——
 // xlsx 就是一个 zip 包，里面是 xml。这里用浏览器自带的解压能力读，
@@ -316,24 +373,31 @@ async function importReadFile(file) {
 }
 if ($("#collectionImportButton")) {
   const modal = $("#collectionImportModal");
-  const closeModal = () => {
-    modal.close();
-    importState.token++;
+  const showSetup = () => {
+    ++importToken;
+    $("#importSetup").classList.remove("hidden");
+    $("#importWork").classList.add("hidden");
+    $("#importSaved").classList.toggle("hidden", !importState);
+    $("#importSavedSummary").textContent = importState ? importBatchSummary() : "";
+    $("#importRetrySkipped").disabled = !importState?.skipped.size;
+    $("#importParse").textContent = importState ? "开始新批次" : "读取清单";
   };
   $("#collectionImportButton").onclick = () => {
     $("#collectionSearchModal").close();
-    $("#importSetup").classList.remove("hidden");
-    $("#importWork").classList.add("hidden");
+    importState = importLoadBatch(importStorageKey());
+    showSetup();
     $("#importPaste").value = "";
     $("#importFile").value = "";
     importRowsAreVerbatim = false;
     importSetStatus("");
     modal.showModal();
   };
-  $("#collectionImportClose").onclick = closeModal;
+  $("#collectionImportClose").onclick = () => { ++importToken; modal.close(); };
   modal.addEventListener("close", () => {
-    importState.token++;
+    if (!modal.open) ++importToken;
   });
+  $("#importResume").onclick = () => importShowWork("pending");
+  $("#importRetrySkipped").onclick = () => importShowWork("skipped");
   $("#importFile").addEventListener("change", (event) => importReadFile(event.target.files?.[0]));
   // 用户动过文本框就回到通用解析，避免 Excel 的“整行一条”规则套到手动编辑的内容上。
   $("#importPaste").addEventListener("input", () => { importRowsAreVerbatim = false; });
@@ -354,25 +418,27 @@ if ($("#collectionImportButton")) {
       return;
     }
     importSetStatus(`识别到 ${names.length} 条${names.length >= IMPORT_LIMIT ? `（单次最多 ${IMPORT_LIMIT} 条，其余已忽略）` : ""}`);
-    importStart(names);
+    importState = { key:importStorageKey(), names, index:0, added:new Set(), skipped:new Set(), cache:new Map() };
+    importSaveBatch();
+    importShowWork("all");
   };
   $("#importSearchForm").onsubmit = (event) => {
     event.preventDefault();
     importState.cache.delete(importCleanName($("#importName").value));
     importSearchCurrent();
   };
-  $("#importPrev").onclick = () => importGoTo(importState.index - 1);
-  $("#importNext").onclick = () => importGoTo(importState.index + 1);
-  $("#importSkip").onclick = () => importMarkDone("skipped");
-  $("#importRestart").onclick = () => {
-    $("#importWork").classList.add("hidden");
-    $("#importSetup").classList.remove("hidden");
+  const step = direction => {
+    const indices = importVisibleIndices();
+    const next = indices[indices.indexOf(importState.index) + direction];
+    if (next !== undefined) importGoTo(next);
   };
+  $("#importPrev").onclick = () => step(-1);
+  $("#importNext").onclick = () => step(1);
+  $("#importFilter").onchange = event => importShowWork(event.target.value);
+  $("#importSkip").onclick = () => importMarkDone("skipped");
+  $("#importRestart").onclick = showSetup;
   document.addEventListener("collection-status-changed", (event) => {
-    if (!modal.open || $("#importWork").classList.contains("hidden")) return;
-    const rows = importState.cache.get(importState.names[importState.index]) || [];
-    const hit = rows.some((row) => Number(row.id) === Number(event.detail?.animeId));
-    if (!hit) return;
-    importMarkDone("added");
+    const origin = importOrigins.get(event.detail?.source);
+    if (origin?.batch === importState && importState?.key === importStorageKey()) importMarkDone("added", origin.index);
   });
 }

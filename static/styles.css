@@ -4364,6 +4364,8 @@ dialog.modal.collect-search-modal { width: min(880px, calc(100vw - 28px)); max-h
 .import-modal { width: min(880px, calc(100vw - 28px)); }
 .import-modal > .modal-frame { display: flex; flex-direction: column; gap: 16px; }
 .import-setup { display: grid; gap: 12px; }
+.import-saved { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.import-saved p, .import-saved small { margin: 0; color: var(--muted); font-size: 12px; }
 .import-drop {
   display: grid; gap: 5px; padding: 24px 20px; text-align: center;
   border: 1.5px dashed var(--line); border-radius: 18px; background: var(--paper);
@@ -4382,7 +4384,8 @@ dialog.modal.collect-search-modal { width: min(880px, calc(100vw - 28px)); max-h
 #importStatus, #importProgress { margin: 0; font-size: 12px; color: var(--muted); }
 #importStatus.is-error { color: var(--danger); }
 .import-work { display: grid; gap: 12px; }
-.import-bar { display: flex; align-items: center; gap: 10px; }
+.import-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#importFilter { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; }
 .import-count { margin-right: auto; font-size: 13px; font-weight: 650; color: var(--green-800); }
 .import-search { padding: 5px 5px 5px 14px; }
 .import-searched { margin: 0; font-size: 11.5px; color: var(--muted); }

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261118-library-target" />
+  <link rel="stylesheet" href="/styles.css?v=20261118-import-resume" />
   </head>
   <body>
     <div class="app-shell">
@@ -1872,6 +1872,15 @@
           <p class="collect-search-hint">没有 Kazumi 收藏也能用：导入一份名单，手账会逐条搜索 Bangumi，确认状态后自动跳到下一条。单次最多 2000 条。</p>
         </header>
         <section id="importSetup" class="import-setup">
+          <div id="importSaved" class="import-saved hidden">
+            <strong>上次导入</strong>
+            <p id="importSavedSummary"></p>
+            <div class="import-actions">
+              <button type="button" class="primary-button compact-button" id="importResume">继续上次</button>
+              <button type="button" class="secondary-button compact-button" id="importRetrySkipped">重新处理跳过项</button>
+            </div>
+            <small>读取新名单会替换这份批次进度，已收藏的番剧会保留。</small>
+          </div>
           <label class="import-drop" id="importDrop">
             <input type="file" id="importFile" accept=".xlsx,.csv,.tsv,.txt,.json" hidden />
             <strong>拖入文件，或点击选择</strong>
@@ -1886,6 +1895,11 @@
         <section id="importWork" class="import-work hidden">
           <div class="import-bar">
             <span class="import-count" id="importCount">1 / 1</span>
+            <select id="importFilter" aria-label="批次条目筛选">
+              <option value="all">全部条目</option>
+              <option value="pending">只看未处理</option>
+              <option value="skipped">只看跳过项</option>
+            </select>
             <button type="button" class="secondary-button compact-button" id="importPrev">上一条</button>
             <button type="button" class="secondary-button compact-button" id="importNext">下一条</button>
           </div>
@@ -1898,7 +1912,7 @@
           <div id="importResults" class="collect-results"></div>
           <div class="import-actions">
             <button type="button" class="secondary-button compact-button" id="importSkip">跳过这条</button>
-            <button type="button" class="secondary-button compact-button" id="importRestart">重新导入</button>
+            <button type="button" class="secondary-button compact-button" id="importRestart">返回导入</button>
             <p id="importProgress" role="status"></p>
           </div>
         </section>
@@ -1993,9 +2007,9 @@
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/collection-edit.js?v=20261118-search-scroll" defer></script>
+    <script src="/modules/collection-edit.js?v=20261118-import-resume" defer></script>
     <script src="/modules/collection-search-history.js?v=20261118" defer></script>
-    <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
+    <script src="/modules/collection-import.js?v=20261118-import-resume" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
     <script src="/modules/offline.js?v=20261118-player-titles" defer></script>

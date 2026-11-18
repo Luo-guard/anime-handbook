@@ -146,7 +146,7 @@ function updateCollectionSearchBadges() {
     cover?.append(node);
   });
 }
-async function changeCollectionStatus(id, status) {
+async function changeCollectionStatus(id, status, source = null) {
   const result = await api("/api/collection-status", { method: "POST", body: JSON.stringify({ anime_id: Number(id), status: Number(status) }) });
   commitAnimes(result.animes, { render: false });
   if (result.stats) {
@@ -162,7 +162,7 @@ async function changeCollectionStatus(id, status) {
   updateCollectionSearchBadges();
   closeCollectMenus();
   toast(window.handbookOnline ? "收藏已更新" : "收藏已更新，已加入 Kazumi 待写回队列");
-  document.dispatchEvent(new CustomEvent("collection-status-changed", { detail: { animeId: Number(id), status: Number(status) } }));
+  document.dispatchEvent(new CustomEvent("collection-status-changed", { detail: { animeId: Number(id), status: Number(status), source } }));
   maybeAutoOpenOffline(Number(id), Number(status));
   return result.anime;
 }
@@ -177,7 +177,7 @@ async function applyCollectStatus(control, status) {
   trigger.disabled = true;
   trigger.querySelector(".collect-name").textContent = "保存中…";
   try {
-    await changeCollectionStatus(id, target);
+    await changeCollectionStatus(id, target, control);
   } catch (error) {
     toast(error.message, "error");
   } finally {

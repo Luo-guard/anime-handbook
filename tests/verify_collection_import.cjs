@@ -90,8 +90,14 @@ const harness=[
 ].join("\n");
 (async()=>{const browser=await chromium.launch({headless:true});try{
 const page=await browser.newPage({viewport:{width:1100,height:820}});
-await page.setContent(fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));
-await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/toolbar-buttons.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-edit.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-import.js','utf8')});
+const html=fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'');
+await page.route('http://import.test/',route=>route.fulfill({contentType:'text/html',body:html}));
+async function load() {
+  await page.goto('http://import.test/');
+  await page.addStyleTag({content:fs.readFileSync('static/styles.css','utf8')});
+  await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/toolbar-buttons.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-edit.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-import.js','utf8')});
+}
+await load();
 // Parsers: plain lines, CSV with header, Excel-style tab paste, JSON objects.
 assert.deepEqual(await page.evaluate(()=>parseImportText('葬送的芙莉莲\n药屋少女的呢喃\n\n葬送的芙莉莲')),['葬送的芙莉莲','药屋少女的呢喃']);
 assert.deepEqual(await page.evaluate(()=>parseImportText('番剧,状态\n葬送的芙莉莲,看过\n药屋少女的呢喃,在看')),['葬送的芙莉莲','药屋少女的呢喃']);
@@ -178,5 +184,34 @@ const before=await page.evaluate(()=>queries.length);
 await page.locator('#importPrev').click();
 await page.waitForTimeout(200);
 assert.equal(await page.evaluate(()=>queries.length),before,'cached entry must not search again');
-console.log('Batch import: list parsing (txt/csv/tsv/json/xlsx incl. deflate+store+inline strings), 2000-entry cap, entry switching, auto-advance after adding, skip and cache passed.');
+// Reload discards JS memory but keeps the current batch on this browser profile.
+await load();
+await page.locator('#collectionSearchButton').click();
+await page.locator('#collectionImportButton').click();
+assert.match(await page.locator('#importSavedSummary').textContent(), /已添加 1 条 · 已跳过 1 条 · 未处理 0 条/);
+await page.locator('#importResume').click();
+assert.equal(await page.locator('#importSearched').textContent(), '没有未处理的条目。');
+assert.deepEqual(await page.evaluate(() => queries), []);
+await page.selectOption('#importFilter', 'skipped');
+await page.waitForFunction(() => queries.includes('"Hello, World!"'));
+assert.equal(await page.locator('#importName').inputValue(), 'Hello, World!');
+await page.locator('#importRestart').click();
+await page.fill('#importPaste', '第一部\n第二部\n第三部');
+await page.getByRole('button', {name:'开始新批次'}).click();
+await page.locator('#importSkip').click();
+await page.waitForFunction(() => document.querySelector('#importName').value === '第二部');
+await page.locator('#collectionImportClose').click();
+await load();
+await page.locator('#collectionSearchButton').click();
+await page.locator('#collectionImportButton').click();
+await page.locator('#importResume').click();
+assert.equal(await page.locator('#importFilter').inputValue(), 'pending');
+assert.equal(await page.locator('#importName').inputValue(), '第二部');
+assert.deepEqual(await page.evaluate(() => queries), ['"第二部"']);
+await page.locator('#collectionImportClose').click();
+await page.evaluate(() => { state.active_profile = {id:'another-profile'}; });
+await page.locator('#collectionSearchButton').click();
+await page.locator('#collectionImportButton').click();
+assert.equal(await page.locator('#importSaved').isVisible(), false);
+console.log('Batch import: parsing, cap, navigation, add, skip, cache, reload/resume, new batches and profile isolation passed.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
