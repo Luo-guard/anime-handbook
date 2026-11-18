@@ -7,6 +7,31 @@ from handbook.database import HandbookDB
 from handbook.collection import save_collection
 
 class CollectionTests(unittest.TestCase):
+    def test_subject_and_episodes_reuse_search_transport_on_connection_failure(self):
+        from handbook.metadata import SyncService
+        from urllib.error import URLError, HTTPError
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            service = SyncService(HandbookDB(root / "test.db", asset_root=root))
+            subject = {"id": 123, "type": 2, "name": "Test"}
+            with patch("urllib.request.urlopen", side_effect=URLError("direct connection failed")), patch(
+                "schedule.ScheduleService.fetch", return_value=json.dumps(subject).encode(),
+            ) as fallback:
+                self.assertEqual(service.fetch_bgm(123), subject)
+                self.assertIn("/v0/subjects/123", fallback.call_args.args[0])
+            episodes = [{"id": 7, "type": 0, "sort": 1, "name": "Episode"}]
+            with patch("urllib.request.urlopen", side_effect=URLError("direct connection failed")), patch(
+                "schedule.ScheduleService.fetch", return_value=json.dumps({"data": episodes, "total": 1}).encode(),
+            ) as fallback:
+                self.assertEqual(service.fetch_bgm_episodes(123), episodes)
+                fallback.assert_called_once()
+            with patch("urllib.request.urlopen", side_effect=HTTPError("https://api.bgm.tv", 404, "missing", {}, None)), patch(
+                "schedule.ScheduleService.fetch",
+            ) as fallback:
+                with self.assertRaises(HTTPError):
+                    service.fetch_bgm(123)
+                fallback.assert_not_called()
+
     def test_add_edit_outbox_survives_import(self):
         with tempfile.TemporaryDirectory() as folder, patch("pathlib.Path.is_file", return_value=True):
             db=HandbookDB(Path(folder)/"test.db")

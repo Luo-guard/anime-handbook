@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261118-statistics-bars" />
+  <link rel="stylesheet" href="/styles.css?v=20261118-search-history" />
   </head>
   <body>
     <div class="app-shell">
@@ -1797,6 +1797,19 @@
           </select>
           <button class="primary-button" type="submit" id="collectionSearchSubmit">搜索</button>
         </form>
+        <section class="collect-history" id="collectionSearchHistory" aria-label="搜索历史" hidden>
+          <div class="collect-history-head">
+            <h3>搜索历史</h3>
+            <span id="collectionHistoryStatus" role="status"></span>
+            <div class="collect-history-tools">
+              <button type="button" id="collectionHistoryManage" aria-pressed="false">管理</button>
+              <button type="button" id="collectionHistoryClear">清空</button>
+              <button type="button" id="collectionHistoryPause" aria-pressed="false">暂停记录</button>
+            </div>
+          </div>
+          <div class="collect-history-list" id="collectionHistoryList"></div>
+          <button type="button" class="collect-history-expand" id="collectionHistoryExpand" aria-expanded="false" aria-controls="collectionHistoryList" hidden>展开全部</button>
+        </section>
         <div id="collectionSearchResults" class="collect-results" role="list" aria-live="polite"></div>
       </div>
     </dialog>
@@ -1974,7 +1987,8 @@
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
-    <script src="/modules/collection-edit.js?v=20261108-search-ui" defer></script>
+    <script src="/modules/collection-edit.js?v=20261118-search-history" defer></script>
+    <script src="/modules/collection-search-history.js?v=20261118" defer></script>
     <script src="/modules/collection-import.js?v=20261106-xlsx-import" defer></script>
     <script src="/modules/jump-history.js?v=20261113-kazumi-playback" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>

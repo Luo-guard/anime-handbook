@@ -28,6 +28,7 @@ const harness=[
 (async()=>{const browser=await chromium.launch({headless:true});try{
 const page=await browser.newPage({viewport:{width:1100,height:820}});
 await page.setContent(fs.readFileSync('static/index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));
+await page.addStyleTag({content:fs.readFileSync('static/styles.css','utf8')});
 await page.addScriptTag({content:harness+"\n"+fs.readFileSync('static/modules/toolbar-buttons.js','utf8')+"\n"+fs.readFileSync('static/modules/collection-edit.js','utf8')});
 await page.locator('#collectionSearchButton').click({force:true});
 await page.locator('#collectionSearchQuery').fill('测试');
@@ -81,17 +82,57 @@ assert.equal(await trigger.getAttribute('aria-expanded'),'true');
 assert.equal(await menu.evaluate(node=>node.closest('dialog[open]')!==null),true);
 assert.equal(await menu.evaluate(node=>node.closest('#collectionSearchResults')===null),true);
 assert.equal(await menu.getAttribute('role'),'menu');
+assert.equal(await menu.evaluate(node=>node.matches(':popover-open')),true);
 assert.equal(await menu.locator('.collect-option').count(),2);
 assert.equal(await menu.locator('.is-current').count(),0);
 await page.keyboard.press('Escape');
 assert.equal(await menu.isVisible(),false);
 assert.equal(await page.locator('#collectionSearchModal').evaluate(node=>node.open),true,'escape must close only the menu');
 await trigger.click();
+const nested = await page.evaluate(() => {
+  const dialog = document.createElement("dialog");
+  dialog.id = "collectionTestNested";
+  dialog.innerHTML = collectionControlMarkup(123);
+  document.body.append(dialog);
+  dialog.showModal();
+  openCollectMenu(dialog.querySelector(".collect-control"), true);
+  return collectMenuElement.parentElement.id;
+});
+assert.equal(nested, "collectionTestNested", "menu belongs to its own dialog when two dialogs are open");
+await page.evaluate(() => { closeCollectMenus(); $("#collectionTestNested").close(); $("#collectionTestNested").remove(); });
+await trigger.click();
+for (const item of await menu.locator('[data-collect-value]').all()) {
+  assert(await item.evaluate(node => {
+    const r=node.getBoundingClientRect();
+    return node.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));
+  }),"every status option can be clicked outside a clipped scrolling container");
+}
 await menu.locator('[data-collect-value="1"]').click();
 await page.waitForFunction(()=>document.querySelector('[data-collect-id="123"] .collect-name')?.textContent==='在看');
 assert.deepEqual(await page.evaluate(()=>requests),[{anime_id:123,status:1}]);
 assert.equal(await result.locator('.collect-result-state').textContent(),'已收藏');
 assert.equal(await trigger.evaluate(node=>node.classList.contains('is-empty')),false,'collecting clears the empty state');
+await page.evaluate(() => {
+  window.testApi = api;
+  window.finishCollectionWrite = null;
+  api = () => new Promise((resolve, reject) => { window.finishCollectionWrite = reject; });
+});
+await trigger.click();
+await menu.locator('[data-collect-value="2"]').click();
+assert(await trigger.isDisabled());
+assert.equal(await trigger.locator('.collect-name').textContent(),'保存中…');
+await page.evaluate(() => { finishCollectionWrite(new Error("simulated failure")); });
+await page.waitForFunction(() => !document.querySelector('[data-collect-id="123"] [data-collect-trigger]').disabled);
+assert.equal(await trigger.locator('.collect-name').textContent(),'在看','failed change preserves the saved status');
+await page.evaluate(() => { api = window.testApi; });
+await page.setViewportSize({width:360,height:300});
+await trigger.click();
+assert(await menu.evaluate(node => {
+  const r=node.getBoundingClientRect();
+  return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight;
+}),"menu stays inside a short narrow viewport");
+await page.keyboard.press('Escape');
+await page.setViewportSize({width:1100,height:820});
 await page.evaluate(()=>{state.settings={kazumi_read_only:true};applyCollectionEditingAvailability();});
 assert.equal(await page.locator('#collectionSearchButton').evaluate(node=>node.classList.contains('hidden')),true,'read-only hides the search entry');
 assert.equal(await page.evaluate(()=>collectionAction(1,2).children.length),0,'read-only renders no status control');

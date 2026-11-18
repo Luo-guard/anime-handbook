@@ -328,8 +328,15 @@ class SyncService:
                 "Accept": "application/json",
             },
         )
-        with urllib.request.urlopen(request, timeout=15) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError:
+            raise
+        except OSError:
+            # Search and calendars already support the system proxy. Reuse
+            # that transport if a direct subject connection fails.
+            return json.loads(ScheduleService.fetch(request.full_url, timeout=15).decode("utf-8"))
 
     def _wait_for_episode_request_slot(self) -> None:
         with self._episode_request_lock:
@@ -481,6 +488,9 @@ class SyncService:
                     except ValueError:
                         delay = min(20.0, 1.5 * (2**attempt))
                     time.sleep(delay)
+                except OSError:
+                    payload = json.loads(ScheduleService.fetch(request.full_url, timeout=20).decode("utf-8"))
+                    break
             if payload is None:
                 raise RuntimeError("章节数据暂不可用")
             batch = payload.get("data") or []

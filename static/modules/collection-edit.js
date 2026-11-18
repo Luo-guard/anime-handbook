@@ -57,15 +57,18 @@ function collectionAction(id, status = 0) {
 // dialog's subtree, otherwise the modal's inert background blocks its clicks.
 let collectMenuElement = null;
 let collectMenuControl = null;
-function collectMenuHost() {
-  return document.querySelector("dialog[open]") || document.body;
+function collectMenuHost(control) {
+  return control.closest("dialog[open]") || document.body;
 }
 function closeCollectMenus() {
   if (!collectMenuControl) return;
   collectMenuControl.classList.remove("is-open");
   collectMenuControl.querySelector("[data-collect-trigger]")?.setAttribute("aria-expanded", "false");
   collectMenuControl = null;
-  if (collectMenuElement) collectMenuElement.hidden = true;
+  if (collectMenuElement) {
+    if (collectMenuElement.matches(":popover-open")) collectMenuElement.hidePopover();
+    collectMenuElement.hidden = true;
+  }
 }
 function positionCollectMenu() {
   if (!collectMenuControl || !collectMenuElement) return;
@@ -81,25 +84,30 @@ function positionCollectMenu() {
     return;
   }
   const menu = collectMenuElement;
+  menu.style.maxHeight = `${Math.max(32, window.innerHeight - 24)}px`;
   const left = Math.max(12, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 12));
   const dropUp = rect.bottom + 8 + menu.offsetHeight > window.innerHeight - 12 && rect.top - 8 - menu.offsetHeight > 12;
   menu.style.left = `${left}px`;
-  menu.style.top = `${dropUp ? rect.top - menu.offsetHeight - 8 : rect.bottom + 8}px`;
+  const top = dropUp ? rect.top - menu.offsetHeight - 8 : rect.bottom + 8;
+  menu.style.top = `${Math.max(12, Math.min(top, window.innerHeight - menu.offsetHeight - 12))}px`;
 }
 function openCollectMenu(control, focusFirst = false) {
   closeCollectMenus();
+  if (control.getAttribute("aria-busy") === "true") return;
   if (!collectMenuElement) {
     collectMenuElement = document.createElement("div");
     collectMenuElement.className = "collect-menu";
     collectMenuElement.setAttribute("role", "menu");
+    collectMenuElement.setAttribute("popover", "manual");
     collectMenuElement.hidden = true;
   }
-  const host = collectMenuHost();
+  const host = collectMenuHost(control);
   if (collectMenuElement.parentElement !== host) host.append(collectMenuElement);
   const menu = collectMenuElement;
   const trigger = control.querySelector("[data-collect-trigger]");
   menu.innerHTML = collectionMenuMarkup(Number(control.dataset.status) || 0);
   menu.hidden = false;
+  menu.showPopover();
   collectMenuControl = control;
   control.classList.add("is-open");
   trigger.setAttribute("aria-expanded", "true");
@@ -159,18 +167,24 @@ async function changeCollectionStatus(id, status) {
   return result.anime;
 }
 async function applyCollectStatus(control, status) {
+  if (control.getAttribute("aria-busy") === "true") return;
   const id = Number(control.dataset.collectId);
   const target = Number(status);
   closeCollectMenus();
   if (Number(control.dataset.status) === target) return;
   control.setAttribute("aria-busy", "true");
+  const trigger = control.querySelector("[data-collect-trigger]");
+  trigger.disabled = true;
+  trigger.querySelector(".collect-name").textContent = "保存中…";
   try {
     await changeCollectionStatus(id, target);
   } catch (error) {
     toast(error.message, "error");
   } finally {
     control.removeAttribute("aria-busy");
-    control.querySelector("[data-collect-trigger]")?.focus({ preventScroll: true });
+    trigger.disabled = false;
+    syncCollectControls(id, state.animes.find(anime => Number(anime.id) === id)?.collection_type ?? control.dataset.status);
+    trigger.focus({ preventScroll: true });
   }
 }
 
@@ -304,10 +318,11 @@ if ($("#collectionSearchButton")) {
   };
   $("#collectionSearchForm").onsubmit = async (event) => {
     event.preventDefault();
+    const query = $("#collectionSearchQuery").value.trim();
+    if (!query) { $("#collectionSearchQuery").focus(); return; }
     const version = ++collectionSearchVersion;
     const results = $("#collectionSearchResults");
     const button = $("#collectionSearchSubmit");
-    const query = $("#collectionSearchQuery").value;
     const sort = $("#collectionSearchSort")?.value || "match";
     button.disabled = true;
     results.innerHTML = collectionSearchSkeleton();

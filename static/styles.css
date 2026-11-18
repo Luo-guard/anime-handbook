@@ -4204,6 +4204,12 @@ dialog::backdrop {
 .collect-caret { display: inline-flex; margin-left: 1px; opacity: .5; }
 .collect-caret svg { width: 13px; height: 13px; }
 .collect-menu {
+  margin: 0;
+  right: auto;
+  bottom: auto;
+  box-sizing: border-box;
+  max-width: calc(100vw - 24px);
+  overflow-y: auto;
   position: fixed; z-index: 90; top: 0; left: 0; min-width: 176px;
   display: grid; gap: 2px; padding: 6px;
   border: 1px solid var(--line); border-radius: 16px; background: var(--surface);
@@ -4255,6 +4261,29 @@ dialog::backdrop {
 }
 .collect-search-sort:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 2px; }
 .collect-search-modal { width: min(880px, calc(100vw - 28px)); }
+.collect-history[hidden], .collect-history-expand[hidden] { display: none; }
+.collect-history { flex: none; min-width: 0; }
+.collect-history-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 9px; }
+.collect-history-head h3 { margin: 0; color: var(--ink); font-family: inherit; font-size: 14px; font-weight: 700; line-height: 1.5; }
+.collect-history-head > span { color: var(--muted); font-size: 12px; }
+.collect-history-tools { display: flex; gap: 12px; margin-left: auto; }
+.collect-history-tools button, .collect-history-expand { padding: 4px 0; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.collect-history-tools button:hover, .collect-history-expand:hover { color: var(--green-700); }
+.collect-history-tools button:disabled { opacity: .4; cursor: default; }
+.collect-history-tools button[aria-pressed="true"] { color: var(--green-700); }
+.collect-history-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 146px; overflow: auto; padding: 2px; }
+.collect-history-chip { display: inline-flex; align-items: center; min-width: 0; max-width: min(100%, 240px); border-radius: 8px; background: var(--paper); }
+.collect-history-chip:hover { background: var(--green-50); }
+.collect-history-query { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; border: 0; border-radius: 8px; padding: 7px 11px; color: var(--ink); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.collect-history-remove { flex: none; width: 30px; align-self: stretch; border: 0; border-radius: 0 8px 8px 0; color: var(--muted); background: transparent; font-size: 17px; cursor: pointer; }
+.collect-history-remove:hover { color: var(--ink); background: var(--line); }
+.collect-history button:focus-visible { outline: 2px solid var(--active-inset); outline-offset: 1px; }
+.collect-history-expand { margin-top: 6px; }
+@media (max-width: 480px) {
+  .collect-history-tools { gap: 10px; }
+  .collect-history-chip { max-width: 100%; }
+  .collect-history-list { max-height: 118px; }
+}
 .collect-results { display: grid; gap: 14px; align-content: start; min-height: 148px; max-height: min(58vh, 560px); overflow: auto; padding: 2px 6px 2px 2px; overscroll-behavior: contain; }
 .collect-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .collect-result {
