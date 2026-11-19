@@ -5,7 +5,6 @@ from typing import Any
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
-from datetime import date
 from datetime import datetime
 import json
 import tempfile
@@ -42,18 +41,6 @@ class SyncService:
             "enriched": 0,
             "pending": 0,
         }
-
-    @staticmethod
-    def _is_in_release_window(air_date_value: Any) -> bool:
-        """Whether an anime is recent enough to warrant daily airing checks."""
-        try:
-            started = date.fromisoformat(str(air_date_value or "")[:10])
-        except ValueError:
-            return False
-        today = datetime.now().astimezone().date()
-        # Covers normal seasonal shows and longer-running series while avoiding
-        # an episode request for every old completed title on every sync.
-        return started <= today and today - started <= timedelta(days=730)
 
     @staticmethod
     def _release_count_is_current(item: dict[str, Any]) -> bool:
@@ -633,44 +620,6 @@ class SyncService:
             episode_titles_synced=True,
         )
         return self.database.get_anime(anime_id) or anime
-
-    def restore_today_episode_groups(self) -> int:
-        """Repair episode lists affected by an older airing-progress refresh.
-
-        Before the preservation rule above existed, a refresh could replace an
-        OP/ED-aware cached list with generated regular episodes. Only titles
-        refreshed today can have been affected, so this is deliberately narrow
-        and safe to run once during the upgrade.
-        """
-        today = datetime.now().astimezone().date().isoformat()
-        candidates = [
-            item
-            for item in self.database.list_anime()
-            if str(item.get("episode_release_synced_at") or "").startswith(today)
-            and not item.get("episode_titles_synced")
-        ]
-        restored = 0
-        restored_ids: list[int] = []
-        for item in candidates:
-            try:
-                episodes = normalize_episodes(self.fetch_bgm_episodes(int(item["id"])))
-                if not episodes:
-                    continue
-                self.database.update_bgm_metadata(
-                    int(item["id"]),
-                    episode_count=max(int(item.get("episode_count") or 0), len(episodes)),
-                    episodes=episodes,
-                    aired_episode_count=aired_main_episode_count(episodes),
-                    episode_release_synced=True,
-                )
-                restored += 1
-                restored_ids.append(int(item["id"]))
-            except Exception as error:
-                record_failure("metadata_fallback", error)
-                # Keep repairing the remaining collection if one subject is unavailable.
-                continue
-        self.database.recover_progress_from_watch_events(restored_ids)
-        return restored
 
     def repair_legacy_watch_episode_keys(self) -> int:
         """Restore exact episode keys only for rows affected by the old refresh bug."""

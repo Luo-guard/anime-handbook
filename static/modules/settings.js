@@ -853,22 +853,6 @@ async function uploadThemeBackground(file, profileId, staged = false) {
   });
 }
 
-// 新建主题继承当前背景时，背景文件仍在来源方案名下；保存时复制一份到新 id，
-// 否则新方案会指向一个不存在的文件。
-async function copyThemeBackground(profileId) {
-  const source = themeProfiles().find((profile) => profile.id === profileId);
-  const url = themeBackgroundUrl(source);
-  if (!url) return null;
-  try {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    return new File([blob], "background.jpg", { type: blob.type || "image/jpeg" });
-  } catch (_) {
-    return null;
-  }
-}
-
 async function persistThemeProfiles(profiles, activeId) {
   state.settings.theme_profiles=profiles;state.settings.active_theme_profile=activeId;
   ThemeSettingsSession.select(activeId);renderThemeProfiles();

@@ -237,9 +237,6 @@ class Client:
             return False
         return True
 
-    def transfer_info(self) -> dict[str, Any]:
-        return self._json("/transfer/info") or {}
-
     def add_torrent(
         self,
         payload: bytes,

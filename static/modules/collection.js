@@ -24,12 +24,6 @@ function activeVisibilityKey() {
     : String(state.category);
 }
 
-function activeCustomCollection() {
-  return state.custom_collections.find(
-    (collection) => Number(collection.id) === Number(state.customCollectionId),
-  );
-}
-
 function ensureVisibleCollection() {
   if (state.collectionKind === "all" && state.settings.show_all_collection_tab === false) {
     state.collectionKind = "builtin";

@@ -4,10 +4,6 @@ function episodeTotal(anime) {
     : Number(anime.episode_count || 0);
 }
 
-function episodeSummaryText(anime) {
-  return anime.episode_summary || (episodeTotal(anime) ? `${episodeTotal(anime)} 条` : "章节待同步");
-}
-
 function storedEpisodeName(episode, number = episode?.sort ?? episode?.ep ?? episode?.label) {
   const episodeNumber = Number(number);
   return [episode?.name_cn, episode?.name].map(value => String(value || "").trim()).find(name => {
@@ -163,10 +159,6 @@ function quickRecordActionEnabled(action) {
   if (action === "op" || action === "ed") return showOpedRecord();
   if (action === "score") return showEpisodeRatingRecord();
   return false;
-}
-
-function hasEnabledQuickRecordActions() {
-  return ["review", "op", "ed", "score"].some(quickRecordActionEnabled);
 }
 
 function applyTheme() {

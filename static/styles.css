@@ -4689,7 +4689,6 @@ dialog.modal.collect-search-modal { width: min(880px, calc(100vw - 28px)); max-h
 .offline-row-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .offline-download, .offline-play, .offline-remove { appearance: none; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 9px; padding: 6px 13px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .offline-download { border-color: var(--green-700); color: var(--green-700); }
-.offline-download:disabled { opacity: .5; cursor: default; }
 .offline-download:hover:not(:disabled), .offline-play:hover { background: var(--green-50); }
 .offline-remove:hover { border-color: #9b3434; color: #9b3434; }
 .offline-section-title { margin: 10px 8px 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
