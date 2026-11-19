@@ -276,6 +276,7 @@ function renderSettingsPanels() {
   hideMissingAsSchedule.closest(".setting-row").classList.toggle("hidden", Boolean(window.handbookOnline));
   $("#showCollectionRatingControlInput").checked = state.settings.show_collection_rating_control !== false;
   $("#showCollectionProgressControlInput").checked = state.settings.show_collection_progress_control !== false;
+  $("#collectionExcludeOpedInput").checked = state.settings.collection_exclude_oped_enabled !== false;
   $("#showCreateCollectionControlInput").checked = state.settings.show_create_collection_control !== false;
   $("#showCollectionAddButtonInput").checked = enabledSetting("show_collection_add_button");
   $("#collectionAddIconOnlyInput").checked = state.settings.collection_add_button_icon_only === true;

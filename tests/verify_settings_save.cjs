@@ -1,16 +1,16 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const elements=new Map(),notices=[];let release,calls=0,shouldFail=false;
-const element=selector=>{if(!elements.has(selector))elements.set(selector,{value:'',checked:false,disabled:false,close(){this.closed=true}});return elements.get(selector)};
+const element=selector=>{if(!elements.has(selector))elements.set(selector,{value:'',valueAsNumber:0,validity:{valid:true},checked:false,disabled:false,close(){this.closed=true}});return elements.get(selector)};
 const context={window:{},ThemeSettingsSession:{lock(){},payload:async()=>({}),finish(){}},console,Set,JSON,Object,Number,Boolean,state:{settings:{},custom_collections:[],noteThemes:new Set(['other']),timelineThemes:new Set(),activeView:'collection'},
- $:element,$$:selector=>selector==='.builtin-visibility-check'?[{dataset:{category:1},checked:true}]:[],
+ $:element,$$:selector=>selector==='.builtin-visibility-check'?[{dataset:{category:1},checked:true}]:[],document:{getElementById:id=>element(`#${id}`)},
  toast:message=>notices.push(message),readDetailLinks:()=>[],readScheduleDetailLinks:()=>[],detailLinks:()=>[],syncLinkAdditions:()=>({detail:[],schedule:[],synced:[]}),
  readKeyboardSettings:()=>({}),keyboardPreferences:()=>({}),readScheduleSorting:()=>({schedule_sort:'time'}),requireScheduleSortingSupport:async()=>{},scheduleSettingsSource:()=>'yuc',verifySchedulePreferencesSaved(){},
  readPlaybackSettings:()=>({}),applyPlaybackSettings:()=>{appliedPlayback++},
- builtinCollectionOrder:()=>[1],sidebarOrder:()=>[],recordThemes:()=>[{id:'other'}],
+ builtinCollectionOrder:()=>[1],sidebarOrder:()=>[],recordThemes:()=>[{id:'other'}],detailCommentTypes:settings=>settings.detail_comment_types||[],
  api:async(path,options)=>{calls++;const body=JSON.parse(options.body);await new Promise(resolve=>release=resolve);if(shouldFail)throw Error('failed save');return {settings:body}},
 };
 let appliedPlayback=0;
-for(const name of ['renderSyncButton','applyTheme','applyCharacterTabVisibility','applyCollectionEditingAvailability','ensureVisibleCollection','applySidebarLayout','applyNoteComposerMode','switchView','renderStats','renderTabs','renderCollection'])context[name]=()=>{};
+for(const name of ['renderSyncButton','applyTheme','applyDetailAppearance','applyCharacterTabVisibility','applyCollectionEditingAvailability','ensureVisibleCollection','applySidebarLayout','applyNoteComposerMode','switchView','renderStats','renderTabs','renderCollection'])context[name]=()=>{};
 context.refreshAiringProgress=async()=>{};
 element('#collectionAiringSourceInput').value='bgm';
 element('#scheduleAiringSourceInput').value='bgm';
@@ -21,6 +21,7 @@ const save=()=>vm.runInContext('HandbookSettings.save()',context);
  const first=save();await new Promise(setImmediate);assert.equal(calls,1);assert(element('#saveSettings').disabled);
  await save();assert.equal(calls,1,'double save while request is pending');release();await first;
  assert(!element('#saveSettings').disabled);assert(notices.includes('设置已保存'));assert.equal(appliedPlayback,1);
+ assert.equal(context.state.settings.collection_exclude_oped_enabled,false,'the unchecked card progress option is saved');
  shouldFail=true;const failed=save();await new Promise(setImmediate);release();await failed;
  assert(!element('#saveSettings').disabled);assert(notices.includes('failed save'));assert.equal(appliedPlayback,1);
  console.log('Settings save: one in-flight submission, duplicate ignored, button restored after success and failure.');

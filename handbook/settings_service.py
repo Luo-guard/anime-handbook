@@ -146,6 +146,7 @@ def _normalize_settings(body, settings):
         "hide_missing_as_schedule",
         "schedule_airing_source",
         "show_collection_progress_control",
+        "collection_exclude_oped_enabled",
         "show_create_collection_control",
         "show_collection_add_button",
         "collection_add_button_icon_only",

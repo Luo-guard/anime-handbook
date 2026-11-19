@@ -580,6 +580,7 @@ class HandbookDB:
                 "show_collection_rating_control": True,
                 "collection_rating_source": "bgm",
                 "show_collection_progress_control": True,
+                "collection_exclude_oped_enabled": True,
                 "show_create_collection_control": True,
                 "show_age_related_button": True,
                 "show_bilibili_search_button": True,

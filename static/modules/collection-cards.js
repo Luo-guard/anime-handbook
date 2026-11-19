@@ -1,6 +1,20 @@
-function animeCard(anime) {
+function collectionCardProgress(anime) {
   const total = episodeTotal(anime);
   const watched = Number(anime.watched_count || 0);
+  if (state.settings.collection_exclude_oped_enabled === false || !Array.isArray(anime.episodes)) {
+    return {total, watched, known: total > 0};
+  }
+  const oped = anime.episodes.filter(episode => [2, 3].includes(Number(episode.type)));
+  if (!oped.length) return {total, watched, known: total > 0};
+  const watchedKeys = new Set((anime.watched_episode_keys || anime.watched_episodes || []).map(String));
+  const watchedOped = oped.filter(episode => watchedKeys.has(String(episode.key))
+    || watchedKeys.has(episodeStorageKey(episode.key, anime))).length;
+  const visibleTotal = total - oped.length;
+  return { total: visibleTotal, watched: Math.max(0, Math.min(visibleTotal, watched - watchedOped)), known: true };
+}
+
+function animeCard(anime) {
+  const {total, watched, known} = collectionCardProgress(anime);
   const percent = total ? Math.min(100, (watched / total) * 100) : 0;
   const moveButton = showCustomMoveButton()
     ? `<button type="button" class="card-move-button" data-action="custom-menu" data-anime-id="${anime.id}">移入</button>`
@@ -30,7 +44,7 @@ function animeCard(anime) {
           </div>
           <div class="card-progress">
             <span>已看 ${watched}</span>
-            <span>${total ? `${watched} / ${total}` : "待补全章节"}</span>
+            <span>${known ? `${watched} / ${total}` : "待补全章节"}</span>
           </div>
         ` : ""}
       </div>

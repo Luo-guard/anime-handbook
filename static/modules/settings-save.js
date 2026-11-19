@@ -140,6 +140,7 @@ const HandbookSettings = (() => {
           collection_rating_source: $("#collectionRatingSourceInput").value,
           show_collection_rating_control: $("#showCollectionRatingControlInput").checked,
           show_collection_progress_control: $("#showCollectionProgressControlInput").checked,
+          collection_exclude_oped_enabled: $("#collectionExcludeOpedInput").checked,
           show_create_collection_control: $("#showCreateCollectionControlInput").checked,
           show_collection_add_button: $("#showCollectionAddButtonInput").checked,
           collection_add_button_icon_only: $("#collectionAddIconOnlyInput").checked,
@@ -164,6 +165,9 @@ const HandbookSettings = (() => {
         }),
       });
       verifySchedulePreferencesSaved(payload.settings, settingsSource, schedulePreferencesNested[settingsSource]);
+      if ((payload.settings.collection_exclude_oped_enabled !== false) !== $("#collectionExcludeOpedInput").checked) {
+        throw new Error("后台未保存卡片进度的 OP／ED 设置，请重启后台并刷新后重试。");
+      }
       if ($("#kazumiReadOnlyInput").checked && payload.settings.kazumi_read_only !== true) throw new Error("当前后台还不支持只读开关，请重启手账后台并刷新后再试。");
       if (!$("#showSearchBgmLinkInput").checked && payload.settings.show_search_bgm_link !== false) throw new Error("当前后台还不支持搜索页 Bangumi 入口开关，请重启手账后台并刷新后再试。");
       if (detailLinksChanged && !Array.isArray(payload.settings.detail_links)) throw new Error("当前后台还不支持详情页链接，请重启手账后台并刷新后再试。");

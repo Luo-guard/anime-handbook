@@ -259,6 +259,25 @@ function scriptUrls() {
       return [before, expanded, filteredAnimes().length, [...state.seasonFilters]];
     });
     assert.deepEqual(scope, [0,1,0,['2025-01']]);
+    const cardProgress = await page.evaluate(() => {
+      const episodes = [
+        ...Array.from({length:12}, (_, i) => ({type:0,key:`0:${i+1}`,sort:i+1})),
+        {type:1,key:'1:1',sort:1},
+        {type:2,key:'bgm:21',sort:1}, {type:2,key:'bgm:22',sort:2},
+        {type:3,key:'bgm:31',sort:1}, {type:3,key:'bgm:32',sort:2},
+      ];
+      const anime = {episodes, watched_count:4, watched_episodes:['0:1','1:1','bgm:21','3:1']};
+      const excluded = collectionCardProgress(anime);
+      const rendered = animeCard({...anime, id:1, cover_url:'', display_name:'测试卡片'});
+      state.settings.collection_exclude_oped_enabled = false;
+      const included = collectionCardProgress(anime);
+      const legacy = collectionCardProgress({episode_count:13,watched_count:0});
+      return {excluded,included,legacy,showsProgress:rendered.includes('2 / 13')};
+    });
+    assert.deepEqual(cardProgress, {
+      excluded:{total:13,watched:2,known:true}, included:{total:17,watched:4,known:true},
+      legacy:{total:13,watched:0,known:true}, showsProgress:true,
+    });
     console.log('App boot smoke: episode labels, statistics drilldown, note drafts, and collection search scope passed.');
   } finally {
     await browser.close();

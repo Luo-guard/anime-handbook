@@ -992,7 +992,11 @@
             </span>
             <div class="sidebar-settings-list" id="builtinCollectionOrderList"></div>
           </div>
-          <h3 class="settings-subsection-title">卡片评分与工具栏</h3>
+          <h3 class="settings-subsection-title">卡片与工具栏</h3>
+          <label class="setting-row">
+            <span><strong>卡片进度不计 OP／ED</strong><small>已看和总数都排除片头、片尾，SP 等其他章节照常计入。</small></span>
+            <span class="switch-row compact"><input type="checkbox" id="collectionExcludeOpedInput" checked /><span class="switch"></span></span>
+          </label>
           <label class="setting-row">
             <span>
               <strong>收藏夹显示评分与排名</strong>
@@ -2027,7 +2031,7 @@
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
     <script src="/modules/collection.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/presentation.js?v=20261116-record-episode-name" defer></script>
-    <script src="/modules/collection-cards.js?v=20261119-journal-tools" defer></script>
+    <script src="/modules/collection-cards.js?v=20261119-card-progress" defer></script>
     <script src="/modules/composer.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
@@ -2038,10 +2042,10 @@
     <script src="/modules/ranking.js?v=20261118-ranking-drafts" defer></script>
     <script src="/modules/statistics.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/lifecycle.js?v=20261118-player-titles" defer></script>
-    <script src="/modules/settings.js?v=20261117-settings-state" defer></script>
+    <script src="/modules/settings.js?v=20261119-card-progress" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261116-library-settings" defer></script>
-    <script src="/modules/settings-save.js?v=20261116-statistics-settings" defer></script>
+    <script src="/modules/settings-save.js?v=20261119-card-progress" defer></script>
     <script src="/modules/events.js?v=20261119-timeline-filter" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>

@@ -8,6 +8,17 @@ from handbook.settings_service import normalize_settings
 
 
 class TimelineDefaultThemesSettingTest(unittest.TestCase):
+    def test_collection_card_progress_option_defaults_on_and_can_be_disabled(self):
+        with tempfile.TemporaryDirectory() as temp:
+            db = database.HandbookDB(Path(temp) / "handbook.db")
+            key = "collection_exclude_oped_enabled"
+            self.assertIs(db.get_settings()[key], True)
+            values, _, _ = normalize_settings({key: False}, db.get_settings())
+            db.set_settings(values)
+            self.assertIs(db.get_settings()[key], False)
+            with self.assertRaises(ValueError):
+                normalize_settings({key: "false"}, db.get_settings())
+
     def test_date_filter_matches_statistics_day_boundary_and_theme(self):
         with tempfile.TemporaryDirectory() as temp:
             db = database.HandbookDB(Path(temp) / "handbook.db")
