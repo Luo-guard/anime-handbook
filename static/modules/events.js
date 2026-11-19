@@ -9,19 +9,6 @@ $$(".nav-item[data-view]").forEach((button) => {
   });
 });
 
-$$('[data-stat-period]').forEach((button) => {
-  button.addEventListener("click", () => {
-    state.statisticsPeriod = button.dataset.statPeriod;
-    $$('[data-stat-period]').forEach((item) => item.classList.toggle("active", item === button));
-    renderStatistics();
-  });
-});
-
-$("#statisticsTypeSelect")?.addEventListener("change", (event) => {
-  state.statisticsType = event.target.value;
-  renderStatistics();
-});
-
 let collectionSearchTimer;
 $("#searchInput").addEventListener("input", (event) => {
   state.search = event.target.value;
@@ -963,6 +950,10 @@ $("#activateHandbookProfileButton").addEventListener("click", async () => {
     applyTheme();
     renderStats(); renderTabs(); renderCollection(); renderSettingsPanels();
     if (state.activeView === "ranking") renderRanking();
+    if (switchingProfile && state.activeView === "statistics") {
+      state.statisticsType = statisticsDefaultTheme();
+      renderStatistics();
+    }
     toast("已切换手账账号");
   } catch (error) { toast(error.message, "error"); }
 });

@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261119-webdav-conflict" />
+  <link rel="stylesheet" href="/styles.css?v=20261119-statistics-views" />
   </head>
   <body>
     <div class="app-shell">
@@ -252,27 +252,55 @@
         </section>
 
         <section class="view" id="statisticsView">
-          <header class="page-header">
-            <div>
-              <p class="eyebrow">WATCHING INSIGHTS</p>
-              <h1 data-page-label="statistics">记录统计</h1>
-              <p class="page-subtitle">点击柱子查看该时段的看番记录</p>
+          <div class="statistics-panel">
+            <header class="statistics-header">
+              <div>
+                <h1 data-page-label="statistics">记录统计</h1>
+                <p class="page-subtitle">点击图形或明细，查看对应时段的记录</p>
+              </div>
+            </header>
+            <div class="statistics-controls">
+              <div class="statistics-button-group statistics-modes" role="group" aria-label="统计视图">
+                <button type="button" class="statistics-button active" data-stat-mode="bars" aria-pressed="true">柱状</button>
+                <button type="button" class="statistics-button" data-stat-mode="trend" aria-pressed="false">趋势</button>
+                <button type="button" class="statistics-button" data-stat-mode="cumulative" aria-pressed="false">累计</button>
+                <button type="button" class="statistics-button" data-stat-mode="calendar" aria-pressed="false">活跃日历</button>
+                <button type="button" class="statistics-button" data-stat-mode="table" aria-pressed="false">明细</button>
+              </div>
+              <div class="statistics-filters">
+                <label class="statistics-theme-select">
+                  <span>记录类型</span>
+                  <select id="statisticsTypeSelect"></select>
+                </label>
+                <label class="statistics-theme-select">
+                  <span>统计口径</span>
+                  <select id="statisticsMetricSelect">
+                    <option value="auto">自动</option>
+                    <option value="episodes">观看集数</option>
+                    <option value="records">记录条数</option>
+                  </select>
+                </label>
+              </div>
             </div>
-          </header>
-          <div class="statistics-controls">
-            <div class="statistics-button-group" aria-label="统计周期">
-              <button type="button" class="statistics-button active" data-stat-period="day">每日</button>
-              <button type="button" class="statistics-button" data-stat-period="week">每周</button>
-              <button type="button" class="statistics-button" data-stat-period="month">每月</button>
-              <button type="button" class="statistics-button" data-stat-period="year">每年</button>
+            <div class="statistics-summary" id="statisticsSummary"></div>
+            <div class="statistics-chart-header">
+              <div class="statistics-button-group" id="statisticsPeriods" role="group" aria-label="统计周期">
+                <button type="button" class="statistics-button active" data-stat-period="day" aria-pressed="true">每日</button>
+                <button type="button" class="statistics-button" data-stat-period="week" aria-pressed="false">每周</button>
+                <button type="button" class="statistics-button" data-stat-period="month" aria-pressed="false">每月</button>
+                <button type="button" class="statistics-button" data-stat-period="year" aria-pressed="false">每年</button>
+              </div>
+              <div class="statistics-window">
+                <p class="statistics-window-note" id="statisticsWindowNote" aria-live="polite"></p>
+                <nav class="statistics-navigation" id="statisticsNavigation" aria-label="统计时间范围" hidden>
+                  <button type="button" class="statistics-button" id="statisticsOlder">‹ 更早</button>
+                  <button type="button" class="statistics-button" id="statisticsLatest">回到最近</button>
+                  <button type="button" class="statistics-button" id="statisticsNewer">较新 ›</button>
+                </nav>
+              </div>
             </div>
-            <label class="statistics-theme-select" aria-label="记录筛选">
-              <span>记录筛选</span>
-              <select id="statisticsTypeSelect"></select>
-            </label>
+            <div class="statistics-chart" id="statisticsChart" aria-live="polite"></div>
           </div>
-          <div class="statistics-summary" id="statisticsSummary"></div>
-          <div class="statistics-chart" id="statisticsChart" aria-live="polite"></div>
         </section>
 
         <section class="view" id="rankingView">
@@ -2057,13 +2085,13 @@
     <script src="/modules/detail-wallpapers.js?v=20261116-detail-wallpapers" defer></script>
     <script src="/modules/records.js?v=20261119-timeline-filter" defer></script>
     <script src="/modules/ranking.js?v=20261118-ranking-drafts" defer></script>
-    <script src="/modules/statistics.js?v=20261119-journal-tools" defer></script>
+    <script src="/modules/statistics.js?v=20261119-statistics-views" defer></script>
     <script src="/modules/lifecycle.js?v=20261119-collection-snapshot" defer></script>
     <script src="/modules/settings.js?v=20261119-card-progress" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261116-library-settings" defer></script>
     <script src="/modules/settings-save.js?v=20261119-card-progress" defer></script>
-    <script src="/modules/events.js?v=20261119-collection-snapshot" defer></script>
+    <script src="/modules/events.js?v=20261119-statistics-views" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
