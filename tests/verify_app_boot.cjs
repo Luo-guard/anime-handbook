@@ -213,6 +213,39 @@ function scriptUrls() {
       onlinePlaylist:'● 第 8 集 · 补齐的中文标题',
       retained:true,
     });
+    await page.route('**/api/webdav/sync', route => route.fulfill({json:{
+      ok: true, settings: {collection_sort_modes: {'1':'rank'}},
+      animes: [
+        {id:12, name:'测试番剧', display_name:'测试番剧', collection_type:1, bgm_rank:2,
+          episodes:[{key:'0:8', type:0, sort:8, name_cn:'坚果云收到的标题'}]},
+        {id:99, name:'另一部番剧', display_name:'另一部番剧', collection_type:1, bgm_rank:1},
+      ],
+    }}));
+    const syncRequests = [];
+    const countSyncRequest = request => {
+      const {pathname} = new URL(request.url());
+      if (pathname.startsWith('/api/')) syncRequests.push(pathname);
+    };
+    page.on('request', countSyncRequest);
+    const webdav = await page.evaluate(async () => {
+      const file = {id:1, episode_key:'0:8'};
+      Object.assign(offlineView, {playing:file, playingAnimeId:12, animeName:'测试番剧', local:{files:[file]}});
+      openOfflinePlayerDialog();
+      switchView('collection');
+      await syncWebdav();
+      const result = {
+        order:state.animes.map(anime => anime.id),
+        title:$('#pcStageTitle').textContent,
+        playlist:$('#pcPlaylistMenu button').textContent,
+      };
+      closeOfflinePlayer();
+      return result;
+    });
+    page.off('request', countSyncRequest);
+    assert.deepEqual(webdav, {
+      order:[99,12], title:'测试番剧 · 第 08 集 · 坚果云收到的标题', playlist:'● 第 08 集 · 坚果云收到的标题',
+    });
+    assert.deepEqual(syncRequests, ['/api/webdav/sync']);
     await page.route('**/api/timeline?**', route => route.fulfill({json:{days:[],available_themes:['watch'],has_more:false,next_offset:0}}));
     const jump = page.waitForRequest(r => r.url().includes('/api/timeline?') && r.url().includes('start=2026-11-16'));
     await page.evaluate(() => {

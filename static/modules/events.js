@@ -806,10 +806,10 @@ async function syncWebdav(options = {}) {
         body: JSON.stringify({ resolution, conflict_token: payload.conflict_token }),
       });
     }
-    Object.assign(state, {
+    applyCollectionSnapshot({
       webdav: payload.webdav || state.webdav,
       settings: payload.settings || state.settings,
-      animes: payload.animes || state.animes,
+      animes: payload.animes,
       custom_collections: payload.custom_collections || state.custom_collections,
       ranking_boards: payload.ranking_boards || state.ranking_boards,
       ranking_templates: payload.ranking_templates || state.ranking_templates,
@@ -950,7 +950,7 @@ $("#activateHandbookProfileButton").addEventListener("click", async () => {
       resetLibResourceSearch();
     }
     ThemeSettingsSession.finish(false);
-    Object.assign(state, payload);
+    applyCollectionSnapshot(payload);
     if (switchingProfile) {
       $("#noteContent").value = "";
       $("#noteAnime").value = "";

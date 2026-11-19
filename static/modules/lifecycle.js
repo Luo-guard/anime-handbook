@@ -61,8 +61,8 @@ function adoptInitialRandomTheme() {
 }
 
 function applySyncedCollection(fresh, revision) {
-  commitAnimes(fresh.animes, { render: false });
   state.custom_collections = fresh.custom_collections || state.custom_collections;
+  commitAnimes(fresh.animes, { render: false });
   state.dataRevision = revision;
   const detail = state.animes.find(item => item.id === state.progressAnime?.id);
   if (detail) refreshDetailEpisodeMetadata(detail);
@@ -198,8 +198,7 @@ function startAiringWatcher() {
 async function bootstrap() {
   try {
     const payload = await api("/api/bootstrap");
-    Object.assign(state, payload);
-    commitAnimes(state.animes, { render: false });
+    applyCollectionSnapshot(payload);
     state.dataRevision = Number(payload.revision || 0);
     adoptInitialWeeklyTheme();
     adoptInitialRandomTheme();

@@ -812,9 +812,7 @@ async function updateCustomMembership(collectionId, checked) {
     state.custom_collections = result.custom_collections || state.custom_collections;
     state.stats = result.stats || state.stats;
     if (result.anime) {
-      const index = state.animes.findIndex((item) => item.id === result.anime.id);
-      if (index >= 0) state.animes[index] = result.anime;
-      commitAnimes(state.animes, { render: false });
+      commitAnimes(state.animes.map(item => item.id === result.anime.id ? result.anime : item), { render: false });
       if (state.progressAnime?.id === result.anime.id) state.progressAnime = result.anime;
       if (state.moveAnime?.id === result.anime.id) state.moveAnime = result.anime;
     }
@@ -1371,9 +1369,7 @@ async function saveProgress() {
       method: "POST",
       body: JSON.stringify({ episode_keys: episodeKeys }),
     });
-    const index = state.animes.findIndex((item) => item.id === result.anime.id);
-    if (index >= 0) state.animes[index] = result.anime;
-    commitAnimes(state.animes, { render: false });
+    commitAnimes(state.animes.map(item => item.id === result.anime.id ? result.anime : item), { render: false });
     if (dialog.open && state.progressAnime?.id === anime.id) {
       dialog.close();
     }

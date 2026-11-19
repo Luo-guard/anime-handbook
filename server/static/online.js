@@ -79,8 +79,10 @@ window.handbookOnline = (() => {
     const target = profileId ? `${path}?profile_id=${encodeURIComponent(profileId)}${staged ? "&defer_settings=1" : ""}` : path;
     return request(target, {method: "POST", headers: {"Content-Type": file.type || "application/octet-stream"}, body: file});
   }
-  function editing() {
-    return document.querySelector("dialog[open], #noteComposer:not(.hidden), .inline-event-editor") || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || state.rankingDirtyBoards.size;
+  function editing({ allowPlayer = false } = {}) {
+    const suspendedDialogs = typeof offlineView !== "undefined" && offlineView.returnDialogs.length;
+    const dialogs = allowPlayer && !suspendedDialogs ? "dialog[open]:not(#offlinePlayer)" : "dialog[open]";
+    return document.querySelector(`${dialogs}, #noteComposer:not(.hidden), .inline-event-editor`) || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || state.rankingDirtyBoards.size;
   }
   async function poll() {
     if (document.hidden || polling || writes || editing()) return;
@@ -90,10 +92,12 @@ window.handbookOnline = (() => {
       if ((change.revision !== revision || refreshPending) && !writes && !editing()) {
         const startingRevision = revision;
         const payload = await request("/api/bootstrap", {onlinePoll: true});
-        if (writes || editing() || revision !== startingRevision) return;
+        // A player opened while the request was in flight can receive the
+        // response. Keep pausing new polls while any dialog is open.
+        if (writes || editing({ allowPlayer: true }) || revision !== startingRevision) return;
         revision = payload.revision;
         refreshPending = false;
-        Object.assign(state, payload);
+        applyCollectionSnapshot(payload);
         applyTheme(); applySidebarLayout(); renderStats(); renderSync(); renderTabs(); renderCollection(); renderSeasonFilter(); populateAnimeSelect();
         if (state.activeView === "timeline") await renderTimeline();
         if (state.activeView === "statistics") await renderStatistics();
@@ -191,7 +195,7 @@ window.handbookOnline = (() => {
     };
   }
   async function reloadCollection() {
-    const payload = await request("/api/bootstrap"); Object.assign(state, payload);
+    applyCollectionSnapshot(await request("/api/bootstrap"));
     renderStats(); renderTabs(); renderCollection(); populateAnimeSelect();
   }
   return {request, uploadImage, start, poll};

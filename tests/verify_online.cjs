@@ -5,29 +5,38 @@ const source = fs.readFileSync('server/static/online.js', 'utf8');
 
 function harness(guest = false) {
   const calls = [];
-  let revision = 0, dialogs = false, active = 'BODY', changed = false, applied = 0;
-  const state = {rankingDirtyBoards: new Set(), activeView: 'collection'};
+  let revision = 0, dialog = '', active = 'BODY', onBootstrap, applied = 0, labelRefreshes = 0;
+  const state = {animes: [], settings: {}, category: 1, rankingDirtyBoards: new Set(), activeView: 'collection'};
   const context = {
-    window: {}, state, location: {replace() {}},
-    document: {hidden: false, querySelector: () => dialogs ? {} : null, get activeElement() {return {tagName: active};}},
+    window: {}, state, offlineView: {returnDialogs: []}, location: {replace() {}},
+    document: {hidden: false, querySelector: selector => selector.includes('dialog[open]') && dialog && !(dialog === 'offlinePlayer' && selector.includes(':not(#offlinePlayer)')) ? {} : null, get activeElement() {return {tagName: active};}},
     fetch: async (path, options = {}) => {
       calls.push({path, options});
       let status = 200, data;
       if (path === '/api/auth/me') data = {csrf: 'test-csrf', username: 'tester', read_only: guest};
       else if (path === '/api/changes') data = {revision};
-      else if (path === '/api/bootstrap') data = {revision, animes: []};
+      else if (path === '/api/bootstrap') data = {revision, settings: {collection_sort_modes: {'1':'rank'}}, animes: [{id:1,bgm_rank:2},{id:2,bgm_rank:1}]};
       else if (options.method) {
         if (String(options.headers['If-Match']) !== String(revision)) {status = 409; data = {message:'stale'};}
         else {revision++; data = {ok:true};}
       }
-      if (path === '/api/bootstrap' && changed) {state.rankingDirtyBoards.add(1); changed = false;}
+      if (path === '/api/bootstrap' && onBootstrap) {
+        const callback = onBootstrap; onBootstrap = null; callback();
+      }
       return {ok: status < 400, status, headers: {get: () => String(revision)}, json: async () => data};
     },
-    renderCollection: () => applied++, applyTheme() {}, applySidebarLayout() {}, renderStats() {}, renderSync() {}, renderTabs() {}, renderSeasonFilter() {}, populateAnimeSelect() {},
+    renderCollection: () => applied++, applyTheme() {}, applySidebarLayout() {}, populateAnimeSelect() {},
+    pcSyncEpisodeLabels: () => labelRefreshes++,
     setInterval() {}, clearInterval() {}, setTimeout, clearTimeout, AbortController, console,
   };
-  vm.createContext(context); vm.runInContext(fs.readFileSync("static/modules/network.js", "utf8"), context); vm.runInContext(source, context);
-  return {api: context.window.handbookOnline, calls, state, setRevision: n => revision=n, setDialog: v => dialogs=v, setActive: v => active=v, race: () => changed=true, applied: () => applied};
+  vm.createContext(context);
+  for (const file of ['network', 'collection']) vm.runInContext(fs.readFileSync(`static/modules/${file}.js`, 'utf8'), context);
+  for (const name of ['renderStats', 'renderSync', 'renderTabs', 'renderSeasonFilter']) context[name] = () => {};
+  vm.runInContext(source, context);
+  return {api: context.window.handbookOnline, calls, state, setRevision: n => revision=n,
+    setDialog: v => dialog=v, setActive: v => active=v, duringBootstrap: callback => onBootstrap=callback,
+    suspendDialog: () => context.offlineView.returnDialogs.push('progressModal'),
+    applied: () => applied, labelRefreshes: () => labelRefreshes};
 }
 
 (async () => {
@@ -52,12 +61,14 @@ function harness(guest = false) {
   h.setRevision(3);
   await assert.rejects(h.api.request('/api/notes', {method:'POST',body:'{}'}), /stale/);
   await assert.rejects(h.api.request('/api/notes', {method:'POST',body:'{}'}), /stale/);
-  h.setDialog(true);
+  h.setDialog('progressModal');
   const count = h.calls.length; await h.api.poll(); assert.equal(h.calls.length, count);
-  h.setDialog(false); h.setActive('TEXTAREA'); await h.api.poll(); assert.equal(h.calls.length, count);
+  h.setDialog(''); h.setActive('TEXTAREA'); await h.api.poll(); assert.equal(h.calls.length, count);
   h.setActive('BODY'); await h.api.poll(); assert.equal(h.applied(), 1);
+  assert.deepEqual(Array.from(h.state.animes, anime => anime.id), [2,1]);
+  assert.equal(h.labelRefreshes(), 1);
   await h.api.request('/api/notes', {method:'POST',body:'{}'});
-  h.setRevision(5); h.race(); await h.api.poll(); assert.equal(h.applied(), 1);
+  h.setRevision(5); h.duringBootstrap(() => h.state.rankingDirtyBoards.add(1)); await h.api.poll(); assert.equal(h.applied(), 1);
   h.state.rankingDirtyBoards.clear(); await h.api.poll(); assert.equal(h.applied(), 2);
   h.state.progressAnime = {watched_episode_keys: ['ep-1']};
   await h.api.request('/api/animes/1/progress', {method:'POST', body:JSON.stringify({episode_keys:['ep-1','ep-2']})});
@@ -65,6 +76,19 @@ function harness(guest = false) {
   assert.deepEqual(delta.base_episode_keys, ['ep-1']);
   assert.deepEqual(delta.episode_keys, ['ep-1','ep-2']);
   assert.ok(Number.isFinite(Date.parse(delta.watched_at)));
+  h.setRevision(7);
+  h.duringBootstrap(() => h.setDialog('offlinePlayer'));
+  const beforePlayback = h.calls.length;
+  await h.api.poll();
+  assert.deepEqual(h.calls.slice(beforePlayback).map(call => call.path), ['/api/changes','/api/bootstrap']);
+  assert.equal(h.labelRefreshes(), 3);
+  h.setRevision(8);
+  await h.api.poll();
+  assert.equal(h.calls.length, beforePlayback + 2, 'an open player does not start extra polls');
+  h.setDialog('');
+  h.duringBootstrap(() => { h.setDialog('offlinePlayer'); h.suspendDialog(); });
+  await h.api.poll();
+  assert.equal(h.labelRefreshes(), 3, 'a suspended detail dialog still protects its draft');
   assert.match(source, /#noteComposer:not\(\.hidden\)/);
   assert.match(source, /inline-event-editor/);
   const guest = harness(true);

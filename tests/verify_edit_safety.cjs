@@ -10,13 +10,15 @@ async function checkDesktopSync(browser) {
   await page.addStyleTag({content:fs.readFileSync('static/styles.css', 'utf8')});
   const events = fs.readFileSync('static/modules/events.js', 'utf8');
   const syncCode = events.slice(events.indexOf('async function syncWebdav('), events.indexOf('$("#copyWebdavAccountIdButton")'));
+  await page.addScriptTag({content:fs.readFileSync('static/modules/collection.js', 'utf8')});
   await page.addScriptTag({content:`
     const $ = selector => document.querySelector(selector);
     const state = {};
     const requests = [];
     const noop = () => {};
-    const saveWebdavSettings = noop, renderSyncButton = noop, applyTheme = noop,
-      renderStats = noop, renderTabs = noop, renderCollection = noop, renderSettingsPanels = noop,
+    Object.assign(window, {renderStats:noop, renderTabs:noop, renderSyncButton:noop});
+    const saveWebdavSettings = noop, applyTheme = noop,
+      renderCollection = noop, renderSettingsPanels = noop,
       renderWebdavSettings = noop, switchView = noop, toast = noop;
     async function api(path, options) {
       const body = JSON.parse(options.body);

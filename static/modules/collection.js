@@ -548,18 +548,16 @@ function renderTabs() {
 
 
 
-// 收藏数据的唯一写入口。以前各入口只是把新对象塞进 state.animes（通常是追加到
-// 末尾），而界面顺序由 filteredAnimes() 在渲染时另算，两套顺序会在「刚加入」和
-// 「刷新后」之间不一致。这里在写入那一刻就按当前排序规则把整个数组规范化，
-// 因此新增、改状态、移入/移出收纳夹、拖拽排序与刷新（bootstrap 也走这里）
-// 得到的顺序完全一致；comparator 稳定且幂等，已有条目的相对顺序不会被打乱，
-// 分类过滤仍由 filteredAnimes() 负责。
+// 快照同时带设置时，先应用设置，让收藏排序使用本次收到的规则。
+function applyCollectionSnapshot({ animes, ...fields }) {
+  Object.assign(state, fields);
+  commitAnimes(animes, { render: false });
+}
+
+// 统一更新收藏数据和播放器集名。调用方决定还要刷新哪些页面。
 function commitAnimes(animes, options = {}) {
   if (!Array.isArray(animes)) return state.animes;
-  // 复制后再排序，不改变调用方持有的数组；重复提交结果相同。
   state.animes = [...animes].sort(collectionComparator());
-  // Every existing response that replaces collection data must also refresh
-  // an open player's labels. This consumes the received metadata, never an API.
   if (typeof pcSyncEpisodeLabels === "function") pcSyncEpisodeLabels();
   if (options.render !== false && typeof renderCollection === "function") {
     renderCollection();
