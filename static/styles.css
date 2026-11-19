@@ -624,6 +624,17 @@ h1 {
 .collection-floating-controls { position:fixed; right:28px; bottom:28px; z-index:30; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
 .collection-floating-button { width:62px; height:62px; border:0; border-radius:18px; color:#fff; background:var(--green-800); box-shadow:0 10px 28px rgb(var(--theme-rgb) / .32); cursor:pointer; font:700 31px/1 system-ui,sans-serif; }
 .collection-floating-button:hover { background:var(--green-700); transform:translateY(-2px); }
+#timelineDateButton { position: relative; }
+#timelineDateButton.has-date-filter::after {
+  content: ""; position: absolute; top: 9px; right: 9px; width: 9px; height: 9px;
+  border: 2px solid var(--green-800); border-radius: 50%; background: var(--surface);
+}
+.cc-body.timeline-date-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 22px 18px; }
+.timeline-date-fields label { display: grid; gap: 6px; color: var(--ink); font-size: 13px; }
+.timeline-date-fields input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); font: inherit; }
+.timeline-date-hint { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 12px; }
+#timelineDateClear:disabled { opacity: .5; cursor: default; }
+@media (max-width: 420px) { .cc-body.timeline-date-fields { grid-template-columns: minmax(0, 1fr); } }
 /* ===== 收藏页「筛选与排序」弹窗 =====
    结构：头（标题+关闭）/ 身（季度筛选块 + 排序块）/ 脚（恢复默认 + 完成）。
    季度是「年份标签 + 该年四季」两级，不再把所有年份一次铺开。 */

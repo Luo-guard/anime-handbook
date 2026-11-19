@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261119-journal-tools" />
+  <link rel="stylesheet" href="/styles.css?v=20261119-timeline-filter" />
   </head>
   <body>
     <div class="app-shell">
@@ -172,12 +172,6 @@
               <button type="button" class="secondary-button compact-button" id="timelineThemeFilterButton" aria-expanded="false">主题筛选 <span>▾</span></button>
               <div class="timeline-theme-menu hidden" id="timelineThemeFilterMenu"></div>
             </div>
-            <form id="timelineDateForm" class="journal-tools">
-              <label>从 <input type="date" id="timelineDateStart" aria-label="起始日期"></label>
-              <label>到 <input type="date" id="timelineDateEnd" aria-label="结束日期"></label>
-              <button class="secondary-button compact-button" type="submit">筛选日期</button>
-              <button class="text-button" type="button" id="timelineDateClear">清除日期</button>
-            </form>
           </div>
 
           <div class="journal-tools hidden" id="noteDraftActions">
@@ -495,6 +489,26 @@
       </div>
       <div class="collection-floating-controls hidden" data-floating-view="schedule">
         <button type="button" class="collection-floating-button" id="scheduleFilterButton" aria-label="排序与筛选" title="排序与筛选" aria-haspopup="dialog" aria-controls="scheduleFilterModal">☷</button>
+      </div>
+      <div class="collection-floating-controls hidden" data-floating-view="timeline">
+        <dialog class="collection-controls-modal" id="timelineDatePanel" aria-labelledby="timelineDateTitle">
+          <form class="collection-controls-modal-frame" id="timelineDateForm">
+            <header class="cc-head">
+              <h3 id="timelineDateTitle">筛选日期</h3>
+              <button type="button" class="collection-controls-close" id="closeTimelineDatePanel" aria-label="关闭">×</button>
+            </header>
+            <div class="cc-body timeline-date-fields">
+              <label>起始日期<input type="date" id="timelineDateStart"></label>
+              <label>结束日期<input type="date" id="timelineDateEnd"></label>
+              <p class="timeline-date-hint">可以只填一端。日期按手账的每日起算时间计算。</p>
+            </div>
+            <footer class="cc-foot">
+              <button type="button" class="cc-foot-reset" id="timelineDateClear" disabled>清除日期</button>
+              <button type="submit" class="cc-foot-done">应用筛选</button>
+            </footer>
+          </form>
+        </dialog>
+        <button type="button" class="collection-floating-button" id="timelineDateButton" aria-label="筛选日期" title="筛选日期" aria-haspopup="dialog" aria-controls="timelineDatePanel" aria-expanded="false">☷</button>
       </div>
     </div>
 
@@ -2020,7 +2034,7 @@
     <script src="/modules/episode-gesture.js?v=20261116-flexible-wheel" defer></script>
     <script src="/modules/details.js?v=20261118-player-titles" defer></script>
     <script src="/modules/detail-wallpapers.js?v=20261116-detail-wallpapers" defer></script>
-    <script src="/modules/records.js?v=20261119-journal-tools" defer></script>
+    <script src="/modules/records.js?v=20261119-timeline-filter" defer></script>
     <script src="/modules/ranking.js?v=20261118-ranking-drafts" defer></script>
     <script src="/modules/statistics.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/lifecycle.js?v=20261118-player-titles" defer></script>
@@ -2028,7 +2042,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261116-library-settings" defer></script>
     <script src="/modules/settings-save.js?v=20261116-statistics-settings" defer></script>
-    <script src="/modules/events.js?v=20261119-journal-tools" defer></script>
+    <script src="/modules/events.js?v=20261119-timeline-filter" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>

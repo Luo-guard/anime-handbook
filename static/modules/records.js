@@ -267,6 +267,13 @@ function setTimelineDateRange(start = "", end = "") {
   timelineDateRange = {start, end};
   $("#timelineDateStart").value = start;
   $("#timelineDateEnd").value = end;
+  const active = Boolean(start || end);
+  const button = $("#timelineDateButton");
+  const summary = start && end ? (start === end ? start : `${start} 至 ${end}`) : start ? `${start} 起` : `截至 ${end}`;
+  button.classList.toggle("has-date-filter", active);
+  button.title = active ? `日期筛选：${summary}` : "筛选日期";
+  button.setAttribute("aria-label", button.title);
+  $("#timelineDateClear").disabled = !active;
 }
 
 async function renderTimeline(append = false) {
@@ -409,6 +416,7 @@ function switchView(view) {
   if (view !== "collection" && $("#collectionFloatingPanel").open) {
     $("#collectionFloatingPanel").close();
   }
+  if (view !== "timeline") $("#timelineDatePanel")?.close();
   if (view === "timeline") {
     if (typeof updateNoteDraftActions === "function") updateNoteDraftActions();
     renderTimeline();

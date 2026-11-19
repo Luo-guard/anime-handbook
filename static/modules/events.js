@@ -39,15 +39,25 @@ $("#collectionSearchRestore").onclick = () => {
   Object.assign(collectionSearchScope, {all:false, anySeason:false});
   renderCollection();
 };
+const timelineDatePanel = $("#timelineDatePanel");
+const timelineDateButton = $("#timelineDateButton");
+timelineDateButton.onclick = () => {
+  setTimelineDateRange(timelineDateRange.start, timelineDateRange.end);
+  timelineDatePanel.showModal();
+  timelineDateButton.setAttribute("aria-expanded", "true");
+};
+$("#closeTimelineDatePanel").onclick = () => timelineDatePanel.close();
+timelineDatePanel.addEventListener("close", () => timelineDateButton.setAttribute("aria-expanded", "false"));
 $("#timelineDateForm").onsubmit = event => {
   event.preventDefault();
   const start = $("#timelineDateStart").value;
   const end = $("#timelineDateEnd").value;
   if (start && end && start > end) { toast("开始日期不能晚于结束日期", "error"); return; }
   setTimelineDateRange(start, end);
+  timelineDatePanel.close();
   renderTimeline();
 };
-$("#timelineDateClear").onclick = () => { setTimelineDateRange(); renderTimeline(); };
+$("#timelineDateClear").onclick = () => { setTimelineDateRange(); timelineDatePanel.close(); renderTimeline(); };
 
 $("#collectionFloatingButton").addEventListener("click", () => {
   const panel = $("#collectionFloatingPanel");
