@@ -15,12 +15,28 @@ function beijingAiringSlot(timestamp) {
   return { weekday: WEEKDAY_NAMES[date.getUTCDay()], clock: date.toISOString().slice(11, 16) };
 }
 
-// 只认补不补零都行的完整日期；"2027-04" 这种只有年月的占位不能当日期用。
+// 将日历日期放在 UTC 零点比较，避免浏览器所在时区改变北京时间的换日。
 function parseIsoDate(value) {
-  const match = String(value || "").trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const match = String(value || "").replaceAll("\u200b", "").trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (!match) return null;
-  const day = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return Number.isNaN(day.getTime()) ? null : day;
+  const [, year, month, day] = match;
+  const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === iso ? date : null;
+}
+
+function beijingAiringDay(moment) {
+  const shifted = new Date(moment.getTime() + 8 * 3600 * 1000);
+  return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+}
+
+function isUnreachedAiringDate(day, today, airing) {
+  // next_episode=null 表示后端按可用时刻确认，所有有日期的正片都已到播出时点。
+  if (airing?.next_episode === null) return false;
+  if (day > today) return true;
+  if (day.getTime() !== today) return false;
+  const next = parseIsoDate(airing?.next_date);
+  return !next || next.getTime() <= today;
 }
 
 // 「周几更新」全部用本地已有数据算，不发任何请求：
@@ -32,21 +48,22 @@ function parseIsoDate(value) {
 function animeUpdateWeekday(anime, today = new Date()) {
   const next = beijingAiringSlot(anime?.airing?.next_at);
   if (next) return { weekday: next.weekday, ongoing: true };
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayStart = beijingAiringDay(today);
   const counts = new Array(7).fill(0);
   let dated = 0;
   let upcoming = 0;
   (anime?.episodes || []).forEach((episode) => {
+    if (Number(episode?.type || 0) !== 0) return;
     const day = parseIsoDate(episode?.airdate);
     if (!day) return;
     dated += 1;
-    counts[day.getDay()] += 1;
-    if (day > todayStart) upcoming += 1;
+    counts[day.getUTCDay()] += 1;
+    if (isUnreachedAiringDate(day, todayStart, anime?.airing)) upcoming += 1;
   });
   if (!dated) {
     const premiere = parseIsoDate(anime?.air_date);
     if (!premiere) return null;
-    return { weekday: WEEKDAY_NAMES[premiere.getDay()], ongoing: premiere > todayStart };
+    return { weekday: WEEKDAY_NAMES[premiere.getUTCDay()], ongoing: isUnreachedAiringDate(premiere, todayStart, anime?.airing) };
   }
   let best = 0;
   counts.forEach((count, index) => {
@@ -58,32 +75,39 @@ function animeUpdateWeekday(anime, today = new Date()) {
 // 钟点只从已有的放送时刻取：air_time.time 来自当季周表（已换算成北京时间），
 // airing.next_at 是下集的真实放送时刻，两者同源。拿不到就不写钟点，绝不编造。
 function animeAirClock(anime) {
+  const next = beijingAiringSlot(anime?.airing?.next_at);
+  if (next || anime?.airing?.next_episode != null) return next?.clock || "";
   const clock = String(anime?.air_time?.time || "").trim();
   const match = clock.match(/^(\d{1,2}):(\d{2})$/);
   if (match && Number(match[1]) < 24 && Number(match[2]) < 60) {
     return `${match[1].padStart(2, "0")}:${match[2]}`;
   }
-  return beijingAiringSlot(anime?.airing?.next_at)?.clock || "";
+  return "";
 }
 
 // 長門番堂徽标用自己的日期和进度判断状态，独立于集数区的来源设置。
 function animeAiringCounts(anime, today = new Date()) {
   const source = anime?.airing;
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayStart = beijingAiringDay(today);
   let dated = 0;
   let upcoming = 0;
   let past = 0;
+  let todayPending = false;
   (anime?.episodes || []).forEach((episode) => {
     if (Number(episode?.type || 0) !== 0) return;
     const day = parseIsoDate(episode?.airdate);
     if (!day) return;
     dated += 1;
-    if (day > todayStart) upcoming += 1;
-    else past += 1;
+    if (isUnreachedAiringDate(day, todayStart, source)) {
+      upcoming += 1;
+      todayPending ||= day.getTime() === todayStart && !source?.next_at;
+    } else {
+      past += 1;
+    }
   });
-  const aired = Math.max(0, Number(source?.aired) || 0) || past;
+  const aired = source?.aired == null ? past : Math.max(0, Number(source.aired) || 0);
   const total = Number(source?.total) || Number(anime?.episode_count) || (anime?.episodes || []).length || 0;
-  return { aired, total, upcoming, dated };
+  return { aired, total, upcoming, dated, todayPending };
 }
 
 function animeScheduleBadge(anime) {
@@ -126,7 +150,7 @@ function animeBadgeModel(anime, today = new Date()) {
   const info = animeUpdateWeekday(anime, today);
   const counts = animeAiringCounts(anime, today);
   const premiere = parseIsoDate(anime?.air_date);
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayStart = beijingAiringDay(today);
   const weekday = info ? `每${info.weekday}` : "";
 
   if (!premiere && !counts.dated && !info) {
@@ -137,6 +161,14 @@ function animeBadgeModel(anime, today = new Date()) {
   }
   if (premiere && premiere > todayStart && counts.aired === 0) {
     return { kind: "upcoming", text: "未开播", title: "首播日期还没到；具体日期就在旁边" };
+  }
+  const isPremiere = premiere?.getTime() === todayStart && counts.aired === 0;
+  if (counts.todayPending || (isPremiere && !counts.dated && !anime?.airing?.next_at)) {
+    return {
+      kind: isPremiere ? "upcoming" : "ongoing",
+      text: isPremiere ? "今日开播 · 时间待定" : "今日更新 · 时间待定",
+      title: "只有播出日期，按北京时间次日零点计入已播",
+    };
   }
   if (info?.ongoing || counts.upcoming > 0) {
     const clock = animeAirClock(anime);

@@ -637,6 +637,8 @@ class HandbookDBTest(unittest.TestCase):
             ),
             2,
         )
+        for day, expected in (("2026-07-13", 1), ("2026-07-14", 2)):
+            self.assertEqual(app.aired_main_episode_count(normalized, as_of=app.date.fromisoformat(day)), expected)
 
         self.db.import_kazumi([sample_item(31, 1, "airing")])
         self.db.update_bgm_metadata(

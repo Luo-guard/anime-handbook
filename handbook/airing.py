@@ -146,5 +146,6 @@ def compute_airing(anime: dict[str, Any], item: dict[str, Any], now: datetime | 
             result["next_at"] = int(at.timestamp())
             result["next_label"] = at.strftime("%m/%d %H:%M")
         else:
+            result["next_date"] = at.isoformat()
             result["next_label"] = f"{at.strftime('%m/%d')}（时刻待公布）"
     return result

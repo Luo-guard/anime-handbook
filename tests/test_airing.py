@@ -62,11 +62,14 @@ class AiringTest(unittest.TestCase):
         )
         self.assertEqual(same_day["precision"], "date")
         self.assertEqual(same_day["aired"], 0)
+        self.assertEqual(same_day["next_date"], "2026-10-05")
+        self.assertIsNone(same_day["next_at"])
         next_day = airing.compute_airing(
-            data, item, now=datetime(2026, 10, 6, 0, 5, tzinfo=BEIJING)
+            data, item, now=datetime(2026, 10, 6, 0, 0, tzinfo=BEIJING)
         )
         self.assertEqual(next_day["aired"], 1)
         self.assertEqual(next_day["latest_aired_at"], "2026-10-05")
+        self.assertEqual(next_day["next_date"], "2026-10-12")
         self.assertIn("时刻待公布", next_day["next_label"])
 
     def test_weekday_mismatch_degrades_to_date(self):

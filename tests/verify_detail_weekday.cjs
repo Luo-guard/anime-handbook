@@ -35,7 +35,7 @@ window.Date = __FrozenDate;
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+    const page = await browser.newPage({ viewport: { width: 1100, height: 900 }, timezoneId: 'America/Los_Angeles' });
     const html = fs.readFileSync('static/index.html', 'utf8')
       .replace(/<script[\s\S]*?<\/script>/g, '')
       .replace(/<link[^>]*>/g, '');
@@ -51,8 +51,8 @@ window.Date = __FrozenDate;
         const start = new Date(startIso);
         return Array.from({ length: count }, (_, i) => {
           const day = new Date(start);
-          day.setDate(start.getDate() + i * 7 + offsetDays);
-          const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+          day.setUTCDate(start.getUTCDate() + i * 7 + offsetDays);
+          const iso = day.toISOString().slice(0, 10);
           return ep(i + 1, iso);
         });
       };
@@ -123,6 +123,28 @@ window.Date = __FrozenDate;
       state.settings.detail_airtime_source = 'yuc';
       const visibleMissingBgm = render({air_date:'',episodes:[]}, '');
       const visibleMissingYucTime = render({air_date:'2026-10-04',episodes:ongoingEpisodes});
+      const finalEpisode = {
+        air_date: '2026-10-31', episodes: [ep(1, '2026-10-31'), ep(2, '2026-11-07')],
+      };
+      const lateSameDay = new Date('2026-11-07T23:59:59+08:00');
+      const nextDay = new Date('2026-11-08T00:00:00+08:00');
+      const dateOnly = {
+        airing: {aired:1, next_episode:2, next_date:'2026-11-07'},
+        air_time: {time:'20:30'},
+      };
+      const finalEpisodeBefore = animeBadgeModel({...finalEpisode,...dateOnly}, lateSameDay);
+      const finalEpisodeAfter = animeBadgeModel(finalEpisode, nextDay);
+      const finalEpisodePrecise = animeBadgeModel({...finalEpisode,airing:{aired:2,next_episode:null}}, lateSameDay);
+      const noBackendCounts = [
+        animeAiringCounts(finalEpisode, lateSameDay).aired,
+        animeAiringCounts(finalEpisode, nextDay).aired,
+        animeAiringCounts({...finalEpisode,airing:{aired:0}}, lateSameDay).aired,
+      ];
+      const premiereToday = animeBadgeModel({air_date:'2026-11-07', episodes:[]}, lateSameDay);
+      const nextDateFuture = animeBadgeModel({
+        ...finalEpisode, episodes:[...finalEpisode.episodes, ep(3, '2026-11-14')],
+        airing:{aired:2,next_episode:3,next_date:'2026-11-14'},
+      }, lateSameDay);
 
       const meta = $('.progress-meta');
       const links = $('.progress-links');
@@ -136,6 +158,7 @@ window.Date = __FrozenDate;
         ongoing, finished, skewed, dirty, withNextAt, noData,
         ongoingDom, noClockDom, nextAtDom, finishedDom, upcomingDom, farUpcomingDom, emptyDom, danglingDom,
         yucDom, asDom, missingAS, loadingAS, finishedAS, visibleMissingAS, noTimeAS, hiddenTimeAS, visibleMissingBgm, visibleMissingYucTime,
+        finalEpisodeBefore, finalEpisodeAfter, finalEpisodePrecise, noBackendCounts, premiereToday, nextDateFuture,
         structure: {
           linksInMeta: Boolean(meta && meta.querySelector('#detailLinks')),
           linksInsideOwnRow: Boolean(links && links.querySelector('#detailLinks')),
@@ -184,6 +207,13 @@ window.Date = __FrozenDate;
 
     assert.equal(result.finishedDom.text, '已完结', `完结徽标：${result.finishedDom.text}`);
     assert.equal(result.finishedDom.kind, 'finished', '完结态要挂 finished 样式');
+    assert.equal(result.finalEpisodeBefore.text, '今日更新 · 时间待定');
+    assert.equal(result.finalEpisodeBefore.kind, 'ongoing');
+    assert.equal(result.finalEpisodeAfter.kind, 'finished');
+    assert.equal(result.finalEpisodePrecise.kind, 'finished');
+    assert.deepEqual(result.noBackendCounts, [1,2,0]);
+    assert.equal(result.premiereToday.text, '今日开播 · 时间待定');
+    assert.equal(result.nextDateFuture.text, '每周六更新');
     assert.ok(!result.finishedDom.text.includes('已播完'), '按口径只写「已完结」，不写「已播完」');
     assert.ok(!result.finishedDom.text.includes('更新'), '完结番不能谎报更新');
 

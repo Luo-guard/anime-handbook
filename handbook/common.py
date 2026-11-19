@@ -30,6 +30,7 @@ from typing import Any, Iterator
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from html import unescape
 from schedule import ScheduleService, attach_collection, season_key
+from .airing import BEIJING, parse_airdate
 
 try:
     from PIL import Image
@@ -367,22 +368,14 @@ def normalize_episodes(raw_items: list[Any]) -> list[dict[str, Any]]:
 def aired_main_episode_count(
     episodes: list[dict[str, Any]], *, as_of: date | None = None
 ) -> int:
-    """Count regular episodes whose Bangumi air date has arrived.
-
-    Bangumi lists scheduled future episodes too, so the list length is not the
-    same thing as the number currently available to watch.
-    """
-    today = as_of or datetime.now().astimezone().date()
+    """Count regular episodes whose date-only schedule has passed in Beijing."""
+    today = as_of or datetime.now(BEIJING).date()
     aired = 0
     for episode in episodes:
         if int(episode.get("type") or 0) != 0:
             continue
-        raw_date = str(episode.get("airdate") or "").strip()[:10]
-        try:
-            air_date = date.fromisoformat(raw_date)
-        except ValueError:
-            continue
-        if air_date <= today:
+        air_date = parse_airdate(episode.get("airdate"))
+        if air_date is not None and air_date < today:
             aired += 1
     return aired
 
