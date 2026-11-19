@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261119-timeline-filter" />
+  <link rel="stylesheet" href="/styles.css?v=20261119-webdav-conflict" />
   </head>
   <body>
     <div class="app-shell">
@@ -1814,6 +1814,23 @@
     </dialog>
     <dialog class="modal schedule-dialog" id="scheduleDetailModal"><div class="modal-frame"><button type="button" class="modal-close" id="scheduleCloseDetail" aria-label="关闭">×</button><div id="scheduleDetail"></div></div></dialog>
 
+    <dialog class="modal webdav-conflict-modal" id="webdavConflictModal" aria-labelledby="webdavConflictTitle" aria-describedby="webdavConflictIntro">
+      <form class="modal-frame" method="dialog">
+        <h2 id="webdavConflictTitle">选择同步版本</h2>
+        <p class="page-subtitle" id="webdavConflictIntro">本机和坚果云的版本不同，缺少可用于自动合并的同步基准。</p>
+        <div class="webdav-conflict-choices">
+          <button type="submit" class="secondary-button" value="local">
+            <strong>保留本机版本</strong><span>用本机数据覆盖坚果云</span>
+          </button>
+          <button type="submit" class="secondary-button" value="remote">
+            <strong>使用云端版本</strong><span>用坚果云数据替换本机</span>
+          </button>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="secondary-button" value="cancel" autofocus>暂不同步</button>
+        </div>
+      </form>
+    </dialog>
     <dialog class="modal backend-closed-dialog" id="backendClosedDialog"><div class="modal-frame"><h2 id="backendClosedTitle">后台已关闭</h2><p id="backendClosedMessage">再次使用时，请运行“启动动漫手账”快捷方式，然后刷新此页面。</p></div></dialog>
     <dialog class="modal collect-search-modal" id="collectionSearchModal" aria-labelledby="collectionSearchTitle">
       <div class="modal-frame">
@@ -2046,7 +2063,7 @@
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261116-library-settings" defer></script>
     <script src="/modules/settings-save.js?v=20261119-card-progress" defer></script>
-    <script src="/modules/events.js?v=20261119-timeline-filter" defer></script>
+    <script src="/modules/events.js?v=20261119-webdav-conflict" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>

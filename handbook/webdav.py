@@ -127,7 +127,7 @@ class WebDAVSyncService:
             if url != config.get("url") or username != config.get("username"):
                 for profile in config["profiles"].values():
                     if isinstance(profile, dict):
-                        profile.pop("last_verified_etag", None)
+                        self._clear_checkpoint(profile)
             config["url"] = url
             config["username"] = username
             supplied_password = str(password or "")
@@ -139,13 +139,18 @@ class WebDAVSyncService:
             item = self._profile_config(config)
             new_account_id = self._account_id(account_id)
             if new_account_id != item.get("account_id"):
-                item.pop("last_verified_etag", None)
+                self._clear_checkpoint(item)
             item["account_id"] = new_account_id
             self._write(config)
             # Wake the background worker so changing the checkbox takes effect
             # immediately instead of waiting for the current 30-minute sleep.
             self._wake.set()
         return self.status()
+
+    @staticmethod
+    def _clear_checkpoint(profile: dict[str, Any]) -> None:
+        for key in ("last_hash", "last_etag", "last_verified_etag", "last_synced_at", "last_error"):
+            profile.pop(key, None)
 
     @staticmethod
     def _url(base: str, relative: str) -> str:
@@ -464,9 +469,9 @@ class WebDAVSyncService:
         merged["tables"]["events"] = sorted(events, key=lambda row: int(row["id"]))
         return merged
 
-    def sync(self, database: HandbookDB, *, resolution: str = "") -> dict[str, Any]:
+    def sync(self, database: HandbookDB, *, resolution: str = "", conflict_token: str = "") -> dict[str, Any]:
         with self._lock:
-            result = self._sync_once(database, resolution=resolution)
+            result = self._sync_once(database, resolution=resolution, conflict_token=conflict_token)
             if result.get("ok"):
                 kazumi = self._push_kazumi(database)
                 if kazumi:
@@ -560,14 +565,22 @@ class WebDAVSyncService:
         self._write(config)
         return {"ok": True, "action": "uploaded", "message": "已把本机 Kazumi 收藏同步到坚果云"}
 
-    def _sync_once(self, database: HandbookDB, *, resolution: str = "") -> dict[str, Any]:
+    @staticmethod
+    def _has_account_data(state: dict[str, Any]) -> bool:
+        tables = state.get("tables")
+        if not isinstance(tables, dict):
+            raise ValueError("云端手账数据不完整")
+        return any(tables.get(table) for table in HandbookDB.CLOUD_TABLES if table != "settings")
+
+    def _sync_once(self, database: HandbookDB, *, resolution: str = "", conflict_token: str = "") -> dict[str, Any]:
         with self._lock:
+            if resolution and (resolution not in {"local", "remote"} or not conflict_token):
+                raise ValueError("请重新同步并选择要保留的版本")
             config = self._read()
             profile_item = self._profile_config(config)
             if not bool(str(config.get("url") or "") and str(config.get("username") or "") and str(config.get("password") or "")):
                 raise ValueError("请先完成坚果云配置")
             account_id = self._account_id(profile_item.get("account_id"))
-            self._ensure_remote_folder(config, account_id)
             local_state = database.export_cloud_state()
             local_hash = self._state_hash(local_state)
             known_hash = str(profile_item.get("last_hash") or "")
@@ -583,42 +596,64 @@ class WebDAVSyncService:
                 self._write(config)
                 return {"ok": True, "action": action, "message": message}
 
-            remote_status, remote_etag = self._remote_probe(config, account_id)
-            if remote_status not in {200, 404}:
-                raise ValueError(f"读取坚果云数据失败（HTTP {remote_status}）")
-            if not resolution and remote_status == 200 and known_hash and remote_etag and remote_etag == previous_etag:
-                if local_hash == known_hash:
-                    return finish("unchanged", "两边数据已经是最新", known_hash, remote_etag)
-                uploaded, etag = self._upload_state(config, account_id, local_state, etag=remote_etag)
-                return finish("uploaded", "已将本机最新数据上传到坚果云", uploaded, etag)
+            def download_first_or_resolved(message):
+                with database._write_lock:
+                    if self._state_hash(database.export_cloud_state()) != local_hash:
+                        raise ValueError("本机版本已变化，请重新同步")
+                    database.import_cloud_state(remote_state)
+                return finish("downloaded", message, remote_document_hash, remote_etag)
+
+            if not resolution:
+                self._ensure_remote_folder(config, account_id)
+                remote_status, remote_etag = self._remote_probe(config, account_id)
+                if remote_status not in {200, 404}:
+                    raise ValueError(f"读取坚果云数据失败（HTTP {remote_status}）")
+                if remote_status == 200 and known_hash and remote_etag and remote_etag == previous_etag:
+                    if local_hash == known_hash:
+                        return finish("unchanged", "两边数据已经是最新", known_hash, remote_etag)
+                    uploaded, etag = self._upload_state(config, account_id, local_state, etag=remote_etag)
+                    return finish("uploaded", "已将本机最新数据上传到坚果云", uploaded, etag)
 
             remote_document, remote_document_hash, remote_etag = self._remote_state(config, account_id)
             remote_state = remote_document.get("state") if isinstance(remote_document, dict) else None
             if remote_document is None:
+                if resolution:
+                    raise ValueError("云端版本已变化，请重新同步后再选择")
                 uploaded, etag = self._upload_state(config, account_id, local_state, missing=True)
                 return finish("uploaded", "已将当前账号首次上传到坚果云", uploaded, etag)
             if not isinstance(remote_state, dict):
                 raise ValueError("坚果云中的手账数据格式不正确")
+
+            def version_token():
+                versions = [str(database.path), config["url"], config["username"], account_id, local_hash, remote_document_hash]
+                return hashlib.sha256(json_dumps(versions).encode("utf-8")).hexdigest()
+
+            if resolution:
+                if conflict_token != version_token():
+                    raise ValueError("本机或云端版本已变化，请重新同步后再选择")
+                if resolution == "remote":
+                    return download_first_or_resolved("已使用坚果云版本替换本机数据")
+                uploaded, etag = self._upload_state(config, account_id, local_state, etag=remote_etag)
+                return finish("uploaded", "已使用本机版本覆盖坚果云数据", uploaded, etag)
+
             # Existing installations stored a hash that included exported_at.
             # Convert it once so an unchanged account is not mistaken for an edit.
             if known_hash in {self._legacy_state_hash(local_state), self._legacy_state_hash(remote_state)}:
                 known_hash = remote_document_hash if known_hash == self._legacy_state_hash(remote_state) else local_hash
-            # A newly connected device treats the remote account as source of
-            # truth. It avoids accidentally overwriting the cloud with its new
-            # empty local profile.
-            if not known_hash or resolution == "remote":
-                database.import_cloud_state(remote_state)
-                return finish("downloaded", "已从坚果云下载账号数据", remote_document_hash, remote_etag)
             if local_hash == remote_document_hash:
                 return finish("unchanged", "两边数据已经是最新", local_hash, remote_etag)
+            if not known_hash:
+                if self._has_account_data(local_state):
+                    return {"conflict": True, "conflict_token": version_token()}
+                return download_first_or_resolved("已从坚果云下载账号数据")
             local_changed = local_hash != known_hash
             remote_changed = remote_document_hash != known_hash
-            if local_changed and remote_changed and resolution != "local":
+            if local_changed and remote_changed:
                 merged_state = self.merge_record_states(local_state, remote_state)
                 merged_hash, etag = self._upload_state(config, account_id, merged_state, etag=remote_etag)
                 database.import_cloud_state(merged_state)
                 return finish("merged", "已自动合并新增记录；同一番剧同一集保留较早观看时间", merged_hash, etag)
-            if local_changed or resolution == "local":
+            if local_changed:
                 uploaded, etag = self._upload_state(config, account_id, local_state, etag=remote_etag)
                 return finish("uploaded", "已将本机最新数据上传到坚果云", uploaded, etag)
             if remote_changed:

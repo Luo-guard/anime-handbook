@@ -178,6 +178,7 @@ public class MainActivity extends Activity {
   }
   private JSONObject sync(String resolution) throws Exception {
     if(prefs.getString("username","").isEmpty()||prefs.getString("password","").isEmpty()||prefs.getString("account","").length()<8)throw new IOException("请先填写坚果云账号、应用密码和云端账号标识");
+    String accountScope=prefs.getString("url","")+"\n"+prefs.getString("username","")+"\n"+prefs.getString("account","");
     return AccountSync.run(new AccountSync.Store(){
       public String read(){return readState();}
       public String baseline(){return MainActivity.this.baseline();}
@@ -187,7 +188,7 @@ public class MainActivity extends Activity {
       public AccountSync.Snapshot probe()throws Exception{return probeRemote();}
       public AccountSync.Snapshot get()throws Exception{return getRemote();}
       public AccountSync.Snapshot put(String state,String etag,String modified,boolean missing)throws Exception{return putRemote(state,etag,modified,missing);}
-    },prefs.getString("last_hash",""),prefs.getString("last_etag",""),resolution);
+    },prefs.getString("last_hash",""),prefs.getString("last_etag",""),resolution,accountScope);
   }
   class Bridge {
     @JavascriptInterface public String config() { try { JSONObject data = new JSONObject(); data.put("url", prefs.getString("url", "https://dav.jianguoyun.com/dav/")); data.put("username", prefs.getString("username", "")); data.put("account", prefs.getString("account", "")); data.put("passwordSet", !prefs.getString("password", "").isEmpty()); data.put("autoSync", prefs.getBoolean("auto_sync", true)); return data.toString(); } catch(Exception e) { return "{}"; } }

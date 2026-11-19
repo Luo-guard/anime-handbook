@@ -105,9 +105,13 @@ function toggleEpisode(id,key){const a=animes().find(x=>x.id===id);let w=JSON.pa
 function addNote(){const content=document.querySelector('#content').value.trim();if(!content)return;const events=tables().events;events.push({...recordIdentity(),id:Date.now(),event_type:'note',anime_id:null,episodes:'[]',content,theme:'other',themes:'["other"]',rating:null,raw_directives:'',created_at:nowIso()});if(save()){ui.noteDraft='';document.querySelector('#content').value='';showPage('records')}}
 function saveConfig(){if(native.saveConfig(JSON.stringify(readConfigForm()))===false){alert('配置保存失败，请重试');return}ui.configDraft=null;document.querySelector('#password').value='';configInitial=JSON.stringify(readConfigForm(false));persistUi();alert('坚果云配置已保存')}
 function requestSync(resolution=''){native.sync(resolution)}
+let syncConflictToken='';
 window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if(r.error){if(!silent)alert(r.error);return}if(r.conflict){
  const dialog = document.querySelector('#syncConflict');
- if (!silent && !dialog.open) dialog.showModal();
+ if (!silent && !dialog.open) {
+  syncConflictToken = r.conflict_token || '';
+  dialog.showModal();
+ }
  return;
 }if(r.state){
  // Read the latest persisted snapshot, including edits made after the network finished.
@@ -120,7 +124,7 @@ document.querySelector('#syncConflict form').addEventListener('submit', event =>
  event.preventDefault();
  const resolution = event.submitter?.value;
  event.currentTarget.closest('dialog').close();
- if (resolution === 'local' || resolution === 'remote') requestSync(resolution);
+ if (syncConflictToken && (resolution === 'local' || resolution === 'remote')) requestSync(`${resolution}:${syncConflictToken}`);
 });
 app.addEventListener('input',persistUi);app.addEventListener('change',persistUi);
 let scrollTimer;window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);scrollTimer=setTimeout(persistUi,100)},{passive:true});

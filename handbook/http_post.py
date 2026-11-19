@@ -254,8 +254,11 @@ class PostRoutes:
             elif path == "/api/webdav/test":
                 self.send_json(self.webdav.test())
             elif path == "/api/webdav/sync":
-                result = self.webdav.sync(self.database, resolution=str(body.get("resolution") or ""))
-                self.send_json({**result, "webdav": self.webdav.status(), "settings": self.database.get_settings(), "animes": self.database.list_anime(), "custom_collections": self.database.list_custom_collections(), "ranking_boards": self.database.list_ranking_boards(), "ranking_templates": self.database.list_ranking_templates(), "stats": self.database.stats()})
+                result = self.webdav.sync(self.database, resolution=str(body.get("resolution") or ""), conflict_token=str(body.get("conflict_token") or ""))
+                if result.get("conflict"):
+                    self.send_json(result)
+                else:
+                    self.send_json({**result, "webdav": self.webdav.status(), "settings": self.database.get_settings(), "animes": self.database.list_anime(), "custom_collections": self.database.list_custom_collections(), "ranking_boards": self.database.list_ranking_boards(), "ranking_templates": self.database.list_ranking_templates(), "stats": self.database.stats()})
             elif path == "/api/background":
                 raw = str(body.get("data") or "")
                 match = re.fullmatch(r"data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)", raw)

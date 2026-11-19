@@ -2494,6 +2494,12 @@ dialog::backdrop {
   box-shadow: 0 30px 90px rgba(5, 20, 12, 0.35);
 }
 
+.webdav-conflict-modal { --modal-width: 460px; }
+.webdav-conflict-modal h2 { margin: 0; }
+.webdav-conflict-choices { display: grid; gap: 8px; margin: 18px 0; }
+.webdav-conflict-choices .secondary-button { text-align: start; }
+.webdav-conflict-choices span { display: block; margin-top: 4px; font-size: .9em; }
+
 /* 人物分栏的卡片数可能很多。详情弹窗自身必须成为滚动容器，
    不能把滚轮事件透传给被遮罩的收藏页。快捷菜单和批注气泡使用
    fixed 定位与更高层级，不受这里的内容滚动影响。 */

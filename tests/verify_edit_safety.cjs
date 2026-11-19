@@ -2,6 +2,47 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {chromium} = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 
+async function checkDesktopSync(browser) {
+  const page = await browser.newPage({viewport:{width:360,height:640}});
+  const html = fs.readFileSync('static/index.html', 'utf8');
+  const dialogMarkup = html.match(/<dialog[^>]+id="webdavConflictModal"[\s\S]*?<\/dialog>/)[0];
+  await page.setContent('<button id="syncWebdavButton">同步</button>' + dialogMarkup);
+  await page.addStyleTag({content:fs.readFileSync('static/styles.css', 'utf8')});
+  const events = fs.readFileSync('static/modules/events.js', 'utf8');
+  const syncCode = events.slice(events.indexOf('async function syncWebdav('), events.indexOf('$("#copyWebdavAccountIdButton")'));
+  await page.addScriptTag({content:`
+    const $ = selector => document.querySelector(selector);
+    const state = {};
+    const requests = [];
+    const noop = () => {};
+    const saveWebdavSettings = noop, renderSyncButton = noop, applyTheme = noop,
+      renderStats = noop, renderTabs = noop, renderCollection = noop, renderSettingsPanels = noop,
+      renderWebdavSettings = noop, switchView = noop, toast = noop;
+    async function api(path, options) {
+      const body = JSON.parse(options.body);
+      requests.push(body);
+      return body.resolution ? {ok:true} : {conflict:true, conflict_token:'desktop-version-test'};
+    }
+    ${syncCode}
+  `});
+  const dialog = page.getByRole('dialog', {name:'选择同步版本'});
+  const syncButton = page.getByRole('button', {name:'同步', exact:true});
+  for (const choice of ['cancel', 'escape', 'local', 'remote']) {
+    await syncButton.click();
+    await dialog.waitFor();
+    assert.equal(await dialog.locator('[autofocus]').evaluate(button => button === document.activeElement), true);
+    if (choice === 'escape') await page.keyboard.press('Escape');
+    else await dialog.locator(`button[value="${choice}"]`).click();
+    await dialog.waitFor({state:'hidden'});
+    await page.waitForFunction(() => !document.querySelector('#syncWebdavButton').disabled);
+  }
+  assert.deepEqual(await page.evaluate(() => requests), [
+    {}, {}, {}, {resolution:'local', conflict_token:'desktop-version-test'},
+    {}, {resolution:'remote', conflict_token:'desktop-version-test'},
+  ]);
+  await page.close();
+}
+
 async function checkMobile(browser) {
   const page = await browser.newPage({viewport:{width:320,height:460}, isMobile:true, hasTouch:true});
   const base = 'android/app/src/main/assets';
@@ -12,7 +53,7 @@ async function checkMobile(browser) {
     window.AndroidHandbook = {state:() => '{}', sync:value => syncCalls.push(value)};
   });
   await page.addScriptTag({content:fs.readFileSync(`${base}/app.js`, 'utf8')});
-  const show = silent => page.evaluate(silent => HandbookMobile.completeSync('{"conflict":true}', silent), silent);
+  const show = silent => page.evaluate(silent => HandbookMobile.completeSync('{"conflict":true,"conflict_token":"version-test"}', silent), silent);
   const dialog = page.getByRole('dialog', {name:'选择同步版本'});
   await show(true);
   assert.equal(await dialog.isVisible(), false);
@@ -30,7 +71,7 @@ async function checkMobile(browser) {
     await dialog.getByRole('button', {name}).click();
     assert.equal(await dialog.isVisible(), false);
   }
-  assert.deepEqual(await page.evaluate(() => syncCalls), ['local','remote']);
+  assert.deepEqual(await page.evaluate(() => syncCalls), ['local:version-test','remote:version-test']);
   await page.close();
 }
 
@@ -100,8 +141,9 @@ async function checkRanking(browser) {
 (async () => {
   const browser = await chromium.launch();
   try {
+    await checkDesktopSync(browser);
     await checkMobile(browser);
     await checkRanking(browser);
-    console.log('Android conflict choice and ranking draft preservation passed.');
+    console.log('Desktop and Android conflict choices and ranking draft preservation passed.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -794,8 +794,17 @@ async function syncWebdav(options = {}) {
     if (options.saveConfig) await saveWebdavSettings();
     let payload = await api("/api/webdav/sync", { method: "POST", body: JSON.stringify({}) });
     if (payload.conflict) {
-      const useLocal = confirm("本机和坚果云都在上次同步后有修改。\n\n确定：以本机这次提交为准，覆盖云端。\n取消：以坚果云版本为准，覆盖本机。");
-      payload = await api("/api/webdav/sync", { method: "POST", body: JSON.stringify({ resolution: useLocal ? "local" : "remote" }) });
+      const dialog = $("#webdavConflictModal");
+      dialog.returnValue = "";
+      dialog.showModal();
+      const resolution = await new Promise(resolve => {
+        dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
+      });
+      if (resolution !== "local" && resolution !== "remote") return;
+      payload = await api("/api/webdav/sync", {
+        method: "POST",
+        body: JSON.stringify({ resolution, conflict_token: payload.conflict_token }),
+      });
     }
     Object.assign(state, {
       webdav: payload.webdav || state.webdav,

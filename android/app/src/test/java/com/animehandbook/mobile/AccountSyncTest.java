@@ -36,34 +36,78 @@ public class AccountSyncTest {
   }
   @Test public void mergeUsesGetVersionNotEarlierHeadAndAddsNoRequests()throws Exception{
     String base=state("[\"01\",\"02\"]");Store store=new Store(state("[\"01\"]"),base);Remote remote=new Remote(state("[\"01\",\"02\",\"03\"]"));
-    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"\"old\"","");
+    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"\"old\"","","test-account");
     assertEquals("merged",result.getString("action"));assertEquals(remote.getVersion,remote.expected);
     assertEquals(1,remote.heads);assertEquals(1,remote.gets);assertEquals(1,remote.puts);
     assertEquals("[\"01\",\"03\"]",new JSONObject(remote.received).getJSONObject("tables").getJSONArray("anime").getJSONObject(0).getString("watched_episodes"));
   }
   @Test public void changedDuringDownloadKeepsLocalAndOldBaseline()throws Exception{
     String base=state("[\"01\"]");Store store=new Store(base,base);store.accept=false;Remote remote=new Remote(state("[\"01\",\"02\"]"));
-    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"\"old\"","");
+    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"\"old\"","","test-account");
     assertTrue(result.getBoolean("pendingLocal"));assertFalse(result.has("state"));assertNull(store.checkpoint);assertEquals(base,store.local);
   }
   @Test public void rejectedUploadNeverAdvancesBaseline()throws Exception{
     String base=state("[\"01\"]");Store store=new Store(state("[\"01\",\"02\"]"),base);Remote remote=new Remote(base);remote.fail=true;
-    try{AccountSync.run(store,remote,AccountSync.digest(base),remote.headVersion,"");fail();}catch(java.io.IOException expected){}
+    try{AccountSync.run(store,remote,AccountSync.digest(base),remote.headVersion,"","test-account");fail();}catch(java.io.IOException expected){}
     assertNull(store.checkpoint);assertEquals(0,remote.gets);assertEquals(1,remote.puts);
   }
   @Test public void missingBaselineRequiresChoiceWithoutUpload()throws Exception{
     Store store=new Store(state("[\"02\"]"),null);Remote remote=new Remote(state("[\"03\"]"));
-    assertTrue(AccountSync.run(store,remote,AccountSync.digest(state("[\"01\"]")),"","").getBoolean("conflict"));assertEquals(0,remote.puts);
+    assertTrue(AccountSync.run(store,remote,AccountSync.digest(state("[\"01\"]")),"","","test-account").getBoolean("conflict"));assertEquals(0,remote.puts);
+  }
+  @Test public void firstSyncChoicesUseReviewedVersions()throws Exception{
+    String local=state("[\"02\"]"), cloud=state("[\"03\"]");
+    for(String choice:new String[]{"local","remote"}){
+      Store store=new Store(local,null);
+      Remote remote=new Remote(cloud);
+      JSONObject conflict=AccountSync.run(store,remote,"","","","test-account");
+      assertTrue(conflict.getBoolean("conflict"));
+      assertNull(store.checkpoint);
+      assertEquals(local,store.local);
+      assertEquals(0,remote.puts);
+      String approved=choice+":"+conflict.getString("conflict_token");
+      remote.state=state("[\"04\"]");
+      try {
+        AccountSync.run(store,remote,"","",approved,"test-account");
+        fail("An updated cloud version requires a new choice");
+      } catch(java.io.IOException expected) {
+        assertTrue(expected.getMessage().contains("版本已变化"));
+      }
+      assertEquals(local,store.local);
+      assertEquals(0,remote.puts);
+      assertNull(store.checkpoint);
+      remote.state=cloud;
+      JSONObject result=AccountSync.run(store,remote,"","",approved,"test-account");
+      assertEquals(choice.equals("local")?"uploaded":"downloaded",result.getString("action"));
+      assertEquals(1,remote.heads);
+      assertEquals(3,remote.gets);
+      if(choice.equals("local")){
+        assertEquals(1,remote.puts);
+        assertEquals(remote.getVersion,remote.expected);
+        assertEquals(local,remote.received);
+      }else{
+        assertEquals(0,remote.puts);
+        assertEquals(AccountSync.digest(cloud),AccountSync.digest(store.local));
+      }
+    }
+  }
+  @Test public void firstSyncDownloadsIntoAnEmptyDevice()throws Exception{
+    String cloud=state("[\"01\"]");
+    Store store=new Store("{\"tables\":{\"settings\":[]}}",null);
+    Remote remote=new Remote(cloud);
+    assertEquals("downloaded",AccountSync.run(store,remote,"","","","test-account").getString("action"));
+    assertEquals(AccountSync.digest(cloud),AccountSync.digest(store.local));
+    assertEquals(0,remote.puts);
   }
   @Test public void unchangedSeedsDeviceOnlyBaselineAndDoesNotDownload()throws Exception{
     String base=state("[\"01\"]");Store store=new Store(base,null);Remote remote=new Remote(base);
-    assertEquals("unchanged",AccountSync.run(store,remote,AccountSync.digest(base),remote.headVersion,"").getString("action"));
+    assertEquals("unchanged",AccountSync.run(store,remote,AccountSync.digest(base),remote.headVersion,"","test-account").getString("action"));
     assertEquals(0,remote.gets);assertEquals(0,remote.puts);assertEquals(base,store.checkpoint);
   }
   @Test public void weakOrMissingVersionCannotOverwriteButCreateIsConditional()throws Exception{
     for(String etag:new String[]{"","W/\"weak\""}){try{AccountSync.requireVersion(etag,"",false);fail();}catch(java.io.IOException expected){}}
     String local=state("[]");Store store=new Store(local,null);Remote remote=new Remote(local);remote.missing=true;
-    AccountSync.run(store,remote,"","","");assertEquals(1,remote.puts);assertEquals(0,remote.gets);
+    AccountSync.run(store,remote,"","","","test-account");assertEquals(1,remote.puts);assertEquals(0,remote.gets);
   }
   @Test public void unquotedVersionFromNutstoreIsUsableAndSentVerbatim()throws Exception{
     // 坚果云返回不带引号的 ETag：不能因为“没有引号”就判定云端没有版本号（1.0.12 的回归）。
@@ -74,14 +118,14 @@ public class AccountSyncTest {
     AccountSync.requireVersion("5f3d9c8e15a4","",false);
     String base=state("[\"01\"]");Store store=new Store(state("[\"01\",\"02\"]"),base);Remote remote=new Remote(base);
     remote.headVersion="5f3d9c8e15a4";remote.getVersion="5f3d9c8e15a4";
-    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"5f3d9c8e15a4","");
+    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"5f3d9c8e15a4","","test-account");
     assertEquals("uploaded",result.getString("action"));assertEquals("5f3d9c8e15a4",remote.expected);
   }
   @Test public void weakVersionFallsBackToLastModifiedInsteadOfBlockingSync()throws Exception{
     AccountSync.requireVersion("W/\"weak\"","Wed, 05 Nov 2025 04:00:00 GMT",false);
     String base=state("[\"01\",\"02\"]");Store store=new Store(state("[\"01\"]"),base);Remote remote=new Remote(base);
     remote.headVersion="W/\"weak\"";remote.getVersion="W/\"weak\"";
-    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"W/\"weak\"","");
+    JSONObject result=AccountSync.run(store,remote,AccountSync.digest(base),"W/\"weak\"","","test-account");
     assertEquals("uploaded",result.getString("action"));assertEquals(1,remote.puts);
     assertEquals(remote.headModified,remote.expectedModified);
   }

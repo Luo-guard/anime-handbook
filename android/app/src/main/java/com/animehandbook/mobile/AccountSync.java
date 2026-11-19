@@ -41,30 +41,49 @@ final class AccountSync {
   }
   private static boolean hasRecords(String raw) throws Exception {
     JSONObject tables=new JSONObject(raw).getJSONObject("tables");
-    for(String key:new String[]{"anime","events"})if(tables.optJSONArray(key)!=null&&tables.optJSONArray(key).length()>0)return true;
+    for(String key:new String[]{"anime","events","custom_collections","custom_collection_items","ranking_boards","ranking_templates","ranking_tiers","ranking_items"}) {
+      if(tables.optJSONArray(key)!=null&&tables.optJSONArray(key).length()>0)return true;
+    }
     return false;
   }
-  static JSONObject run(Store store, Remote remote, String known, String previousEtag, String resolution) throws Exception {
+  static JSONObject run(Store store, Remote remote, String known, String previousEtag, String choice, String accountScope) throws Exception {
+    String[] selection=choice.split(":",2);
+    String resolution=selection[0];
+    if(!resolution.isEmpty()&&(!("local".equals(resolution)||"remote".equals(resolution))||selection.length!=2)) {
+      throw new java.io.IOException("请重新同步并选择要保留的版本");
+    }
     String local=store.read();new JSONObject(local).getJSONObject("tables");
-    Snapshot probe=remote.probe();
-    if(probe.code!=200&&probe.code!=404&&probe.code!=405)throw new java.io.IOException("读取云端失败（HTTP "+probe.code+"）");
-    if(probe.code==404)return upload(store,remote,local,"","",true);
     boolean localUnchanged=!known.isEmpty()&&matches(known,local);
-    if(probe.code==200&&!previousEtag.isEmpty()&&previousEtag.equals(probe.etag)&&!known.isEmpty()&&resolution.isEmpty()) {
-      if(!localUnchanged)return upload(store,remote,local,probe.etag,probe.modified,false);
-      store.checkpoint(local,probe.etag);return new JSONObject().put("action","unchanged").put("message","两边数据已经是最新");
+    if(resolution.isEmpty()) {
+      Snapshot probe=remote.probe();
+      if(probe.code!=200&&probe.code!=404&&probe.code!=405)throw new java.io.IOException("读取云端失败（HTTP "+probe.code+"）");
+      if(probe.code==404)return upload(store,remote,local,"","",true);
+      if(probe.code==200&&!previousEtag.isEmpty()&&previousEtag.equals(probe.etag)&&!known.isEmpty()) {
+        if(!localUnchanged)return upload(store,remote,local,probe.etag,probe.modified,false);
+        store.checkpoint(local,probe.etag);return new JSONObject().put("action","unchanged").put("message","两边数据已经是最新");
+      }
     }
     Snapshot incoming=remote.get();
-    if(incoming.code==404)return upload(store,remote,local,"","",true);
+    if(incoming.code==404) {
+      if(!resolution.isEmpty())throw new java.io.IOException("云端版本已变化，请重新同步后再选择");
+      return upload(store,remote,local,"","",true);
+    }
     if(incoming.code!=200)throw new java.io.IOException("读取云端失败（HTTP "+incoming.code+"）");
     String value=new JSONObject(incoming.value).getJSONObject("state").toString();new JSONObject(value).getJSONObject("tables");
-    if(digest(local).equals(digest(value))){store.checkpoint(local,incoming.etag);return new JSONObject().put("action","unchanged").put("message","两边数据已经是最新");}
-    if("local".equals(resolution))return upload(store,remote,local,incoming.etag,incoming.modified,false);
+    String localDigest=digest(local), remoteDigest=digest(value);
+    String versionToken=hash(accountScope+"\n"+localDigest+"\n"+remoteDigest);
+    if(!resolution.isEmpty()) {
+      if(!versionToken.equals(selection[1]))throw new java.io.IOException("手机或云端版本已变化，请重新同步后再选择");
+      if("local".equals(resolution))return upload(store,remote,local,incoming.etag,incoming.modified,false);
+      return download(store,local,value,incoming.etag,"downloaded");
+    }
+    if(localDigest.equals(remoteDigest)){store.checkpoint(local,incoming.etag);return new JSONObject().put("action","unchanged").put("message","两边数据已经是最新");}
+    if(known.isEmpty()&&!hasRecords(local))return download(store,local,value,incoming.etag,"downloaded");
     boolean remoteUnchanged=!known.isEmpty()&&matches(known,value);
-    if("remote".equals(resolution)||localUnchanged||(known.isEmpty()&&!hasRecords(local)))return download(store,local,value,incoming.etag,"downloaded");
+    if(localUnchanged)return download(store,local,value,incoming.etag,"downloaded");
     if(remoteUnchanged)return upload(store,remote,local,incoming.etag,incoming.modified,false);
     String base=store.baseline();
-    if(base==null||known.isEmpty()||!matches(known,base))return new JSONObject().put("conflict",true);
+    if(base==null||known.isEmpty()||!matches(known,base))return new JSONObject().put("conflict",true).put("conflict_token",versionToken);
     String merged=RecordStateMerger.merge(new JSONObject(local),new JSONObject(value),new JSONObject(base)).toString();
     requireVersion(incoming.etag,incoming.modified,false);
     Snapshot uploaded=remote.put(merged,incoming.etag,incoming.modified,false);
