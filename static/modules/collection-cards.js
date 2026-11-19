@@ -141,6 +141,25 @@ function renderCollection() {
       : state.sync.last_error ||
         "可以搜索添加番剧，也可以从本机 Kazumi 导入收藏。";
   $("#emptySyncButton").classList.toggle("hidden", state.collectionKind === "custom");
+  if ($("#collectionSearchScope")) {
+    const searching = Boolean(state.search.trim());
+    const expanded = collectionSearchScope.all || collectionSearchScope.anySeason;
+    $("#collectionSearchScope").classList.toggle("hidden", !searching || (items.length > 0 && !expanded));
+    $("#collectionEmptyTitle").textContent = searching ? "没有找到匹配的收藏" : "这里还没有收藏";
+    if (searching) {
+      $("#emptyMessage").textContent = "可以换个关键词，或扩大搜索范围。";
+      $("#emptySyncButton").classList.add("hidden");
+    }
+    const category = state.collectionKind === "custom"
+      ? state.custom_collections.find(item => Number(item.id) === Number(state.customCollectionId))?.name
+      : CATEGORIES.find(item => item.id === state.category)?.name;
+    const all = collectionSearchScope.all || state.collectionKind === "all";
+    const seasons = collectionSearchScope.anySeason ? 0 : state.seasonFilters.size;
+    $("#collectionScopeLabel").textContent = `搜索范围：${all ? "全部收藏" : category || "当前收藏夹"} · ${seasons ? `${seasons} 个选定季度` : "不限季度"}`;
+    $("#collectionSearchAll").hidden = all;
+    $("#collectionSearchAnySeason").hidden = !seasons;
+    $("#collectionSearchRestore").hidden = !expanded;
+  }
   const ratingVisibility = state.settings.category_rating_visibility || {};
   $("#collectionRatingToggle").checked = ratingVisibility[activeVisibilityKey()] !== false;
   $("#progressBarToggle").checked = showProgressBar();

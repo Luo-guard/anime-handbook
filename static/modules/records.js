@@ -261,6 +261,13 @@ let timelineOffset = 0;
 let timelineLoading = false;
 let timelineHasMore = false;
 let timelineObserver = null;
+let timelineDateRange = {};
+
+function setTimelineDateRange(start = "", end = "") {
+  timelineDateRange = {start, end};
+  $("#timelineDateStart").value = start;
+  $("#timelineDateEnd").value = end;
+}
 
 async function renderTimeline(append = false) {
   if (append && (timelineLoading || !timelineHasMore || state.activeView !== "timeline")) return;
@@ -278,6 +285,7 @@ async function renderTimeline(append = false) {
   timelineLoading = true;
   try {
     const query = new URLSearchParams({limit: "30", offset: String(timelineOffset), q: state.timelineSearch});
+    for (const [key, value] of Object.entries(timelineDateRange)) if (value) query.set(key, value);
     for (const theme of state.timelineThemes) query.append("theme", theme);
     const result = await api(`/api/timeline?${query}`, {signal: timelineAbort.signal});
     if (request !== timelineRequest) return;
@@ -401,7 +409,10 @@ function switchView(view) {
   if (view !== "collection" && $("#collectionFloatingPanel").open) {
     $("#collectionFloatingPanel").close();
   }
-  if (view === "timeline") renderTimeline();
+  if (view === "timeline") {
+    if (typeof updateNoteDraftActions === "function") updateNoteDraftActions();
+    renderTimeline();
+  }
   if (view === "statistics") {
     state.statisticsType = statisticsDefaultTheme();
     renderStatistics();

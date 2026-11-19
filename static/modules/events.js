@@ -25,9 +25,29 @@ $("#statisticsTypeSelect")?.addEventListener("change", (event) => {
 let collectionSearchTimer;
 $("#searchInput").addEventListener("input", (event) => {
   state.search = event.target.value;
+  if (!state.search.trim()) Object.assign(collectionSearchScope, {all:false, anySeason:false});
   clearTimeout(collectionSearchTimer);
   collectionSearchTimer = setTimeout(renderCollection, 120);
 });
+
+$("#collectionSearchAll").onclick = () => {
+  Object.assign(collectionSearchScope, {all:true, anySeason:true});
+  renderCollection();
+};
+$("#collectionSearchAnySeason").onclick = () => { collectionSearchScope.anySeason = true; renderCollection(); };
+$("#collectionSearchRestore").onclick = () => {
+  Object.assign(collectionSearchScope, {all:false, anySeason:false});
+  renderCollection();
+};
+$("#timelineDateForm").onsubmit = event => {
+  event.preventDefault();
+  const start = $("#timelineDateStart").value;
+  const end = $("#timelineDateEnd").value;
+  if (start && end && start > end) { toast("开始日期不能晚于结束日期", "error"); return; }
+  setTimelineDateRange(start, end);
+  renderTimeline();
+};
+$("#timelineDateClear").onclick = () => { setTimelineDateRange(); renderTimeline(); };
 
 $("#collectionFloatingButton").addEventListener("click", () => {
   const panel = $("#collectionFloatingPanel");
@@ -249,10 +269,55 @@ const noteComposerHome = document.createComment("note composer home");
 noteComposer.before(noteComposerHome);
 let quickRecordSession = null;
 let noteSaving = false;
+const noteDraftKey = () => `handbook:note-draft:${state.active_profile?.id || state.user?.id || "default"}`;
+
+function readNoteDraft(key = noteDraftKey()) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+
+function updateNoteDraftActions() {
+  $("#noteDraftActions").classList.toggle("hidden", !readNoteDraft() || !noteComposer.classList.contains("hidden"));
+}
+
+function saveNoteDraft() {
+  const content = $("#noteContent").value;
+  const anime = $("#noteAnime").value;
+  try {
+    if (content.trim() || anime) localStorage.setItem(noteDraftKey(), JSON.stringify({content, anime, themes:[...state.noteThemes]}));
+    else localStorage.removeItem(noteDraftKey());
+  } catch { /* Keep editing available when browser storage is disabled. */ }
+}
+
+function restoreNoteDraft() {
+  const draft = readNoteDraft();
+  if (!draft || $("#noteContent").value || $("#noteAnime").value) return;
+  $("#noteContent").value = typeof draft.content === "string" ? draft.content : "";
+  $("#noteAnime").value = draft.anime || "";
+  if (Array.isArray(draft.themes)) state.noteThemes = new Set(draft.themes);
+  renderNoteThemePicker();
+  updateAssociatedAnimeLabel();
+}
+
+function clearNoteDraft(key = noteDraftKey()) {
+  try { localStorage.removeItem(key); } catch { /* Storage can be unavailable. */ }
+}
+
+noteComposer.addEventListener("input", saveNoteDraft);
+noteComposer.addEventListener("change", saveNoteDraft);
+$("#resumeNoteDraft").onclick = () => $("#writeNoteButton").click();
+$("#discardNoteDraft").onclick = () => {
+  if (!confirm("丢弃这份未保存的感想？")) return;
+  clearNoteDraft();
+  $("#noteContent").value = "";
+  $("#noteAnime").value = "";
+  updateAssociatedAnimeLabel();
+  updateNoteDraftActions();
+};
 
 function openQuickRecord() {
   if (state.user?.read_only) return false;
   if (quickRecordSession) return true;
+  restoreNoteDraft();
   const video = $("#offlinePlayer[open] #offlineVideo");
   const playing = video && !video.paused && !video.ended;
   quickRecordSession = {
@@ -263,6 +328,7 @@ function openQuickRecord() {
   quickRecordDialog.append(noteComposer);
   noteComposer.classList.remove("hidden");
   quickRecordDialog.showModal();
+  updateNoteDraftActions();
   if (playing) video.pause();
   $("#noteContent").focus({ preventScroll: true });
   return true;
@@ -273,6 +339,7 @@ quickRecordDialog.addEventListener("close", () => {
   quickRecordSession = null;
   noteComposerHome.after(noteComposer);
   noteComposer.classList.toggle("hidden", !session?.inlineOpen || quickRecordDialog.returnValue === "saved");
+  updateNoteDraftActions();
   const resume = session?.resume;
   if (resume && $("#offlinePlayer")?.open && (resume.video.currentSrc || resume.video.src) === resume.source) {
     resume.video.play().catch(() => {});
@@ -280,13 +347,16 @@ quickRecordDialog.addEventListener("close", () => {
 });
 
 $("#writeNoteButton").addEventListener("click", () => {
+  restoreNoteDraft();
   $("#noteComposer").classList.remove("hidden");
+  updateNoteDraftActions();
   $("#noteContent").focus();
 });
 
 $("#closeComposer").addEventListener("click", () => {
   if (quickRecordDialog.open) quickRecordDialog.close();
   else noteComposer.classList.add("hidden");
+  updateNoteDraftActions();
 });
 
 async function createRecordTheme() {
@@ -360,6 +430,7 @@ async function uploadRecordImageFiles(files, total, textarea, { signal, onProgre
   if (!textarea.isConnected) return;
   const insert = inserts.join("\n");
   textarea.setRangeText(insert, textarea.selectionStart, textarea.selectionEnd, "end");
+  if (textarea === $("#noteContent")) saveNoteDraft();
   textarea.focus();
   onSuccess(total > 1 ? `${total} 张图片已插入记录` : "图片已插入记录");
 }
@@ -544,6 +615,9 @@ noteComposer.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (noteSaving) return;
   noteSaving = true;
+  const owner = noteDraftKey();
+  const submitted = $("#noteContent").value;
+  const submittedAnime = $("#noteAnime").value;
   const submit = noteComposer.querySelector('button[type="submit"]');
   submit.disabled = true;
   try {
@@ -561,11 +635,19 @@ noteComposer.addEventListener("submit", async (event) => {
         }),
       }),
     });
+    if (owner !== noteDraftKey()) { clearNoteDraft(owner); return; }
+    if ($("#noteContent").value !== submitted || $("#noteAnime").value !== submittedAnime) {
+      saveNoteDraft();
+      toast("感想已保存，后续修改留在草稿里");
+      return;
+    }
+    clearNoteDraft(owner);
     $("#noteContent").value = "";
     $("#noteAnime").value = "";
     updateAssociatedAnimeLabel();
     if (quickRecordDialog.open) quickRecordDialog.close("saved");
     else noteComposer.classList.add("hidden");
+    updateNoteDraftActions();
     toast("感想已写入时间线");
     if (state.activeView === "timeline") await renderTimeline();
   } catch (error) {
@@ -850,6 +932,14 @@ $("#activateHandbookProfileButton").addEventListener("click", async () => {
     }
     ThemeSettingsSession.finish(false);
     Object.assign(state, payload);
+    if (switchingProfile) {
+      $("#noteContent").value = "";
+      $("#noteAnime").value = "";
+      state.noteThemes = new Set(["other"]);
+      populateAnimeSelect();
+      noteComposer.classList.add("hidden");
+      updateNoteDraftActions();
+    }
     ThemeSettingsSession.begin();
     applyTheme();
     renderStats(); renderTabs(); renderCollection(); renderSettingsPanels();

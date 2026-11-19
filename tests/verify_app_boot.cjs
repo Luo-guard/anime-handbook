@@ -198,6 +198,7 @@ function scriptUrls() {
       const retained = button === $('#pcPlaylistMenu button');
       window.onlinePlayback = originalPlayback;
       $('#offlinePlayer').close();
+      $('#offlinePlayerBackdrop').hidden = true;
       commitAnimes([japanese], {render:false});
       return {before,after,localPlaylist,onlineBefore,onlineAfter,onlinePlaylist,retained};
     });
@@ -212,7 +213,39 @@ function scriptUrls() {
       onlinePlaylist:'● 第 8 集 · 补齐的中文标题',
       retained:true,
     });
-    console.log('App boot smoke: real script order, startup, collection revision, modal interactions, and live local/online episode translations passed with no added requests.');
+    await page.route('**/api/timeline?**', route => route.fulfill({json:{days:[],available_themes:['watch'],has_more:false,next_offset:0}}));
+    const jump = page.waitForRequest(r => r.url().includes('/api/timeline?') && r.url().includes('start=2026-11-16'));
+    await page.evaluate(() => {
+      state.statisticsPeriod = 'week'; state.statisticsType = 'watch';
+      renderStatisticsChart([{label:'2026-W47',episodes:2}]);
+      document.querySelector('.statistics-bar-item').click();
+    });
+    const timelineQuery = new URL((await jump).url()).searchParams;
+    assert.equal(timelineQuery.get('end'), '2026-11-22');
+    assert.equal(timelineQuery.get('theme'), 'watch');
+    await page.locator('#writeNoteButton').click();
+    await page.locator('#noteContent').fill('可恢复的感想');
+    await page.locator('#closeComposer').click();
+    assert.equal(await page.locator('#noteDraftActions').isVisible(), true);
+    await page.evaluate(() => { $('#noteContent').value = ''; });
+    await page.locator('#resumeNoteDraft').click();
+    assert.equal(await page.locator('#noteContent').inputValue(), '可恢复的感想');
+    await page.route('**/api/notes', route => route.fulfill({json:{ok:true}}));
+    await page.locator('#noteComposer button[type=submit]').click();
+    await page.locator('#noteComposer').waitFor({state:'hidden'});
+    assert.equal(await page.evaluate(() => localStorage.getItem(noteDraftKey())), null);
+    const scope = await page.evaluate(() => {
+      state.animes = [{id:1,collection_type:2,name:'示例番',air_date:'2026-11-01'}];
+      state.collectionKind = 'builtin'; state.category = 1;
+      state.search = '示例'; state.seasonFilters = new Set(['2025-01']);
+      const before = filteredAnimes().length;
+      $('#collectionSearchAll').click();
+      const expanded = filteredAnimes().length;
+      $('#collectionSearchRestore').click();
+      return [before, expanded, filteredAnimes().length, [...state.seasonFilters]];
+    });
+    assert.deepEqual(scope, [0,1,0,['2025-01']]);
+    console.log('App boot smoke: episode labels, statistics drilldown, note drafts, and collection search scope passed.');
   } finally {
     await browser.close();
     server.close();

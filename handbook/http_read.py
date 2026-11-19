@@ -391,6 +391,8 @@ class ReadRoutes:
                         themes=query.get("theme", []),
                         offset=int(query.get("offset", ["0"])[0]),
                         limit=int(query["limit"][0]),
+                        start=query.get("start", [""])[0],
+                        end=query.get("end", [""])[0],
                     ))
                     return
                 settings = self.database.get_settings()

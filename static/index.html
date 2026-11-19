@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261118-history-layout" />
+  <link rel="stylesheet" href="/styles.css?v=20261119-journal-tools" />
   </head>
   <body>
     <div class="app-shell">
@@ -134,9 +134,15 @@
           <div class="anime-grid" id="animeGrid"></div>
           <div class="empty-state hidden" id="collectionEmpty">
             <div class="empty-mark">手</div>
-            <h2>这里还没有收藏</h2>
+            <h2 id="collectionEmptyTitle">这里还没有收藏</h2>
             <p id="emptyMessage">可以搜索添加番剧，也可以从本机 Kazumi 导入收藏。</p>
             <button class="secondary-button" id="emptySyncButton">立即同步</button>
+          </div>
+          <div class="journal-tools hidden" id="collectionSearchScope">
+            <span id="collectionScopeLabel"></span>
+            <button type="button" class="secondary-button compact-button" id="collectionSearchAll">搜全部收藏</button>
+            <button type="button" class="secondary-button compact-button" id="collectionSearchAnySeason">忽略季度筛选</button>
+            <button type="button" class="secondary-button compact-button" id="collectionSearchRestore">恢复原筛选</button>
           </div>
         </section>
 
@@ -166,6 +172,18 @@
               <button type="button" class="secondary-button compact-button" id="timelineThemeFilterButton" aria-expanded="false">主题筛选 <span>▾</span></button>
               <div class="timeline-theme-menu hidden" id="timelineThemeFilterMenu"></div>
             </div>
+            <form id="timelineDateForm" class="journal-tools">
+              <label>从 <input type="date" id="timelineDateStart" aria-label="起始日期"></label>
+              <label>到 <input type="date" id="timelineDateEnd" aria-label="结束日期"></label>
+              <button class="secondary-button compact-button" type="submit">筛选日期</button>
+              <button class="text-button" type="button" id="timelineDateClear">清除日期</button>
+            </form>
+          </div>
+
+          <div class="journal-tools hidden" id="noteDraftActions">
+            <span>有一份未保存的感想</span>
+            <button type="button" class="secondary-button compact-button" id="resumeNoteDraft">继续编辑</button>
+            <button type="button" class="text-button" id="discardNoteDraft">丢弃草稿</button>
           </div>
 
           <form class="note-composer hidden" id="noteComposer">
@@ -244,7 +262,7 @@
             <div>
               <p class="eyebrow">WATCHING INSIGHTS</p>
               <h1 data-page-label="statistics">记录统计</h1>
-              <p class="page-subtitle">看见每一段追番与记录留下的轨迹</p>
+              <p class="page-subtitle">点击柱子查看该时段的看番记录</p>
             </div>
           </header>
           <div class="statistics-controls">
@@ -1865,6 +1883,7 @@
             <button type="button" data-history-layout="grid" aria-pressed="false">封面网格</button>
           </div>
         </div>
+        <input type="search" class="history-query" id="playbackHistoryQuery" placeholder="搜索番名" aria-label="搜索播放历史番名" autocomplete="off">
         <div id="jumpHistoryList" class="jump-list" tabindex="0" role="region" aria-label="播放记录"></div>
         <div class="jump-actions"><button type="button" class="secondary-button compact-button" id="clearJumpHistory">清空记录</button><p id="jumpHistoryStatus" role="status"></p></div>
       </div>
@@ -1992,31 +2011,31 @@
     <script src="/schedule.js?v=20261116-collected-detail" defer></script>
     <script src="/modules/core.js?v=20261118-ranking-drafts" defer></script>
     <script src="/modules/network.js?v=20261104-hardening" defer></script>
-    <script src="/modules/collection.js?v=20261118-player-titles" defer></script>
+    <script src="/modules/collection.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/presentation.js?v=20261116-record-episode-name" defer></script>
-    <script src="/modules/collection-cards.js?v=20261114-card-columns" defer></script>
-    <script src="/modules/composer.js?v=20261113-note-anime-search" defer></script>
+    <script src="/modules/collection-cards.js?v=20261119-journal-tools" defer></script>
+    <script src="/modules/composer.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/video-links.js?v=20261111-playback-history" defer></script>
     <script src="/modules/rules-menu.js?v=20261111-playback-history" defer></script>
     <script src="/modules/episode-gesture.js?v=20261116-flexible-wheel" defer></script>
     <script src="/modules/details.js?v=20261118-player-titles" defer></script>
     <script src="/modules/detail-wallpapers.js?v=20261116-detail-wallpapers" defer></script>
-    <script src="/modules/records.js?v=20261116-record-episode-name" defer></script>
+    <script src="/modules/records.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/ranking.js?v=20261118-ranking-drafts" defer></script>
-    <script src="/modules/statistics.js?v=20261116-stale-preview" defer></script>
+    <script src="/modules/statistics.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/lifecycle.js?v=20261118-player-titles" defer></script>
     <script src="/modules/settings.js?v=20261117-settings-state" defer></script>
     <script src="/modules/theme-session.js?v=20261105-direct-preview" defer></script>
     <script src="/modules/settings-help.js?v=20261116-library-settings" defer></script>
     <script src="/modules/settings-save.js?v=20261116-statistics-settings" defer></script>
-    <script src="/modules/events.js?v=20261118-library-target" defer></script>
+    <script src="/modules/events.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/keyboard.js?v=20261111-quick-record" defer></script>
     <script src="/modules/desktop-control.js?v=20261025-shutdown-settings" defer></script>
     <script src="/modules/toolbar-buttons.js?v=20261111-playback-history" defer></script>
     <script src="/modules/collection-edit.js?v=20261118-import-resume" defer></script>
     <script src="/modules/collection-search-history.js?v=20261118" defer></script>
     <script src="/modules/collection-import.js?v=20261118-import-resume" defer></script>
-    <script src="/modules/jump-history.js?v=20261118-history-layout" defer></script>
+    <script src="/modules/jump-history.js?v=20261119-journal-tools" defer></script>
     <script src="/modules/danmaku.js?v=20261113-danmaku-auto-match" defer></script>
     <script src="/modules/offline.js?v=20261118-player-titles" defer></script>
     <script src="/modules/online-playback.js?v=20261115-episode-metadata" defer></script>

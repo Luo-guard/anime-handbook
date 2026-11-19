@@ -81,22 +81,50 @@ function visibleStatisticsSeries(series) {
   return series.filter(item => Number(item[metric] || 0) !== 0);
 }
 
+function statisticsDateRange(label, period) {
+  if (period === "day" && /^\d{4}-\d{2}-\d{2}$/.test(label)) return [label, label];
+  if (period === "week") {
+    const range = statisticsWeekRange(label);
+    if (range) return [range.start, range.end].map(date => date.toISOString().slice(0, 10));
+  }
+  if (period === "month" && /^\d{4}-\d{2}$/.test(label)) {
+    const [year, month] = label.split("-").map(Number);
+    return [`${label}-01`, new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)];
+  }
+  if (period === "year" && /^\d{4}$/.test(label)) return [`${label}-01-01`, `${label}-12-31`];
+  return null;
+}
+
 function renderStatisticsChart(series) {
   const chart = $("#statisticsChart");
+  const period = state.statisticsPeriod;
+  const type = state.statisticsType;
   const metric = state.statisticsType === "watch" ? "episodes" : "records";
   const max = Math.max(1, ...series.map((item) => Number(item[metric] || 0)));
   chart.innerHTML = series.length
-    ? `<div class="statistics-bars">${series.map((item) => {
+    ? `<div class="statistics-bars">${series.map((item, index) => {
         const value = Number(item[metric] || 0);
         const height = value > 0 ? Math.max(6, Math.round((value / max) * 100)) : 0;
-        return `<div class="statistics-bar-item" title="${escapeHtml(statisticsPeriodTitle(item.label))}：${value} ${statisticsMetricLabel()}">
+        return `<button type="button" class="statistics-bar-item" data-period-index="${index}" title="${escapeHtml(statisticsPeriodTitle(item.label))}：${value} ${statisticsMetricLabel()}">
           <span class="statistics-value">${value}</span>
           <div class="statistics-bar-track">${value > 0 ? `<div class="statistics-bar-fill" style="height:${height}%"></div>` : ""}</div>
           <span class="statistics-label" title="${escapeHtml(statisticsPeriodTitle(item.label))}">${escapeHtml(statisticsDateLabel(item.label))}</span>
-        </div>`;
+        </button>`;
       }).join("")}</div>`
     : `<div class="statistics-empty">这个时间范围还没有对应记录。</div>`;
   const bars = $(".statistics-bars", chart);
+  if (bars) bars.onclick = event => {
+    const button = event.target.closest("[data-period-index]");
+    if (!button) return;
+    const range = statisticsDateRange(series[Number(button.dataset.periodIndex)].label, period);
+    if (!range) return;
+    applyTimelineDefaults();
+    state.timelineThemes = new Set(type === "all" ? [] : [type]);
+    state.timelineSearch = "";
+    $("#timelineSearchInput").value = "";
+    setTimelineDateRange(...range);
+    switchView("timeline");
+  };
   if (bars) requestAnimationFrame(() => { bars.scrollLeft = bars.scrollWidth; });
 }
 

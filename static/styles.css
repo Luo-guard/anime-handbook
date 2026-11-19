@@ -1130,6 +1130,7 @@ h1 {
 }
 
 .statistics-bar-item {
+  padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
   display: grid;
   min-width: 52px;
   flex: 1;
@@ -1138,6 +1139,18 @@ h1 {
   align-items: end;
   text-align: center;
 }
+.statistics-bar-item:hover .statistics-bar-track { filter: brightness(.92); }
+.statistics-bar-item:focus-visible { outline: 2px solid var(--active-inset); outline-offset: -2px; }
+.journal-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 8px; }
+.journal-tools label { display: inline-flex; align-items: center; gap: 5px; }
+.journal-tools input, .history-query { min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
+#collectionSearchScope { justify-content: center; }
+.history-entry { position: relative; min-width: 0; }
+.history-entry:not([data-layout]) .playback-history-row { padding-right: 49px; }
+.history-remove { position: absolute; right: 5px; bottom: 5px; padding: 5px; border: 0; border-radius: 6px; background: var(--surface); color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.history-remove:hover, .history-remove.is-failed { color: var(--danger); }
+#jumpHistoryList[data-layout="grid"] .playback-history-row { padding-right: 0; }
+#jumpHistoryList[data-layout="grid"] .jump-time { padding-right: 42px; }
 
 .statistics-value {
   color: var(--green-800);

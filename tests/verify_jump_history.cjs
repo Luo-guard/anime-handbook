@@ -70,6 +70,12 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
     await page.locator('[data-history-kind="all"]').click();
     await page.locator('[data-history-layout="list"]').click();
     assert.equal(await page.locator('.jump-row').count(), 4);
+    await page.locator('#playbackHistoryQuery').fill('在线番');
+    assert.equal(await page.locator('.jump-row').count(), 1);
+    await page.locator('.history-remove').click();
+    assert.equal(await page.locator('.jump-row').count(), 0);
+    await page.locator('#playbackHistoryQuery').fill('');
+    assert.equal(await page.locator('.jump-row').count(), 3);
     await page.locator('#clearJumpHistory').click();
     assert.equal(await page.locator('.jump-row').count(), 0);
     console.log('Playback history: date groups, cover grid, saved layout, filters, resume, narrow viewport, profile isolation and clear passed.');

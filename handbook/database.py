@@ -2405,7 +2405,7 @@ class HandbookDB:
         return result
 
     def timeline_page(self, *, search: str = "", themes: list[str] | None = None,
-                      offset: int = 0, limit: int = 30) -> dict[str, Any]:
+                      offset: int = 0, limit: int = 30, start: str = "", end: str = "") -> dict[str, Any]:
         """Page lightweight event headers first; expand only this page's episodes.
 
         Finish the last day so daily summaries and day sections remain complete.
@@ -2435,6 +2435,16 @@ class HandbookDB:
         """
         conditions = " WHERE 1 = 1"
         params: list[Any] = []
+        start = date.fromisoformat(start).isoformat() if start else ""
+        end = date.fromisoformat(end).isoformat() if end else ""
+        if start and end and start > end:
+            raise ValueError("开始日期不能晚于结束日期")
+        # Match _event_day and statistics: use each event's wall time, then
+        # subtract the configured journal-day offset before testing the date.
+        for operator, bound in ((">=", start), ("<=", end)):
+            if bound:
+                conditions += f" AND date(substr(created_at, 1, 19), ?) {operator} ?"
+                params += [f"{-day_start} hours", bound]
         if search.strip():
             conditions += " AND (name LIKE ? OR name_cn LIKE ? OR content LIKE ?)"
             keyword = f"%{search.strip()}%"

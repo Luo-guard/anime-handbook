@@ -96,16 +96,18 @@ function builtinCollectionOrder() {
     .filter((id, index, list) => CATEGORIES.some((item) => item.id === id) && list.indexOf(id) === index);
 }
 
+const collectionSearchScope = { all: false, anySeason: false };
+
 function filteredAnimes() {
   const keyword = state.search.trim().toLocaleLowerCase();
   return state.animes.filter((anime) => {
-    const inCollection = state.collectionKind === "all"
+    const inCollection = (keyword && collectionSearchScope.all) || state.collectionKind === "all"
       ? true
       : state.collectionKind === "custom"
       ? (anime.custom_collection_ids || []).map(Number).includes(Number(state.customCollectionId))
       : anime.collection_type === state.category &&
         !(hideCustomizedFromBuiltin() && anime.in_custom_collection);
-    const seasonMatches = !state.seasonFilters.size || state.seasonFilters.has(animeSeasonKey(anime));
+    const seasonMatches = (keyword && collectionSearchScope.anySeason) || !state.seasonFilters.size || state.seasonFilters.has(animeSeasonKey(anime));
     if (!keyword) return inCollection && seasonMatches;
     return (
       inCollection &&

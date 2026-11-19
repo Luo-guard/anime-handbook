@@ -1,5 +1,6 @@
 window.playbackHistory = (() => {
   let filter = "all";
+  let query = "";
   let opening = false;
   const limit = 200;
   const profileKey = () => `handbook:playback-history:${state.active_profile?.id || "default"}`;
@@ -59,6 +60,8 @@ window.playbackHistory = (() => {
   }
 
   function renderEntry(item, layout) {
+    const entry = document.createElement("div");
+    entry.className = "history-entry";
     const row = document.createElement("button");
     row.type = "button";
     row.className = "jump-row playback-history-row";
@@ -91,6 +94,16 @@ window.playbackHistory = (() => {
     const played = new Date(item.playedAt);
     if (Number.isFinite(played.getTime())) time.textContent = (layout === "grid" ? shortDate : timeLabel).format(played);
     row.append(cover, copy, time);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "history-remove";
+    remove.textContent = "移除";
+    remove.setAttribute("aria-label", `移除播放记录：${title.textContent} ${item.episode || ""}`);
+    remove.onclick = () => {
+      if (!confirm("移除这条播放历史？")) return;
+      try { write(read().filter(record => historyKey(record) !== historyKey(item))); render(); $("#jumpHistoryList").focus(); }
+      catch (error) { $("#jumpHistoryStatus").textContent = error.message; }
+    };
     row.addEventListener("click", async () => {
       if (opening) return;
       opening = true;
@@ -100,17 +113,26 @@ window.playbackHistory = (() => {
         else await resumeLocal(item);
       } catch (error) {
         $("#jumpHistoryStatus").textContent = error.message;
+        remove.classList.add("is-failed");
       } finally {
         opening = false;
         row.disabled = false;
       }
     });
-    return row;
+    entry.append(row, remove);
+    return entry;
   }
 
   function render() {
     const items = read().sort((a, b) => (Number(b.playedAt) || 0) - (Number(a.playedAt) || 0));
-    const visible = filter === "all" ? items : items.filter(item => item.kind === filter);
+    const animeById = query ? new Map((state.animes || []).map(anime => [Number(anime.id), anime])) : null;
+    const visible = items.filter(item => {
+      if (filter !== "all" && item.kind !== filter) return false;
+      if (!query) return true;
+      const anime = animeById.get(Number(item.animeId));
+      return [item.animeTitle, anime?.name, anime?.name_cn, anime?.display_name]
+        .some(name => String(name || "").toLocaleLowerCase().includes(query));
+    });
     const layout = currentLayout();
     const list = $("#jumpHistoryList");
     list.dataset.layout = layout;
@@ -148,7 +170,7 @@ window.playbackHistory = (() => {
     if (!visible.length) {
       const empty = document.createElement("p");
       empty.className = "jump-empty";
-      empty.textContent = "还没有这类播放记录。";
+      empty.textContent = query ? "没有匹配的播放记录。" : "还没有这类播放记录。";
       list.append(empty);
     }
     list.scrollTop = 0;
@@ -165,6 +187,10 @@ window.playbackHistory = (() => {
       if (!modal.open) modal.showModal();
     });
     $("#jumpHistoryClose").addEventListener("click", () => modal.close());
+    $("#playbackHistoryQuery").addEventListener("input", event => {
+      query = event.target.value.trim().toLocaleLowerCase();
+      render();
+    });
     $("#playbackHistoryLayouts").addEventListener("click", event => {
       const button = event.target.closest("[data-history-layout]");
       if (!button || button.dataset.historyLayout === currentLayout()) return;

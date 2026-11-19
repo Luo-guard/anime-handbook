@@ -126,6 +126,7 @@ function renderNoteThemePicker() {
     else state.noteThemes.add(id);
     renderNoteThemePicker();
     updateNoteThemeLabel();
+    if (typeof saveNoteDraft === "function") saveNoteDraft();
   }));
   menu.querySelectorAll("[data-remove-theme]").forEach((button) => button.addEventListener("click", async () => {
     const id = button.dataset.removeTheme;
