@@ -76,9 +76,10 @@ async function fillShareTab(tabId, url) {
     if (!isShareTab(draft.platform,url)) return;
     let editor;
     let opened = false;
+    const locate = [draft.platform,"locate",draft.platform === "bilibili" ? draft.text : ""];
     for (let attempt=0; attempt<10; attempt++) {
       const frames = draft.platform === "qzone" ? {allFrames:true} : {};
-      const results = await run(frames,[draft.platform,"locate"]).catch(() => run({},[draft.platform,"locate"]));
+      const results = await run(frames,locate).catch(() => run({},locate));
       editor = results.find(frame=>frame.result?.editor);
       if (editor) break;
       const entry = results.find(frame=>frame.result?.entry);
@@ -92,7 +93,7 @@ async function fillShareTab(tabId, url) {
       await run({},[draft.platform,"notice","手账暂未识别到编辑器。请登录，打开写说说或发帖界面，再点下方重试。"]);
       return;
     }
-    if (editor.result.occupied) {
+    if (editor.result.occupied && !(editor.result.sameText && draft.paths.length)) {
       await run({},[draft.platform,"notice","编辑器里已有内容。手账保留了原稿，请打开空白编辑器后重试。"]);
       return;
     }
@@ -104,7 +105,13 @@ async function fillShareTab(tabId, url) {
       return;
     }
     await chrome.storage.session.remove(key);
-    const sent = result.result.images;
+    let sent = result.result.images;
+    if (draft.platform === "bilibili" && !sent && files.length) {
+      const [upload] = await chrome.scripting.executeScript({
+        target:{tabId,...target}, world:"MAIN", func:fillBilibiliImagePicker, args:[files,draft.text],
+      }).catch(()=>[]);
+      sent = upload?.result || 0;
+    }
     const message = draft.totalImages > sent
       ? `已准备草稿，${draft.totalImages-sent} 张图片需要手动添加。请检查后发布。`
       : sent ? "正文和图片已交给编辑器，请检查图片预览后再发布。" : "正文已填入，请在平台检查并发布。";
@@ -182,16 +189,23 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   // QQ Space puts this prompt inside the collapsed editor as ordinary text.
   const isQzonePrompt = node => platform === "qzone" && !hasMedia(node) &&
     ["说点儿什么吧", "说点什么吧"].includes(editorText(node));
-  const occupied = ({node,root}) => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node)) ||
-    (platform === "bilibili" && Boolean(root.querySelector(".bili-dyn-publishing__title__input")?.value.trim() ||
-      root.querySelector(".bili-pics-uploader__item__remove")));
-  if (action === "locate") return {editor:Boolean(editor),occupied:editor ? occupied(editor) : false,entry:Boolean(entry)};
+  const hasBilibiliDraftDetails = root => platform === "bilibili" &&
+    Boolean(root.querySelector(".bili-dyn-publishing__title__input")?.value.trim() ||
+      root.querySelector(".bili-pics-uploader__item__remove"));
+  const sameBilibiliText = ({node,root}, text) => platform === "bilibili" && Boolean(text) &&
+    !hasMedia(node) && !hasBilibiliDraftDetails(root) && editorText(node) === text.trim();
+  const occupied = ({node,root}) => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node)) || hasBilibiliDraftDetails(root);
+  if (action === "locate") return {
+    editor:Boolean(editor),occupied:editor ? occupied(editor) : false,entry:Boolean(entry),
+    ...(editor && sameBilibiliText(editor,payload) ? {sameText:true} : {}),
+  };
   if (action === "open" && !editor) {
     // Use only listed composer-entry labels. Never invoke form submission.
     if (entry && !entry.closest("form") && entry.getAttribute("type") !== "submit") entry.click();
     return;
   }
-  if (!editor || occupied(editor)) return {ok:false};
+  const addImagesOnly = editor && payload.files.length && sameBilibiliText(editor,payload.text);
+  if (!editor || (occupied(editor) && !addImagesOnly)) return {ok:false};
   const {node,root} = editor;
   const imageInputs = scope => [...scope.querySelectorAll('input[type="file"]:not([disabled])')];
   const acceptsImages = item => /image|png|jpe?g|webp/i.test(item.accept) ||
@@ -201,7 +215,7 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   const imageInput = () => findImageInput(imageInputs(root));
   let input = imageInput();
   if (input?.files.length) return {ok:false};
-  if (payload.text || isQzonePrompt(node)) {
+  if (!addImagesOnly && (payload.text || isQzonePrompt(node))) {
     node.focus();
     if (!node.isConnected || occupied(editor)) return {ok:false};
     if (node instanceof HTMLTextAreaElement) {
@@ -261,4 +275,52 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   input.dispatchEvent(new Event("input",{bubbles:true}));
   input.dispatchEvent(new Event("change",{bubbles:true}));
   return {ok:true,images:files.files.length};
+}
+
+// Bilibili's add button may use a detached image input. Intercept only its
+// picker call during this single click, then restore the page's prototypes.
+async function fillBilibiliImagePicker(attachments, expectedText) {
+  const root = document.querySelector(".bili-dyn-publishing");
+  const add = root?.querySelector(".bili-pics-uploader__add");
+  const thumbnail = ".bili-pics-uploader__item__remove";
+  const editor = root?.querySelector(".bili-rich-textarea__inner");
+  if (!editor || editor.innerText.replace(/[\u200b\ufeff]/g,"").trim() !== expectedText.trim() ||
+      root.querySelector(".bili-dyn-publishing__title__input")?.value.trim() ||
+      !add || !add.getClientRects().length || (add.closest("form") && add.type === "submit") ||
+      root.querySelector(thumbnail)) return 0;
+  const transfer = new DataTransfer();
+  for (const {name,mime,data} of attachments) {
+    transfer.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));
+  }
+  const prototype = HTMLInputElement.prototype;
+  const click = prototype.click;
+  const showPicker = prototype.showPicker;
+  let picker;
+  function capture(input) {
+    if (input.type !== "file" || input.name !== "upload" || input.files.length ||
+        (input.isConnected && !root.contains(input))) return false;
+    picker ||= input;
+    return true;
+  }
+  prototype.click = function(...args) {
+    if (!capture(this)) return click.apply(this,args);
+  };
+  if (showPicker) prototype.showPicker = function(...args) {
+    if (!capture(this)) return showPicker.apply(this,args);
+  };
+  try {
+    add.dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true}));
+  } finally {
+    prototype.click = click;
+    if (showPicker) prototype.showPicker = showPicker;
+  }
+  if (!picker || root.querySelector(thumbnail)) return 0;
+  picker.files = transfer.files;
+  picker.dispatchEvent(new Event("change",{bubbles:true}));
+  let count = 0;
+  for (let attempt=0; attempt<25 && count<transfer.files.length; attempt++) {
+    await new Promise(resolve=>setTimeout(resolve,200));
+    count = root.querySelectorAll(thumbnail).length;
+  }
+  return Math.min(count,transfer.files.length);
 }

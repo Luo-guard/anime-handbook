@@ -76,6 +76,35 @@ async function main() {
       return {draft,fill,title:document.querySelector("input").value,body:body.innerText};
     });
     assert.deepEqual(bili,{draft:{editor:true,occupied:true,entry:false},fill:{ok:true,images:1},title:"",body:"这是正文"});
+    await page.setContent('<section class="bili-dyn-publishing"><div class="bili-rich-textarea__inner" contenteditable="true">原来的正文</div><button type="button" class="bili-pics-uploader__add">＋</button><button type="button" class="publish">发布</button></section>');
+    const detached = await page.evaluate(async () => {
+      const add = document.querySelector(".bili-pics-uploader__add");
+      const previousClick = HTMLInputElement.prototype.click;
+      let published = 0;
+      let uploaded = [];
+      document.querySelector(".publish").onclick = () => published++;
+      const input = document.createElement("input");
+      input.type = "file";
+      input.name = "upload";
+      input.multiple = true;
+      input.onchange = () => {
+        uploaded = [...input.files].map(file=>file.name);
+        for (const name of uploaded) {
+          const preview = document.createElement("span");
+          preview.className = "bili-pics-uploader__item__remove";
+          preview.textContent = name;
+          add.parentElement.append(preview);
+        }
+      };
+      add.onclick = () => input.click();
+      const matches = await interactWithShareEditor("bilibili","locate","原来的正文");
+      const files = [{name:"截图.png",mime:"image/png",data:"AA=="},{name:"另一张.jpg",mime:"image/jpeg",data:"AA=="}];
+      const mismatched = await fillBilibiliImagePicker(files,"另一篇正文");
+      const count = await fillBilibiliImagePicker(files,"原来的正文");
+      const repeat = await fillBilibiliImagePicker(files,"原来的正文");
+      return {matched:matches.sameText,mismatched,count,repeat,uploaded,published,restored:HTMLInputElement.prototype.click===previousClick};
+    });
+    assert.deepEqual(detached,{matched:true,mismatched:0,count:2,repeat:0,uploaded:["截图.png","另一张.jpg"],published:0,restored:true});
     console.log("All three adapter fixtures preserve multiline text, accept multiple images, and leave final submission to the user.");
   } finally { await browser.close(); }
 }
