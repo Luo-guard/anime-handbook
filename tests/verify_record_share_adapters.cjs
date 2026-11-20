@@ -105,6 +105,84 @@ async function main() {
       return {matched:matches.sameText,mismatched,count,repeat,uploaded,published,restored:HTMLInputElement.prototype.click===previousClick};
     });
     assert.deepEqual(detached,{matched:true,mismatched:0,count:2,repeat:0,uploaded:["截图.png","另一张.jpg"],published:0,restored:true});
+    const heyboxURL = "https://www.xiaoheihe.cn/creator/editor/draft/image_text/local-fixture";
+    await page.route(heyboxURL, route => route.fulfill({contentType:"text/html",body:`
+      <meta charset="utf-8">
+      <form class="editor-image-text__section">
+        <div class="editor-image-text__image-seletor editor__image-wrapper">
+          <div class="editor-image-wrapper__box upload">＋</div>
+        </div>
+        <div class="hb-cpt__editor-title">填写标题<div contenteditable="true"><p><br></p></div></div>
+        <div class="image-text__edit-content">
+          <div class="image-text__edit-content--placeholder">正文文案</div>
+          <div class="image-text__edit-content--inner"><div class="ProseMirror" contenteditable="true"><p><br></p></div></div>
+        </div>
+        <button type="submit">发布</button>
+      </form>
+      <aside class="publish-editor"><textarea placeholder="正文">预览旁的其他编辑框</textarea></aside>
+    `}));
+    await page.goto(heyboxURL);
+    await page.addScriptTag({content:`
+      const noop=()=>{};
+      const chrome={runtime:{onMessage:{addListener:noop}},tabs:{onUpdated:{addListener:noop},onRemoved:{addListener:noop}}};
+      ${fs.readFileSync("browser-extension/record-share.js","utf8")}
+    `});
+    const heybox = await page.evaluate(async () => {
+      const body = document.querySelector(".ProseMirror");
+      const title = document.querySelector(".hb-cpt__editor-title [contenteditable]");
+      const gallery = document.querySelector(".editor__image-wrapper");
+      const locate = () => interactWithShareEditor("heybox","locate");
+      const fill = () => interactWithShareEditor("heybox","fill", {
+        text:"正文第一行\n\n第三行 <div>",
+        files:[{name:"截图.png",mime:"image/png",data:"AA=="},{name:"另一张.jpg",mime:"image/jpeg",data:"AA=="}],
+      });
+      let submitted = 0;
+      let uploaded = [];
+      document.querySelector("form").onsubmit = event => {event.preventDefault(); submitted++;};
+      body.addEventListener("paste", event => {
+        event.preventDefault();
+        body.style.whiteSpace = "pre-wrap";
+        body.textContent = event.clipboardData.getData("text/plain");
+      });
+      const add = document.createElement("div");
+      add.className = "editor-image-wrapper__box draggable";
+      gallery.append(add);
+      const existingImage = await fill();
+      add.remove();
+      title.textContent = "自己的标题";
+      const existingTitle = await fill();
+      title.textContent = "";
+      const missing = await locate();
+      const ignoredDrop = await fill();
+      body.textContent = "";
+      gallery.addEventListener("drop", event => {
+        event.preventDefault();
+        uploaded = Array.from(event.dataTransfer.items, item => item.getAsFile().name);
+        for (const name of uploaded) {
+          const preview = add.cloneNode();
+          preview.dataset.filename = name;
+          gallery.append(preview);
+          setTimeout(() => {
+            const image = document.createElement("div");
+            image.className = "editor-image-wrapper__box-image";
+            preview.append(image);
+          }, 60);
+        }
+      });
+      const filled = await fill();
+      const repeat = await fill();
+      const text = body.innerText;
+      body.remove();
+      const unmounted = await locate();
+      return {existingImage,existingTitle,missing,ignoredDrop,filled,repeat,uploaded,submitted,
+        unmounted,text,title:title.innerText,other:document.querySelector("aside textarea").value};
+    });
+    assert.deepEqual(heybox,{
+      existingImage:{ok:false},existingTitle:{ok:false},missing:{editor:true,occupied:false,entry:false},
+      ignoredDrop:{ok:true,images:0},filled:{ok:true,images:2},repeat:{ok:false},
+      unmounted:{editor:false,occupied:false,entry:false},
+      uploaded:["截图.png","另一张.jpg"],submitted:0,text:"正文第一行\n\n第三行 <div>",title:"",other:"预览旁的其他编辑框",
+    });
     console.log("All three adapter fixtures preserve multiline text, accept multiple images, and leave final submission to the user.");
   } finally { await browser.close(); }
 }

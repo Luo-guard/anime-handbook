@@ -90,7 +90,8 @@ async function fillShareTab(tabId, url) {
       await new Promise(resolve=>setTimeout(resolve,750));
     }
     if (!editor) {
-      await run({},[draft.platform,"notice","手账暂未识别到编辑器。请登录，打开写说说或发帖界面，再点下方重试。"]);
+      const hint = draft.platform === "heybox" ? "请打开小黑盒的「发布图文」页面，再点下方重试。" : "请登录，打开写说说或发帖界面，再点下方重试。";
+      await run({},[draft.platform,"notice",`手账暂未识别到编辑器。${hint}`]);
       return;
     }
     if (editor.result.occupied && !(editor.result.sameText && draft.paths.length)) {
@@ -180,10 +181,16 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   const isComposerText = node => /说说|动态|想说|分享|正文|内容/.test(node.getAttribute("placeholder") || node.getAttribute("data-placeholder") || node.getAttribute("aria-label") || node.querySelector("[data-placeholder]")?.getAttribute("data-placeholder") || "");
   const bilibiliBody = platform === "bilibili" && candidates.filter(({node}) =>
     node.matches('.bili-rich-textarea__inner,[placeholder="有什么想和大家分享的？"]'));
-  const known = bilibiliBody?.length ? bilibiliBody : candidates.filter(({node,root})=>
+  const heyboxEditorPage = platform === "heybox" && /^\/creator\/editor(?:\/|$)/.test(location.pathname);
+  const heyboxImageText = heyboxEditorPage && /^\/creator\/editor\/draft\/image_text(?:\/|$)/.test(location.pathname);
+  const heyboxBodies = heyboxImageText ? [...document.querySelectorAll(".editor-image-text__section")].flatMap(root =>
+    [...root.querySelectorAll('.image-text__edit-content--inner [contenteditable="true"]')]
+      .filter(node => visible(node) && !node.closest('[aria-hidden="true"],[inert]'))
+      .map(node => ({root,node}))) : [];
+  const known = heyboxEditorPage ? heyboxBodies : bilibiliBody?.length ? bilibiliBody : candidates.filter(({node,root})=>
     isComposerText(node) || (platform !== "heybox" && candidates.length===1 && root.tagName!=="FORM"));
   const editor = known.length===1 ? known[0] : null;
-  const entry = [...document.querySelectorAll("a,button,[role='button']")].find(node=>visible(node) && adapter.entry.includes(node.textContent.trim()));
+  const entry = !heyboxEditorPage && [...document.querySelectorAll("a,button,[role='button']")].find(node=>visible(node) && adapter.entry.includes(node.textContent.trim()));
   const editorText = node => (node.value ?? node.innerText ?? node.textContent).replace(/[\u200b\ufeff]/g,"").trim();
   const hasMedia = node => Boolean(node.querySelector("img,video,[data-attachment]"));
   // QQ Space puts this prompt inside the collapsed editor as ordinary text.
@@ -192,9 +199,16 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   const hasBilibiliDraftDetails = root => platform === "bilibili" &&
     Boolean(root.querySelector(".bili-dyn-publishing__title__input")?.value.trim() ||
       root.querySelector(".bili-pics-uploader__item__remove"));
+  const heyboxGallerySelector = ".editor-image-text__image-seletor.editor__image-wrapper";
+  const heyboxImageSelector = ".editor-image-wrapper__box.draggable";
+  const hasHeyboxDraftDetails = root => heyboxImageText &&
+    ([...root.querySelectorAll(".hb-cpt__editor-title [contenteditable],.hb-cpt__editor-title input,.hb-cpt__editor-title textarea")]
+      .some(title => editorText(title) || hasMedia(title)) ||
+      Boolean(root.querySelector(`${heyboxGallerySelector} ${heyboxImageSelector}`)));
   const sameBilibiliText = ({node,root}, text) => platform === "bilibili" && Boolean(text) &&
     !hasMedia(node) && !hasBilibiliDraftDetails(root) && editorText(node) === text.trim();
-  const occupied = ({node,root}) => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node)) || hasBilibiliDraftDetails(root);
+  const occupied = ({node,root}) => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node)) ||
+    hasBilibiliDraftDetails(root) || hasHeyboxDraftDetails(root);
   if (action === "locate") return {
     editor:Boolean(editor),occupied:editor ? occupied(editor) : false,entry:Boolean(entry),
     ...(editor && sameBilibiliText(editor,payload) ? {sameText:true} : {}),
@@ -229,7 +243,12 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       node.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"insertText",data:node.textContent}));
     } else {
       const lines = payload.text.replace(/\r\n?/g,"\n").split("\n");
-      const inserted = lines.every((line,index) =>
+      if (heyboxImageText) {
+        const clipboard = new DataTransfer();
+        clipboard.setData("text/plain", lines.join("\n"));
+        node.dispatchEvent(new ClipboardEvent("paste",{clipboardData:clipboard,bubbles:true,cancelable:true}));
+      }
+      const inserted = editorText(node) || lines.every((line,index) =>
         (!index || document.execCommand("insertLineBreak")) &&
         (!line || document.execCommand("insertText",false,line)));
       if (!inserted || !editorText(node)) {
@@ -240,6 +259,24 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
     if (payload.text && !editorText(node)) return {ok:false};
   }
   if (!payload.files.length) return {ok:true,images:0};
+  if (heyboxImageText) {
+    const galleries = [...root.querySelectorAll(heyboxGallerySelector)].filter(visible);
+    const gallery = galleries.length === 1 ? galleries[0] : null;
+    if (!node.isConnected || !gallery || hasHeyboxDraftDetails(root)) return {ok:true,images:0};
+    const transfer = new DataTransfer();
+    for (const {name,mime,data} of payload.files) {
+      transfer.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));
+    }
+    const handled = !gallery.dispatchEvent(new DragEvent("drop",{dataTransfer:transfer,bubbles:true,cancelable:true}));
+    if (!handled) return {ok:true,images:0};
+    const previews = () => gallery.querySelectorAll(`${heyboxImageSelector} .editor-image-wrapper__box-image`).length;
+    let added = previews();
+    for (let attempt=0; attempt<40 && added<transfer.files.length && gallery.isConnected; attempt++) {
+      await new Promise(resolve=>setTimeout(resolve,250));
+      added = previews();
+    }
+    return {ok:true,images:Math.min(added,transfer.files.length)};
+  }
   input = imageInput();
   if (!input && platform === "qzone") {
     const before = new Set(imageInputs(document));
