@@ -155,7 +155,7 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       entry:["写说说","发表说说"],
     },
     bilibili: {
-      root:".bili-dyn-publish,.dyn-publish,.bgd-publish",
+      root:".bili-dyn-publishing,.bili-dyn-publish,.dyn-publish,.bgd-publish",
       entry:["写动态","发动态"],
     },
     heybox: {
@@ -171,25 +171,31 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
     [...root.querySelectorAll(editorSelector)].filter(node=>visible(node) && !node.closest('[aria-hidden="true"]')).map(node=>({root,node})));
   const candidates = [...new Map(editors.map(item=>[item.node,item])).values()];
   const isComposerText = node => /说说|动态|想说|分享|正文|内容/.test(node.getAttribute("placeholder") || node.getAttribute("data-placeholder") || node.getAttribute("aria-label") || node.querySelector("[data-placeholder]")?.getAttribute("data-placeholder") || "");
-  const known = candidates.filter(({node,root})=>isComposerText(node) || (platform !== "heybox" && candidates.length===1 && root.tagName!=="FORM"));
+  const bilibiliBody = platform === "bilibili" && candidates.filter(({node}) =>
+    node.matches('.bili-rich-textarea__inner,[placeholder="有什么想和大家分享的？"]'));
+  const known = bilibiliBody?.length ? bilibiliBody : candidates.filter(({node,root})=>
+    isComposerText(node) || (platform !== "heybox" && candidates.length===1 && root.tagName!=="FORM"));
   const editor = known.length===1 ? known[0] : null;
   const entry = [...document.querySelectorAll("a,button,[role='button']")].find(node=>visible(node) && adapter.entry.includes(node.textContent.trim()));
-  const editorText = node => (node.value ?? node.innerText ?? node.textContent).trim();
+  const editorText = node => (node.value ?? node.innerText ?? node.textContent).replace(/[\u200b\ufeff]/g,"").trim();
   const hasMedia = node => Boolean(node.querySelector("img,video,[data-attachment]"));
   // QQ Space puts this prompt inside the collapsed editor as ordinary text.
   const isQzonePrompt = node => platform === "qzone" && !hasMedia(node) &&
     ["说点儿什么吧", "说点什么吧"].includes(editorText(node));
-  const occupied = node => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node));
-  if (action === "locate") return {editor:Boolean(editor),occupied:editor ? occupied(editor.node) : false,entry:Boolean(entry)};
+  const occupied = ({node,root}) => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node)) ||
+    (platform === "bilibili" && Boolean(root.querySelector(".bili-dyn-publishing__title__input")?.value.trim() ||
+      root.querySelector(".bili-pics-uploader__item__remove")));
+  if (action === "locate") return {editor:Boolean(editor),occupied:editor ? occupied(editor) : false,entry:Boolean(entry)};
   if (action === "open" && !editor) {
     // Use only listed composer-entry labels. Never invoke form submission.
     if (entry && !entry.closest("form") && entry.getAttribute("type") !== "submit") entry.click();
     return;
   }
-  if (!editor || occupied(editor.node)) return {ok:false};
+  if (!editor || occupied(editor)) return {ok:false};
   const {node,root} = editor;
   const imageInputs = scope => [...scope.querySelectorAll('input[type="file"]:not([disabled])')];
-  const acceptsImages = item => /image|png|jpe?g|webp/i.test(item.accept);
+  const acceptsImages = item => /image|png|jpe?g|webp/i.test(item.accept) ||
+    (platform === "bilibili" && item.name === "upload" && !item.accept);
   const findImageInput = inputs => inputs.find(acceptsImages) ||
     (platform === "qzone" && inputs.length === 1 && !inputs[0].accept ? inputs[0] : null);
   const imageInput = () => findImageInput(imageInputs(root));
@@ -197,14 +203,13 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   if (input?.files.length) return {ok:false};
   if (payload.text || isQzonePrompt(node)) {
     node.focus();
-    if (!node.isConnected || occupied(node)) return {ok:false};
+    if (!node.isConnected || occupied(editor)) return {ok:false};
     if (node instanceof HTMLTextAreaElement) {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value").set.call(node,payload.text);
       node.dispatchEvent(new Event("input",{bubbles:true}));
       node.dispatchEvent(new Event("change",{bubbles:true}));
-    } else if (platform === "qzone") {
-      // The legacy Qzone composer can serialize editor HTML as the message.
-      // A plain text node preserves newlines without inserting <div> or <br>.
+    } else if (platform === "qzone" || platform === "bilibili") {
+      // Preserve newlines without editor-generated markup or empty markers.
       node.style.whiteSpace = "pre-wrap";
       node.textContent = payload.text.replace(/\r\n?/g,"\n");
       node.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"insertText",data:node.textContent}));
@@ -213,7 +218,7 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       const inserted = lines.every((line,index) =>
         (!index || document.execCommand("insertLineBreak")) &&
         (!line || document.execCommand("insertText",false,line)));
-      if (!inserted || !occupied(node)) {
+      if (!inserted || !editorText(node)) {
         node.replaceChildren(...lines.flatMap((line,index)=>index ? [document.createElement("br"),document.createTextNode(line)] : [document.createTextNode(line)]));
         node.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"insertText",data:payload.text}));
       }
@@ -236,10 +241,21 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       }
     }
   }
-  if (!input || input.disabled || input.files.length) return {ok:true,images:0};
+  if ((!input && platform !== "bilibili") || input?.disabled || input?.files.length) return {ok:true,images:0};
   const files = new DataTransfer();
-  for (const {name,mime,data} of payload.files.slice(0,input.multiple ? payload.files.length : 1)) {
+  for (const {name,mime,data} of payload.files.slice(0,!input || input.multiple ? payload.files.length : 1)) {
     files.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));
+  }
+  if (!input) {
+    // Some Bilibili builds keep the file picker off DOM. Use the editor's
+    // paste event and count only attachments that appeared in the composer.
+    node.dispatchEvent(new ClipboardEvent("paste",{clipboardData:files,bubbles:true,cancelable:true}));
+    let previews = 0;
+    for (let attempt=0; attempt<12 && previews<files.files.length; attempt++) {
+      await new Promise(resolve=>setTimeout(resolve,200));
+      previews = root.querySelectorAll(".bili-pics-uploader__item__remove").length;
+    }
+    return {ok:true,images:Math.min(previews,files.files.length)};
   }
   input.files = files.files;
   input.dispatchEvent(new Event("input",{bubbles:true}));

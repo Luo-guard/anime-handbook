@@ -7,7 +7,7 @@ async function main() {
   try {
     const fixtures = [
       ["qzone", "qz-poster", '<textarea placeholder="写说说"></textarea>'],
-      ["bilibili", "bili-dyn-publish", '<div contenteditable="true" data-placeholder="写动态"></div>'],
+      ["bilibili", "bili-dyn-publishing", '<input class="bili-dyn-publishing__title__input" placeholder="好的标题更容易获得支持，选填20字"><div class="bili-rich-textarea__inner" contenteditable="true" placeholder="有什么想和大家分享的？">&#8203;</div>'],
       ["heybox", "publish-editor", '<div contenteditable="true"><p data-placeholder="请输入正文"></p></div>'],
     ];
     const page = await browser.newPage();
@@ -57,6 +57,25 @@ async function main() {
     assert.deepEqual(qzone, {before:{editor:true,occupied:false,entry:false}, result:{ok:true,images:1}, serialized:"第一行\n\n第三行", uploaded:"截图.jpg"});
     await page.evaluate(() => document.querySelector("[contenteditable]").textContent = "说点儿什么吧，这是我自己的草稿。");
     assert.equal(await page.evaluate(async () => (await interactWithShareEditor("qzone", "locate")).occupied), true);
+    await page.setContent('<section class="bili-dyn-publishing"><input class="bili-dyn-publishing__title__input" value="我的标题"><div class="bili-rich-textarea__inner" contenteditable="true">&#8203;</div></section>');
+    const bili = await page.evaluate(async () => {
+      const draft = await interactWithShareEditor("bilibili","locate");
+      document.querySelector("input").value = "";
+      const body = document.querySelector("[contenteditable]");
+      body.addEventListener("paste", event => {
+        for (const image of event.clipboardData.files) {
+          const thumb = document.createElement("span");
+          thumb.className = "bili-pics-uploader__item__remove";
+          thumb.textContent = image.name;
+          body.parentElement.append(thumb);
+        }
+      });
+      const fill = await interactWithShareEditor("bilibili","fill",{
+        text:"这是正文",files:[{name:"截图.png",mime:"image/png",data:"AA=="}],
+      });
+      return {draft,fill,title:document.querySelector("input").value,body:body.innerText};
+    });
+    assert.deepEqual(bili,{draft:{editor:true,occupied:true,entry:false},fill:{ok:true,images:1},title:"",body:"这是正文"});
     console.log("All three adapter fixtures preserve multiline text, accept multiple images, and leave final submission to the user.");
   } finally { await browser.close(); }
 }
