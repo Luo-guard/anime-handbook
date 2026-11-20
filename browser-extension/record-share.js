@@ -183,7 +183,11 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   }
   if (!editor || occupied(editor.node)) return {ok:false};
   const {node,root} = editor;
-  const imageInput = () => [...root.querySelectorAll('input[type="file"]')].find(item=>/image|png|jpe?g|webp/i.test(item.accept));
+  const imageInputs = scope => [...scope.querySelectorAll('input[type="file"]:not([disabled])')];
+  const acceptsImages = item => /image|png|jpe?g|webp/i.test(item.accept);
+  const findImageInput = inputs => inputs.find(acceptsImages) ||
+    (platform === "qzone" && inputs.length === 1 && !inputs[0].accept ? inputs[0] : null);
+  const imageInput = () => findImageInput(imageInputs(root));
   let input = imageInput();
   if (input?.files.length) return {ok:false};
   if (payload.text) {
@@ -192,6 +196,12 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value").set.call(node,payload.text);
       node.dispatchEvent(new Event("input",{bubbles:true}));
       node.dispatchEvent(new Event("change",{bubbles:true}));
+    } else if (platform === "qzone") {
+      // The legacy Qzone composer can serialize editor HTML as the message.
+      // A plain text node preserves newlines without inserting <div> or <br>.
+      node.style.whiteSpace = "pre-wrap";
+      node.textContent = payload.text.replace(/\r\n?/g,"\n");
+      node.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"insertText",data:node.textContent}));
     } else {
       const lines = payload.text.replace(/\r\n?/g,"\n").split("\n");
       const inserted = lines.every((line,index) =>
@@ -206,6 +216,20 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   }
   if (!payload.files.length) return {ok:true,images:0};
   input = imageInput();
+  if (!input && platform === "qzone") {
+    const before = new Set(imageInputs(document));
+    const photoLabels = ["图片","照片","添加图片","上传照片","上传图片"];
+    const picker = [...root.querySelectorAll('button,a,[role="button"],[title],[aria-label]')].find(item =>
+      visible(item) && item.getAttribute("type") !== "submit" &&
+      [item.getAttribute("title"),item.getAttribute("aria-label"),item.textContent.trim()].some(label=>photoLabels.includes(label)));
+    if (picker) {
+      picker.click();
+      for (let attempt=0; attempt<12 && !input; attempt++) {
+        await new Promise(resolve=>setTimeout(resolve,200));
+        input = imageInput() || findImageInput(imageInputs(document).filter(item=>!before.has(item)));
+      }
+    }
+  }
   if (!input || input.disabled || input.files.length) return {ok:true,images:0};
   const files = new DataTransfer();
   for (const {name,mime,data} of payload.files.slice(0,input.multiple ? payload.files.length : 1)) {

@@ -38,6 +38,22 @@ async function main() {
       assert.deepEqual(current, {text:"两行内容\n第二行", submitted:0, changed:1, files:["1.png","2.jpg"]});
     }
     assert.equal(await page.evaluate(() => isShareTab("qzone", "https://qzone.qq.com.example.org/")), false);
+    await page.setContent('<section class="qz-poster"><div contenteditable="true" data-placeholder="写说说"></div><button type="button" aria-label="图片">图片</button></section>');
+    await page.evaluate(() => {
+      document.querySelector('[aria-label="图片"]').onclick = () => {
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.multiple = true;
+        document.body.append(picker);
+      };
+    });
+    const qzone = await page.evaluate(async () => {
+      const result = await interactWithShareEditor("qzone", "fill", {
+        text:"第一行\n\n第三行", files:[{name:"截图.jpg", mime:"image/jpeg", data:"AA=="}],
+      });
+      return {result, serialized:document.querySelector("[contenteditable]").innerHTML, uploaded:document.querySelector("[type=file]").files[0]?.name};
+    });
+    assert.deepEqual(qzone, {result:{ok:true,images:1}, serialized:"第一行\n\n第三行", uploaded:"截图.jpg"});
     console.log("All three adapter fixtures preserve multiline text, accept multiple images, and leave final submission to the user.");
   } finally { await browser.close(); }
 }
