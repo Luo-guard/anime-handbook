@@ -7,7 +7,6 @@ async function main() {
   try {
     const fixtures = [
       ["qzone", "qz-poster", '<textarea placeholder="写说说"></textarea>'],
-      ["bilibili", "bili-dyn-publishing", '<input class="bili-dyn-publishing__title__input" placeholder="好的标题更容易获得支持，选填20字"><div class="bili-rich-textarea__inner" contenteditable="true" placeholder="有什么想和大家分享的？">&#8203;</div>'],
       ["heybox", "publish-editor", '<div contenteditable="true"><p data-placeholder="请输入正文"></p></div>'],
     ];
     const page = await browser.newPage();
@@ -59,26 +58,24 @@ async function main() {
     assert.equal(await page.evaluate(async () => (await interactWithShareEditor("qzone", "locate")).occupied), true);
     await page.setContent('<section class="bili-dyn-publishing"><input class="bili-dyn-publishing__title__input" value="我的标题"><div class="bili-rich-textarea__inner" contenteditable="true">&#8203;</div></section>');
     const bili = await page.evaluate(async () => {
+      const publisher = document.querySelector(".bili-dyn-publishing");
+      publisher.__vue__ = {$options:{name:"bili-dyn-publishing"},loadingState:{init:true},user:null};
+      const loading = await interactWithShareEditor("bilibili","locate");
+      publisher.__vue__.loadingState.init = false;
+      publisher.__vue__.user = {};
       const draft = await interactWithShareEditor("bilibili","locate");
       document.querySelector("input").value = "";
       const body = document.querySelector("[contenteditable]");
-      body.addEventListener("paste", event => {
-        for (const image of event.clipboardData.files) {
-          const thumb = document.createElement("span");
-          thumb.className = "bili-pics-uploader__item__remove";
-          thumb.textContent = image.name;
-          body.parentElement.append(thumb);
-        }
-      });
       const fill = await interactWithShareEditor("bilibili","fill",{
         text:"这是正文",files:[{name:"截图.png",mime:"image/png",data:"AA=="}],
       });
-      return {draft,fill,title:document.querySelector("input").value,body:body.innerText};
+      return {loading,draft,fill,title:document.querySelector("input").value,body:body.innerText};
     });
-    assert.deepEqual(bili,{draft:{editor:true,occupied:true,entry:false},fill:{ok:true,images:1},title:"",body:"这是正文"});
-    await page.setContent('<section class="bili-dyn-publishing"><div class="bili-rich-textarea__inner" contenteditable="true">原来的正文</div><button type="button" class="bili-pics-uploader__add">＋</button><button type="button" class="publish">发布</button></section>');
+    assert.deepEqual(bili,{loading:{editor:false,occupied:false,entry:false},draft:{editor:true,occupied:true,entry:false},
+      fill:{ok:true,images:0,nativePicker:true,editorText:"这是正文"},title:"",body:"这是正文"});
+    await page.setContent('<section class="bili-dyn-publishing"><div class="bili-rich-textarea__inner" contenteditable="true">原来的正文</div><button type="button" class="bili-dyn-publishing__tools__item pic">图片</button><button type="button" class="publish">发布</button></section>');
     const detached = await page.evaluate(async () => {
-      const add = document.querySelector(".bili-pics-uploader__add");
+      const toolbar = document.querySelector(".pic");
       const previousClick = HTMLInputElement.prototype.click;
       let published = 0;
       let uploaded = [];
@@ -89,22 +86,30 @@ async function main() {
       input.multiple = true;
       input.onchange = () => {
         uploaded = [...input.files].map(file=>file.name);
-        for (const name of uploaded) {
+        input.value = "";
+        const root = toolbar.parentElement;
+        const replacement = root.cloneNode(true);
+        root.replaceWith(replacement);
+        for (const [index,name] of uploaded.entries()) {
           const preview = document.createElement("span");
-          preview.className = "bili-pics-uploader__item__remove";
+          preview.className = "bili-pics-uploader__item loading";
           preview.textContent = name;
-          add.parentElement.append(preview);
+          replacement.append(preview);
+          setTimeout(() => preview.classList.replace("loading", index ? "error" : "success"), 50);
         }
       };
-      add.onclick = () => input.click();
+      toolbar.onclick = () => queueMicrotask(() => {
+        toolbar.classList.add("active");
+        input.click();
+      });
       const matches = await interactWithShareEditor("bilibili","locate","原来的正文");
       const files = [{name:"截图.png",mime:"image/png",data:"AA=="},{name:"另一张.jpg",mime:"image/jpeg",data:"AA=="}];
-      const mismatched = await fillBilibiliImagePicker(files,"另一篇正文");
-      const count = await fillBilibiliImagePicker(files,"原来的正文");
-      const repeat = await fillBilibiliImagePicker(files,"原来的正文");
+      const mismatched = await fillNativeShareImagePicker("bilibili",files,"另一篇正文");
+      const count = await fillNativeShareImagePicker("bilibili",files,"原来的正文");
+      const repeat = await fillNativeShareImagePicker("bilibili",files,"原来的正文");
       return {matched:matches.sameText,mismatched,count,repeat,uploaded,published,restored:HTMLInputElement.prototype.click===previousClick};
     });
-    assert.deepEqual(detached,{matched:true,mismatched:0,count:2,repeat:0,uploaded:["截图.png","另一张.jpg"],published:0,restored:true});
+    assert.deepEqual(detached,{matched:true,mismatched:0,count:1,repeat:0,uploaded:["截图.png","另一张.jpg"],published:0,restored:true});
     const heyboxURL = "https://www.xiaoheihe.cn/creator/editor/draft/image_text/local-fixture";
     await page.route(heyboxURL, route => route.fulfill({contentType:"text/html",body:`
       <meta charset="utf-8">
@@ -132,10 +137,9 @@ async function main() {
       const title = document.querySelector(".hb-cpt__editor-title [contenteditable]");
       const gallery = document.querySelector(".editor__image-wrapper");
       const locate = () => interactWithShareEditor("heybox","locate");
-      const fill = () => interactWithShareEditor("heybox","fill", {
-        text:"正文第一行\n\n第三行 <div>",
-        files:[{name:"截图.png",mime:"image/png",data:"AA=="},{name:"另一张.jpg",mime:"image/jpeg",data:"AA=="}],
-      });
+      const draft = {text:"正文第一行\n\n第三行 <div>",
+        files:[{name:"截图.png",mime:"image/png",data:"AA=="},{name:"另一张.jpg",mime:"image/jpeg",data:"AA=="}]};
+      const fill = () => interactWithShareEditor("heybox","fill",draft);
       let submitted = 0;
       let uploaded = [];
       document.querySelector("form").onsubmit = event => {event.preventDefault(); submitted++;};
@@ -153,11 +157,13 @@ async function main() {
       const existingTitle = await fill();
       title.textContent = "";
       const missing = await locate();
-      const ignoredDrop = await fill();
-      body.textContent = "";
-      gallery.addEventListener("drop", event => {
-        event.preventDefault();
-        uploaded = Array.from(event.dataTransfer.items, item => item.getAsFile().name);
+      const picker = document.createElement("input");
+      picker.type = "file";
+      picker.accept = "image/*";
+      picker.multiple = true;
+      gallery.querySelector(".upload").onclick = () => picker.click();
+      picker.onchange = () => {
+        uploaded = [...picker.files].map(file => file.name);
         for (const name of uploaded) {
           const preview = add.cloneNode();
           preview.dataset.filename = name;
@@ -168,21 +174,38 @@ async function main() {
             preview.append(image);
           }, 60);
         }
-      });
+      };
       const filled = await fill();
+      const count = await fillNativeShareImagePicker("heybox",draft.files,filled.editorText);
       const repeat = await fill();
       const text = body.innerText;
       body.remove();
       const unmounted = await locate();
-      return {existingImage,existingTitle,missing,ignoredDrop,filled,repeat,uploaded,submitted,
+      return {existingImage,existingTitle,missing,filled,count,repeat,uploaded,submitted,
         unmounted,text,title:title.innerText,other:document.querySelector("aside textarea").value};
     });
     assert.deepEqual(heybox,{
       existingImage:{ok:false},existingTitle:{ok:false},missing:{editor:true,occupied:false,entry:false},
-      ignoredDrop:{ok:true,images:0},filled:{ok:true,images:2},repeat:{ok:false},
+      filled:{ok:true,images:0,nativePicker:true,editorText:"正文第一行\n\n第三行 <div>"},count:2,repeat:{ok:false},
       unmounted:{editor:false,occupied:false,entry:false},
       uploaded:["截图.png","另一张.jpg"],submitted:0,text:"正文第一行\n\n第三行 <div>",title:"",other:"预览旁的其他编辑框",
     });
+    const formats = await page.evaluate(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 20;
+      canvas.getContext("2d").fillRect(0,0,20,20);
+      const webp = await new Promise(resolve => canvas.toBlob(resolve,"image/webp"));
+      const fetchOriginal = window.fetch;
+      window.fetch = async () => new Response(webp,{headers:{"Content-Type":"image/webp; charset=binary"}});
+      try {
+        const [bili] = await loadShareImages({origin:"http://localhost:43127",paths:["/fixture"],platform:"bilibili"});
+        const [heybox] = await loadShareImages({origin:"http://localhost:43127",paths:["/fixture"],platform:"heybox"});
+        return {bili:bili.mime,hasPngSignature:atob(bili.data).slice(1,4)==="PNG",heybox:heybox.mime};
+      } finally {
+        window.fetch = fetchOriginal;
+      }
+    });
+    assert.deepEqual(formats,{bili:"image/png",hasPngSignature:true,heybox:"image/webp"});
     console.log("All three adapter fixtures preserve multiline text, accept multiple images, and leave final submission to the user.");
   } finally { await browser.close(); }
 }

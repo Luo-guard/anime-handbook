@@ -48,13 +48,27 @@ async function loadShareImages(draft) {
   for (const path of draft.paths) {
     try {
       const response = await fetch(draft.origin+path,{redirect:"error",signal:AbortSignal.timeout(4000)});
-      if (!response.ok || !["image/png","image/jpeg","image/webp"].includes(response.headers.get("Content-Type"))) continue;
-      const data = new Uint8Array(await response.arrayBuffer());
+      const mime = response.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase();
+      if (!response.ok || !["image/png","image/jpeg","image/webp"].includes(mime)) continue;
+      let blob = await response.blob();
+      if (!blob.size || blob.size > 8*1024*1024) continue;
+      if (draft.platform === "bilibili" && mime === "image/webp") {
+        const bitmap = await createImageBitmap(blob);
+        try {
+          if (bitmap.width * bitmap.height > 32_000_000) continue;
+          const image = new OffscreenCanvas(bitmap.width, bitmap.height);
+          image.getContext("2d").drawImage(bitmap, 0, 0);
+          blob = await image.convertToBlob({type:"image/png"});
+        } finally {
+          bitmap.close();
+        }
+      }
+      const data = new Uint8Array(await blob.arrayBuffer());
       if (!data.length || data.length > 8*1024*1024 || bytes+data.length > 20*1024*1024) continue;
-      const mime = response.headers.get("Content-Type");
       const file = btoa(Array.from({length:Math.ceil(data.length/32768)}, (_,index) =>
         String.fromCharCode(...data.subarray(index*32768,(index+1)*32768))).join(""));
-      files.push({mime, name:`手账配图-${files.length+1}.${mime === "image/jpeg" ? "jpg" : mime.split("/")[1]}`, data:file});
+      const type = blob.type.split(";")[0].toLowerCase();
+      files.push({mime:type, name:`手账配图-${files.length+1}.${type === "image/jpeg" ? "jpg" : type.split("/")[1]}`, data:file});
       bytes += data.length;
     } catch { /* Count the unavailable image in the final status. */ }
   }
@@ -65,7 +79,10 @@ async function fillShareTab(tabId, url) {
   if (activeShareTabs.has(tabId)) return;
   activeShareTabs.add(tabId);
   const key = shareKey(tabId);
-  const run = (target, args) => chrome.scripting.executeScript({target:{tabId,...target},func:interactWithShareEditor,args});
+  const run = (target, args) => chrome.scripting.executeScript({
+    target:{tabId,...target},func:interactWithShareEditor,args,
+    world:args[0] === "bilibili" && args[1] !== "notice" ? "MAIN" : "ISOLATED",
+  });
   try {
     const draft = (await chrome.storage.session.get(key))[key];
     if (!draft) return;
@@ -76,7 +93,7 @@ async function fillShareTab(tabId, url) {
     if (!isShareTab(draft.platform,url)) return;
     let editor;
     let opened = false;
-    const locate = [draft.platform,"locate",draft.platform === "bilibili" ? draft.text : ""];
+    const locate = [draft.platform,"locate",draft.text];
     for (let attempt=0; attempt<10; attempt++) {
       const frames = draft.platform === "qzone" ? {allFrames:true} : {};
       const results = await run(frames,locate).catch(() => run({},locate));
@@ -105,17 +122,20 @@ async function fillShareTab(tabId, url) {
       await run({},[draft.platform,"notice","编辑器发生变化，手账未写入。请打开空白编辑器后重试。"]);
       return;
     }
-    await chrome.storage.session.remove(key);
     let sent = result.result.images;
-    if (draft.platform === "bilibili" && !sent && files.length) {
+    if (result.result.nativePicker && files.length) {
       const [upload] = await chrome.scripting.executeScript({
-        target:{tabId,...target}, world:"MAIN", func:fillBilibiliImagePicker, args:[files,draft.text],
+        target:{tabId,...target}, world:"MAIN", func:fillNativeShareImagePicker, args:[draft.platform,files,result.result.editorText],
       }).catch(()=>[]);
       sent = upload?.result || 0;
     }
-    const message = draft.totalImages > sent
-      ? `已准备草稿，${draft.totalImages-sent} 张图片需要手动添加。请检查后发布。`
-      : sent ? "正文和图片已交给编辑器，请检查图片预览后再发布。" : "正文已填入，请在平台检查并发布。";
+    await chrome.storage.session.remove(key);
+    const unread = draft.totalImages - files.length;
+    const unconfirmed = files.length - sent;
+    const message = unread || unconfirmed
+      ? ["草稿已准备。", unread ? `${unread} 张配图未能从手账读取。` : "",
+        unconfirmed ? `${unconfirmed} 张配图未确认上传，请先检查编辑器预览。` : ""].join("")
+      : sent ? "图文已填入，请检查图片预览后再发布。" : "正文已填入，请在平台检查并发布。";
     await run({},[draft.platform,"notice",message,false]);
   } catch {
     await run({},[null,"notice","手账暂时无法访问编辑器。请检查扩展权限，或回到手账复制正文和保存配图。"]).catch(()=>{});
@@ -189,7 +209,16 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       .map(node => ({root,node}))) : [];
   const known = heyboxEditorPage ? heyboxBodies : bilibiliBody?.length ? bilibiliBody : candidates.filter(({node,root})=>
     isComposerText(node) || (platform !== "heybox" && candidates.length===1 && root.tagName!=="FORM"));
-  const editor = known.length===1 ? known[0] : null;
+  let editor = known.length===1 ? known[0] : null;
+  if (platform === "bilibili" && editor) {
+    const publisher = editor.node.closest(".bili-dyn-publishing") || editor.root;
+    const component = publisher.__vue__;
+    // The editor is already visible while Bilibili retrieves and restores
+    // its unpublished draft. Re-check once initialization has finished.
+    if (component?.$options?.name === "bili-dyn-publishing" &&
+        (component.loadingState?.init || !component.user)) editor = null;
+    else editor.root = publisher;
+  }
   const entry = !heyboxEditorPage && [...document.querySelectorAll("a,button,[role='button']")].find(node=>visible(node) && adapter.entry.includes(node.textContent.trim()));
   const editorText = node => (node.value ?? node.innerText ?? node.textContent).replace(/[\u200b\ufeff]/g,"").trim();
   const hasMedia = node => Boolean(node.querySelector("img,video,[data-attachment]"));
@@ -198,32 +227,32 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
     ["说点儿什么吧", "说点什么吧"].includes(editorText(node));
   const hasBilibiliDraftDetails = root => platform === "bilibili" &&
     Boolean(root.querySelector(".bili-dyn-publishing__title__input")?.value.trim() ||
-      root.querySelector(".bili-pics-uploader__item__remove"));
+      root.querySelector(".bili-pics-uploader__item,.bili-pics-uploader__item__remove,.bili-dyn-publishing__attachment"));
   const heyboxGallerySelector = ".editor-image-text__image-seletor.editor__image-wrapper";
   const heyboxImageSelector = ".editor-image-wrapper__box.draggable";
   const hasHeyboxDraftDetails = root => heyboxImageText &&
     ([...root.querySelectorAll(".hb-cpt__editor-title [contenteditable],.hb-cpt__editor-title input,.hb-cpt__editor-title textarea")]
       .some(title => editorText(title) || hasMedia(title)) ||
       Boolean(root.querySelector(`${heyboxGallerySelector} ${heyboxImageSelector}`)));
-  const sameBilibiliText = ({node,root}, text) => platform === "bilibili" && Boolean(text) &&
-    !hasMedia(node) && !hasBilibiliDraftDetails(root) && editorText(node) === text.trim();
+  const canAddImages = ({node,root}, text) => (platform === "bilibili" || heyboxImageText) && Boolean(text) &&
+    !hasMedia(node) && !hasBilibiliDraftDetails(root) && !hasHeyboxDraftDetails(root) &&
+    editorText(node) === text.replace(/\r\n?/g,"\n").trim();
   const occupied = ({node,root}) => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node)) ||
     hasBilibiliDraftDetails(root) || hasHeyboxDraftDetails(root);
   if (action === "locate") return {
     editor:Boolean(editor),occupied:editor ? occupied(editor) : false,entry:Boolean(entry),
-    ...(editor && sameBilibiliText(editor,payload) ? {sameText:true} : {}),
+    ...(editor && canAddImages(editor,payload || "") ? {sameText:true} : {}),
   };
   if (action === "open" && !editor) {
     // Use only listed composer-entry labels. Never invoke form submission.
     if (entry && !entry.closest("form") && entry.getAttribute("type") !== "submit") entry.click();
     return;
   }
-  const addImagesOnly = editor && payload.files.length && sameBilibiliText(editor,payload.text);
+  const addImagesOnly = editor && payload.files.length && canAddImages(editor,payload.text);
   if (!editor || (occupied(editor) && !addImagesOnly)) return {ok:false};
   const {node,root} = editor;
   const imageInputs = scope => [...scope.querySelectorAll('input[type="file"]:not([disabled])')];
-  const acceptsImages = item => /image|png|jpe?g|webp/i.test(item.accept) ||
-    (platform === "bilibili" && item.name === "upload" && !item.accept);
+  const acceptsImages = item => /image|png|jpe?g|webp/i.test(item.accept);
   const findImageInput = inputs => inputs.find(acceptsImages) ||
     (platform === "qzone" && inputs.length === 1 && !inputs[0].accept ? inputs[0] : null);
   const imageInput = () => findImageInput(imageInputs(root));
@@ -259,24 +288,7 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
     if (payload.text && !editorText(node)) return {ok:false};
   }
   if (!payload.files.length) return {ok:true,images:0};
-  if (heyboxImageText) {
-    const galleries = [...root.querySelectorAll(heyboxGallerySelector)].filter(visible);
-    const gallery = galleries.length === 1 ? galleries[0] : null;
-    if (!node.isConnected || !gallery || hasHeyboxDraftDetails(root)) return {ok:true,images:0};
-    const transfer = new DataTransfer();
-    for (const {name,mime,data} of payload.files) {
-      transfer.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));
-    }
-    const handled = !gallery.dispatchEvent(new DragEvent("drop",{dataTransfer:transfer,bubbles:true,cancelable:true}));
-    if (!handled) return {ok:true,images:0};
-    const previews = () => gallery.querySelectorAll(`${heyboxImageSelector} .editor-image-wrapper__box-image`).length;
-    let added = previews();
-    for (let attempt=0; attempt<40 && added<transfer.files.length && gallery.isConnected; attempt++) {
-      await new Promise(resolve=>setTimeout(resolve,250));
-      added = previews();
-    }
-    return {ok:true,images:Math.min(added,transfer.files.length)};
-  }
+  if (heyboxImageText || platform === "bilibili") return {ok:true,images:0,nativePicker:true,editorText:editorText(node)};
   input = imageInput();
   if (!input && platform === "qzone") {
     const before = new Set(imageInputs(document));
@@ -292,21 +304,10 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       }
     }
   }
-  if ((!input && platform !== "bilibili") || input?.disabled || input?.files.length) return {ok:true,images:0};
+  if (!input || input.disabled || input.files.length) return {ok:true,images:0};
   const files = new DataTransfer();
-  for (const {name,mime,data} of payload.files.slice(0,!input || input.multiple ? payload.files.length : 1)) {
+  for (const {name,mime,data} of payload.files.slice(0,input.multiple ? payload.files.length : 1)) {
     files.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));
-  }
-  if (!input) {
-    // Some Bilibili builds keep the file picker off DOM. Use the editor's
-    // paste event and count only attachments that appeared in the composer.
-    node.dispatchEvent(new ClipboardEvent("paste",{clipboardData:files,bubbles:true,cancelable:true}));
-    let previews = 0;
-    for (let attempt=0; attempt<12 && previews<files.files.length; attempt++) {
-      await new Promise(resolve=>setTimeout(resolve,200));
-      previews = root.querySelectorAll(".bili-pics-uploader__item__remove").length;
-    }
-    return {ok:true,images:Math.min(previews,files.files.length)};
   }
   input.files = files.files;
   input.dispatchEvent(new Event("input",{bubbles:true}));
@@ -314,50 +315,75 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   return {ok:true,images:files.files.length};
 }
 
-// Bilibili's add button may use a detached image input. Intercept only its
-// picker call during this single click, then restore the page's prototypes.
-async function fillBilibiliImagePicker(attachments, expectedText) {
-  const root = document.querySelector(".bili-dyn-publishing");
-  const add = root?.querySelector(".bili-pics-uploader__add");
-  const thumbnail = ".bili-pics-uploader__item__remove";
-  const editor = root?.querySelector(".bili-rich-textarea__inner");
-  if (!editor || editor.innerText.replace(/[\u200b\ufeff]/g,"").trim() !== expectedText.trim() ||
-      root.querySelector(".bili-dyn-publishing__title__input")?.value.trim() ||
-      !add || !add.getClientRects().length || (add.closest("form") && add.type === "submit") ||
-      root.querySelector(thumbnail)) return 0;
-  const transfer = new DataTransfer();
-  for (const {name,mime,data} of attachments) {
-    transfer.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));
+// Both sites create their picker off DOM. Only intercept the picker opened
+// by the named image controls, then route files through the site's handler.
+async function fillNativeShareImagePicker(platform, attachments, expectedText) {
+  const bili = platform === "bilibili";
+  const heybox = platform === "heybox" && /^\/creator\/editor\/draft\/image_text(?:\/|$)/.test(location.pathname);
+  if (!bili && !heybox) return 0;
+  const rootSelector = bili ? ".bili-dyn-publishing" : ".editor-image-text__section";
+  const bodySelector = bili ? ".bili-rich-textarea__inner" : '.image-text__edit-content--inner [contenteditable="true"]';
+  const gallerySelector = ".editor-image-text__image-seletor.editor__image-wrapper";
+  const addSelector = bili ? ".bili-pics-uploader__add" : `${gallerySelector} .editor-image-wrapper__box.upload`;
+  const itemSelector = bili ? ".bili-pics-uploader__item" : `${gallerySelector} .editor-image-wrapper__box.draggable`;
+  const successSelector = bili ? `${itemSelector}.success` : `${itemSelector} .editor-image-wrapper__box-image`;
+  const titleSelector = bili ? ".bili-dyn-publishing__title__input" : ".hb-cpt__editor-title [contenteditable]";
+  const visible = (node) => node?.getClientRects().length && getComputedStyle(node).visibility !== "hidden";
+  const textOf = (node) => (node.value ?? node.innerText ?? node.textContent).replace(/[\u200b\ufeff]/g,"").trim();
+  function getEditor() {
+    const editors = [...document.querySelectorAll(`${rootSelector} ${bodySelector}`)].filter(visible);
+    return editors.length === 1 ? editors[0] : null;
   }
+  const editor = getEditor();
+  if (!editor) return 0;
+  const root = editor.closest(rootSelector);
+  const draftText = expectedText.replace(/\r\n?/g,"\n").trim();
+  const isSameDraft = () => editor.isConnected && textOf(editor) === draftText &&
+    !editor.querySelector("img,video,[data-attachment]") && !root.querySelector(".bili-dyn-publishing__attachment") &&
+    ![...root.querySelectorAll(titleSelector)].some(title => textOf(title));
+  if (!isSameDraft() || root.querySelector(itemSelector)) return 0;
+
   const prototype = HTMLInputElement.prototype;
   const click = prototype.click;
-  const showPicker = prototype.showPicker;
   let picker;
-  function capture(input) {
-    if (input.type !== "file" || input.name !== "upload" || input.files.length ||
-        (input.isConnected && !root.contains(input))) return false;
-    picker ||= input;
-    return true;
-  }
   prototype.click = function(...args) {
-    if (!capture(this)) return click.apply(this,args);
-  };
-  if (showPicker) prototype.showPicker = function(...args) {
-    if (!capture(this)) return showPicker.apply(this,args);
+    const matching = this.type === "file" && !this.disabled && !this.files.length &&
+      !this.isConnected && (bili ? this.name === "upload" : this.accept === "image/*");
+    if (!matching) return click.apply(this,args);
+    picker ||= this;
   };
   try {
-    add.dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true}));
+    const add = root.querySelector(addSelector);
+    const tool = bili && root.querySelector(".bili-dyn-publishing__tools__item.pic:not(.active):not(.disabled)");
+    if (visible(add) && !add.matches('button[type="submit"]')) add.click();
+    else if (visible(tool)) {
+      tool.click();
+      // Vue opens the panel and may request the picker in its update queue.
+      await new Promise(resolve => setTimeout(resolve,0));
+      const openedAdd = root.querySelector(addSelector);
+      if (!picker && visible(openedAdd) && !openedAdd.matches('button[type="submit"]')) openedAdd.click();
+    }
   } finally {
     prototype.click = click;
-    if (showPicker) prototype.showPicker = showPicker;
   }
-  if (!picker || root.querySelector(thumbnail)) return 0;
+
+  if (!picker || !isSameDraft() || root.querySelector(itemSelector)) return 0;
+  const transfer = new DataTransfer();
+  for (const {name,mime,data} of attachments.slice(0,picker.multiple ? attachments.length : 1)) {
+    transfer.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));
+  }
+  const expectedCount = transfer.files.length;
   picker.files = transfer.files;
   picker.dispatchEvent(new Event("change",{bubbles:true}));
   let count = 0;
-  for (let attempt=0; attempt<25 && count<transfer.files.length; attempt++) {
-    await new Promise(resolve=>setTimeout(resolve,200));
-    count = root.querySelectorAll(thumbnail).length;
+  const href = location.href;
+  for (let attempt=0; attempt<60 && location.href === href; attempt++) {
+    const current = getEditor();
+    const publisher = current && textOf(current) === draftText ? current.closest(rootSelector) : null;
+    count = publisher?.querySelectorAll(successSelector).length || 0;
+    if (count >= expectedCount ||
+        (bili && publisher?.querySelectorAll(`${itemSelector}.success,${itemSelector}.error`).length >= expectedCount)) break;
+    await new Promise(resolve=>setTimeout(resolve,250));
   }
-  return Math.min(count,transfer.files.length);
+  return Math.min(count,expectedCount);
 }
