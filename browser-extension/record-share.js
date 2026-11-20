@@ -174,7 +174,12 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   const known = candidates.filter(({node,root})=>isComposerText(node) || (platform !== "heybox" && candidates.length===1 && root.tagName!=="FORM"));
   const editor = known.length===1 ? known[0] : null;
   const entry = [...document.querySelectorAll("a,button,[role='button']")].find(node=>visible(node) && adapter.entry.includes(node.textContent.trim()));
-  const occupied = node => Boolean((node.value ?? node.innerText ?? node.textContent).trim() || node.querySelector("img,video,[data-attachment]"));
+  const editorText = node => (node.value ?? node.innerText ?? node.textContent).trim();
+  const hasMedia = node => Boolean(node.querySelector("img,video,[data-attachment]"));
+  // QQ Space puts this prompt inside the collapsed editor as ordinary text.
+  const isQzonePrompt = node => platform === "qzone" && !hasMedia(node) &&
+    ["说点儿什么吧", "说点什么吧"].includes(editorText(node));
+  const occupied = node => hasMedia(node) || Boolean(editorText(node) && !isQzonePrompt(node));
   if (action === "locate") return {editor:Boolean(editor),occupied:editor ? occupied(editor.node) : false,entry:Boolean(entry)};
   if (action === "open" && !editor) {
     // Use only listed composer-entry labels. Never invoke form submission.
@@ -190,8 +195,9 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   const imageInput = () => findImageInput(imageInputs(root));
   let input = imageInput();
   if (input?.files.length) return {ok:false};
-  if (payload.text) {
+  if (payload.text || isQzonePrompt(node)) {
     node.focus();
+    if (!node.isConnected || occupied(node)) return {ok:false};
     if (node instanceof HTMLTextAreaElement) {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value").set.call(node,payload.text);
       node.dispatchEvent(new Event("input",{bubbles:true}));
@@ -212,7 +218,7 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
         node.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"insertText",data:payload.text}));
       }
     }
-    if (!occupied(node)) return {ok:false};
+    if (payload.text && !editorText(node)) return {ok:false};
   }
   if (!payload.files.length) return {ok:true,images:0};
   input = imageInput();

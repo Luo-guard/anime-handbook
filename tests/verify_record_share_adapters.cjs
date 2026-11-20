@@ -38,7 +38,7 @@ async function main() {
       assert.deepEqual(current, {text:"两行内容\n第二行", submitted:0, changed:1, files:["1.png","2.jpg"]});
     }
     assert.equal(await page.evaluate(() => isShareTab("qzone", "https://qzone.qq.com.example.org/")), false);
-    await page.setContent('<section class="qz-poster"><div contenteditable="true" data-placeholder="写说说"></div><button type="button" aria-label="图片">图片</button></section>');
+    await page.setContent('<section class="qz-poster"><div contenteditable="true">说点儿什么吧</div><button type="button" aria-label="图片">图片</button></section>');
     await page.evaluate(() => {
       document.querySelector('[aria-label="图片"]').onclick = () => {
         const picker = document.createElement("input");
@@ -48,12 +48,15 @@ async function main() {
       };
     });
     const qzone = await page.evaluate(async () => {
+      const before = await interactWithShareEditor("qzone", "locate");
       const result = await interactWithShareEditor("qzone", "fill", {
         text:"第一行\n\n第三行", files:[{name:"截图.jpg", mime:"image/jpeg", data:"AA=="}],
       });
-      return {result, serialized:document.querySelector("[contenteditable]").innerHTML, uploaded:document.querySelector("[type=file]").files[0]?.name};
+      return {before, result, serialized:document.querySelector("[contenteditable]").innerHTML, uploaded:document.querySelector("[type=file]").files[0]?.name};
     });
-    assert.deepEqual(qzone, {result:{ok:true,images:1}, serialized:"第一行\n\n第三行", uploaded:"截图.jpg"});
+    assert.deepEqual(qzone, {before:{editor:true,occupied:false,entry:false}, result:{ok:true,images:1}, serialized:"第一行\n\n第三行", uploaded:"截图.jpg"});
+    await page.evaluate(() => document.querySelector("[contenteditable]").textContent = "说点儿什么吧，这是我自己的草稿。");
+    assert.equal(await page.evaluate(async () => (await interactWithShareEditor("qzone", "locate")).occupied), true);
     console.log("All three adapter fixtures preserve multiline text, accept multiple images, and leave final submission to the user.");
   } finally { await browser.close(); }
 }
