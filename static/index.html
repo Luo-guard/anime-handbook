@@ -7,7 +7,7 @@
     <title>动漫手账</title>
     <script id="initialAppearance" type="application/json">{}</script>
     <script src="/appearance.js?v=20261104-theme-studio"></script>
-  <link rel="stylesheet" href="/styles.css?v=20261119-statistics-restored" />
+  <link rel="stylesheet" href="/styles.css?v=20261120-share-preview" />
   </head>
   <body>
     <div class="app-shell">
@@ -205,6 +205,10 @@
                 <select id="noteAnime" class="hidden" aria-hidden="true" tabindex="-1">
                 <option value="">不关联动漫</option>
               </select></div>
+              <button class="record-share-trigger" type="button" id="shareNoteButton" aria-haspopup="dialog">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
+                分享
+              </button>
               <button class="primary-button" type="submit">保存感想</button>
             </div>
           </form>
@@ -1994,6 +1998,36 @@
     </dialog>
     <div id="themePagePreviewBar" popover="manual"><button type="button" class="secondary-button" id="themePreviewCancel">取消预览</button><button type="button" class="primary-button" id="themePreviewSave">保存设置</button></div>
     <dialog class="modal quick-record-dialog" id="quickRecordDialog" aria-labelledby="noteComposerTitle"></dialog>
+    <dialog class="modal record-share-modal" id="recordShareDialog" aria-labelledby="recordShareTitle">
+      <div class="modal-frame">
+        <form method="dialog"><button class="modal-close" aria-label="关闭发布预览">×</button></form>
+        <header class="record-share-header">
+          <h2 id="recordShareTitle">分享记录</h2>
+          <p>在这里调整要分享的图文，到平台确认发布。</p>
+        </header>
+        <div class="record-share-preview">
+          <div class="record-share-field">
+            <label for="recordShareText">正文</label>
+            <button type="button" class="record-share-trigger" id="recordShareCopy">复制正文</button>
+          </div>
+          <textarea id="recordShareText" rows="5" placeholder="添加想分享的文字"></textarea>
+          <section id="recordShareAttachments" hidden>
+            <h3>配图</h3>
+            <div id="recordShareImages" class="record-share-images"></div>
+          </section>
+        </div>
+        <section class="record-share-destinations" aria-labelledby="recordShareDestinationLabel">
+          <h3 id="recordShareDestinationLabel">发布到</h3>
+          <div class="record-share-actions" id="recordShareTargets">
+            <a href="https://qzone.qq.com/" target="_blank" rel="noopener noreferrer"><span class="record-share-platform qzone" aria-hidden="true">QQ</span><span>QQ 空间</span><span class="record-share-arrow" aria-hidden="true">↗</span></a>
+            <a href="https://t.bilibili.com/" target="_blank" rel="noopener noreferrer"><span class="record-share-platform bilibili" aria-hidden="true">哔</span><span>B 站动态</span><span class="record-share-arrow" aria-hidden="true">↗</span></a>
+            <a href="https://www.xiaoheihe.cn/" target="_blank" rel="noopener noreferrer"><span class="record-share-platform heybox" aria-hidden="true">盒</span><span>小黑盒</span><span class="record-share-arrow" aria-hidden="true">↗</span></a>
+          </div>
+          <p class="record-share-hint">选择平台会复制正文。配图可先保存，再到平台添加。</p>
+        </section>
+        <p id="recordShareStatus" class="record-share-status" role="status"></p>
+      </div>
+    </dialog>
     <dialog class="modal record-image-picker" id="recordImagePicker" aria-labelledby="recordImagePickerTitle">
       <form method="dialog" class="modal-frame">
         <button class="modal-close" aria-label="关闭">×</button>
@@ -2055,7 +2089,8 @@
     <script src="/modules/episode-gesture.js?v=20261116-flexible-wheel" defer></script>
     <script src="/modules/details.js?v=20261119-date-only-airing" defer></script>
     <script src="/modules/detail-wallpapers.js?v=20261116-detail-wallpapers" defer></script>
-    <script src="/modules/records.js?v=20261119-timeline-filter" defer></script>
+    <script src="/modules/records.js?v=20261120-share-preview" defer></script>
+    <script src="/modules/record-share.js?v=20261120-record-share" defer></script>
     <script src="/modules/ranking.js?v=20261118-ranking-drafts" defer></script>
     <script src="/modules/statistics.js?v=20261119-statistics-restored" defer></script>
     <script src="/modules/lifecycle.js?v=20261119-collection-snapshot" defer></script>

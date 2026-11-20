@@ -237,6 +237,10 @@ function timelineEvent(event) {
         ${content}
       </div>
       <div class="event-actions">
+        ${(title || parts.episodeText || editableContent) && !state.user?.read_only ? `
+          <button type="button" class="record-share-trigger share-event" title="分享记录" aria-label="分享记录" aria-haspopup="dialog">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
+          </button>` : ""}
         <button class="edit-event" data-event-id="${event.id}" data-event-theme="${escapeHtml(themes[0]?.id || "other")}" data-event-themes="${escapeHtml(themes.map((theme) => theme.id).join(","))}" data-event-anime="${event.anime_id || ""}" data-event-title="${escapeHtml(title)}" data-event-episodes="${escapeHtml(parts.episodeText)}" data-event-content="${escapeHtml(editableContent)}" data-event-raw="${escapeHtml(event.raw_directives || "")}" title="修改记录">编辑</button>
         <button class="delete-event" data-event-id="${event.id}" title="删除记录" aria-label="删除记录">×</button>
       </div>
