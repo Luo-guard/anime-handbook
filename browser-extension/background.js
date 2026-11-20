@@ -1,3 +1,5 @@
+importScripts("record-share.js");
+
 function isHandbookURL(value){
  try{const url=new URL(value);return url.protocol==="http:"&&["127.0.0.1","localhost"].includes(url.hostname)&&url.port==="43127";}catch{return false;}
 }
