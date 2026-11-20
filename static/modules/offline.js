@@ -640,6 +640,8 @@ function pcSetPlaybackState(state = "", message = "", retry = null) {
 
 function pcResetVideo() {
   pcMediaLoad?.abort();
+  pcStopUpscale();
+  if ($("#pcUpscaleMenu:not(.hidden)")) pcToggleMenu("#pcUpscaleMenu");
   pcSetPlaybackState();
   const video = $("#offlineVideo");
   video.pause();
@@ -649,11 +651,15 @@ function pcResetVideo() {
 
 function pcPrepareVideo(resumeSeconds) {
   pcMediaLoad?.abort();
+  pcStopUpscale();
   pcMediaLoad = new AbortController();
   const video = $("#offlineVideo");
+  const { upscale } = pcLoadPrefs();
+  pcUpscaleUI(upscale, upscale === "off" ? PC_UPSCALE_OFF_LABEL : "等待视频载入…");
   const options = { signal: pcMediaLoad.signal };
   video.addEventListener("canplay", () => pcSetPlaybackState(), options);
   video.addEventListener("playing", () => pcSetPlaybackState(), options);
+  video.addEventListener("loadeddata", () => pcStartUpscale(video), options);
   video.addEventListener("waiting", () => {
     if (!video.paused && $("#pcPlaybackState").hidden) pcSetPlaybackState("loading", "正在缓冲…");
   }, options);
@@ -918,6 +924,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 const PC_PREFS_KEY = "handbook.player.prefs";
 const PC_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+const PC_UPSCALE_MODES = ["off", "fast", "quality"];
+const PC_UPSCALE_OFF_LABEL = "若要使用浏览器扩展，请在扩展里开启。";
+let pcUpscaleSession;
+let pcUpscaleGeneration = 0;
 
 function pcLoadPrefs() {
   try {
@@ -928,11 +938,12 @@ function pcLoadPrefs() {
       volume: Number.isFinite(Number(raw.volume)) ? Math.min(1, Math.max(0, Number(raw.volume))) : 1,
       muted: raw.muted === true,
       resume: raw.resume !== false,
+      upscale: PC_UPSCALE_MODES.includes(raw.upscale) ? raw.upscale : "off",
       // 顶栏快进按钮一次跳的秒数（Kazumi buttonSkipTime），默认 80
       skip: Number.isFinite(skip) && skip > 0 ? Math.min(600, skip) : 80,
     };
   } catch (error) {
-    return { speed: 1, volume: 1, muted: false, resume: true, skip: 80 };
+    return { speed: 1, volume: 1, muted: false, resume: true, skip: 80, upscale: "off" };
   }
 }
 
@@ -940,6 +951,51 @@ function pcSavePrefs(patch) {
   try {
     localStorage.setItem(PC_PREFS_KEY, JSON.stringify({ ...pcLoadPrefs(), ...patch }));
   } catch (error) { /* 忽略 */ }
+}
+
+function pcUpscaleUI(mode, status, active = false) {
+  const button = $("#pcUpscale");
+  if (!button) return;
+  button.dataset.active = String(active);
+  button.textContent = active ? (mode === "quality" ? "超分·画质" : "超分·轻量") : "超分";
+  button.title = status;
+  $("#pcUpscaleStatus").textContent = status;
+  $$("#pcUpscaleMenu [data-upscale]").forEach((option) => {
+    const selected = option.dataset.upscale === mode;
+    option.classList.toggle("active", selected);
+    option.setAttribute("aria-pressed", String(selected));
+  });
+}
+
+function pcStopUpscale() {
+  pcUpscaleGeneration++;
+  pcUpscaleSession?.stop();
+  pcUpscaleSession = null;
+}
+
+async function pcStartUpscale(video) {
+  pcStopUpscale();
+  const { upscale: mode } = pcLoadPrefs();
+  if (mode === "off" || video.readyState < 2) {
+    pcUpscaleUI(mode, mode === "off" ? PC_UPSCALE_OFF_LABEL : "等待视频载入…");
+    return;
+  }
+  const generation = pcUpscaleGeneration;
+  const source = video.currentSrc;
+  const report = (error) => {
+    if (generation !== pcUpscaleGeneration) return;
+    pcUpscaleUI(mode, error ? `${error}，已恢复普通播放。` : "内置超分生效中。建议关闭扩展超分，避免重复处理。", !error);
+  };
+  pcUpscaleUI(mode, "正在启动内置超分…");
+  try {
+    const { startPlayerUpscale } = await import("./player-upscale.js?v=1");
+    if (generation !== pcUpscaleGeneration || video.currentSrc !== source) return;
+    pcUpscaleSession = startPlayerUpscale(video, $("#pcVideoSurface"), mode, report);
+  } catch (error) {
+    console.warn("播放器内置超分启动失败", error);
+    report(error.message === "WebGL 2 浮点渲染不可用" || error.message === "浏览器不支持视频帧回调"
+      ? error.message : "内置超分启动失败");
+  }
 }
 
 // 快进按钮的界面同步：悬停提示文案 + 图标里的秒数数字都跟着偏好走。
@@ -999,6 +1055,7 @@ function pcSleep() {
   if (!wrap || !$("#offlinePlayer")?.open || !video?.readyState || video.error || video.ended || pcSeeking) return;
   // 面板/菜单开着、正在输弹幕时都不自动藏。
   if ($(".danmaku-panel:not(.hidden)")) return;
+  if ($("#pcUpscaleMenu:not(.hidden)")) return;
   if ($("#pcSpeedMenu") && !$("#pcSpeedMenu").classList.contains("hidden")) return;
   if ($("#pcPlaylistMenu") && !$("#pcPlaylistMenu").classList.contains("hidden")) return;
   if (document.activeElement === $("#dmSendInput")) return;
@@ -1098,6 +1155,8 @@ function pcToggleMenu(id) {
   if (!menu) return;
   const willShow = menu.classList.contains("hidden");
   $$("#playerControls .pc-menu").forEach((node) => node.classList.add("hidden"));
+  $("#pcUpscaleMenu")?.classList.add("hidden");
+  $("#pcUpscale")?.setAttribute("aria-expanded", String(willShow && id === "#pcUpscaleMenu"));
   if (willShow) {
     if (id === "#pcPlaylistMenu") pcRenderPlaylist();
     if (id === "#pcSpeedMenu") pcSyncSpeed();
@@ -1180,7 +1239,7 @@ function pcUpscaleCanvas(video) {
   for (const root of roots) {
     if (!root) continue;
     root.querySelectorAll("canvas").forEach((node) => {
-      if (node.id === "danmakuCanvas" || node.classList.contains("JASSUB")) return;
+      if (node.id === "danmakuCanvas" || node.classList.contains("JASSUB") || node.classList.contains("pc-native-upscale")) return;
       if (!node.width || !node.height) return;
       if (!found.includes(node)) found.push(node);
     });
@@ -1324,9 +1383,10 @@ async function pcCaptureScreenshot(video, seconds) {
   const paused = video.paused;
   const media = video.currentSrc;
   const mediaLoad = pcMediaLoad;
-  const upscaleCanvas = pcUpscaleCanvas(video);
-  const original = paused ? pcDrawShot(video, null) : null;
-  const enhanced = upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null;
+  const builtIn = pcUpscaleSession?.capture();
+  const upscaleCanvas = builtIn ? null : pcUpscaleCanvas(video);
+  const original = !builtIn && paused ? pcDrawShot(video, null) : null;
+  const enhanced = builtIn || (upscaleCanvas ? await pcCaptureUpscaled(video, upscaleCanvas) : null);
   if (mediaLoad !== pcMediaLoad || video.currentSrc !== media ||
       (paused && (!video.paused || video.currentTime !== seconds))) {
     throw new Error("画面已切换，请重新截图");
@@ -1514,6 +1574,17 @@ function pcInit() {
   });
   $("#pcSpeed")?.addEventListener("click", () => pcToggleMenu("#pcSpeedMenu"));
   $("#pcPlaylist")?.addEventListener("click", () => pcToggleMenu("#pcPlaylistMenu"));
+  $("#pcUpscale")?.addEventListener("click", () => pcToggleMenu("#pcUpscaleMenu"));
+  $("#pcUpscaleMenu")?.addEventListener("click", (event) => {
+    const mode = event.target.closest("[data-upscale]")?.dataset.upscale;
+    if (!PC_UPSCALE_MODES.includes(mode)) return;
+    pcSavePrefs({ upscale: mode });
+    pcStartUpscale(video);
+    $("#pcUpscale")?.focus();
+    pcToggleMenu("#pcUpscaleMenu");
+  });
+  const upscale = pcLoadPrefs().upscale;
+  pcUpscaleUI(upscale, upscale === "off" ? PC_UPSCALE_OFF_LABEL : "等待视频载入…");
   $("#pcSpeedMenu")?.addEventListener("click", (event) => {
     const item = event.target.closest("[data-rate]");
     if (!item) return;
@@ -1664,8 +1735,9 @@ function pcInit() {
   });
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".pc-pop-host")) {
-      const menus = $$("#playerControls .pc-menu:not(.hidden)");
+      const menus = $$("#playerControls .pc-menu:not(.hidden), #pcUpscaleMenu:not(.hidden)");
       menus.forEach((node) => node.classList.add("hidden"));
+      $("#pcUpscale")?.setAttribute("aria-expanded", "false");
       if (menus.length) pcWake();
     }
   });
