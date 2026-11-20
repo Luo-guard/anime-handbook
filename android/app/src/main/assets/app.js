@@ -46,6 +46,11 @@ function detail(){
  const done=new Set(arrayValue(a.watched_episodes).map(String));
  app.innerHTML=`<button class="back" onclick="backHome()">← 返回收藏</button><div class="detail-cover" ${cover(a)}><h2>${esc(name(a))}</h2></div>${groups.size?[...groups].map(([type,eps])=>`<div class="panel"><div class="episode-heading"><b>${typeLabel(type)}</b><small data-group-count="${type}"></small></div><div class="episode">${eps.map(e=>`<button data-episode-key="${esc(e.key)}" data-episode-type="${type}" class="${done.has(String(e.key))?'done':''}" aria-pressed="${done.has(String(e.key))}">${esc(e.display_label||e.key)}</button>`).join('')}</div></div>`).join(''):'<div class="empty">剧集资料暂缺，暂无可标记的集数。</div>'}`;
  app.querySelectorAll('[data-episode-key]').forEach(button=>button.onclick=()=>toggleEpisode(a.id,button.dataset.episodeKey));
+ const playButton=document.createElement('button');
+ playButton.className='primary detail-play';
+ playButton.textContent='在手账里播放';
+ playButton.onclick=()=>window.HandbookPlayer.show(a);
+ app.querySelector('.detail-cover').after(playButton);
  updateEpisodeButtons();
 }
 function updateEpisodeButtons(){
@@ -99,6 +104,7 @@ function backHome(){persistUi();selected=null;page='home';render();syncNav();res
 function handleBack(){
  const conflict = document.querySelector('#syncConflict');
  if (conflict.open) { conflict.close(); return true; }
+ if(window.HandbookPlayer?.back())return true;
  if(selected!==null){backHome();return true}if(composerOpen){showPage('records');return true}if(page!=='home'){showPage('home');return true}return false;
 }
 function toggleEpisode(id,key){const a=animes().find(x=>x.id===id);let w=JSON.parse(a.watched_episodes||'[]'), watched=!w.includes(key);w=watched?[...w,key]:w.filter(x=>x!==key);a.watched_episodes=JSON.stringify(w);a.updated_at=nowIso();const events=tables().events;if(watched){events.push({...recordIdentity(),id:Date.now(),event_type:'watch',anime_id:id,episodes:JSON.stringify([key]),content:'',theme:'watch',themes:'["watch"]',rating:null,raw_directives:'',created_at:nowIso()})}else{const index=[...events].reverse().findIndex(e=>e.event_type==='watch'&&Number(e.anime_id)===Number(id)&&(()=>{try{return JSON.parse(e.episodes||'[]').includes(key)}catch(_){return false}})());if(index>=0){const actual=events.length-1-index,event=events[actual],remaining=JSON.parse(event.episodes||'[]').filter(item=>item!==key);if(remaining.length)event.episodes=JSON.stringify(remaining);else events.splice(actual,1)}}save();updateEpisodeButtons();persistUi()}
@@ -119,7 +125,7 @@ window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if
  const editing=!!document.querySelector('#content')||!!document.querySelector('#url');
  if(!editing){const y=window.scrollY;if(selected!==null)updateEpisodeButtons();else render();window.scrollTo(0,y)}
  }if(!silent)alert(r.pendingLocal?'同步已完成；期间的新修改已保留在手机，等待下次同步。':r.message||'同步完成')}};
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelector('#sync').onclick=()=>requestSync();
+document.querySelectorAll('nav button[data-page]').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelector('#sync').onclick=()=>requestSync();
 document.querySelector('#syncConflict form').addEventListener('submit', event => {
  event.preventDefault();
  const resolution = event.submitter?.value;

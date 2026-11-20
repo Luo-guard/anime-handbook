@@ -4,6 +4,71 @@
 
 .episode-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.episode-heading small{font-size:12px;color:var(--muted)}
 
+.detail-play { margin: 10px 0 14px; min-height: 44px; }
+.mobile-playing { overflow: hidden; }
+#mobilePlayer {
+  position: fixed; inset: 0; z-index: 20; overflow: auto;
+  background: #14131a; color: #f5f2fa; color-scheme: dark;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  font-size: 14px; accent-color: #cbb4fa;
+}
+#mobilePlayer[hidden], #mobilePlayer [hidden], #mobilePlayer .hidden { display: none !important; }
+#mobilePlayer button {
+  min-height: 42px; padding: 6px 10px; border-radius: 8px;
+  background: #f5eaff19; color: inherit; white-space: nowrap;
+}
+#mobilePlayer button:disabled { opacity: .42; }
+#mobilePlayer .selected { background: #cbb4fa; color: #221736; }
+#offlineDanmakuToggle.is-off { opacity: .6; }
+#mobilePlayer input:not([type=range]):not([type=checkbox]), #mobilePlayer select {
+  border: 1px solid #f7e7ff36; border-radius: 8px; padding: 8px; min-width: 0;
+  color: inherit; background: #211f2b; font: inherit;
+}
+.mobile-video-wrap { position: relative; aspect-ratio: 16/9; min-height: 210px; background: black; isolation: isolate; }
+#pcVideoSurface, #offlineVideo, #pcVideoSurface .pc-native-upscale { position: absolute; inset: 0; width: 100%; height: 100%; }
+#offlineVideo, #pcVideoSurface .pc-native-upscale { object-fit: contain; }
+#pcVideoSurface .pc-native-upscale { pointer-events: none; }
+#danmakuCanvas { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
+.mobile-video-top, .mobile-video-bottom { position: absolute; left: 0; right: 0; z-index: 2; padding: 5px 8px; }
+.mobile-video-top { top: 0; display: flex; align-items: center; gap: 6px; background: linear-gradient(#08070bdf, transparent); }
+.mobile-video-top strong { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mobile-video-bottom { bottom: 0; background: linear-gradient(transparent,#08070bf0); }
+.mobile-video-bottom input { width: 100%; display: block; min-height: 24px; margin: 0; }
+.mobile-video-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mobile-video-row label { display: inline-flex; gap: 5px; align-items: center; }
+.mobile-video-row #mpTime { margin-right: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+.mobile-tools { display: grid; gap: 7px; padding: 8px 10px; }
+.mobile-tools p { margin: 0; }
+.mobile-tools p:empty { display: none; }
+#mpVolume { max-width: 80px; }
+#dmSendInput { flex: 1; }
+.mobile-player-sheet, #danmakuPanel {
+  position: absolute; z-index: 5; left: 8px; right: 8px; bottom: 8px;
+  max-height: min(52dvh, 520px); overflow: auto; padding: 12px;
+  background: #211e2b; border: 1px solid #f7e7ff30; border-radius: 14px;
+}
+.mobile-player-sheet h2, #danmakuPanel h3 { margin: 0 0 8px; font-size: 17px; }
+.mp-sheet-close { float: right; margin-left: 6px; }
+.mobile-player-sheet select, .mobile-player-sheet label, .mobile-player-sheet input:not([type=checkbox]) { display: block; width: 100%; margin-block: 5px; }
+#danmakuPanel { bottom: auto; top: 4px; max-height: min(75dvh, 490px); }
+.danmaku-panel-head, .danmaku-actions, .danmaku-row, .danmaku-status, .danmaku-search div {
+  display: flex; align-items: center; justify-content: space-between; gap: 7px; flex-wrap: wrap;
+}
+.danmaku-panel-body, .danmaku-match { display: grid; gap: 8px; }
+.danmaku-panel-body p { margin: 4px 0; }
+.danmaku-row { padding-block: 4px; }
+.mobile-player-sheet { position: fixed; }
+.mp-fullscreen { overflow: hidden !important; }
+.mp-fullscreen .mobile-video-wrap, .mp-pip .mobile-video-wrap { position: absolute; inset: 0; min-height: 0; aspect-ratio: auto; }
+.mp-fullscreen .mobile-video-bottom { bottom: var(--mp-tools-height, 112px); }
+.mp-fullscreen .mobile-tools { position: absolute; z-index: 3; bottom: 0; left: 0; right: 0; background: #0c0b11db; }
+.mp-controls-hidden :is(.mobile-video-top,.mobile-video-bottom,.mobile-tools), .mp-pip :is(.mobile-video-top,.mobile-video-bottom,.mobile-tools,#danmakuCanvas,#danmakuPanel,.mobile-player-sheet) { visibility: hidden; pointer-events: none; }
+.mp-pip { padding: 0 !important; }
+@media (orientation: landscape) {
+  .mobile-player-sheet, #danmakuPanel { left: auto; width: min(380px, 54vw); }
+  .mp-fullscreen .mobile-tools { display: flex; flex-wrap: wrap; align-items: center; }
+}
+
 #syncConflict {
   width: min(380px, calc(100% - 32px));
   max-height: calc(100dvh - 32px);

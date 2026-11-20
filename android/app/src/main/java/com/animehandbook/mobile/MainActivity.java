@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebResourceRequest;
@@ -22,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends Activity {
   private WebView web;
+  private MobilePlayerHost player;
   private File stateFile;
   private final Object stateLock = new Object();
   private android.content.SharedPreferences prefs;
@@ -44,9 +44,12 @@ public class MainActivity extends Activity {
     web = new WebView(this);
     web.getSettings().setJavaScriptEnabled(true);
     web.getSettings().setDomStorageEnabled(true);
+    web.getSettings().setAllowFileAccess(false);
+    player = new MobilePlayerHost(this, web);
     CoverLoader covers = new CoverLoader(new File(getCacheDir(), "covers"));
     web.setWebViewClient(new WebViewClient() {
       @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+        if (MobilePlayerHost.HOST.equals(request.getUrl().getHost())) return player.asset(request);
         if (!"covers.animehandbook.local".equals(request.getUrl().getHost())) return null;
         try {
           byte[] image = covers.load(request.getUrl().getQueryParameter("url"));
@@ -57,21 +60,36 @@ public class MainActivity extends Activity {
           return new WebResourceResponse("image/svg+xml", "UTF-8", new ByteArrayInputStream(placeholder.getBytes(StandardCharsets.UTF_8)));
         }
       }
+      @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+        return true;
+      }
     });
-    web.setWebChromeClient(new WebChromeClient());
+    web.setWebChromeClient(player);
     web.addJavascriptInterface(new Bridge(), "AndroidHandbook");
     setContentView(web);
-    web.loadUrl("file:///android_asset/index.html");
+    web.addJavascriptInterface(player.bridge(), "AndroidPlayer");
+    web.loadUrl("https://" + MobilePlayerHost.HOST + "/index.html");
     restartAutoSync();
     if(android.os.Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::navigateBack);
   }
   private void navigateBack(){web.evaluateJavascript("window.HandbookMobile ? window.HandbookMobile.handleBack() : false", result->{if(!"true".equals(result))moveTaskToBack(true);});}
   @Override public void onBackPressed(){navigateBack();}
-  @Override protected void onPause(){web.evaluateJavascript("window.HandbookMobile && window.HandbookMobile.persistUi()",null);super.onPause();}
+  @Override protected void onPause(){web.evaluateJavascript("window.HandbookMobile && window.HandbookMobile.persistUi(); window.HandbookPlayer?.background(" + isInPictureInPictureMode() + ")",null);super.onPause();}
+
+  @Override protected void onActivityResult(int request, int result, android.content.Intent data) {
+    super.onActivityResult(request, result, data);
+    player.result(request, result, data);
+  }
+
+  @Override public void onPictureInPictureModeChanged(boolean active, android.content.res.Configuration configuration) {
+    super.onPictureInPictureModeChanged(active, configuration);
+    web.evaluateJavascript("window.HandbookPlayer?.pictureInPicture(" + active + ")", null);
+  }
 
 
   @Override protected void onDestroy() {
     autoSyncHandler.removeCallbacks(autoSyncTask);
+    player.close();
     super.onDestroy();
   }
 

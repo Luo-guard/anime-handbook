@@ -1,8 +1,19 @@
 plugins { id 'com.android.application' }
 
 android { namespace 'com.animehandbook.mobile'; compileSdk 35
-    defaultConfig { applicationId 'com.animehandbook.mobile'; minSdk 26; targetSdk 35; versionCode 16; versionName '1.0.15' }
+    defaultConfig { applicationId 'com.animehandbook.mobile'; minSdk 26; targetSdk 35; versionCode 17; versionName '1.0.16' }
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/player-assets'))
 }
+
+def sharedStatic = rootProject.file('static').isDirectory() ? rootProject.file('static') : rootProject.file('../static')
+tasks.register('copyPlayerAssets', Sync) {
+    from(sharedStatic) {
+        include 'modules/danmaku.js', 'modules/player-upscale.js', 'modules/anime4k-shaders.js'
+        include 'vendor/hls/hls.min.js', 'vendor/hls/LICENSE'
+    }
+    into layout.buildDirectory.dir('generated/player-assets')
+}
+tasks.named('preBuild').configure { dependsOn 'copyPlayerAssets' }
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'

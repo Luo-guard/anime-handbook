@@ -343,16 +343,17 @@ async function dmProxy(apiPath, validateText, signal) {
   let lastError = null;
   for (const base of bases) {
     try {
-      const response = await fetch("/api/danmaku/proxy", {
+      const request = {
+        base,
+        path: apiPath,
+        app_id: sourceMode === "dandanplay" ? appId : "",
+        app_secret: sourceMode === "dandanplay" ? appSecret : "",
+      };
+      const response = await (window.handbookDanmakuRequest || fetch)("/api/danmaku/proxy", {
         method: "POST",
         signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          base,
-          path: apiPath,
-          app_id: sourceMode === "dandanplay" ? appId : "",
-          app_secret: sourceMode === "dandanplay" ? appSecret : "",
-        }),
+        body: JSON.stringify(request),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload.ok === false) throw new Error(payload.error || payload.message || "弹幕服务没有响应");
@@ -436,7 +437,9 @@ async function dmLoadFor(file, animeName, animeId, onlineKey = "") {
   danmakuView.mineKey = onlineKey || String(danmakuView.fileId);
   danmakuView.animeName = String(animeName || "");
   danmakuView.animeId = Number(animeId) || 0;
-  const anime = state.animes.find(item => Number(item.id) === danmakuView.animeId);
+  const anime = window.handbookDanmakuAnime
+    ? window.handbookDanmakuAnime(danmakuView.animeId)
+    : state.animes.find(item => Number(item.id) === danmakuView.animeId);
   const episodeKey = episodeStorageKey(file?.episode_key, anime);
   danmakuView.episodeKey = episodeKey;
   danmakuView.episode = Number(/^0:([1-9]\d*)$/.exec(episodeKey)?.[1]) || 0;

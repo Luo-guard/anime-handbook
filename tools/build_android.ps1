@@ -23,6 +23,11 @@ try {
     }
     Copy-Item -LiteralPath (Join-Path $androidRoot 'app\build.gradle') -Destination (Join-Path $staging 'app')
     Copy-Item -LiteralPath (Join-Path $androidRoot 'app\src') -Destination (Join-Path $staging 'app') -Recurse
+    foreach ($asset in @('modules/danmaku.js', 'modules/player-upscale.js', 'modules/anime4k-shaders.js', 'vendor/hls/hls.min.js', 'vendor/hls/LICENSE')) {
+        $target = Join-Path (Join-Path $staging 'static') $asset
+        New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path (Join-Path $projectRoot 'static') $asset) -Destination $target
+    }
     $env:JAVA_HOME = $JavaHome
     $arguments = @('-p', $staging, ':app:testDebugUnitTest', ':app:assembleDebug', '--console=plain', '--no-daemon')
     if (!$Online) { $arguments += '--offline' }
