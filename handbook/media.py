@@ -142,6 +142,140 @@ def probe(path: Path | str, *, ffprobe: str = "", timeout: float = PROBE_TIMEOUT
     }
 
 
+def chapters(
+    path: Path | str,
+    *,
+    ffprobe: str = "",
+    timeout: float = PROBE_TIMEOUT,
+) -> list[dict[str, Any]]:
+    """读取章节表。合集单文件（整季一个 MKV）通常每集一个章节。
+
+    返回 ``[{"start": 秒, "end": 秒, "title": 章节名}]``，按时间升序。
+    没有章节就返回空列表；读取失败同样返回空列表（不值得为此打断归档）。
+    """
+    binary = ffprobe or tool_path("ffprobe")
+    if not binary:
+        return []
+    target = Path(path)
+    if not target.is_file():
+        return []
+    command = [
+        binary,
+        "-v", "error",
+        "-print_format", "json",
+        "-show_chapters",
+        str(target),
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if completed.returncode != 0:
+        return []
+    try:
+        document = json.loads(completed.stdout.decode("utf-8", "replace"))
+    except ValueError:
+        return []
+    result: list[dict[str, Any]] = []
+    for chapter in document.get("chapters") or []:
+        try:
+            start = float(chapter.get("start_time") or 0)
+            end = float(chapter.get("end_time") or 0)
+        except (TypeError, ValueError):
+            continue
+        if end <= start:
+            continue
+        result.append({
+            "start": round(start, 3),
+            "end": round(end, 3),
+            "title": str((chapter.get("tags") or {}).get("title") or ""),
+        })
+    result.sort(key=lambda item: item["start"])
+    return result
+
+
+def episode_numbers_from_chapters(
+    chapter_list: list[dict[str, Any]],
+) -> list[tuple[int, dict[str, Any]]]:
+    """从章节名里认集数：「1ぺこ …」「第01话」「EP07」这类开头带数字的算一集。
+
+    OP/ED/菜单这类没有数字的章节会被跳过。要求认出的集数互不相同且
+    递增（合集的章节就是按集排的），否则宁可不用。
+    """
+    numbers: list[tuple[int, dict[str, Any]]] = []
+    seen: set[int] = set()
+    for chapter in chapter_list:
+        match = re.match(r"^\s*(?:第)?\s*(\d{1,3})(?:\b|[话話集集ぺ话])", str(chapter.get("title") or ""))
+        if not match:
+            match = re.match(r"^\s*(?:EP|Ep|ep)\s*(\d{1,3})\b", str(chapter.get("title") or ""))
+        if not match:
+            continue
+        number = int(match.group(1))
+        if number < 1 or number in seen:
+            continue
+        seen.add(number)
+        numbers.append((number, chapter))
+    ordered = sorted(numbers, key=lambda item: float(item[1]["start"]))
+    values = [number for number, _ in ordered]
+    if len(values) < 2 or values != sorted(values) or len(set(values)) != len(values):
+        return []
+    return ordered
+
+
+def split_by_chapter(
+    source: Path | str,
+    destination: Path | str,
+    start: float,
+    end: float,
+    *,
+    ffmpeg: str = "",
+    timeout: float | None = None,
+) -> dict[str, Any]:
+    """按章节起点无损切出一段（``-c copy``），合集单文件拆集用。
+
+    章节起点通常对齐关键帧，直接 ``-ss`` 在 ``-i`` 前即可；段尾取到下一集
+    开始之前，所以 OP/ED 会跟着最近的正片段落走，不会丢内容。
+    """
+    binary = ffmpeg or tool_path("ffmpeg")
+    if not binary:
+        raise MediaError("找不到 ffmpeg，请确认已安装并在 PATH 中")
+    src = Path(source)
+    dst = Path(destination)
+    if not src.is_file():
+        raise MediaError(f"源文件不存在：{src}")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    duration = max(0.1, float(end) - float(start))
+    command = [
+        binary,
+        "-y",
+        "-loglevel", "error",
+        "-ss", f"{float(start):.3f}",
+        "-i", str(src),
+        "-t", f"{duration:.3f}",
+        "-map", "0:v:0",
+        "-map", "0:a?",
+        "-c", "copy",
+        "-sn",
+        "-map_chapters", "-1",
+        "-movflags", "+faststart",
+        "-f", "mp4",
+        str(dst),
+    ]
+    if timeout is None:
+        timeout = max(REMUX_TIMEOUT, duration * 2)
+    try:
+        completed = subprocess.run(command, capture_output=True, timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise MediaError(f"ffmpeg 运行失败：{error}") from error
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", "replace").strip()[:200]
+        raise MediaError(f"按章节拆分失败：{detail or 'ffmpeg 返回错误'}")
+    if not dst.is_file() or dst.stat().st_size == 0:
+        raise MediaError("按章节拆分后没有产出文件")
+    info = probe(dst, ffprobe=ffmpeg)
+    return {"path": str(dst), **info}
+
+
 def remux(
     source: Path | str,
     destination: Path | str,

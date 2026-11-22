@@ -107,6 +107,53 @@ class ArchiveTest(unittest.TestCase):
             save_path=content_path,
         )
 
+    def test_chapter_compilation_splits_into_episodes(self):
+        """整季合集单文件：按章节无损拆成单集再入库。"""
+        meta = self.root / "chapters.txt"
+        meta.write_text(
+            ";FFMETADATA1\n"
+            + "".join(
+                f"[CHAPTER]\nTIMEBASE=1/1000\nSTART={index * 1000}\nEND={(index + 1) * 1000}\n"
+                f"title=第{index + 1}话\n"
+                for index in range(3)
+            ),
+            encoding="utf-8",
+        )
+        chapter_dir = self.root / "download-chapters"
+        chapter_dir.mkdir(parents=True, exist_ok=True)
+        video = chapter_dir / "[VCB] 测试合集 [Ma10p_1080p].mkv"
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+                "-t", "3",
+                "-i", str(meta),
+                "-map", "0:v", "-map", "1:a", "-map_metadata", "2",
+                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-shortest",
+                str(video),
+            ],
+            capture_output=True,
+            timeout=180,
+            check=True,
+        )
+        self.assertEqual([item["start"] for item in media.chapters(video)], [0.0, 1.0, 2.0])
+
+        job = self.make_job(str(video))
+        service = OfflineService(self.db)
+        fake = PathClient(content_path=str(video), save_path=str(video.parent), name="[VCB] 测试合集")
+        with patch.object(OfflineService, "client", new=lambda _self, config=None: fake):
+            service._archive(job["id"])
+
+        files = self.store.files_for_anime(99)
+        self.assertEqual([row["episode_key"] for row in files], ["0:1", "0:2", "0:3"])
+        for row in files:
+            target = Path(row["file_path"])
+            self.assertTrue(target.is_file(), target)
+            self.assertEqual(target.suffix, ".mp4")
+        self.assertEqual(self.store.job(job["id"])["status"], "ready")
+
     def test_archives_every_file_and_marks_ready(self):
         job = self.make_job(str(self.source_dir))
         service = OfflineService(self.db)

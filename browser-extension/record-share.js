@@ -129,13 +129,21 @@ async function fillShareTab(tabId, url) {
       }).catch(()=>[]);
       sent = upload?.result || 0;
     }
+    // QQ 空间的上传面板常在另一个 frame（甚至点完「图片」按钮才生成），
+    // 编辑器帧里找不到 input 不代表没法传，这里做一次全 frame 的补投。
+    if (draft.platform === "qzone" && files.length && !sent) {
+      sent = await uploadQzoneImages(tabId, target, files);
+    }
     await chrome.storage.session.remove(key);
     const unread = draft.totalImages - files.length;
-    const unconfirmed = files.length - sent;
-    const message = unread || unconfirmed
-      ? ["草稿已准备。", unread ? `${unread} 张配图未能从手账读取。` : "",
-        unconfirmed ? `${unconfirmed} 张配图未确认上传，请先检查编辑器预览。` : ""].join("")
-      : sent ? "图文已填入，请检查图片预览后再发布。" : "正文已填入，请在平台检查并发布。";
+    const message = unread
+      ? ["草稿已准备。", `${unread} 张配图未能从手账读取。`,
+        files.length ? "已填入的配图请检查编辑器预览。" : ""].join("")
+      : sent === files.length && files.length
+        ? "图文已填入，请检查图片预览后再发布。"
+        : files.length
+          ? `正文已填入。${files.length} 张配图没有自动上传，请在编辑器里点图片图标手动选择文件（配图就是这些文件）。`
+          : "正文已填入，请在平台检查并发布。";
     await run({},[draft.platform,"notice",message,false]);
   } catch {
     await run({},[null,"notice","手账暂时无法访问编辑器。请检查扩展权限，或回到手账复制正文和保存配图。"]).catch(()=>{});
@@ -151,6 +159,79 @@ chrome.tabs.onRemoved.addListener(id=>chrome.storage.session.remove(shareKey(id)
 chrome.runtime.onMessage.addListener((message,sender)=>{
   if (message.type === "handbook-share-retry" && sender.tab && sender.frameId === 0) fillShareTab(sender.tab.id,sender.url).catch(()=>{});
 });
+
+// ---------- QQ 空间：跨 frame 找上传面板的 file input ----------
+
+async function imageInputSnapshot(tabId) {
+  const results = await chrome.scripting.executeScript({
+    target:{allFrames:true}, func:collectShareFileInputs,
+  }).catch(()=>[]);
+  return results.filter(item => Array.isArray(item.result))
+    .flatMap(item => item.result.map(entry => ({...entry, frameId:item.frameId})));
+}
+
+// 注入：收集本 frame 里可用的图片 file input（QQ 空间的上传面板是点完按钮才生成的）。
+function collectShareFileInputs() {
+  const visible = node => node.getClientRects().length && getComputedStyle(node).visibility !== "hidden";
+  return [...document.querySelectorAll('input[type="file"]:not([disabled])')]
+    .filter(input => /image|png|jpe?g|webp/i.test(input.accept) || !input.accept)
+    .map(input => ({
+      key:`${input.id}§${input.name}§${input.accept}`,
+      visible:visible(input), files:input.files.length,
+    }));
+}
+
+// 注入：把配图写进指定 frame 的 file input 并触发 change。
+function setShareImageInput(key, files) {
+  const input = [...document.querySelectorAll('input[type="file"]:not([disabled])')]
+    .find(item => `${item.id}§${item.name}§${item.accept}` === key);
+  if (!input) return 0;
+  const transfer = new DataTransfer();
+  for (const {name,mime,data} of files.slice(0, input.multiple ? files.length : 1)) {
+    transfer.items.add(new File([Uint8Array.from(atob(data), char => char.charCodeAt(0))], name, {type:mime}));
+  }
+  input.files = transfer.files;
+  input.dispatchEvent(new Event("input",{bubbles:true}));
+  input.dispatchEvent(new Event("change",{bubbles:true}));
+  return transfer.files.length;
+}
+
+// 注入：数编辑器/发布区里的图片缩略图，用来确认上传真的进来了。
+function countShareComposerImages(rootSelectors) {
+  return rootSelectors.reduce((total, selector) => total +
+    [...document.querySelectorAll(`${selector} img`)]
+      .filter(image => image.getClientRects().length).length, 0);
+}
+
+async function uploadQzoneImages(tabId, target, files) {
+  const before = await imageInputSnapshot(tabId);
+  await new Promise(resolve => setTimeout(resolve, 1200));   // 面板/输入框可能还没挂上
+  const after = await imageInputSnapshot(tabId);
+  const fresh = after.filter(item => !before.some(b => b.frameId === item.frameId && b.key === item.key));
+  const candidates = (fresh.length ? fresh : after).filter(item => item.visible || fresh.length);
+  const pick = candidates.find(item => item.files === 0) || candidates[0];
+  if (!pick) return 0;
+  const [upload] = await chrome.scripting.executeScript({
+    target:{tabId, frameIds:[pick.frameId]}, func:setShareImageInput, args:[pick.key, files],
+  }).catch(()=>[]);
+  const handed = upload?.result || 0;
+  if (!handed) return 0;
+  // 上传面板接了文件不代表发布区里已经有图，等缩略图出现才算确认。
+  const selectors = ["#tgb,.qz-poster,.mod-publisher,.msg-poster,.mood-publisher,#emotion_publisher",
+    "body"];
+  const baseline = await chrome.scripting.executeScript({
+    target, func:countShareComposerImages, args:[selectors],
+  }).catch(()=>[]);
+  const base = baseline?.[0]?.result || 0;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const [current] = await chrome.scripting.executeScript({
+      target, func:countShareComposerImages, args:[selectors],
+    }).catch(()=>[]);
+    if ((current?.result || 0) >= base + handed) return handed;
+  }
+  return 0;
+}
 
 // This function is injected as a self-contained script into the destination document.
 async function interactWithShareEditor(platform, action, payload, retry = true) {
@@ -292,7 +373,7 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
   input = imageInput();
   if (!input && platform === "qzone") {
     const before = new Set(imageInputs(document));
-    const photoLabels = ["图片","照片","添加图片","上传照片","上传图片"];
+    const photoLabels = ["图片","照片","添加图片","上传照片","上传图片","插入图片","本地上传","本地图片","添加照片"];
     const picker = [...root.querySelectorAll('button,a,[role="button"],[title],[aria-label]')].find(item =>
       visible(item) && item.getAttribute("type") !== "submit" &&
       [item.getAttribute("title"),item.getAttribute("aria-label"),item.textContent.trim()].some(label=>photoLabels.includes(label)));
@@ -304,7 +385,7 @@ async function interactWithShareEditor(platform, action, payload, retry = true) 
       }
     }
   }
-  if (!input || input.disabled || input.files.length) return {ok:true,images:0};
+  if (!input || input.disabled || input.files.length) return {ok:true,images:0,photo:platform === "qzone" && payload.files.length > 0};
   const files = new DataTransfer();
   for (const {name,mime,data} of payload.files.slice(0,input.multiple ? payload.files.length : 1)) {
     files.items.add(new File([Uint8Array.from(atob(data),char=>char.charCodeAt(0))],name,{type:mime}));

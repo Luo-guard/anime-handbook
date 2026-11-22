@@ -395,6 +395,65 @@ class OfflineService:
 
     # ---- 归档（remux + 抽字幕）-----------------------------------------
 
+    def _split_compilation_files(
+        self, files: list[Any], paths: dict[str, Any], anime_id: int, job: dict[str, Any]
+    ) -> tuple[list[Any], Any]:
+        """合集单文件（整季一个视频、每集一个章节）按章节无损拆成单集。
+
+        VCB 这类发布把整季拼成一个文件、章节名里带集数；按文件名找集数会
+        一无所获。这里只在文件名/标题都认不出集数时尝试，并且要求主文件
+        明显大于其余文件（特典/CD），避免把普通的单集任务误拆。拆出来的
+        文件名带「番名 - 01」，后续流程照常按名字认集数；失败时原样返回，
+        让常规的错误提示继续生效。
+        """
+        try:
+            ordered = sorted(files, key=lambda path: path.stat().st_size, reverse=True)
+        except OSError:
+            return files, None
+        if not ordered:
+            return files, None
+        main = ordered[0]
+        if len(ordered) > 1 and main.stat().st_size < 3 * ordered[1].stat().st_size:
+            return files, None
+        try:
+            chapter_list = media_tools.chapters(main)
+            numbered = media_tools.episode_numbers_from_chapters(chapter_list)
+        except media_tools.MediaError:
+            return files, None
+        if not numbered:
+            return files, None
+        anime = self.db.get_anime(anime_id) or {}
+        safe = media_tools.safe_name(
+            anime.get("display_name") or anime.get("name_cn") or anime.get("name")
+            or str(job.get("torrent_name") or ""), fallback="合集",
+        )
+        split_dir = tempfile.TemporaryDirectory(prefix=".chapter-split-", dir=paths["download_root"])
+        split_files: list[Path] = []
+        try:
+            ends = [float(item["end"]) for item in sorted(chapter_list, key=lambda item: item["start"])]
+            for index, (number, chapter) in enumerate(numbered):
+                start = 0.0 if index == 0 else float(chapter["start"])
+                end = float(numbered[index + 1][1]["start"]) if index + 1 < len(numbered) else (
+                    ends[-1] if ends else float(chapter["end"])
+                )
+                if end <= start:
+                    continue
+                destination = Path(split_dir.name) / f"{safe} - {number:02d}.mp4"
+                media_tools.split_by_chapter(main, destination, start, end)
+                split_files.append(destination)
+        except (media_tools.MediaError, OSError):
+            for path in split_files:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            split_dir.cleanup()
+            return files, None
+        if len(split_files) < 2:
+            split_dir.cleanup()
+            return files, None
+        return split_files, split_dir.cleanup
+
     def _schedule_archive(self, media_id: int) -> None:
         with _ARCHIVE_LOCK:
             if media_id in _ARCHIVING:
@@ -617,42 +676,54 @@ class OfflineService:
         already = 0
         broken = 0
         fonts_done = False
-        for source in files:
-            kind, number = media_tools.episode_identity(source.name)
-            if explicit_key and len(files) == 1:
-                # 文件名里的数字可能是「10-bit」这类噪声；用户点的是哪一集就存哪一集。
-                key = explicit_key
-                label = media_tools.label_for_key(key) or media_tools.safe_name(source.stem)
-            elif number > 0:
-                # 特别篇写 1:N，和收藏里「特别篇 02」那一格对得上，不再占本篇的位置。
-                key = media_tools.episode_key(number, kind)
-                label = media_tools.episode_filename(number, kind)
-            elif len(files) == 1 and title_key:
-                key = title_key
-                label = media_tools.label_for_key(key) or media_tools.safe_name(source.stem)
-            else:
-                # 多文件任务认不出集数就跳过，硬塞给某一集只会把别的集覆盖掉。
-                key = ""
-                label = ""
-            if not key:
-                continue
-            if key in done_keys:
-                # 重试时跳过已入库的集，不重复封装，也不把重试跑成全量返工。
-                already += 1
-                continue
+        # 合集单文件（整季一个视频、每集一个章节）按章节无损拆成单集再入库。
+        # 拆出来的临时文件名带「番名 - 01」，后面的流程照常按名字认集数。
+        split_cleanup = None
+        if not explicit_key:
             try:
-                self._ingest_episode(
-                    source, target_dir, label, anime_id, key, media_id, extract_fonts=not fonts_done,
-                )
+                files, split_cleanup = self._split_compilation_files(files, paths, anime_id, job)
             except media_tools.MediaError:
-                # 单个文件坏掉不该让整季任务失败，剩下的继续处理；但数量要记下来，
-                # 全是封装失败时不能报成「认不出集数」，那会把人引到错误的方向。
-                broken += 1
-                continue
-            # 同一个字幕组的合集里每集附件都一样，抽一次就够，别重复读十几遍原片。
-            fonts_done = True
-            made += 1
-        ingested = made + already
+                pass
+        try:
+            for source in files:
+                kind, number = media_tools.episode_identity(source.name)
+                if explicit_key and len(files) == 1:
+                    # 文件名里的数字可能是「10-bit」这类噪声；用户点的是哪一集就存哪一集。
+                    key = explicit_key
+                    label = media_tools.label_for_key(key) or media_tools.safe_name(source.stem)
+                elif number > 0:
+                    # 特别篇写 1:N，和收藏里「特别篇 02」那一格对得上，不再占本篇的位置。
+                    key = media_tools.episode_key(number, kind)
+                    label = media_tools.episode_filename(number, kind)
+                elif len(files) == 1 and title_key:
+                    key = title_key
+                    label = media_tools.label_for_key(key) or media_tools.safe_name(source.stem)
+                else:
+                    # 多文件任务认不出集数就跳过，硬塞给某一集只会把别的集覆盖掉。
+                    key = ""
+                    label = ""
+                if not key:
+                    continue
+                if key in done_keys:
+                    # 重试时跳过已入库的集，不重复封装，也不把重试跑成全量返工。
+                    already += 1
+                    continue
+                try:
+                    self._ingest_episode(
+                        source, target_dir, label, anime_id, key, media_id, extract_fonts=not fonts_done,
+                    )
+                except media_tools.MediaError:
+                    # 单个文件坏掉不该让整季任务失败，剩下的继续处理；但数量要记下来，
+                    # 全是封装失败时不能报成「认不出集数」，那会把人引到错误的方向。
+                    broken += 1
+                    continue
+                # 同一个字幕组的合集里每集附件都一样，抽一次就够，别重复读十几遍原片。
+                fonts_done = True
+                made += 1
+            ingested = made + already
+        finally:
+            if split_cleanup:
+                split_cleanup()
         if not ingested:
             if broken:
                 raise OfflineError(
