@@ -1,5 +1,15 @@
 const native = window.AndroidHandbook; const app=document.querySelector('#app'); let page='home', category=1, selected=null;
 let persistedState=native.state(),state=JSON.parse(persistedState); const tables=()=>state.tables||(state.tables={anime:[],events:[],settings:[],custom_collections:[],custom_collection_items:[],ranking_boards:[],ranking_templates:[],ranking_tiers:[],ranking_items:[]});
+const ICON={
+ play:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.2v13.6c0 .8.9 1.3 1.6.9l10.4-6.8c.6-.4.6-1.4 0-1.8L9.6 4.3C8.9 3.9 8 4.4 8 5.2z"/></svg>',
+ rule:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M14.9 9.1l-1.7 4.1-4.1 1.7 1.7-4.1 4.1-1.7z"/></svg>',
+ back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg>',
+ dm:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16M4 12h11M4 17.5h7"/></svg>',
+ theme:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>',
+ cloud:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-8 6 6 0 0 0-11.4 1.6A3.2 3.2 0 0 0 7 18z"/></svg>',
+ info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>',
+ film:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M8 5v14M16 5v14M3.5 12h17"/></svg>',
+};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); const name=a=>a.name_cn||a.name||(a.id?`Bangumi #${a.id}`:'未关联番剧');
 function recordIdentity(){const bytes=crypto.getRandomValues(new Uint8Array(16));return {record_uid:Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join(''),updated_at:nowIso()}}
 function nowIso(){const d=new Date(),p=n=>String(n).padStart(2,'0'),minutes=-d.getTimezoneOffset(),sign=minutes>=0?'+':'-',offset=Math.abs(minutes);return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${sign}${p(Math.floor(offset/60))}:${p(offset%60)}`}
@@ -31,7 +41,29 @@ function collectionItems(){
 function dayKey(value,dayStart){const d=new Date(value);d.setHours(d.getHours()-dayStart);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function balance(){const s=settingMap(), anchor=String(s.episode_balance_anchor||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(anchor)||s.show_episode_balance===false)return null;const start=new Date(`${anchor}T00:00:00`), today=new Date(`${dayKey(new Date(),Number(s.day_start_hour??4))}T00:00:00`), days=Math.max(0,Math.round((today-start)/86400000)), watched=(tables().events||[]).filter(e=>e.event_type==='watch'&&dayKey(e.created_at,Number(s.day_start_hour??4))>=anchor).reduce((n,e)=>{try{return n+JSON.parse(e.episodes||'[]').length}catch(_){return n}},0);return Number(s.episode_balance_initial??237)+days*Number(s.episode_balance_daily_target??8)-watched}
 function balanceText(){const value=balance();if(value===null)return '';return value>0?`还欠 ${value} 集`:value<0?`超前 ${Math.abs(value)} 集`:'刚好追平'}
-function home(){ const cats=[[1,'在看'],[2,'想看'],[3,'搁置'],[4,'看过'],[5,'抛弃']]; const list=collectionItems(); const label=cats.find(x=>x[0]===category)?.[1]||'收藏'; app.innerHTML=`<div class="quick-row"><button class="quick" onclick="playLocal()"><span>▶</span>本机视频</button><button class="quick" onclick="openRulesPage()"><span>⌕</span>规则找片源</button></div><div class="section-title"><h2>${label}</h2><span>${list.length} 部</span></div>${balanceText()?`<div class="balance">${balanceText()}</div>`:''}<div class="chips">${cats.map(x=>`<button class="chip ${x[0]===category?'active':''}" onclick="setCat(${x[0]})">${x[1]}</button>`).join('')}</div>${list.length?`<div class="grid">${list.map(a=>`<button class="anime" onclick="openAnime(${a.id})"><div class="cover" ${cover(a)}>${a.image_url?'':esc(name(a).slice(0,10))}</div><div class="info"><b>${esc(name(a))}</b><small>已看 ${(JSON.parse(a.watched_episodes||'[]')).length} 集</small></div></button>`).join('')}</div>`:'<div class="empty">这里还没有番剧。先在电脑端同步收藏，再到手机点同步下载。</div>'}`; }
+function animeCard(a){
+ const total=episodeList(a).length, seen=arrayValue(a.watched_episodes).length;
+ const percent=total?Math.min(100,Math.round(seen/total*100)):0;
+ return `<button class="anime" onclick="openAnime(${a.id})">
+  <div class="cover" ${cover(a)}>${total?`<span class="cover-badge">${seen}/${total}</span>`:''}</div>
+  <div class="info"><b>${esc(name(a))}</b><small>${total?`已看 ${seen} / ${total} 集`:`已看 ${seen} 集`}</small>${percent?`<span class="progress"><i style="width:${percent}%"></i></span>`:''}</div>
+ </button>`;
+}
+function home(){
+ const cats=[[1,'在看'],[2,'想看'],[3,'搁置'],[4,'看过'],[5,'抛弃']];
+ const list=collectionItems(), label=cats.find(x=>x[0]===category)?.[1]||'收藏';
+ const counts={};
+ for(const item of animes()){const type=Number(item.collection_type);if(item.active!==0&&type)counts[type]=(counts[type]||0)+1}
+ app.innerHTML=`
+ <div class="quick-row">
+  <button class="quick" onclick="playLocal()"><span class="quick-icon">${ICON.play}</span><span class="quick-text">本机视频<small>播放本地文件</small></span></button>
+  <button class="quick" onclick="openRulesPage()"><span class="quick-icon">${ICON.rule}</span><span class="quick-text">规则找片源<small>按番名搜站点</small></span></button>
+ </div>
+ <div class="section-title"><h2>${label}</h2><span>${list.length} 部</span></div>
+ ${balanceText()?`<div class="balance">${balanceText()}</div>`:''}
+ <div class="chips">${cats.map(x=>`<button class="chip ${x[0]===category?'active':''}" onclick="setCat(${x[0]})">${x[1]}<small>${counts[x[0]]||0}</small></button>`).join('')}</div>
+ ${list.length?`<div class="grid">${list.map(animeCard).join('')}</div>`:'<div class="empty">这里还没有番剧。<br>先在电脑端同步收藏，再到手机点右上角同步。</div>'}`;
+}
 function arrayValue(value){try{const result=typeof value==='string'?JSON.parse(value):value;return Array.isArray(result)?result:[]}catch(_){return []}}
 function episodeList(anime){
  const list=arrayValue(anime.episodes);if(list.length)return list;
@@ -42,9 +74,16 @@ function episodeType(e){const n=Number(e.type??String(e.key).match(/^(\d+):/)?.[
 function typeLabel(type){return ({0:'本篇',1:'特别篇',2:'OP',3:'ED',4:'预告',5:'MAD',6:'其他'})[type]||'其他'}
 function detail(){
  const a=animes().find(x=>Number(x.id)===Number(selected));if(!a){selected=null;home();return}
- const groups=new Map();for(const e of episodeList(a)){const type=episodeType(e);if(!groups.has(type))groups.set(type,[]);groups.get(type).push(e)}
+ const list=episodeList(a), groups=new Map();
+ for(const e of list){const type=episodeType(e);if(!groups.has(type))groups.set(type,[]);groups.get(type).push(e)}
  const done=new Set(arrayValue(a.watched_episodes).map(String));
- app.innerHTML=`<button class="back" onclick="backHome()">← 返回收藏</button><div class="detail-cover" ${cover(a)}><h2>${esc(name(a))}</h2></div>${groups.size?[...groups].map(([type,eps])=>`<div class="panel"><div class="episode-heading"><b>${typeLabel(type)}</b><small data-group-count="${type}"></small></div><div class="episode">${eps.map(e=>`<button data-episode-key="${esc(e.key)}" data-episode-type="${type}" class="${done.has(String(e.key))?'done':''}" aria-pressed="${done.has(String(e.key))}">${esc(e.display_label||e.key)}</button>`).join('')}</div></div>`).join(''):'<div class="empty">剧集资料暂缺，暂无可标记的集数。</div>'}`;
+ const meta=[`${done.size} / ${list.length||'?'} 集`];
+ if(a.air_date)meta.push(String(a.air_date).slice(0,10));
+ if(a.bgm_rating)meta.push(`★ ${a.bgm_rating}`);
+ app.innerHTML=`
+ <div class="detail-top"><button class="back" onclick="backHome()">${ICON.back}<span>收藏</span></button></div>
+ <div class="detail-cover" ${cover(a)}><div class="hero-text"><h2>${esc(name(a))}</h2><div class="hero-meta">${meta.map(text=>`<span>${esc(text)}</span>`).join('')}</div></div></div>
+ ${groups.size?[...groups].map(([type,eps])=>`<div class="panel"><div class="episode-heading"><b>${typeLabel(type)}</b><small data-group-count="${type}"></small></div><div class="episode">${eps.map(e=>`<button data-episode-key="${esc(e.key)}" data-episode-type="${type}" class="${done.has(String(e.key))?'done':''}" aria-pressed="${done.has(String(e.key))}">${esc(e.display_label||e.key)}</button>`).join('')}</div></div>`).join(''):'<div class="empty">剧集资料暂缺，暂无可标记的集数。</div>'}`;
  app.querySelectorAll('[data-episode-key]').forEach(button=>button.onclick=()=>toggleEpisode(a.id,button.dataset.episodeKey));
  const actions=document.createElement('div');
  actions.className='detail-actions';
@@ -72,16 +111,28 @@ function eventEpisodeText(e){
  for(const key of keys){const ep=episodes.find(item=>String(item.key)===String(key)),label=ep?typeLabel(episodeType(ep)):'集数';if(!groups.has(label))groups.set(label,[]);groups.get(label).push(ep?.display_label||String(key))}
  return [...groups].map(([label,items])=>`${label} ${items.join('、')}`).join(' · ');
 }
-function records(){const list=[...tables().events].sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());app.innerHTML=`<div class="section-title"><h2>看番记录</h2><button onclick="noteForm()">写记录</button></div>${balanceText()?`<div class="balance">${balanceText()}</div>`:''}${list.length?list.map(e=>{const episode=eventEpisodeText(e), title=e.event_type==='watch'?'观看记录':e.event_type==='anime_comment'?'番剧评论':'其他记录';return `<article class="card record"><small>${esc(formatTime(e.created_at))}</small><h3>${esc(title)}${episode?` · ${esc(episode)}`:''}</h3><b>${esc(name(animes().find(a=>a.id===e.anime_id)||{} )||'未关联番剧')}</b>${e.content?`<p>${esc(e.content)}</p>`:''}</article>`}).join(''):'<div class="empty">还没有记录。</div>'}`;}
+function records(){
+ const list=[...tables().events].sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
+ app.innerHTML=`<div class="section-title"><h2>看番记录</h2><button onclick="noteForm()">写记录</button></div>${balanceText()?`<div class="balance">${balanceText()}</div>`:''}${list.length?list.map(e=>{
+  const episode=eventEpisodeText(e);
+  const title=e.event_type==='watch'?'观看记录':e.event_type==='anime_comment'?'番剧评论':e.event_type==='note'?'随手记录':'其他记录';
+  return `<article class="card record">
+   <div class="record-head"><span class="record-type">${title}</span><span class="record-date">${esc(formatTime(e.created_at))}</span></div>
+   ${episode?`<h3>${esc(episode)}</h3>`:''}
+   <b>${esc(name(animes().find(a=>a.id===e.anime_id)||{})||'未关联番剧')}</b>
+   ${e.content?`<p>${esc(e.content)}</p>`:''}
+  </article>`;
+ }).join(''):'<div class="empty">还没有记录。<br>点右上角「写记录」记下今天看的番。</div>'}`;
+}
 function noteForm(){
  const opening=!composerOpen;if(opening)persistUi();composerOpen=true;
- app.innerHTML=`<button class="back" onclick="showPage('records')">← 返回记录</button><div class="panel form"><h2>写记录</h2><label>内容</label><textarea id="content" placeholder="今天看了什么？"></textarea><button class="primary" onclick="addNote()">保存到手机</button></div>`;
+ app.innerHTML=`<div class="detail-top"><button class="back" onclick="showPage('records')">${ICON.back}<span>记录</span></button></div><div class="form"><h2>写记录</h2><label>内容</label><textarea id="content" placeholder="今天看了什么？"></textarea><button class="primary" onclick="addNote()">保存到手机</button></div>`;
  document.querySelector('#content').value=ui.noteDraft||'';if(opening){restorePosition();persistUi()}
 }
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.19'}catch(_){return '1.0.19'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.20'}catch(_){return '1.0.20'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
@@ -102,7 +153,7 @@ function settings(){
  const rules=window.HandbookRules?.count?.()||0;
  app.innerHTML=`<div class="page-title-bar"><h2>设置</h2><p>播放、弹幕、规则和同步都在这里</p></div>
 
-<section class="group"><h3>播放</h3><div class="group-body">
+<section class="group"><h3>${ICON.play}播放</h3><div class="group-body">
  <label class="setting-row"><span>默认倍速</span><select id="setSpeed">${options([[0.75,'0.75x'],[1,'1.0x'],[1.25,'1.25x'],[1.5,'1.5x'],[2,'2.0x']],pref.speed??1)}</select></label>
  <label class="setting-row"><span>快进步长</span><select id="setSkip">${options([[15,'15 秒'],[30,'30 秒'],[60,'60 秒'],[80,'80 秒'],[120,'120 秒']],pref.skip??80)}</select></label>
  <label class="setting-row"><span>默认超分</span><select id="setQuality">${options([['off','关闭'],['fast','轻量 2×'],['quality','画质 2×']],pref.quality||'off')}</select></label>
@@ -110,7 +161,7 @@ function settings(){
  <label class="setting-row stacked"><span>记住播放进度<small>关闭后每次从片头开始</small></span><input type="checkbox" class="switch-input" id="setRemember" ${pref.remember!==false?'checked':''}></label>
 </div></section>
 
-<section class="group"><h3>弹幕</h3><div class="group-body">
+<section class="group"><h3>${ICON.dm}弹幕</h3><div class="group-body">
  <label class="setting-row stacked"><span>默认显示弹幕</span><input type="checkbox" class="switch-input" id="setDmEnabled" ${dm.enabled!==false?'checked':''}></label>
  <label class="setting-row"><span>字号 <b id="setDmFontValue">${dm.fontSize??24}</b></span><input type="range" id="setDmFont" min="16" max="40" step="1" value="${dm.fontSize??24}"></label>
  <label class="setting-row"><span>不透明度 <b id="setDmOpacityValue">${dm.opacity??0.92}</b></span><input type="range" id="setDmOpacity" min="0.3" max="1" step="0.02" value="${dm.opacity??0.92}"></label>
@@ -120,15 +171,15 @@ function settings(){
  <p class="hint">弹幕源、搜索和发送在播放器的「弹幕设置」里。</p>
 </div></section>
 
-<section class="group"><h3>外观</h3><div class="group-body">
+<section class="group"><h3>${ICON.theme}外观</h3><div class="group-body">
  <label class="setting-row"><span>深色模式</span><select id="setTheme">${options([['auto','跟随系统'],['light','浅色'],['dark','深色']],theme)}</select></label>
 </div></section>
 
-<section class="group"><h3>规则</h3><div class="group-body">
+<section class="group"><h3>${ICON.rule}规则</h3><div class="group-body">
  <button class="setting-row link" type="button" onclick="openRulesPage()"><span>规则与片源<small>装规则、按番名搜片源</small></span><i>${rules?`已启用 ${rules} 条`:'未安装'} ›</i></button>
 </div></section>
 
-<section class="group"><h3>坚果云同步</h3><div class="group-body">
+<section class="group"><h3>${ICON.cloud}坚果云同步</h3><div class="group-body">
  <p class="hint">密码只留在手机应用的私有存储中；留空不会覆盖已保存密码。</p>
  <label class="field">WebDAV 地址<input id="url" value="${esc(c.url||'https://dav.jianguoyun.com/dav/')}"></label>
  <label class="field">坚果云账号<input id="username" value="${esc(c.username||'')}"></label>
@@ -139,7 +190,7 @@ function settings(){
  <button class="secondary" onclick="requestSync()">立即同步</button>
 </div></section>
 
-<section class="group"><h3>关于</h3><div class="group-body">
+<section class="group"><h3>${ICON.info}关于</h3><div class="group-body">
  <div class="setting-row"><span>版本</span><i>v${esc(APP_VERSION)}</i></div>
  <p class="hint">收藏和记录来自电脑端的坚果云同步；播放器可播本机视频、HTTPS 直链和 KazumiRules 规则。</p>
  <button class="text-button danger-text" id="clearResume" type="button">清除本机播放进度</button>
@@ -192,7 +243,7 @@ function mayLeave(){
 }
 function restorePosition(){window.scrollTo(0,Number(ui.positions[viewKey()])||0)}
 let navOverride='';
-function syncNav(override){navOverride=override||'';document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',(navOverride||page)===b.dataset.page))}
+function syncNav(override){navOverride=override||'';document.querySelectorAll('nav button').forEach(b=>{const on=(navOverride||page)===b.dataset.page;b.classList.toggle('active',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')})}
 
 function showPage(p){if(!mayLeave())return;if(p==='rules'){window.HandbookRules?.open('app');syncNav('rules');return}if(window.HandbookRules?.isOpen())window.HandbookRules.close();persistUi();page=p;selected=null;composerOpen=false;render();syncNav();restorePosition();persistUi()}
 function render(){rendering=true;try{if(selected!==null)return detail();if(composerOpen)return noteForm();if(page==='records')return records();if(page==='settings')return settings();home()}finally{rendering=false}}

@@ -29,7 +29,20 @@ MOCK = """
       key: String(i + 1).padStart(2, "0"), display_label: String(i + 1),
       name_cn: i === 0 ? "冒险的结束" : "",
     }))) };
-  let snapshot = JSON.stringify({ tables: { anime: [demo], events: [], settings: [] } });
+  const extras = [
+    { id: 9002, name_cn: "迷宫饭", collection_type: 1, episode_count: 24, watched_episodes: '["01","02","03","04","05"]' },
+    { id: 9003, name_cn: "孤独摇滚！", collection_type: 1, episode_count: 12, watched_episodes: '["01","02","03","04","05","06","07","08"]' },
+    { id: 9004, name_cn: "药屋少女的呢喃", collection_type: 1, episode_count: 24, watched_episodes: '["01","02"]' },
+    { id: 9005, name_cn: "蓝色管弦乐", collection_type: 2, episode_count: 24, watched_episodes: '[]' },
+    { id: 9006, name_cn: "地。-关于地球的运动-", collection_type: 2, episode_count: 25, watched_episodes: '[]' },
+    { id: 9007, name_cn: "胆大党", collection_type: 4, episode_count: 12, watched_episodes: '["01","02","03","04","05","06","07","08","09","10","11","12"]' },
+  ].map(item => ({ active: 1, ...item }));
+  const events = [
+    { id: 1, event_type: "watch", anime_id: 9001, episodes: '["01"]', content: "", created_at: "2026-11-22T12:40:00+08:00" },
+    { id: 2, event_type: "note", anime_id: 9001, episodes: "[]", content: "第一集的分镜很稳，音乐也好听，先记一笔。", created_at: "2026-11-21T23:10:00+08:00" },
+    { id: 3, event_type: "watch", anime_id: 9003, episodes: '["07","08"]', content: "", created_at: "2026-11-20T21:05:00+08:00" },
+  ];
+  let snapshot = JSON.stringify({ tables: { anime: [demo, ...extras], events, settings: [] } });
   window.AndroidHandbook = {
     state: () => snapshot,
     saveState: value => { snapshot = value; return true; },

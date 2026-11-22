@@ -1,7 +1,32 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>动漫手账</title><link rel="stylesheet" href="style.css"></head><body>
-<header><div><small>ANIME HANDBOOK</small><h1>动漫手账</h1></div><button id="sync">同步</button></header>
+<header class="app-bar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">手</span>
+    <div class="brand-text"><small>ANIME HANDBOOK</small><h1>动漫手账</h1></div>
+  </div>
+  <button id="sync" class="app-action" type="button" aria-label="同步">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19.6 12a7.6 7.6 0 0 1-13 5.3M4.4 12a7.6 7.6 0 0 1 13-5.3"/><path d="M4.4 17.3v-4.4h4.4M19.6 6.7v4.4h-4.4"/></svg>
+  </button>
+</header>
 <main id="app"></main>
-<nav><button data-page="home" class="active">收藏</button><button data-page="records">记录</button><button data-page="rules">规则</button><button data-page="settings">设置</button></nav>
+<nav aria-label="主导航">
+  <button data-page="home" class="active" type="button" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z"/></svg>
+    <span>收藏</span>
+  </button>
+  <button data-page="records" type="button">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+    <span>记录</span>
+  </button>
+  <button data-page="rules" type="button">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M14.9 9.1l-1.7 4.1-4.1 1.7 1.7-4.1 4.1-1.7z"/></svg>
+    <span>规则</span>
+  </button>
+  <button data-page="settings" type="button">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 12h4M12 12h8M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+    <span>设置</span>
+  </button>
+</nav>
 <dialog id="syncConflict" aria-labelledby="syncConflictTitle" aria-describedby="syncConflictIntro">
   <form method="dialog">
     <h2 id="syncConflictTitle">选择同步版本</h2>
@@ -13,7 +38,7 @@
 </dialog>
 <section class="page" id="rulesPage" hidden aria-label="规则与片源">
   <div class="page-head">
-    <button class="page-back" id="mpRuleBack" type="button" aria-label="返回">←</button>
+    <button class="page-back" id="mpRuleBack" type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>
     <div class="page-title"><h1>规则与片源</h1><small id="mpRuleSummary">还没有安装规则</small></div>
   </div>
   <div class="page-body">

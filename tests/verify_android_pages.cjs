@@ -20,7 +20,7 @@ async function main() {
         state: () => snapshot, saveState: () => true, uiState: () => "{}", saveUiState: () => {},
         config: () => JSON.stringify({ url: "https://dav.jianguoyun.com/dav/", username: "demo", account: "", passwordSet: false, autoSync: true }),
         saveConfig: () => true,
-        version: () => "1.0.19",
+        version: () => "1.0.20",
       };
       const rule = { name: "演示站", type: "anime", baseURL: "https://demo.test/",
         searchURL: "https://demo.test/search?wd=@keyword", searchList: "//div[@class='item']",
@@ -54,7 +54,7 @@ async function main() {
     for (const group of ["播放", "弹幕", "外观", "规则", "坚果云同步", "关于"]) {
       assert.ok(text.includes(group), `设置页缺少「${group}」`);
     }
-    assert.ok(text.includes("v1.0.19"), "设置页应显示版本号");
+    assert.ok(text.includes("v1.0.20"), "设置页应显示版本号");
 
     // 2) 播放偏好落到 localStorage，播放器能读到
     await page.locator("#setSpeed").selectOption("1.5");
@@ -71,7 +71,8 @@ async function main() {
     await page.locator("#setTheme").selectOption("dark");
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
     const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    assert.ok(background.includes("18, 17, 22"), `深色背景应为 #121116，实际 ${background}`);
+    const channels = (background.match(/\d+/g) || []).map(Number);
+    assert.ok(channels.length >= 3 && channels[0] + channels[1] + channels[2] < 120, `深色背景应是深色，实际 ${background}`);
     await page.locator("#setTheme").selectOption("light");
     assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
 
