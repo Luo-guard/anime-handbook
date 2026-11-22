@@ -13,7 +13,10 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.webkit.CookieManager;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
@@ -24,6 +27,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,6 +41,8 @@ final class MobilePlayerHost extends WebChromeClient {
   private final ExecutorService requests = Executors.newFixedThreadPool(2);
   private ValueCallback<Uri[]> chooser;
   private byte[] pendingImage;
+  private WebView renderView;
+  private int renderId;
 
   MobilePlayerHost(Activity activity, WebView web) {
     this.activity = activity;
@@ -212,6 +220,106 @@ final class MobilePlayerHost extends WebChromeClient {
     } finally { connection.disconnect(); }
   }
 
+  // 用隐藏 WebView 跑完页面脚本，再把渲染后的 DOM 交回前端解析。
+  // 这是 Kazumi 规则里 useWebview 那类站点的兜底路径：同一个 WebView 里 cookie 会保留，
+  // 所以“搜索 → 分集 → 播放页”能走同一条会话。
+  private void renderPage(int id, String url, String headers) {
+    activity.runOnUiThread(() -> {
+      cancelRender("新的页面请求已开始");
+      final String target;
+      try { target = https(url).toString(); }
+      catch (Exception invalid) { deliver(id, null, invalid.getMessage()); return; }
+      final WebView view = new WebView(activity);
+      renderView = view;
+      renderId = id;
+      final boolean[] done = {false};
+      android.webkit.WebSettings settings = view.getSettings();
+      settings.setJavaScriptEnabled(true);
+      settings.setDomStorageEnabled(true);
+      settings.setAllowFileAccess(false);
+      settings.setAllowContentAccess(false);
+      settings.setJavaScriptCanOpenWindowsAutomatically(false);
+      settings.setBlockNetworkImage(true);
+      settings.setLoadsImagesAutomatically(false);
+      settings.setMediaPlaybackRequiresUserGesture(true);
+      settings.setUserAgentString(settings.getUserAgentString().replace("; wv", ""));
+      CookieManager.getInstance().setAcceptCookie(true);
+      CookieManager.getInstance().setAcceptThirdPartyCookies(view, true);
+      view.setVisibility(View.INVISIBLE);
+      view.setLayoutParams(new android.widget.FrameLayout.LayoutParams(2, 2));
+      view.setWebViewClient(new WebViewClient() {
+        @Override public void onPageFinished(WebView current, String finished) {
+          if (done[0] || finished == null || finished.startsWith("about:")) return;
+          // 单页应用在 onPageFinished 之后才填内容，等一拍再取 DOM。
+          current.postDelayed(() -> {
+            if (done[0] || renderView != current) return;
+            current.evaluateJavascript(
+              "(function(){try{return document.documentElement?document.documentElement.outerHTML:''}catch(e){return ''}})()",
+              value -> {
+                if (done[0]) return;
+                String html = "";
+                try { Object parsed = new JSONTokener(value == null ? "null" : value).nextValue(); html = parsed instanceof String ? (String) parsed : ""; }
+                catch (Exception ignored) { html = ""; }
+                if (html.trim().isEmpty()) return;   // 可能还在渲染，等下一次 onPageFinished
+                done[0] = true;
+                if (html.length() > 6 * 1024 * 1024) html = html.substring(0, 6 * 1024 * 1024);
+                finishRender(id, current, html, null);
+              });
+          }, 1100);
+        }
+        @Override public boolean shouldOverrideUrlLoading(WebView current, WebResourceRequest request) {
+          String next = request.getUrl().toString();
+          return !(next.startsWith("http://") || next.startsWith("https://"));
+        }
+      });
+      try {
+        ((android.view.ViewGroup) activity.findViewById(android.R.id.content)).addView(view);
+      } catch (Exception ignored) { /* 加不进视图树也能加载，只是不可见 */ }
+      view.postDelayed(() -> {
+        if (!done[0] && renderView == view) { done[0] = true; finishRender(id, view, null, "页面渲染超时，站点可能太慢或需要验证"); }
+      }, 20000);
+      Map<String, String> extra = new HashMap<>();
+      try {
+        JSONObject raw = new JSONObject(headers == null || headers.isEmpty() ? "{}" : headers);
+        for (Iterator<String> keys = raw.keys(); keys.hasNext(); ) {
+          String key = keys.next();
+          if ("Referer".equalsIgnoreCase(key) || "User-Agent".equalsIgnoreCase(key)) extra.put(key, raw.getString(key));
+        }
+      } catch (Exception ignored) { /* 头不是必需 */ }
+      try { view.loadUrl(target, extra); }
+      catch (Exception error) { done[0] = true; finishRender(id, view, null, "无法加载这个页面"); }
+    });
+  }
+
+  private void cancelRender(String reason) {
+    if (renderView == null) return;
+    WebView old = renderView;
+    int id = renderId;
+    renderView = null;
+    detach(old);
+    deliver(id, null, reason);
+  }
+
+  private void finishRender(int id, WebView view, String html, String error) {
+    if (renderView == view) { renderView = null; renderId = 0; }
+    detach(view);
+    deliver(id, html, error);
+  }
+
+  private void detach(WebView view) {
+    try {
+      if (view.getParent() instanceof android.view.ViewGroup) ((android.view.ViewGroup) view.getParent()).removeView(view);
+      view.stopLoading();
+      view.loadUrl("about:blank");
+      view.destroy();
+    } catch (Exception ignored) { /* 已经销毁 */ }
+  }
+
+  private void deliver(int id, String html, String error) {
+    if (error != null) script("window.HandbookRules?.fetchResult(" + id + ",null," + JSONObject.quote(error) + ")");
+    else script("window.HandbookRules?.fetchResult(" + id + "," + JSONObject.quote(html) + ",null)");
+  }
+
   Object bridge() { return new PlayerBridge(); }
 
   final class PlayerBridge {
@@ -237,6 +345,10 @@ final class MobilePlayerHost extends WebChromeClient {
             + JSONObject.quote(error.getMessage() == null ? "请求失败" : error.getMessage()) + ")");
         }
       });
+    }
+
+    @JavascriptInterface public void renderText(int id, String url, String headers) {
+      renderPage(id, url, headers);
     }
 
     @JavascriptInterface public void external(String url) {

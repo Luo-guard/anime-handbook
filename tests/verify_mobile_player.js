@@ -183,19 +183,17 @@ async function main() {
     assert.equal(await page.locator("#mobilePlayer").isVisible(),false);
     assert.equal(await page.locator("video").getAttribute("src"),null);
 
-    // 13) 直链 HLS
-    await page.locator("nav").getByRole("button",{name:"播放",exact:true}).click();
+    // 13) 直链 HLS（从详情页进播放器，片源面板自动弹出）
+    await page.getByRole("button",{name:"在手账里播放"}).click();
     await page.locator("#mpUrl").fill("https://video.example.test/01.m3u8");
     await page.getByRole("button",{name:"添加并播放"}).click();
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
     assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
     await page.evaluate(() => window.HandbookMobile.handleBack());
 
-    // 14) 规则仓库：装规则 → 按番名找源 → 解析直链播放
-    await page.locator("nav").getByRole("button",{name:"播放",exact:true}).click();
-    await page.locator("#mpMore").click();
-    await page.locator('#mpMenu [data-menu="sources"]').click();
-    await page.locator("#mpRulesButton").click();
+    // 14) 规则：导航「规则」→ 装规则 → 按番名找源 → 解析直链播放
+    await page.locator("nav").getByRole("button",{name:"规则",exact:true}).click();
+    await page.locator("#rulesPage").waitFor();
     await page.locator('[data-rule-tab="repo"]').click();
     await page.locator("#mpRuleRefresh").click();
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleRepo [data-install]").length === 1);
@@ -203,7 +201,7 @@ async function main() {
     await page.waitForFunction(() => document.querySelector("#mpRuleRepoStatus").textContent.includes("已安装"));
     await page.locator('[data-rule-tab="find"]').click();
     await page.locator("#mpRuleQuery").fill("测试番");
-    await page.getByRole("button",{name:"搜索片源"}).click();
+    await page.locator("#mpRuleFindForm button").click();
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleResults [data-result]").length === 1);
     await page.locator('#mpRuleResults [data-result="0"]').click();
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleEpisodes [data-play]").length === 2);

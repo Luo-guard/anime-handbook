@@ -1,7 +1,7 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>动漫手账</title><link rel="stylesheet" href="style.css"></head><body>
 <header><div><small>ANIME HANDBOOK</small><h1>动漫手账</h1></div><button id="sync">同步</button></header>
 <main id="app"></main>
-<nav><button data-page="home" class="active">收藏</button><button data-page="records">记录</button><button type="button" onclick="window.HandbookPlayer.show()">播放</button><button data-page="settings">设置</button></nav>
+<nav><button data-page="home" class="active">收藏</button><button data-page="records">记录</button><button data-page="rules">规则</button><button data-page="settings">设置</button></nav>
 <dialog id="syncConflict" aria-labelledby="syncConflictTitle" aria-describedby="syncConflictIntro">
   <form method="dialog">
     <h2 id="syncConflictTitle">选择同步版本</h2>
@@ -11,6 +11,63 @@
     <button type="submit" value="cancel" autofocus>暂不同步</button>
   </form>
 </dialog>
+<section class="page" id="rulesPage" hidden aria-label="规则与片源">
+  <div class="page-head">
+    <button class="page-back" id="mpRuleBack" type="button" aria-label="返回">←</button>
+    <div class="page-title"><h1>规则与片源</h1><small id="mpRuleSummary">还没有安装规则</small></div>
+  </div>
+  <div class="page-body">
+    <div class="mp-tabs" role="tablist">
+      <button type="button" role="tab" data-rule-tab="find" aria-selected="true">找片源</button>
+      <button type="button" role="tab" data-rule-tab="repo" aria-selected="false">规则仓库</button>
+      <button type="button" role="tab" data-rule-tab="installed" aria-selected="false">已安装</button>
+    </div>
+
+    <div class="mp-rule-view" data-rule-view="find">
+      <div class="card">
+        <label class="field">用哪条规则<select id="mpRulePick" aria-label="片源规则"></select></label>
+        <form id="mpRuleFindForm" class="inline-form">
+          <input id="mpRuleQuery" placeholder="番名或关键词" aria-label="番名或关键词" required>
+          <button type="submit">搜索</button>
+        </form>
+        <p class="hint" id="mpRuleStatus" role="status"></p>
+      </div>
+      <div class="mp-rule-results" id="mpRuleResults"></div>
+      <div class="mp-rule-episodes" id="mpRuleEpisodes"></div>
+    </div>
+
+    <div class="mp-rule-view" data-rule-view="repo" hidden>
+      <div class="rule-toolbar">
+        <input id="mpRuleFilter" placeholder="筛选规则名" aria-label="筛选规则">
+        <button id="mpRuleRefresh" type="button">刷新</button>
+      </div>
+      <p class="hint" id="mpRuleRepoStatus" role="status">规则来自 GitHub 上的 KazumiRules。</p>
+      <div class="mp-rule-results" id="mpRuleRepo"></div>
+    </div>
+
+    <div class="mp-rule-view" data-rule-view="installed" hidden>
+      <div class="rule-toolbar">
+        <button id="mpRuleLinkImport" type="button">从链接导入</button>
+        <button id="mpRulePasteImport" type="button">粘贴 JSON</button>
+      </div>
+      <div class="mp-rule-results" id="mpRuleInstalled"></div>
+    </div>
+  </div>
+</section>
+
+<dialog id="rulePasteDialog" aria-labelledby="rulePasteTitle">
+  <form method="dialog">
+    <h2 id="rulePasteTitle">粘贴规则 JSON</h2>
+    <p>把 Kazumi 规则的完整 JSON 贴进来，保存后会出现在「已安装」。</p>
+    <textarea id="rulePasteText" rows="8" placeholder='{"name":"站点名","baseURL":"https://…"}'></textarea>
+    <p class="hint" id="rulePasteStatus" role="status"></p>
+    <div class="dialog-actions">
+      <button type="submit" value="cancel">取消</button>
+      <button type="submit" value="save" class="primary">导入</button>
+    </div>
+  </form>
+</dialog>
+
 <section id="mobilePlayer" hidden aria-label="播放器">
   <div class="mp-stage" id="mpStage">
     <div id="offlinePlayerVideoWrap" class="mp-video">
@@ -100,6 +157,10 @@
   <section class="mp-sheet" id="mpSources" hidden aria-label="片源">
     <div class="mp-sheet-head"><h2>片源</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
     <div class="mp-sheet-body">
+      <button class="mp-primary-action" id="mpRulesButton" type="button">
+        <b>按番名找片源</b>
+        <small>用已安装的规则搜索站点</small>
+      </button>
       <div class="mp-actions">
         <button id="mpOpenFile" type="button">本机视频</button>
         <button id="mpSubtitleImport" type="button">导入字幕</button>
@@ -116,10 +177,6 @@
         <label class="mp-check"><input id="mpUseTemplate" type="checkbox"> 存成分集规则，用 {episode} 代替集数</label>
         <button type="submit">添加并播放</button>
       </form>
-      <div class="mp-rule-entry">
-        <div><b>规则仓库</b><small>KazumiRules：按番名找片源</small></div>
-        <button id="mpRulesButton" type="button">打开</button>
-      </div>
     </div>
   </section>
 
@@ -133,41 +190,6 @@
       </div>
       <select id="mpQuality" hidden aria-hidden="true"><option value="off">关闭</option><option value="fast">轻量 · 2×</option><option value="quality">画质 · 2×</option></select>
       <p id="mpQualityStatus" class="mp-hint" role="status"></p>
-    </div>
-  </section>
-
-  <section class="mp-sheet" id="mpRules" hidden aria-label="规则仓库">
-    <div class="mp-sheet-head"><h2>规则仓库</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
-    <div class="mp-sheet-body">
-      <div class="mp-tabs" role="tablist">
-        <button type="button" role="tab" data-rule-tab="find" aria-selected="true">按番名找源</button>
-        <button type="button" role="tab" data-rule-tab="repo" aria-selected="false">规则仓库</button>
-        <button type="button" role="tab" data-rule-tab="installed" aria-selected="false">已安装</button>
-      </div>
-
-      <div class="mp-rule-view" data-rule-view="find">
-        <label class="mp-field">片源规则<select id="mpRulePick" aria-label="片源规则"></select></label>
-        <form id="mpRuleFindForm" class="mp-form">
-          <label class="mp-field">番名或关键词<input id="mpRuleQuery" placeholder="例如：葬送的芙莉莲" required></label>
-          <button type="submit">搜索片源</button>
-        </form>
-        <p class="mp-hint" id="mpRuleStatus" role="status"></p>
-        <div class="mp-rule-results" id="mpRuleResults"></div>
-        <div class="mp-rule-episodes" id="mpRuleEpisodes"></div>
-      </div>
-
-      <div class="mp-rule-view" data-rule-view="repo" hidden>
-        <div class="mp-inline">
-          <input id="mpRuleFilter" placeholder="筛选规则名" aria-label="筛选规则">
-          <button id="mpRuleRefresh" type="button">刷新列表</button>
-        </div>
-        <p class="mp-hint" id="mpRuleRepoStatus" role="status">还没有读取仓库。规则来自 GitHub 上的 KazumiRules。</p>
-        <div class="mp-rule-results" id="mpRuleRepo"></div>
-      </div>
-
-      <div class="mp-rule-view" data-rule-view="installed" hidden>
-        <div class="mp-rule-results" id="mpRuleInstalled"></div>
-      </div>
     </div>
   </section>
 

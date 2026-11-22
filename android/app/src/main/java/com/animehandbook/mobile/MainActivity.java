@@ -210,6 +210,7 @@ public class MainActivity extends Activity {
   }
   class Bridge {
     @JavascriptInterface public String config() { try { JSONObject data = new JSONObject(); data.put("url", prefs.getString("url", "https://dav.jianguoyun.com/dav/")); data.put("username", prefs.getString("username", "")); data.put("account", prefs.getString("account", "")); data.put("passwordSet", !prefs.getString("password", "").isEmpty()); data.put("autoSync", prefs.getBoolean("auto_sync", true)); return data.toString(); } catch(Exception e) { return "{}"; } }
+    @JavascriptInterface public String version() { try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception missing) { return ""; } }
     @JavascriptInterface public String state() { return readState(); }
     @JavascriptInterface public boolean saveState(String value, String expected) {
       synchronized(stateLock){try{new JSONObject(value).getJSONObject("tables");if(expected==null||!digest(expected).equals(digest(readStateLocked())))return false;writeStateLocked(value);return true;}catch(Exception error){return false;}}

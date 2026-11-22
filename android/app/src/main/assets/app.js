@@ -31,7 +31,7 @@ function collectionItems(){
 function dayKey(value,dayStart){const d=new Date(value);d.setHours(d.getHours()-dayStart);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function balance(){const s=settingMap(), anchor=String(s.episode_balance_anchor||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(anchor)||s.show_episode_balance===false)return null;const start=new Date(`${anchor}T00:00:00`), today=new Date(`${dayKey(new Date(),Number(s.day_start_hour??4))}T00:00:00`), days=Math.max(0,Math.round((today-start)/86400000)), watched=(tables().events||[]).filter(e=>e.event_type==='watch'&&dayKey(e.created_at,Number(s.day_start_hour??4))>=anchor).reduce((n,e)=>{try{return n+JSON.parse(e.episodes||'[]').length}catch(_){return n}},0);return Number(s.episode_balance_initial??237)+days*Number(s.episode_balance_daily_target??8)-watched}
 function balanceText(){const value=balance();if(value===null)return '';return value>0?`还欠 ${value} 集`:value<0?`超前 ${Math.abs(value)} 集`:'刚好追平'}
-function home(){ const cats=[[1,'在看'],[2,'想看'],[3,'搁置'],[4,'看过'],[5,'抛弃']]; const list=collectionItems(); app.innerHTML=`<div class="section-title"><h2>${cats.find(x=>x[0]===category)?.[1]||'收藏'}</h2><span>${list.length} 部</span></div>${balanceText()?`<div class="balance">${balanceText()}</div>`:''}<div class="chips">${cats.map(x=>`<button class="chip ${x[0]===category?'active':''}" onclick="setCat(${x[0]})">${x[1]}</button>`).join('')}</div>${list.length?`<div class="grid">${list.map(a=>`<button class="anime" onclick="openAnime(${a.id})"><div class="cover" ${cover(a)}>${a.image_url?'':esc(name(a).slice(0,10))}</div><div class="info"><b>${esc(name(a))}</b><small>已看 ${(JSON.parse(a.watched_episodes||'[]')).length} 集</small></div></button>`).join('')}</div>`:'<div class="empty">这里还没有番剧。先在电脑端同步收藏，再到手机点同步下载。</div>'}`; }
+function home(){ const cats=[[1,'在看'],[2,'想看'],[3,'搁置'],[4,'看过'],[5,'抛弃']]; const list=collectionItems(); const label=cats.find(x=>x[0]===category)?.[1]||'收藏'; app.innerHTML=`<div class="quick-row"><button class="quick" onclick="playLocal()"><span>▶</span>本机视频</button><button class="quick" onclick="openRulesPage()"><span>⌕</span>规则找片源</button></div><div class="section-title"><h2>${label}</h2><span>${list.length} 部</span></div>${balanceText()?`<div class="balance">${balanceText()}</div>`:''}<div class="chips">${cats.map(x=>`<button class="chip ${x[0]===category?'active':''}" onclick="setCat(${x[0]})">${x[1]}</button>`).join('')}</div>${list.length?`<div class="grid">${list.map(a=>`<button class="anime" onclick="openAnime(${a.id})"><div class="cover" ${cover(a)}>${a.image_url?'':esc(name(a).slice(0,10))}</div><div class="info"><b>${esc(name(a))}</b><small>已看 ${(JSON.parse(a.watched_episodes||'[]')).length} 集</small></div></button>`).join('')}</div>`:'<div class="empty">这里还没有番剧。先在电脑端同步收藏，再到手机点同步下载。</div>'}`; }
 function arrayValue(value){try{const result=typeof value==='string'?JSON.parse(value):value;return Array.isArray(result)?result:[]}catch(_){return []}}
 function episodeList(anime){
  const list=arrayValue(anime.episodes);if(list.length)return list;
@@ -46,11 +46,18 @@ function detail(){
  const done=new Set(arrayValue(a.watched_episodes).map(String));
  app.innerHTML=`<button class="back" onclick="backHome()">← 返回收藏</button><div class="detail-cover" ${cover(a)}><h2>${esc(name(a))}</h2></div>${groups.size?[...groups].map(([type,eps])=>`<div class="panel"><div class="episode-heading"><b>${typeLabel(type)}</b><small data-group-count="${type}"></small></div><div class="episode">${eps.map(e=>`<button data-episode-key="${esc(e.key)}" data-episode-type="${type}" class="${done.has(String(e.key))?'done':''}" aria-pressed="${done.has(String(e.key))}">${esc(e.display_label||e.key)}</button>`).join('')}</div></div>`).join(''):'<div class="empty">剧集资料暂缺，暂无可标记的集数。</div>'}`;
  app.querySelectorAll('[data-episode-key]').forEach(button=>button.onclick=()=>toggleEpisode(a.id,button.dataset.episodeKey));
+ const actions=document.createElement('div');
+ actions.className='detail-actions';
  const playButton=document.createElement('button');
  playButton.className='primary detail-play';
  playButton.textContent='在手账里播放';
  playButton.onclick=()=>window.HandbookPlayer.show(a);
- app.querySelector('.detail-cover').after(playButton);
+ const sourceButton=document.createElement('button');
+ sourceButton.className='secondary detail-play';
+ sourceButton.textContent='按规则找源';
+ sourceButton.onclick=()=>findSourceFor(a);
+ actions.append(playButton,sourceButton);
+ app.querySelector('.detail-cover').after(actions);
  updateEpisodeButtons();
 }
 function updateEpisodeButtons(){
@@ -71,7 +78,97 @@ function noteForm(){
  app.innerHTML=`<button class="back" onclick="showPage('records')">← 返回记录</button><div class="panel form"><h2>写记录</h2><label>内容</label><textarea id="content" placeholder="今天看了什么？"></textarea><button class="primary" onclick="addNote()">保存到手机</button></div>`;
  document.querySelector('#content').value=ui.noteDraft||'';if(opening){restorePosition();persistUi()}
 }
-function settings(){const c=JSON.parse(native.config());app.innerHTML=`<div class="panel form"><h2>坚果云同步</h2><p class="notice">密码只留在手机应用的私有存储中；留空不会覆盖已保存密码。</p><label>WebDAV 地址</label><input id="url" value="${esc(c.url||'https://dav.jianguoyun.com/dav/')}"><label>坚果云账号</label><input id="username" value="${esc(c.username)}"><label>坚果云应用密码</label><input id="password" type="password" placeholder="${c.passwordSet?'已保存，留空即可':'请输入应用密码'}"><label>云端账号标识</label><input id="account" value="${esc(c.account)}"><label class="compact-check"><input id="autoSync" type="checkbox" ${c.autoSync!==false?'checked':''}> 每 30 分钟自动同步</label><button class="primary" onclick="saveConfig()">保存配置</button><button class="secondary" onclick="requestSync()">立即同步</button></div>`;configInitial=JSON.stringify(readConfigForm(false));if(ui.configDraft){for(const key of ['url','username','account'])document.querySelector('#'+key).value=ui.configDraft[key]??'';document.querySelector('#autoSync').checked=ui.configDraft.auto_sync!==false}}
+function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
+function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
+const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.19'}catch(_){return '1.0.19'}})();
+function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
+function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
+function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
+function saveDm(patch){writeLocal(DM_KEY,{...dmPrefs(),...patch});if(typeof dmLoadPrefs==='function'){try{dmLoadPrefs();dmSyncControls();}catch(_){}}
+ if(window.HandbookPlayer?.commitDanmakuPrefs)window.HandbookPlayer.commitDanmakuPrefs();}
+function applyTheme(mode){const value=['light','dark'].includes(mode)?mode:'auto';writeLocal(THEME_KEY,value);
+ const dark=value==='dark'||(value==='auto'&&Boolean(window.matchMedia?.('(prefers-color-scheme: dark)')?.matches));
+ document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.dataset.themeMode=value;}
+function toast(text){let node=document.querySelector('#appToast');if(!node){node=document.createElement('p');node.id='appToast';node.setAttribute('role','status');document.body.append(node)}
+ node.textContent=text;node.classList.add('is-visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('is-visible'),2000)}
+function playLocal(){window.HandbookPlayer?.show()}
+function openRulesPage(){if(window.HandbookRules?.isOpen())return;window.HandbookRules?.open('app');syncNav('rules')}
+function findSourceFor(anime){window.HandbookPlayer?.show(anime);window.HandbookRules?.open('player')}
+function options(list,current){return list.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(current)?' selected':''}>${esc(label)}</option>`).join('')}
+function settings(){
+ const c=JSON.parse(native.config()||'{}');
+ const pref=playerPrefs(),dm={...dmPrefs()},theme=readLocal(THEME_KEY,'auto');
+ const rules=window.HandbookRules?.count?.()||0;
+ app.innerHTML=`<div class="page-title-bar"><h2>设置</h2><p>播放、弹幕、规则和同步都在这里</p></div>
+
+<section class="group"><h3>播放</h3><div class="group-body">
+ <label class="setting-row"><span>默认倍速</span><select id="setSpeed">${options([[0.75,'0.75x'],[1,'1.0x'],[1.25,'1.25x'],[1.5,'1.5x'],[2,'2.0x']],pref.speed??1)}</select></label>
+ <label class="setting-row"><span>快进步长</span><select id="setSkip">${options([[15,'15 秒'],[30,'30 秒'],[60,'60 秒'],[80,'80 秒'],[120,'120 秒']],pref.skip??80)}</select></label>
+ <label class="setting-row"><span>默认超分</span><select id="setQuality">${options([['off','关闭'],['fast','轻量 2×'],['quality','画质 2×']],pref.quality||'off')}</select></label>
+ <label class="setting-row stacked"><span>自动连播下一集<small>播完停 5 秒，再进下一集</small></span><input type="checkbox" class="switch-input" id="setAutoNext" ${pref.autoNext!==false?'checked':''}></label>
+ <label class="setting-row stacked"><span>记住播放进度<small>关闭后每次从片头开始</small></span><input type="checkbox" class="switch-input" id="setRemember" ${pref.remember!==false?'checked':''}></label>
+</div></section>
+
+<section class="group"><h3>弹幕</h3><div class="group-body">
+ <label class="setting-row stacked"><span>默认显示弹幕</span><input type="checkbox" class="switch-input" id="setDmEnabled" ${dm.enabled!==false?'checked':''}></label>
+ <label class="setting-row"><span>字号 <b id="setDmFontValue">${dm.fontSize??24}</b></span><input type="range" id="setDmFont" min="16" max="40" step="1" value="${dm.fontSize??24}"></label>
+ <label class="setting-row"><span>不透明度 <b id="setDmOpacityValue">${dm.opacity??0.92}</b></span><input type="range" id="setDmOpacity" min="0.3" max="1" step="0.02" value="${dm.opacity??0.92}"></label>
+ <label class="setting-row"><span>显示区域 <b id="setDmAreaValue">${dm.area??0.5}</b></span><input type="range" id="setDmArea" min="0.25" max="1" step="0.25" value="${dm.area??0.5}"></label>
+ <label class="setting-row"><span>滚动时长 <b id="setDmDurationValue">${dm.duration??8}</b> 秒</span><input type="range" id="setDmDuration" min="4" max="16" step="1" value="${dm.duration??8}"></label>
+ <label class="setting-row stacked"><span>屏蔽词<small>逗号分隔，例如：剧透, 广告</small></span><input id="setDmShield" type="text" value="${esc(dm.shield||'')}" placeholder="剧透, 广告"></label>
+ <p class="hint">弹幕源、搜索和发送在播放器的「弹幕设置」里。</p>
+</div></section>
+
+<section class="group"><h3>外观</h3><div class="group-body">
+ <label class="setting-row"><span>深色模式</span><select id="setTheme">${options([['auto','跟随系统'],['light','浅色'],['dark','深色']],theme)}</select></label>
+</div></section>
+
+<section class="group"><h3>规则</h3><div class="group-body">
+ <button class="setting-row link" type="button" onclick="openRulesPage()"><span>规则与片源<small>装规则、按番名搜片源</small></span><i>${rules?`已启用 ${rules} 条`:'未安装'} ›</i></button>
+</div></section>
+
+<section class="group"><h3>坚果云同步</h3><div class="group-body">
+ <p class="hint">密码只留在手机应用的私有存储中；留空不会覆盖已保存密码。</p>
+ <label class="field">WebDAV 地址<input id="url" value="${esc(c.url||'https://dav.jianguoyun.com/dav/')}"></label>
+ <label class="field">坚果云账号<input id="username" value="${esc(c.username||'')}"></label>
+ <label class="field">应用密码<input id="password" type="password" placeholder="${c.passwordSet?'已保存，留空即可':'请输入应用密码'}"></label>
+ <label class="field">云端账号标识<input id="account" value="${esc(c.account||'')}" placeholder="多设备同步时区分账号"></label>
+ <label class="setting-row stacked"><span>每 30 分钟自动同步</span><input type="checkbox" class="switch-input" id="autoSync" ${c.autoSync!==false?'checked':''}></label>
+ <button class="primary" onclick="saveConfig()">保存配置</button>
+ <button class="secondary" onclick="requestSync()">立即同步</button>
+</div></section>
+
+<section class="group"><h3>关于</h3><div class="group-body">
+ <div class="setting-row"><span>版本</span><i>v${esc(APP_VERSION)}</i></div>
+ <p class="hint">收藏和记录来自电脑端的坚果云同步；播放器可播本机视频、HTTPS 直链和 KazumiRules 规则。</p>
+ <button class="text-button danger-text" id="clearResume" type="button">清除本机播放进度</button>
+ <button class="text-button danger-text" id="clearSources" type="button">清除已添加的视频线路</button>
+</div></section>`;
+ bindSettings();
+ configInitial=JSON.stringify(readConfigForm(false));
+ if(ui.configDraft){for(const key of ['url','username','account']){const input=document.querySelector('#'+key);if(input)input.value=ui.configDraft[key]??''}const auto=document.querySelector('#autoSync');if(auto)auto.checked=ui.configDraft.auto_sync!==false}
+}
+function bindSettings(){
+ const change=(id,fn)=>document.querySelector('#'+id)?.addEventListener('change',fn);
+ change('setSpeed',()=>{savePref({speed:Number(document.querySelector('#setSpeed').value)});toast('默认倍速已保存')});
+ change('setSkip',()=>{savePref({skip:Number(document.querySelector('#setSkip').value)});toast('快进步长已保存')});
+ change('setQuality',()=>{savePref({quality:document.querySelector('#setQuality').value});toast('默认超分已保存')});
+ change('setAutoNext',()=>{savePref({autoNext:document.querySelector('#setAutoNext').checked})});
+ change('setRemember',()=>{savePref({remember:document.querySelector('#setRemember').checked})});
+ change('setDmEnabled',()=>{saveDm({enabled:document.querySelector('#setDmEnabled').checked})});
+ const range=(id,key,label,format)=>{const input=document.querySelector('#'+id);input?.addEventListener('input',()=>{const value=Number(input.value);document.querySelector('#'+label).textContent=format?format(value):value});input?.addEventListener('change',()=>saveDm({[key]:Number(input.value)}))};
+ range('setDmFont','fontSize','setDmFontValue');
+ range('setDmOpacity','opacity','setDmOpacityValue',value=>value.toFixed(2));
+ range('setDmArea','area','setDmAreaValue');
+ range('setDmDuration','duration','setDmDurationValue');
+ document.querySelector('#setDmShield')?.addEventListener('change',event=>saveDm({shield:event.target.value.trim()}));
+ change('setTheme',()=>{applyTheme(document.querySelector('#setTheme').value);toast('外观已更新')});
+ document.querySelector('#clearResume')?.addEventListener('click',()=>{if(!confirm('清除所有已记住的播放进度？'))return;
+  if(window.HandbookPlayer?.clearResume)window.HandbookPlayer.clearResume();else writeLocal('mobile-player:resume',{});toast('播放进度已清除')});
+ document.querySelector('#clearSources')?.addEventListener('click',()=>{if(!confirm('清除手动添加的视频线路和分集规则？已下载的本机视频不受影响。'))return;
+  if(window.HandbookPlayer?.clearSources)window.HandbookPlayer.clearSources();else writeLocal('mobile-player:sources',{});toast('线路已清除')});
+}
 // Device-only UI state never enters the WebDAV account snapshot.
 let ui={positions:{},noteDraft:'',configDraft:null},composerOpen=false,configInitial='',rendering=false;
 try{if(native.uiState)ui={...ui,...JSON.parse(native.uiState())}}catch(_){}
@@ -94,16 +191,18 @@ function mayLeave(){
  return true;
 }
 function restorePosition(){window.scrollTo(0,Number(ui.positions[viewKey()])||0)}
-function syncNav(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page))}
+let navOverride='';
+function syncNav(override){navOverride=override||'';document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',(navOverride||page)===b.dataset.page))}
 
-function showPage(p){if(!mayLeave())return;persistUi();page=p;selected=null;composerOpen=false;render();syncNav();restorePosition();persistUi()}
+function showPage(p){if(!mayLeave())return;if(p==='rules'){window.HandbookRules?.open('app');syncNav('rules');return}if(window.HandbookRules?.isOpen())window.HandbookRules.close();persistUi();page=p;selected=null;composerOpen=false;render();syncNav();restorePosition();persistUi()}
 function render(){rendering=true;try{if(selected!==null)return detail();if(composerOpen)return noteForm();if(page==='records')return records();if(page==='settings')return settings();home()}finally{rendering=false}}
 function setCat(c){persistUi();category=c;render();restorePosition();persistUi()}
 function openAnime(id){persistUi();selected=id;composerOpen=false;render();restorePosition();persistUi()}
 function backHome(){persistUi();selected=null;page='home';render();syncNav();restorePosition();persistUi()}
 function handleBack(){
  const conflict = document.querySelector('#syncConflict');
- if (conflict.open) { conflict.close(); return true; }
+ if (conflict?.open) { conflict.close(); return true; }
+ if(window.HandbookRules?.back())return true;
  if(window.HandbookPlayer?.back())return true;
  if(selected!==null){backHome();return true}if(composerOpen){showPage('records');return true}if(page!=='home'){showPage('home');return true}return false;
 }
@@ -126,7 +225,7 @@ window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if
  if(!editing){const y=window.scrollY;if(selected!==null)updateEpisodeButtons();else render();window.scrollTo(0,y)}
  }if(!silent)alert(r.pendingLocal?'同步已完成；期间的新修改已保留在手机，等待下次同步。':r.message||'同步完成')}};
 document.querySelectorAll('nav button[data-page]').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelector('#sync').onclick=()=>requestSync();
-document.querySelector('#syncConflict form').addEventListener('submit', event => {
+document.querySelector('#syncConflict form')?.addEventListener('submit', event => {
  event.preventDefault();
  const resolution = event.submitter?.value;
  event.currentTarget.closest('dialog').close();
@@ -135,7 +234,9 @@ document.querySelector('#syncConflict form').addEventListener('submit', event =>
 app.addEventListener('input',persistUi);app.addEventListener('change',persistUi);
 let scrollTimer;window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);scrollTimer=setTimeout(persistUi,100)},{passive:true});
 window.addEventListener('pagehide',persistUi);
-window.HandbookMobile.handleBack=handleBack;window.HandbookMobile.persistUi=persistUi;
+window.HandbookMobile.handleBack=handleBack;window.HandbookMobile.persistUi=persistUi;window.HandbookMobile.syncNav=syncNav;
+applyTheme(readLocal(THEME_KEY,'auto'));
+const themeMedia=window.matchMedia?.('(prefers-color-scheme: dark)');themeMedia?.addEventListener?.('change',()=>{if(readLocal(THEME_KEY,'auto')==='auto')applyTheme('auto')});
 if(['home','records','settings'].includes(ui.page))page=ui.page;
 if([1,2,3,4,5].includes(ui.category))category=ui.category;
 selected=ui.selected??null;composerOpen=ui.composer===true&&selected===null;

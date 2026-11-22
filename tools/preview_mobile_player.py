@@ -23,6 +23,7 @@ MOCK = """
 <script>
 (() => {
   // 预览用的假原生桥：和 APK 里的接口一一对应，只是不碰真实存储/系统。
+  window.__previewAllowHttp = true;   // 预览用 localhost 的示例视频，真机只认 HTTPS
   const demo = { id: 9001, name_cn: "葬送的芙莉莲", collection_type: 1,
     episodes: JSON.stringify(Array.from({ length: 12 }, (_, i) => ({
       key: String(i + 1).padStart(2, "0"), display_label: String(i + 1),
@@ -33,7 +34,48 @@ MOCK = """
     state: () => snapshot,
     saveState: value => { snapshot = value; return true; },
     uiState: () => "{}", saveUiState: () => {}, config: () => "{}",
+    version: () => "1.0.19-preview",
   };
+
+  // ---- 预览里的假站点：搜到的条目、分集、播放页都指向本机 sample.mp4 ----
+  const MEDIA = location.origin + "/_build/sample.mp4";
+  const rule = dynamic => ({
+    name: dynamic ? "演示站（动态）" : "演示站（静态）",
+    version: "1.0", type: "anime", baseURL: "https://demo.preview/",
+    searchURL: "https://demo.preview/search?kw=@keyword",
+    searchList: "//div[@class='item']", searchName: ".//a", searchResult: ".//a",
+    chapterRoads: "//ul[@class='eps']", chapterResult: ".//a", useWebview: dynamic,
+  });
+  window.__previewRules = [rule(false), rule(true)];
+  const PAGES = {
+    search: `<div class="item"><a href="/anime/1">葬送的芙莉莲</a></div><div class="item"><a href="/anime/2">葬送的芙莉莲 第二季</a></div>`,
+    anime: `<ul class='eps'><li><a href='/play/1'>第 1 集</a></li><li><a href='/play/2'>第 2 集</a></li><li><a href='/play/3'>第 3 集</a></li></ul>`,
+    // 地址放在播放器容器的属性里，和很多真实站点一致
+    play: `<div id="player" data-src="${MEDIA}"></div>`,
+  };
+  const respond = url => {
+    if (url.includes("api.github.com")) return JSON.stringify([
+      { name: "demo.json", download_url: "https://demo.preview/static.json", size: 640 },
+      { name: "demo-dynamic.json", download_url: "https://demo.preview/dynamic.json", size: 660 },
+    ]);
+    if (url.endsWith("/static.json")) return JSON.stringify(window.__previewRules[0]);
+    if (url.endsWith("/dynamic.json")) return JSON.stringify(window.__previewRules[1]);
+    if (url.includes("demo.preview/search")) return PAGES.search;
+    if (url.includes("demo.preview/anime/")) return PAGES.anime;
+    if (url.includes("demo.preview/play/")) return PAGES.play;
+    return null;
+  };
+  // 预置一份仓库缓存，打开「规则仓库」就能直接装
+  try {
+    localStorage.setItem("mobile-player:rule-repo", JSON.stringify({
+      at: Date.now(),
+      items: [
+        { name: "demo", url: "https://demo.preview/static.json", size: 640 },
+        { name: "demo-dynamic", url: "https://demo.preview/dynamic.json", size: 660 },
+      ],
+    }));
+  } catch (error) { /* 无痕模式 */ }
+
   window.__previewNotices = [];
   window.AndroidPlayer = {
     bars() {},
@@ -48,7 +90,14 @@ MOCK = """
         : { comments: Array.from({ length: 40 }, (_, i) => ({ p: "1,1,16777215", m: "预览弹幕 " + (i + 1) })) };
       setTimeout(() => window.HandbookPlayer?.danmakuResult(id, JSON.stringify(body), null), 150);
     },
-    fetchText(id) { setTimeout(() => window.HandbookRules?.fetchResult(id, null, "预览模式不联网，规则仓库只在真机上生效"), 60); },
+    fetchText(id, url) {
+      const text = respond(url);
+      setTimeout(() => window.HandbookRules?.fetchResult(id, text, text ? null : "预览只支持内置的演示站点"), 80);
+    },
+    renderText(id, url) {
+      const text = respond(url);
+      setTimeout(() => window.HandbookRules?.fetchResult(id, text, text ? null : "预览只支持内置的演示站点"), 700);
+    },
   };
 })();
 </script>
@@ -77,19 +126,7 @@ BOOT = """
   } catch (error) {
     console.warn("示例视频没有加载：", error);
   }
-  // 顶栏的返回键在预览里会关掉播放器，这里补一个复位入口。
-  const reset = document.createElement("button");
-  reset.textContent = "↻ 重新打开播放器";
-  Object.assign(reset.style, {
-    position: "fixed", right: "12px", bottom: "calc(env(safe-area-inset-bottom) + 96px)",
-    zIndex: 999, padding: "8px 14px", borderRadius: "999px", border: "0",
-    background: "#c4b1f0", color: "#1d1630", font: "600 12px/1 system-ui", display: "none",
-  });
-  reset.onclick = () => window.HandbookPlayer.show(demo, "01");
-  document.body.append(reset);
-  new MutationObserver(() => {
-    reset.style.display = document.getElementById("mobilePlayer").hidden ? "block" : "none";
-  }).observe(document.getElementById("mobilePlayer"), { attributes: true, attributeFilter: ["hidden"] });
+  // 关掉播放器后，用收藏页的「本机视频」或番剧详情重新打开，和真机路径一致。
 })();
 </script>
 """
@@ -134,7 +171,8 @@ def build() -> None:
 
     html = (BUILD / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="app.js"></script>', MOCK + '<script src="app.js"></script>', 1)
-    html = html.replace("</body>", BOOT + "</body>", 1)
+    cut = html.rindex("</body>")   # 只替换真正的文档结尾，避免命中内联字符串
+    html = html[:cut] + BOOT + html[cut:]
     (BUILD / "index.html").write_text(html, encoding="utf-8")
 
 

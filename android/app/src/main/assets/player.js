@@ -35,7 +35,9 @@
   function link(value) {
     try {
       const url = new URL(value);
-      return url.protocol === "https:" && !url.username && !url.password ? url.href : "";
+      // 预览页用 localhost 的示例视频；真机只认 HTTPS。
+      const secure = url.protocol === "https:" || (window.__previewAllowHttp === true && url.hostname === "localhost");
+      return secure && !url.username && !url.password ? url.href : "";
     } catch { return ""; }
   }
 
@@ -156,6 +158,7 @@
 
   // ---------- 播放核心 ----------
   function remember() {
+    if (prefs.remember === false) return;
     if (!source || video.readyState < 1 || !Number.isFinite(video.duration)) return;
     resume[positionKey(source)] = video.ended || video.currentTime >= video.duration - 2 ? 0 : video.currentTime;
     write("resume", resume);
@@ -213,7 +216,7 @@
   function applyFit() {
     video.classList.toggle("mp-fill", prefs.fit === "cover");
   }
-  async function loadLine(next, resumeAt = Number(resume[positionKey(next)]) || 0) {
+  async function loadLine(next, resumeAt = (prefs.remember === false ? 0 : Number(resume[positionKey(next)]) || 0)) {
     stopVideo();
     source = next;
     if (!next) { notice("请选择本机视频，或添加 HTTPS 视频地址"); sync(); return; }
@@ -566,7 +569,7 @@
   $("mpSeek").addEventListener("input", () => { dragging = true; });
   $("mpSeek").addEventListener("pointerup", () => { dragging = false; });
 
-  click("mpRulesButton", () => { window.HandbookRules?.open(); setSheet("mpRules"); });
+  click("mpRulesButton", () => window.HandbookRules?.open("player"));
   click("mpOpenFile", () => $("mpFiles").click());
   change("mpFiles", () => {
     const files = [...$("mpFiles").files];
@@ -722,6 +725,19 @@
 
   window.HandbookPlayer = {
     show,
+    playStandalone(url, title, label) {
+      const value = link(url);
+      if (!value) { notice("这条规则没有给出可播放的 HTTPS 地址"); return false; }
+      if (overlay.hidden) {
+        show({
+          id: null,
+          name_cn: title || "在线播放",
+          episodes: JSON.stringify([{ key: "01", display_label: label || "正片", type: 0 }]),
+        }, "01");
+        closeAll();
+      }
+      return this.playUrl(value, label);
+    },
     playUrl(url, label) {
       const value = link(url);
       if (!value) { notice("这条规则没有给出可播放的 HTTPS 地址"); return false; }
@@ -754,6 +770,21 @@
         if (pipWasPlaying && video.paused) play();
       } else if (!overlay.hidden) upscale();
     },
+    clearResume() {
+      for (const key of Object.keys(resume)) delete resume[key];
+      write("resume", resume);
+    },
+    clearSources() {
+      for (const key of Object.keys(sources)) delete sources[key];
+      write("sources", sources);
+      if (!overlay.hidden) refreshLines();
+    },
+    commitDanmakuPrefs() {
+      if (typeof dmLoadPrefs !== "function") return;
+      dmLoadPrefs();
+      if (typeof dmSyncControls === "function") dmSyncControls();
+      if (typeof dmResize === "function") dmResize(true);
+    },
     danmakuResult(id,text,error) {
       const callback = pending.get(id);
       pending.delete(id);
@@ -771,6 +802,18 @@
     }[event.key.length === 1 ? event.key.toLowerCase() : event.key];
     if (action) { event.preventDefault(); action(); }
   });
-  applyFit();
-  if (prefs.brightness && prefs.brightness !== 1) video.style.filter = `brightness(${prefs.brightness})`;
+  function applyPrefs() {
+    const saved = read("prefs", {});
+    if (saved && typeof saved === "object") Object.assign(prefs, saved);
+    video.playbackRate = Number(prefs.speed) || 1;
+    $("mpQuality").value = prefs.quality;
+    document.querySelectorAll('input[name="mpQuality"]').forEach(input => { input.checked = input.value === prefs.quality; });
+    applyFit();
+    video.style.filter = prefs.brightness && prefs.brightness !== 1 ? `brightness(${prefs.brightness})` : "";
+    if (!host) video.volume = Number(prefs.volume);
+    if (!overlay.hidden) upscale();
+    refreshMenuValues();
+  }
+  applyPrefs();
+  window.HandbookPlayer.applyPrefs = applyPrefs;
 })();
