@@ -117,6 +117,62 @@ final class MobilePlayerHost extends WebChromeClient {
     return uri;
   }
 
+  // 规则仓库要抓站点页面，WebView 里的 fetch 会被 CORS 挡掉，只能走原生。
+  // 限制：只允许 https、不跟随跳转、拒绝本机/内网地址、4MB 上限、只接受 Referer/UA 两个头。
+  private String httpText(String rawUrl, String headersRaw) throws Exception {
+    URI uri = https(rawUrl);
+    String host = uri.getHost().toLowerCase(java.util.Locale.ROOT);
+    if (host.equals("localhost") || host.endsWith(".local") || host.endsWith(".localhost")
+        || host.contains(":") || host.matches("\\d+(\\.\\d+){3}"))
+      throw new IllegalArgumentException("规则不允许访问本机或 IP 地址");
+    HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
+    try {
+      connection.setInstanceFollowRedirects(false);
+      connection.setConnectTimeout(8000);
+      connection.setReadTimeout(12000);
+      connection.setRequestProperty("User-Agent",
+        "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36");
+      connection.setRequestProperty("Accept", "text/html,application/json;q=0.9,*/*;q=0.5");
+      connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
+      JSONObject headers = new JSONObject(headersRaw == null || headersRaw.isEmpty() ? "{}" : headersRaw);
+      String referer = headers.optString("Referer", "");
+      String agent = headers.optString("User-Agent", "");
+      if (!referer.isEmpty()) {
+        URI check = https(referer);
+        connection.setRequestProperty("Referer", check.toString());
+      }
+      if (!agent.isEmpty()) connection.setRequestProperty("User-Agent", agent);
+      int code = connection.getResponseCode();
+      if (code >= 300 && code < 400)
+        throw new IllegalStateException("站点要求跳转（HTTP " + code + "），请用浏览器打开");
+      if (code != 200) throw new IllegalStateException("站点返回 HTTP " + code);
+      String charset = "UTF-8";
+      String type = connection.getContentType();
+      if (type != null) {
+        java.util.regex.Matcher found = java.util.regex.Pattern.compile("(?i)charset=([\\w-]+)").matcher(type);
+        if (found.find()) charset = found.group(1);
+      }
+      byte[] body;
+      try (InputStream in = connection.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+        byte[] buffer = new byte[16384];
+        for (int length; (length = in.read(buffer)) != -1; ) {
+          if (out.size() + length > 4 * 1024 * 1024) throw new IllegalStateException("页面超过 4MB，已停止读取");
+          out.write(buffer, 0, length);
+        }
+        body = out.toByteArray();
+      }
+      if ("UTF-8".equalsIgnoreCase(charset)) {
+        String head = new String(body, 0, Math.min(body.length, 2048), StandardCharsets.ISO_8859_1);
+        java.util.regex.Matcher meta = java.util.regex.Pattern
+          .compile("(?i)<meta[^>]+charset=[\"']?([\\w-]+)").matcher(head);
+        if (meta.find()) charset = meta.group(1);
+      }
+      String name = charset;
+      try { return new String(body, java.nio.charset.Charset.forName(name)); }
+      catch (Exception wrong) { return new String(body, StandardCharsets.UTF_8); }
+    } finally { connection.disconnect(); }
+  }
+
   private String danmaku(String raw) throws Exception {
     JSONObject query = new JSONObject(raw);
     URI base = https(query.getString("base"));
@@ -167,6 +223,18 @@ final class MobilePlayerHost extends WebChromeClient {
         } catch (Exception error) {
           script("window.HandbookPlayer?.danmakuResult(" + id + ",null,"
             + JSONObject.quote(error.getMessage() == null ? "弹幕源请求失败" : error.getMessage()) + ")");
+        }
+      });
+    }
+
+    @JavascriptInterface public void fetchText(int id, String url, String headers) {
+      requests.execute(() -> {
+        try {
+          String text = httpText(url, headers);
+          script("window.HandbookRules?.fetchResult(" + id + "," + JSONObject.quote(text) + ",null)");
+        } catch (Exception error) {
+          script("window.HandbookRules?.fetchResult(" + id + ",null,"
+            + JSONObject.quote(error.getMessage() == null ? "请求失败" : error.getMessage()) + ")");
         }
       });
     }

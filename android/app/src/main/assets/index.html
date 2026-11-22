@@ -12,104 +12,242 @@
   </form>
 </dialog>
 <section id="mobilePlayer" hidden aria-label="播放器">
-  <div id="offlinePlayerVideoWrap" class="mobile-video-wrap">
-    <div id="pcVideoSurface"><video id="offlineVideo" playsinline preload="metadata"></video></div>
-    <canvas id="danmakuCanvas" aria-hidden="true"></canvas>
-    <div class="mobile-video-top">
-      <button id="mpClose" type="button" aria-label="退出播放器">‹</button>
-      <strong id="mpTitle"></strong>
-      <button id="mpUpscaleButton" type="button" aria-controls="mpUpscale">超分</button>
-      <button id="mpShot" type="button">截图</button>
+  <div class="mp-stage" id="mpStage">
+    <div id="offlinePlayerVideoWrap" class="mp-video">
+      <div id="pcVideoSurface"><video id="offlineVideo" playsinline preload="metadata"></video></div>
+      <canvas id="danmakuCanvas" aria-hidden="true"></canvas>
+
+      <div class="mp-buffering" id="mpBuffering" hidden><i></i><span>缓冲中…</span></div>
+      <div class="mp-flash" id="mpFlash" hidden aria-live="polite"></div>
+
+      <button class="mp-center-play" id="mpBigPlay" type="button" aria-label="播放">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z" fill="currentColor"/></svg>
+      </button>
+
+      <div class="mp-chrome mp-top">
+        <button class="mp-icon" id="mpClose" type="button" aria-label="退出播放器">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="mp-heading">
+          <strong id="mpTitle"></strong>
+          <small id="mpEpisodeLabel"></small>
+        </div>
+        <button class="mp-icon mp-dm" id="mpDanmakuQuick" type="button" aria-label="弹幕开关" aria-pressed="true">弹</button>
+        <button class="mp-icon" id="mpShot" type="button" aria-label="截图">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6.6" width="18" height="13" rx="2.6"/><circle cx="12" cy="13" r="3.4"/><path d="M8.6 6.6 10 4.4h4l1.4 2.2"/></svg>
+        </button>
+        <button class="mp-icon" id="mpMore" type="button" aria-label="更多设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="5.4" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18.6" r="1.7"/></svg>
+        </button>
+      </div>
+
+      <div class="mp-chrome mp-bottom">
+        <div class="mp-timeline">
+          <div class="mp-track" aria-hidden="true">
+            <span class="mp-bufferbar" id="mpBuffer"></span>
+            <span class="mp-playedbar" id="mpPlayed"></span>
+            <span class="mp-thumb" id="mpThumb"></span>
+          </div>
+          <input id="mpSeek" type="range" min="0" max="1000" step="1" value="0" aria-label="播放进度">
+        </div>
+        <div class="mp-row">
+          <button class="mp-icon" id="mpPlay" type="button" aria-label="播放">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z" fill="currentColor"/></svg>
+          </button>
+          <button class="mp-icon" id="mpPrevious" type="button" aria-label="上一集">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6.5v11L9.5 12z" fill="currentColor" stroke="none"/><path d="M6 5.5v13"/></svg>
+          </button>
+          <button class="mp-icon" id="mpNext" type="button" aria-label="下一集">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5v11L14.5 12z" fill="currentColor" stroke="none"/><path d="M18 5.5v13"/></svg>
+          </button>
+          <span class="mp-time" id="mpTime">00:00<i>/ 00:00</i></span>
+          <button class="mp-chip" id="mpSpeedChip" type="button" aria-label="播放速度">1.0×</button>
+          <button class="mp-icon" id="mpEpisodesButton" type="button" aria-label="选集">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 12h10M4 17h6"/><path d="M17.5 12.5v6l4-3z" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button class="mp-icon" id="mpFullscreen" type="button" aria-label="沉浸模式">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="mp-end" id="mpEndCard" hidden>
+        <b>本集播放完毕</b>
+        <p id="mpEndHint"></p>
+        <div class="mp-end-actions">
+          <button type="button" id="mpReplay">重播本集</button>
+          <button type="button" class="mp-end-next" id="mpEndNext">播放下一集</button>
+        </div>
+      </div>
+
+      <p class="mp-status" id="mpStatus" role="status"></p>
     </div>
-    <div class="mobile-video-bottom">
-      <input id="mpSeek" type="range" min="0" max="1000" value="0" aria-label="播放进度">
-      <div class="mobile-video-row">
-        <button id="mpPrevious" type="button">上一集</button><button id="mpPlay" type="button">播放</button><button id="mpNext" type="button">下一集</button>
-        <span id="mpTime">00:00 / 00:00</span>
-        <button id="mpEpisodesButton" type="button">选集</button><button id="mpFullscreen" type="button">全屏</button>
+  </div>
+
+  <section class="mp-sheet" id="mpEpisodes" hidden aria-label="选集">
+    <div class="mp-sheet-head"><h2>选集</h2><span class="mp-sheet-hint" id="mpEpisodeHint"></span><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-sheet-body" id="mpEpisodeGrid"></div>
+    <select id="mpEpisode" hidden aria-hidden="true"></select>
+  </section>
+
+  <section class="mp-sheet" id="mpMenu" hidden aria-label="播放设置">
+    <div class="mp-sheet-head"><h2>播放设置</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-sheet-body">
+      <div class="mp-menu-grid">
+        <label class="mp-field">倍速
+          <select id="mpSpeed" aria-label="倍速"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1.0×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option><option value="3">3.0×</option></select>
+        </label>
+        <div class="mp-field">快进
+          <div class="mp-inline"><button id="mpSkip" type="button">+80 秒</button><input id="mpSkipSeconds" type="number" min="1" max="600" inputmode="numeric" aria-label="快进步长（秒）"></div>
+        </div>
+        <div class="mp-field">音量
+          <div class="mp-inline"><button id="mpMute" type="button">静音</button><input id="mpVolume" type="range" min="0" max="1" step="0.05" aria-label="音量"></div>
+        </div>
+      </div>
+      <div class="mp-actions">
+        <button id="mpUpscaleButton" type="button">画质超分</button>
+        <button id="mpSourcesButton" type="button">片源与规则</button>
+        <button id="offlineDanmakuSettings" type="button">弹幕设置</button>
+        <button id="mpSubtitle" type="button">字幕</button>
+        <button id="mpPip" type="button">画中画</button>
+        <button id="mpWatched" type="button">记录已看</button>
+      </div>
+      <button id="offlineDanmakuToggle" type="button" hidden aria-hidden="true">弹幕</button>
+      <input type="file" id="mpSubtitleFile" accept=".vtt,.srt" hidden>
+    </div>
+  </section>
+
+  <section class="mp-sheet" id="mpSources" hidden aria-label="片源">
+    <div class="mp-sheet-head"><h2>片源</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-sheet-body">
+      <div class="mp-actions">
+        <button id="mpOpenFile" type="button">本机视频</button>
+        <button id="mpSubtitleImport" type="button">导入字幕</button>
+        <button id="mpOriginal" type="button">浏览器打开</button>
+        <button id="mpRemoveSource" type="button">移除当前线路</button>
+      </div>
+      <input type="file" id="mpFiles" accept="video/*,.mkv,.mp4,.webm,.m4v" multiple hidden>
+      <label class="mp-field">当前线路<select id="mpLine" aria-label="当前线路"></select></label>
+      <form id="mpAddSource" class="mp-form">
+        <label class="mp-field">视频地址（HTTPS）
+          <input id="mpUrl" inputmode="url" placeholder="MP4 / M3U8 直链" required>
+        </label>
+        <label class="mp-check"><input id="mpUseTemplate" type="checkbox"> 存成分集规则，用 {episode} 代替集数</label>
+        <button type="submit">添加并播放</button>
+      </form>
+      <div class="mp-rule-entry">
+        <div><b>规则仓库</b><small>从 KazumiRules 安装站点规则，按番名找片源</small></div>
+        <button id="mpRulesButton" type="button">打开</button>
       </div>
     </div>
-          <section class="danmaku-panel hidden" id="danmakuPanel" aria-labelledby="dmPanelTitle">
-            <div class="danmaku-panel-head">
-              <h3 id="dmPanelTitle">弹幕</h3>
-              <button type="button" id="dmPanelClose" aria-label="关闭弹幕设置">×</button>
-            </div>
-            <div class="danmaku-panel-body">
-              <div class="danmaku-status">
-                <div><strong id="dmProvider">公共弹幕源</strong><p id="dmSource" role="status">还没有加载弹幕</p></div>
-                <b id="dmCount">0 条</b>
-              </div>
-              <form class="danmaku-search" id="dmSearchForm">
-                <label for="dmQuery">按番名搜索弹幕</label>
-                <div>
-                  <input type="search" id="dmQuery" placeholder="输入番名" required />
-                  <button type="submit" class="primary-button compact-button" id="dmOnlineSearch">搜索</button>
-                </div>
-              </form>
-              <div class="danmaku-match hidden" id="dmMatchRow">
-                <label for="dmMatch">选择分集</label>
-                <select id="dmMatch"></select>
-                <button type="button" class="primary-button compact-button" id="dmUseMatch">加载这集弹幕</button>
-              </div>
-              <div class="danmaku-actions">
-                <button type="button" class="text-button" id="dmImport">导入文件</button>
-                <button type="button" class="text-button" id="dmReload">重新加载</button>
-                <button type="button" class="text-button" id="dmConfigure">配置弹幕源</button>
-                <input type="file" id="dmFile" accept=".xml,.json" hidden />
-              </div>
-              <details class="danmaku-display">
-                <summary>显示与过滤</summary>
-                <label class="danmaku-row"><span>显示弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmEnabled" /><span class="switch"></span></span></label>
-                <label class="danmaku-row"><span>字号 <b id="dmFontSizeValue">24</b></span><input type="range" id="dmFontSize" min="16" max="40" step="1" /></label>
-                <label class="danmaku-row"><span>滚动时长 <b id="dmDurationValue">8</b> 秒</span><input type="range" id="dmDuration" min="4" max="16" step="1" /></label>
-                <label class="danmaku-row"><span>不透明度 <b id="dmOpacityValue">0.92</b></span><input type="range" id="dmOpacity" min="0.3" max="1" step="0.02" /></label>
-                <label class="danmaku-row"><span>显示区域 <b id="dmAreaValue">0.5</b></span><input type="range" id="dmArea" min="0.25" max="1" step="0.25" /></label>
-                <label class="danmaku-row"><span>同屏上限 <b id="dmDensityValue">0</b></span><input type="range" id="dmDensity" min="0" max="60" step="5" /></label>
-                <label class="danmaku-row"><span>粗体弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmBold" /><span class="switch"></span></span></label>
-                <label class="danmaku-row"><span>顶底弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmTopBottom" /><span class="switch"></span></span></label>
-                <label class="danmaku-row stacked"><span>屏蔽词（逗号分隔）</span><input type="text" id="dmShield" placeholder="剧透, 广告" /></label>
-              </details>
-            </div>
-          </section>
-  </div>
-  <div class="mobile-tools">
-    <p id="mpStatus" role="status"></p>
-    <div class="mobile-video-row">
-      <button id="mpSkip" type="button">快进</button><button id="mpMute" type="button">静音</button>
-      <label>音量<input id="mpVolume" type="range" min="0" max="1" step="0.05" aria-label="音量"></label>
-      <label>倍速<select id="mpSpeed" aria-label="倍速"><option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option><option>3</option></select></label>
-      <button id="mpPip" type="button">小窗</button>
-    </div>
-    <div class="mobile-video-row">
-      <button id="offlineDanmakuToggle" type="button">弹幕</button><button id="offlineDanmakuSettings" type="button">弹幕设置</button>
-      <button id="mpSubtitle" type="button">字幕</button><button id="mpSourcesButton" type="button">片源</button>
-      <button id="mpWatched" type="button">记录已看</button>
-    </div>
-    <form id="mpSend" class="mobile-video-row"><input id="dmSendInput" placeholder="发一条本机弹幕" maxlength="100" aria-label="弹幕内容"><button id="dmSendButton">发送</button></form>
-  </div>
-  <section id="mpEpisodes" class="mobile-player-sheet" hidden><h2>选集</h2><select id="mpEpisode" size="5" aria-label="选集"></select></section>
-  <section id="mpUpscale" class="mobile-player-sheet" hidden><h2>Anime4K 超分</h2>
-    <select id="mpQuality" aria-label="超分画质"><option value="off">关闭</option><option value="fast">轻量 · 2×</option><option value="quality">画质 · 2×</option></select><p id="mpQualityStatus" role="status"></p>
   </section>
-  <section id="mpSources" class="mobile-player-sheet" hidden><h2>播放片源</h2>
-    <div class="mobile-video-row"><button id="mpOpenFile" type="button">打开本机视频</button><button id="mpOriginal" type="button">打开片源链接 ↗</button><button id="mpSubtitleImport" type="button">导入字幕</button></div>
-    <input type="file" id="mpFiles" accept="video/*,.mkv,.mp4,.webm,.m4v" multiple hidden>
-    <input type="file" id="mpSubtitleFile" accept=".vtt,.srt" hidden>
-    <label>当前线路<select id="mpLine"></select></label>
-    <form id="mpAddSource"><label>HTTPS 视频地址<input id="mpUrl" inputmode="url" placeholder="MP4 或 M3U8 地址" required></label>
-      <label><input id="mpUseTemplate" type="checkbox"> 作为分集规则保存，地址中用 {episode} 或 {key} 代替集数</label>
-      <div class="mobile-video-row"><button>添加并播放</button><button id="mpRemoveSource" type="button">移除所选线路</button></div>
-    </form>
-    <label>快进步长（秒）<input id="mpSkipSeconds" type="number" min="1" max="600" inputmode="numeric"></label>
+
+  <section class="mp-sheet" id="mpUpscale" hidden aria-label="画质超分">
+    <div class="mp-sheet-head"><h2>Anime4K 超分</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-sheet-body">
+      <div class="mp-choice" role="radiogroup" aria-label="超分档位">
+        <label><input type="radio" name="mpQuality" value="off"><span><b>关闭</b><small>原画，最省电</small></span></label>
+        <label><input type="radio" name="mpQuality" value="fast"><span><b>轻量 · 2×</b><small>实时放大，发热小</small></span></label>
+        <label><input type="radio" name="mpQuality" value="quality"><span><b>画质 · 2×</b><small>更锐利，更耗电</small></span></label>
+      </div>
+      <select id="mpQuality" hidden aria-hidden="true"><option value="off">关闭</option><option value="fast">轻量 · 2×</option><option value="quality">画质 · 2×</option></select>
+      <p id="mpQualityStatus" class="mp-hint" role="status"></p>
+    </div>
   </section>
-  <section id="mpDanmakuSource" class="mobile-player-sheet" hidden><h2>弹幕源</h2>
-    <form id="mpDanmakuConfig">
-      <label>来源<select id="mpDmMode"><option value="public">社区公共源</option><option value="dandanplay">弹弹play 官方</option><option value="custom">兼容服务</option></select></label>
-      <label>兼容服务地址<input id="mpDmBase" inputmode="url" placeholder="https://"></label>
-      <label>AppId<input id="mpDmId" autocomplete="off"></label>
-      <label>AppSecret<input id="mpDmSecret" type="password" autocomplete="off"></label>
-      <button>保存弹幕源</button>
-    </form>
+
+  <section class="mp-sheet" id="mpRules" hidden aria-label="规则仓库">
+    <div class="mp-sheet-head"><h2>规则仓库</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-sheet-body">
+      <div class="mp-tabs" role="tablist">
+        <button type="button" role="tab" data-rule-tab="find" aria-selected="true">按番名找源</button>
+        <button type="button" role="tab" data-rule-tab="repo" aria-selected="false">规则仓库</button>
+        <button type="button" role="tab" data-rule-tab="installed" aria-selected="false">已安装</button>
+      </div>
+
+      <div class="mp-rule-view" data-rule-view="find">
+        <label class="mp-field">片源规则<select id="mpRulePick" aria-label="片源规则"></select></label>
+        <form id="mpRuleFindForm" class="mp-form">
+          <label class="mp-field">番名或关键词<input id="mpRuleQuery" placeholder="例如：葬送的芙莉莲" required></label>
+          <button type="submit">搜索片源</button>
+        </form>
+        <p class="mp-hint" id="mpRuleStatus" role="status"></p>
+        <div class="mp-rule-results" id="mpRuleResults"></div>
+        <div class="mp-rule-episodes" id="mpRuleEpisodes"></div>
+      </div>
+
+      <div class="mp-rule-view" data-rule-view="repo" hidden>
+        <div class="mp-inline">
+          <input id="mpRuleFilter" placeholder="筛选规则名" aria-label="筛选规则">
+          <button id="mpRuleRefresh" type="button">刷新列表</button>
+        </div>
+        <p class="mp-hint" id="mpRuleRepoStatus" role="status">还没有读取仓库。规则来自 GitHub 上的 KazumiRules。</p>
+        <div class="mp-rule-results" id="mpRuleRepo"></div>
+      </div>
+
+      <div class="mp-rule-view" data-rule-view="installed" hidden>
+        <div class="mp-rule-results" id="mpRuleInstalled"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mp-sheet" id="mpDanmakuSource" hidden aria-label="弹幕源">
+    <div class="mp-sheet-head"><h2>弹幕源</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-sheet-body">
+      <form id="mpDanmakuConfig" class="mp-form">
+        <label class="mp-field">来源<select id="mpDmMode"><option value="public">社区公共源</option><option value="dandanplay">弹弹play 官方</option><option value="custom">兼容服务</option></select></label>
+        <label class="mp-field">兼容服务地址<input id="mpDmBase" inputmode="url" placeholder="https://"></label>
+        <label class="mp-field">AppId<input id="mpDmId" autocomplete="off"></label>
+        <label class="mp-field">AppSecret<input id="mpDmSecret" type="password" autocomplete="off"></label>
+        <button type="submit">保存弹幕源</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="danmaku-panel hidden" id="danmakuPanel" aria-labelledby="dmPanelTitle">
+    <div class="danmaku-panel-head">
+      <h3 id="dmPanelTitle">弹幕</h3>
+      <button type="button" id="dmPanelClose" aria-label="关闭弹幕设置">×</button>
+    </div>
+    <div class="danmaku-panel-body">
+      <div class="danmaku-status">
+        <div><strong id="dmProvider">公共弹幕源</strong><p id="dmSource" role="status">还没有加载弹幕</p></div>
+        <b id="dmCount">0 条</b>
+      </div>
+      <form class="danmaku-search" id="dmSearchForm">
+        <label for="dmQuery">按番名搜索弹幕</label>
+        <div>
+          <input type="search" id="dmQuery" placeholder="输入番名" required />
+          <button type="submit" class="primary-button compact-button" id="dmOnlineSearch">搜索</button>
+        </div>
+      </form>
+      <div class="danmaku-match hidden" id="dmMatchRow">
+        <label for="dmMatch">选择分集</label>
+        <select id="dmMatch"></select>
+        <button type="button" class="primary-button compact-button" id="dmUseMatch">加载这集弹幕</button>
+      </div>
+      <div class="danmaku-actions">
+        <button type="button" class="text-button" id="dmImport">导入文件</button>
+        <button type="button" class="text-button" id="dmReload">重新加载</button>
+        <button type="button" class="text-button" id="dmConfigure">配置弹幕源</button>
+        <input type="file" id="dmFile" accept=".xml,.json" hidden />
+      </div>
+      <details class="danmaku-display">
+        <summary>显示与过滤</summary>
+        <label class="danmaku-row"><span>显示弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmEnabled" /><span class="switch"></span></span></label>
+        <label class="danmaku-row"><span>字号 <b id="dmFontSizeValue">24</b></span><input type="range" id="dmFontSize" min="16" max="40" step="1" /></label>
+        <label class="danmaku-row"><span>滚动时长 <b id="dmDurationValue">8</b> 秒</span><input type="range" id="dmDuration" min="4" max="16" step="1" /></label>
+        <label class="danmaku-row"><span>不透明度 <b id="dmOpacityValue">0.92</b></span><input type="range" id="dmOpacity" min="0.3" max="1" step="0.02" /></label>
+        <label class="danmaku-row"><span>显示区域 <b id="dmAreaValue">0.5</b></span><input type="range" id="dmArea" min="0.25" max="1" step="0.25" /></label>
+        <label class="danmaku-row"><span>同屏上限 <b id="dmDensityValue">0</b></span><input type="range" id="dmDensity" min="0" max="60" step="5" /></label>
+        <label class="danmaku-row"><span>粗体弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmBold" /><span class="switch"></span></span></label>
+        <label class="danmaku-row"><span>顶底弹幕</span><span class="switch-row compact"><input type="checkbox" id="dmTopBottom" /><span class="switch"></span></span></label>
+        <label class="danmaku-row stacked"><span>屏蔽词（逗号分隔）</span><input type="text" id="dmShield" placeholder="剧透, 广告" /></label>
+      </details>
+      <form id="mpSend" class="mp-send">
+        <input id="dmSendInput" placeholder="发一条本机弹幕" maxlength="100" aria-label="弹幕内容">
+        <button id="dmSendButton">发送</button>
+      </form>
+    </div>
   </section>
 </section>
-<script src="app.js"></script><script src="modules/danmaku.js"></script><script src="player.js"></script></body></html>
+<script src="app.js"></script><script src="modules/danmaku.js"></script><script src="rules.js"></script><script src="player.js"></script></body></html>
