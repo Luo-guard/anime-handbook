@@ -17,32 +17,34 @@
       <div id="pcVideoSurface"><video id="offlineVideo" playsinline preload="metadata"></video></div>
       <canvas id="danmakuCanvas" aria-hidden="true"></canvas>
 
-      <div class="mp-buffering" id="mpBuffering" hidden><i></i><span>缓冲中…</span></div>
-      <div class="mp-flash" id="mpFlash" hidden aria-live="polite"></div>
-
-      <button class="mp-center-play" id="mpBigPlay" type="button" aria-label="播放">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z" fill="currentColor"/></svg>
-      </button>
+      <div class="mp-loading" id="mpBuffering" hidden aria-hidden="true"><i></i></div>
+      <div class="mp-hud" id="mpHud" hidden><b id="mpHudMain"></b><span id="mpHudSub"></span></div>
 
       <div class="mp-chrome mp-top">
-        <button class="mp-icon" id="mpClose" type="button" aria-label="退出播放器">
-          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <button class="mp-btn" id="mpClose" type="button" aria-label="返回">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z" fill="currentColor"/></svg>
         </button>
-        <div class="mp-heading">
-          <strong id="mpTitle"></strong>
-          <small id="mpEpisodeLabel"></small>
-        </div>
-        <button class="mp-icon mp-dm" id="mpDanmakuQuick" type="button" aria-label="弹幕开关" aria-pressed="true">弹</button>
-        <button class="mp-icon" id="mpShot" type="button" aria-label="截图">
-          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6.6" width="18" height="13" rx="2.6"/><circle cx="12" cy="13" r="3.4"/><path d="M8.6 6.6 10 4.4h4l1.4 2.2"/></svg>
+        <div class="mp-title"><strong id="mpTitle"></strong><small id="mpEpisodeLabel"></small></div>
+        <button class="mp-btn" id="mpSkip" type="button" aria-label="快进">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l8.5-6L4 6v12zm9 0l8.5-6L13 6v12z" fill="currentColor"/></svg>
         </button>
-        <button class="mp-icon" id="mpMore" type="button" aria-label="更多设置">
-          <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="5.4" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18.6" r="1.7"/></svg>
+        <button class="mp-btn" id="mpPip" type="button" aria-label="画中画">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z" fill="currentColor"/></svg>
+        </button>
+        <button class="mp-btn mp-danmaku" id="mpDanmakuQuick" type="button" aria-label="弹幕" aria-pressed="true">弹</button>
+        <button class="mp-btn" id="mpWatched" type="button" aria-label="记录已看">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/></svg>
+        </button>
+        <button class="mp-btn" id="mpMore" type="button" aria-label="更多选项">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="currentColor"/></svg>
         </button>
       </div>
 
       <div class="mp-chrome mp-bottom">
-        <div class="mp-timeline">
+        <button class="mp-btn mp-play" id="mpPlay" type="button" aria-label="播放">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        </button>
+        <div class="mp-progress" id="mpProgress">
           <div class="mp-track" aria-hidden="true">
             <span class="mp-bufferbar" id="mpBuffer"></span>
             <span class="mp-playedbar" id="mpPlayed"></span>
@@ -50,25 +52,10 @@
           </div>
           <input id="mpSeek" type="range" min="0" max="1000" step="1" value="0" aria-label="播放进度">
         </div>
-        <div class="mp-row">
-          <button class="mp-icon" id="mpPlay" type="button" aria-label="播放">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z" fill="currentColor"/></svg>
-          </button>
-          <button class="mp-icon" id="mpPrevious" type="button" aria-label="上一集">
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6.5v11L9.5 12z" fill="currentColor" stroke="none"/><path d="M6 5.5v13"/></svg>
-          </button>
-          <button class="mp-icon" id="mpNext" type="button" aria-label="下一集">
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6.5v11L14.5 12z" fill="currentColor" stroke="none"/><path d="M18 5.5v13"/></svg>
-          </button>
-          <span class="mp-time" id="mpTime">00:00<i>/ 00:00</i></span>
-          <button class="mp-chip" id="mpSpeedChip" type="button" aria-label="播放速度">1.0×</button>
-          <button class="mp-icon" id="mpEpisodesButton" type="button" aria-label="选集">
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 12h10M4 17h6"/><path d="M17.5 12.5v6l4-3z" fill="currentColor" stroke="none"/></svg>
-          </button>
-          <button class="mp-icon" id="mpFullscreen" type="button" aria-label="沉浸模式">
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>
-          </button>
-        </div>
+        <span class="mp-time" id="mpTime">00:00 / 00:00</span>
+        <button class="mp-btn" id="mpFullscreen" type="button" aria-label="全屏">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="mpFullscreenPath" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
+        </button>
       </div>
 
       <div class="mp-end" id="mpEndCard" hidden>
@@ -84,38 +71,31 @@
     </div>
   </div>
 
-  <section class="mp-sheet" id="mpEpisodes" hidden aria-label="选集">
-    <div class="mp-sheet-head"><h2>选集</h2><span class="mp-sheet-hint" id="mpEpisodeHint"></span><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
-    <div class="mp-sheet-body" id="mpEpisodeGrid"></div>
-    <select id="mpEpisode" hidden aria-hidden="true"></select>
+  <!-- ⋮ 更多选项：仿 Kazumi 的弹出菜单，手机上是底部列表 -->
+  <section class="mp-menu" id="mpMenu" hidden aria-label="更多选项">
+    <button type="button" data-menu="episodes"><span>选集</span><i id="mpMenuEpisodesValue"></i></button>
+    <button type="button" data-menu="speed"><span>倍速</span><i id="mpMenuSpeedValue">1.0x</i></button>
+    <button type="button" data-menu="ratio"><span>视频比例</span><i id="mpMenuRatioValue">适应</i></button>
+    <button type="button" data-menu="upscale"><span>超分辨率</span><i id="mpMenuUpscaleValue">关闭</i></button>
+    <button type="button" data-menu="danmaku"><span>弹幕设置</span></button>
+    <button type="button" data-menu="subtitle"><span>字幕</span><i id="mpMenuSubtitleValue">未加载</i></button>
+    <button type="button" data-menu="shot"><span>截图</span></button>
+    <button type="button" data-menu="sources"><span>片源与规则</span></button>
+    <button type="button" data-menu="pip"><span>画中画</span></button>
   </section>
 
-  <section class="mp-sheet" id="mpMenu" hidden aria-label="播放设置">
-    <div class="mp-sheet-head"><h2>播放设置</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
-    <div class="mp-sheet-body">
-      <div class="mp-menu-grid">
-        <label class="mp-field">倍速
-          <select id="mpSpeed" aria-label="倍速"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1.0×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option><option value="3">3.0×</option></select>
-        </label>
-        <div class="mp-field">快进
-          <div class="mp-inline"><button id="mpSkip" type="button">+80 秒</button><input id="mpSkipSeconds" type="number" min="1" max="600" inputmode="numeric" aria-label="快进步长（秒）"></div>
-        </div>
-        <div class="mp-field">音量
-          <div class="mp-inline"><button id="mpMute" type="button">静音</button><input id="mpVolume" type="range" min="0" max="1" step="0.05" aria-label="音量"></div>
-        </div>
-      </div>
-      <div class="mp-actions">
-        <button id="mpUpscaleButton" type="button">画质超分</button>
-        <button id="mpSourcesButton" type="button">片源与规则</button>
-        <button id="offlineDanmakuSettings" type="button">弹幕设置</button>
-        <button id="mpSubtitle" type="button">字幕</button>
-        <button id="mpPip" type="button">画中画</button>
-        <button id="mpWatched" type="button">记录已看</button>
-      </div>
-      <button id="offlineDanmakuToggle" type="button" hidden aria-hidden="true">弹幕</button>
-      <input type="file" id="mpSubtitleFile" accept=".vtt,.srt" hidden>
-    </div>
+  <!-- 通用选择器：倍速 / 比例 / 超分 / 快进时长 -->
+  <section class="mp-sheet" id="mpPicker" hidden aria-label="选项">
+    <div class="mp-sheet-head"><h2 id="mpPickerTitle">选项</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-sheet-body" id="mpPickerBody"></div>
   </section>
+
+  <!-- 选集：右侧抽屉（Kazumi 的侧栏） -->
+  <aside class="mp-drawer" id="mpEpisodes" hidden aria-label="选集">
+    <div class="mp-drawer-head"><h2>选集</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+    <div class="mp-drawer-body" id="mpEpisodeGrid"></div>
+    <select id="mpEpisode" hidden aria-hidden="true"></select>
+  </aside>
 
   <section class="mp-sheet" id="mpSources" hidden aria-label="片源">
     <div class="mp-sheet-head"><h2>片源</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
@@ -127,6 +107,7 @@
         <button id="mpRemoveSource" type="button">移除当前线路</button>
       </div>
       <input type="file" id="mpFiles" accept="video/*,.mkv,.mp4,.webm,.m4v" multiple hidden>
+      <input type="file" id="mpSubtitleFile" accept=".vtt,.srt" hidden>
       <label class="mp-field">当前线路<select id="mpLine" aria-label="当前线路"></select></label>
       <form id="mpAddSource" class="mp-form">
         <label class="mp-field">视频地址（HTTPS）
@@ -136,14 +117,14 @@
         <button type="submit">添加并播放</button>
       </form>
       <div class="mp-rule-entry">
-        <div><b>规则仓库</b><small>从 KazumiRules 安装站点规则，按番名找片源</small></div>
+        <div><b>规则仓库</b><small>KazumiRules：按番名找片源</small></div>
         <button id="mpRulesButton" type="button">打开</button>
       </div>
     </div>
   </section>
 
-  <section class="mp-sheet" id="mpUpscale" hidden aria-label="画质超分">
-    <div class="mp-sheet-head"><h2>Anime4K 超分</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
+  <section class="mp-sheet" id="mpUpscale" hidden aria-label="超分辨率">
+    <div class="mp-sheet-head"><h2>超分辨率</h2><button class="mp-sheet-close" type="button" aria-label="关闭">×</button></div>
     <div class="mp-sheet-body">
       <div class="mp-choice" role="radiogroup" aria-label="超分档位">
         <label><input type="radio" name="mpQuality" value="off"><span><b>关闭</b><small>原画，最省电</small></span></label>
@@ -249,5 +230,8 @@
       </form>
     </div>
   </section>
+
+  <button id="offlineDanmakuToggle" type="button" hidden aria-hidden="true">弹幕</button>
+  <button id="offlineDanmakuSettings" type="button" hidden aria-hidden="true">弹幕设置</button>
 </section>
 <script src="app.js"></script><script src="modules/danmaku.js"></script><script src="rules.js"></script><script src="player.js"></script></body></html>

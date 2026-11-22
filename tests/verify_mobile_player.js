@@ -5,9 +5,9 @@ const { chromium } = require("C:/Users/han/.cache/codex-runtimes/codex-primary-r
 
 async function main() {
   const movie = execFileSync("ffmpeg", [
-    "-v","error","-f","lavfi","-i","testsrc2=s=320x180:r=12:d=12",
+    "-v","error","-f","lavfi","-i","testsrc2=s=320x180:r=12:d=60",
     "-c:v","libx264","-pix_fmt","yuv420p","-movflags","frag_keyframe+empty_moov","-f","mp4","pipe:1",
-  ]);
+  ], {maxBuffer: 32 * 1024 * 1024});
   const segment = execFileSync("ffmpeg", [
     "-v","error","-f","lavfi","-i","testsrc2=s=320x180:r=12:d=5",
     "-c:v","libx264","-pix_fmt","yuv420p","-f","mpegts","pipe:1",
@@ -27,7 +27,6 @@ async function main() {
         uiState:() => "{}", saveUiState:() => {}, config:() => "{}",
       };
       window.nativeEvents = [];
-      window.fetched = [];
       window.AndroidPlayer = {
         bars:hidden => nativeEvents.push(["bars",hidden]),
         volume:level => nativeEvents.push(["volume",level]),
@@ -35,7 +34,6 @@ async function main() {
         saveImage:(_,data) => nativeEvents.push(["shot",data]),
         external:url => nativeEvents.push(["external",url]),
         fetchText(id, url) {
-          window.fetched.push(url);
           const reply = {
             "api.github.com": JSON.stringify([{name:"demo.json", download_url:"https://raw.githubusercontent.com/demo/rule/demo.json", size:120}]),
             "demo.json": JSON.stringify({
@@ -78,58 +76,89 @@ async function main() {
     await page.getByRole("button",{name:"在手账里播放"}).click();
     await page.locator("#mpFiles").setInputFiles(["01.mp4","02.mp4"].map(name => ({name,mimeType:"video/mp4",buffer:movie})));
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
-    assert.match(await page.locator("#mpTitle").innerText(),/开场/);
-    assert.match(await page.locator("#mpEpisodeLabel").innerText(),/第 1 \/ 2 集/);
+    assert.match(await page.locator("#mpTitle").textContent(),/测试番剧/);
+    assert.match(await page.locator("#mpEpisodeLabel").textContent(),/开场/);
 
-    // 1) 控制层自动隐藏，点画面唤回
+    // 1) 底栏只有 播放/进度/时间/全屏，上下集不再常驻
+    assert.equal(await page.locator(".mp-bottom .mp-btn").count(), 2, "底栏应只有播放与全屏两个按钮");
+    assert.equal(await page.locator("#mpPrevious").count(), 0, "上下集不再常驻底栏");
+
+    // 2) 控制层自动隐藏；点一下画面唤回
     await page.waitForTimeout(4600);
     assert.equal(await page.locator("#mobilePlayer").evaluate(n => n.classList.contains("mp-controls-hidden")), true, "播放中控制层应自动收起");
-    await page.locator("#mpStage").click({position:{x:195,y:300}});
+    await page.mouse.click(195, 300);
     await page.waitForTimeout(400);
     assert.equal(await page.locator("#mobilePlayer").evaluate(n => n.classList.contains("mp-controls-hidden")), false, "点画面应唤回控制层");
 
-    // 2) 菜单里的倍速
-    await page.locator("#mpMore").click();
-    await page.locator("#mpSpeed").selectOption("1.5");
-    assert.equal(await page.locator("video").evaluate(v => v.playbackRate),1.5);
-    await page.locator("#mpMenu .mp-sheet-close").click();
+    // 3) 双击 = 播放/暂停（Kazumi 行为）
+    await page.mouse.click(195, 300);
+    await page.waitForTimeout(120);
+    await page.mouse.click(195, 300);
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator("#offlineVideo").evaluate(v => v.paused), true, "双击应暂停");
+    await page.mouse.click(195, 300);
+    await page.waitForTimeout(120);
+    await page.mouse.click(195, 300);
+    await page.waitForTimeout(500);
+    assert.equal(await page.locator("#offlineVideo").evaluate(v => v.paused), false, "再双击应继续播放");
 
-    // 3) 超分档位（单选卡片）
+    // 4) 横向拖动 = 快进，HUD 显示目标时间
+    await page.evaluate(() => { const v = document.querySelector("#offlineVideo"); v.pause(); v.currentTime = 10; });
+    await page.waitForTimeout(300);
+    const box = await page.locator("#mpStage").boundingBox();
+    const y = box.y + box.height * .5;
+    await page.mouse.move(box.x + 120, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 220, y, {steps: 6});
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    const afterDrag = await page.locator("#offlineVideo").evaluate(v => v.currentTime);
+    assert.ok(afterDrag > 36 && afterDrag < 45, `向右拖 100px（整屏 120 秒）应前进约 30 秒，实际 ${afterDrag}`);
+    assert.match(await page.locator("#mpHudMain").innerText(), /^\d{2}:\d{2}$/);
+
+    // 5) 右半屏纵向拖动 = 音量（走原生）
+    await page.evaluate(() => { nativeEvents.length = 0; });
+    await page.mouse.move(box.x + box.width * .8, box.y + 400);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * .8, box.y + 300, {steps: 6});
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    assert.ok(await page.evaluate(() => nativeEvents.some(([type]) => type === "volume")), "右半屏上下滑应调音量");
+
+    // 6) ⋮ 菜单：倍速
     await page.locator("#mpMore").click();
-    await page.locator("#mpUpscaleButton").click();
+    await page.locator("#mpMenu").waitFor();
+    await page.locator('#mpMenu [data-menu="speed"]').click();
+    await page.locator('#mpPicker .mp-option[data-value="1.5"]').click();
+    assert.equal(await page.locator("video").evaluate(v => v.playbackRate),1.5);
+
+    // 7) ⋮ 菜单：超分辨率
+    await page.locator("#mpMore").click();
+    await page.locator('#mpMenu [data-menu="upscale"]').click();
     await page.locator('input[name="mpQuality"][value="fast"]').check();
     await page.locator(".pc-native-upscale:not([hidden])").waitFor();
     await page.locator("#mpUpscale .mp-sheet-close").click();
-    await page.locator("video").evaluate(v => { v.playbackRate = 1; });
+    await page.evaluate(() => { document.querySelector("#offlineVideo").playbackRate = 1; });
 
-    // 4) 截图仍然按超分后的尺寸
-    await page.locator("#mpShot").click();
+    // 8) ⋮ 菜单：截图（超分后按 2 倍尺寸保存）
+    await page.locator("#mpMore").click();
+    await page.locator('#mpMenu [data-menu="shot"]').click();
     await page.waitForFunction(() => nativeEvents.some(([type]) => type==="shot"));
     const shot = Buffer.from(await page.evaluate(() => nativeEvents.find(([type]) => type==="shot")[1]),"base64");
     assert.equal(shot.readUInt32BE(16),640);
 
-    // 5) 双击右侧快进 10 秒
-    await page.evaluate(() => { const v = document.querySelector("#offlineVideo"); v.currentTime = 0; });
-    const box = await page.locator("#mpStage").boundingBox();
-    await page.mouse.click(box.x + box.width * .86, box.y + box.height * .5);
-    await page.waitForTimeout(120);
-    await page.mouse.click(box.x + box.width * .86, box.y + box.height * .5);
-    await page.waitForTimeout(600);
-    const jumped = await page.locator("video").evaluate(v => v.currentTime);
-    assert.ok(jumped > 8 && jumped < 12, `双击右侧应快进约 10 秒，实际 ${jumped}`);
-    assert.match(await page.locator("#mpFlash").innerText(), /快进 10 秒/);
-
-    // 6) 选集面板：分组网格、当前集高亮
-    await page.locator("#mpEpisodesButton").click();
+    // 9) 选集抽屉（右侧滑出）
+    await page.locator("#mpMore").click();
+    await page.locator('#mpMenu [data-menu="episodes"]').click();
+    await page.locator("#mpEpisodes").waitFor();
     assert.equal(await page.locator("#mpEpisodeGrid .mp-episode").count(), 2);
-    assert.equal(await page.locator("#mpEpisodeGrid .mp-episode.is-current").count(), 1);
     await page.locator('#mpEpisodeGrid .mp-episode[data-episode-index="1"]').click();
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
-    assert.match(await page.locator("#mpTitle").innerText(),/续篇/);
+    assert.match(await page.locator("#mpEpisodeLabel").textContent(),/续篇/);
 
-    // 7) 弹幕设置与发送框
+    // 10) 弹幕设置与发送框
     await page.locator("#mpMore").click();
-    await page.locator("#offlineDanmakuSettings").click();
+    await page.locator('#mpMenu [data-menu="danmaku"]').click();
     await page.locator("#dmOnlineSearch").click();
     await page.locator("#dmMatchRow:not(.hidden)").waitFor();
     await page.locator("#dmUseMatch").click();
@@ -137,28 +166,24 @@ async function main() {
     assert.equal(await page.locator("#dmSendInput").isVisible(), true);
     await page.locator("#dmPanelClose").click();
 
-    // 8) 记录已看
-    await page.locator("#mpMore").click();
+    // 11) 顶栏：记录已看 / 沉浸 / 画中画
     await page.locator("#mpWatched").click();
-    assert.equal(await page.locator("#mpWatched").innerText(),"已记录");
-    await page.locator("#mpMenu .mp-sheet-close").click();
-
-    // 9) 沉浸模式与画中画
+    assert.equal(await page.locator("#mpWatched").getAttribute("aria-pressed"),"true");
     await page.locator("#mpFullscreen").click();
     assert.equal(await page.locator("#mobilePlayer").evaluate(node => node.classList.contains("mp-fullscreen")),true);
     await page.locator("#mpMore").click();
-    await page.locator("#mpPip").click();
+    await page.locator('#mpMenu [data-menu="pip"]').click();
     assert.equal(await page.locator("#mobilePlayer").evaluate(node => node.classList.contains("mp-pip")),true);
     await page.evaluate(() => window.HandbookPlayer.pictureInPicture(false));
 
-    // 10) 返回键：收面板 → 退沉浸 → 关播放器
+    // 12) 返回：先收面板 → 退沉浸 → 关播放器
     for (let i = 0; i < 4 && await page.locator("#mobilePlayer").isVisible(); i += 1) {
       await page.evaluate(() => window.HandbookMobile.handleBack());
     }
     assert.equal(await page.locator("#mobilePlayer").isVisible(),false);
     assert.equal(await page.locator("video").getAttribute("src"),null);
 
-    // 11) 直链 HLS
+    // 13) 直链 HLS
     await page.locator("nav").getByRole("button",{name:"播放",exact:true}).click();
     await page.locator("#mpUrl").fill("https://video.example.test/01.m3u8");
     await page.getByRole("button",{name:"添加并播放"}).click();
@@ -166,10 +191,10 @@ async function main() {
     assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
     await page.evaluate(() => window.HandbookMobile.handleBack());
 
-    // 12) 规则仓库：装规则 → 按番名找源 → 解析直链播放
+    // 14) 规则仓库：装规则 → 按番名找源 → 解析直链播放
     await page.locator("nav").getByRole("button",{name:"播放",exact:true}).click();
     await page.locator("#mpMore").click();
-    await page.locator("#mpSourcesButton").click();
+    await page.locator('#mpMenu [data-menu="sources"]').click();
     await page.locator("#mpRulesButton").click();
     await page.locator('[data-rule-tab="repo"]').click();
     await page.locator("#mpRuleRefresh").click();
@@ -188,7 +213,7 @@ async function main() {
     await page.screenshot({path:"C:/Users/han/AppData/Local/Temp/hb-shots/mobile-player.png"});
 
     assert.deepEqual(errors,[]);
-    console.log("Mobile browser: gestures, auto-hide, menu, episodes, Anime4K, danmaku, rules repository and playback verified.");
+    console.log("Mobile browser: Kazumi-style controls, gestures, menu, drawer, Anime4K, danmaku, rules verified.");
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode=1; });

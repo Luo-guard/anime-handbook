@@ -15,7 +15,7 @@
   function write(key, value) {
     try { localStorage.setItem("mobile-player:" + key, JSON.stringify(value)); } catch { /* Playback stays available. */ }
   }
-  const prefs = { speed: 1, skip: 80, quality: "off", volume: 1, autoNext: true, ...read("prefs", {}) };
+  const prefs = { speed: 1, skip: 80, quality: "off", volume: 1, brightness: 1, fit: "contain", autoNext: true, ...read("prefs", {}) };
   const sources = read("sources", {});
   const resume = read("resume", {});
   const local = new Map();
@@ -31,6 +31,7 @@
     : item.saved ? key() + ":" + item.saved : key()) : key();
   const linksKey = (template = false) => template ? `${anime?.id || "local"}:rule` : key();
   const notice = text => { $("mpStatus").textContent = text; };
+  const escapeText = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   function link(value) {
     try {
       const url = new URL(value);
@@ -38,19 +39,36 @@
     } catch { return ""; }
   }
 
-  // ---------- 面板 ----------
-  function setSheet(id) {
-    for (const sheet of sheets) sheet.hidden = sheet.id !== id;
-    const open = sheets.some(sheet => !sheet.hidden);
-    overlay.classList.remove("mp-controls-hidden");
-    if (open) clearTimeout(hideTimer);
-    else scheduleHide();
-  }
-  function closeSheets() {
+  // ---------- 面板 / 菜单 ----------
+  const menuOpen = () => !$("mpMenu").hidden;
+  const drawerOpen = () => !$("mpEpisodes").hidden;
+  const sheetOpen = () => menuOpen() || drawerOpen() || sheets.some(sheet => !sheet.hidden)
+    || !$("danmakuPanel").classList.contains("hidden");
+
+  function closeMenu() { $("mpMenu").hidden = true; }
+  function closeAll() {
+    closeMenu();
+    $("mpEpisodes").hidden = true;
     for (const sheet of sheets) sheet.hidden = true;
+    $("danmakuPanel").classList.add("hidden");
     scheduleHide();
   }
-  const sheetOpen = () => sheets.some(sheet => !sheet.hidden) || !$("danmakuPanel").classList.contains("hidden");
+  function setSheet(id) {
+    closeMenu();
+    $("mpEpisodes").hidden = true;
+    for (const sheet of sheets) sheet.hidden = sheet.id !== id;
+    $("danmakuPanel").classList.add("hidden");
+    overlay.classList.remove("mp-controls-hidden");
+    clearTimeout(hideTimer);
+  }
+  function openMenu() {
+    if (menuOpen()) { closeMenu(); return; }
+    for (const sheet of sheets) sheet.hidden = true;
+    refreshMenuValues();
+    $("mpMenu").hidden = false;
+    overlay.classList.remove("mp-controls-hidden");
+    clearTimeout(hideTimer);
+  }
 
   // ---------- 控制层自动隐藏 ----------
   let hideTimer = 0;
@@ -65,7 +83,7 @@
     hideTimer = window.setTimeout(hideControls, 4000);
   }
   function toggleControls() {
-    if (sheetOpen()) return;
+    if (sheetOpen()) { closeAll(); return; }
     if (overlay.classList.contains("mp-controls-hidden")) {
       overlay.classList.remove("mp-controls-hidden");
       scheduleHide();
@@ -74,15 +92,18 @@
       clearTimeout(hideTimer);
     }
   }
-  function flash(text) {
-    const node = $("mpFlash");
-    node.textContent = text;
-    node.hidden = false;
-    clearTimeout(flash.timer);
-    flash.timer = window.setTimeout(() => { node.hidden = true; }, 900);
+
+  // ---------- HUD ----------
+  let hudTimer = 0;
+  function showHud(main, sub) {
+    $("mpHudMain").textContent = main;
+    $("mpHudSub").textContent = sub || "";
+    $("mpHud").hidden = false;
+    clearTimeout(hudTimer);
+    hudTimer = window.setTimeout(() => { $("mpHud").hidden = true; }, 900);
   }
 
-  // ---------- 进度与时间 ----------
+  // ---------- 时间与进度 ----------
   function time(seconds) {
     const n = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
     const h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), s = n % 60;
@@ -104,22 +125,33 @@
       if (!buffered && ranges.length) buffered = ranges.end(ranges.length - 1);
     } catch { /* 还没加载 */ }
     $("mpBuffer").style.width = `${Number.isFinite(duration) && duration > 0 ? Math.min(100, buffered / duration * 100) : 0}%`;
-    $("mpTime").innerHTML = `${time(video.currentTime)}<i> / ${time(duration)}</i>`;
+    $("mpTime").textContent = `${time(video.currentTime)} / ${time(duration)}`;
     if (!dragging) $("mpSeek").value = String(Math.round(ratio * 1000));
     $("mpSeek").disabled = !Number.isFinite(duration);
   }
 
-  // ---------- 图标状态 ----------
-  const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z" fill="currentColor"/></svg>';
-  const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5h3.2v14H7.5zM13.3 5h3.2v14h-3.2z" fill="currentColor"/></svg>';
-  function sync() {
+  // ---------- 图标 ----------
+  const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+  const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" fill="currentColor"/></svg>';
+  const PATH_FULL = "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z";
+  const PATH_EXIT = "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z";
+  function syncPlayIcon() {
     const paused = video.paused;
-    $("mpPlay").innerHTML = paused ? PLAY_ICON : PAUSE_ICON;
+    $("mpPlay").innerHTML = paused ? ICON_PLAY : ICON_PAUSE;
     $("mpPlay").setAttribute("aria-label", paused ? "播放" : "暂停");
-    $("mpBigPlay").hidden = !paused || video.ended;
-    $("mpMute").textContent = video.muted ? "取消静音" : "静音";
+  }
+  function sync() {
+    syncPlayIcon();
     paintProgress();
-    if (paused) overlay.classList.remove("mp-controls-hidden");
+    if (video.paused) overlay.classList.remove("mp-controls-hidden");
+  }
+  function refreshMenuValues() {
+    const quality = { off: "关闭", fast: "轻量 2×", quality: "画质 2×" }[prefs.quality] || "关闭";
+    $("mpMenuSpeedValue").textContent = `${Number(prefs.speed).toFixed(2).replace(/0$/, "").replace(/\.$/, ".0")}x`;
+    $("mpMenuRatioValue").textContent = prefs.fit === "cover" ? "填充" : "适应";
+    $("mpMenuUpscaleValue").textContent = quality;
+    $("mpMenuEpisodesValue").textContent = `${episodes.length} 集`;
+    $("mpMenuSubtitleValue").textContent = subtitle ? (subtitle.track.mode === "showing" ? "已开启" : "已关闭") : "未加载";
   }
 
   // ---------- 播放核心 ----------
@@ -145,7 +177,6 @@
       URL.revokeObjectURL(subtitle.src);
       subtitle = null;
     }
-    $("mpSubtitle").classList.remove("selected");
     $("mpBuffering").hidden = true;
     $("mpEndCard").hidden = true;
     source = null;
@@ -156,9 +187,7 @@
     const report = error => {
       if (generation !== modelGeneration) return;
       $("mpQualityStatus").textContent = error ? `${error}。已使用原画。` : "内置超分生效中";
-      $("mpUpscaleButton").classList.toggle("selected", !error);
     };
-    $("mpUpscaleButton").classList.remove("selected");
     $("mpQualityStatus").textContent = prefs.quality === "off" ? "已关闭" : "等待可用视频帧…";
     if (prefs.quality === "off" || video.readyState < 2 || overlay.classList.contains("mp-pip")) return;
     try {
@@ -181,6 +210,9 @@
   function seek(seconds) {
     if (Number.isFinite(video.duration)) video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
   }
+  function applyFit() {
+    video.classList.toggle("mp-fill", prefs.fit === "cover");
+  }
   async function loadLine(next, resumeAt = Number(resume[positionKey(next)]) || 0) {
     stopVideo();
     source = next;
@@ -190,11 +222,11 @@
     const options = {signal:mediaEvents.signal};
     let retryWithoutCors = Boolean(next.file);
     notice("正在连接视频…");
+    $("mpBuffering").hidden = false;
     video.addEventListener("loadedmetadata", () => {
       video.playbackRate = Number(prefs.speed) || 1;
       if (!host) video.volume = Number(prefs.volume);
       if (resumeAt > 0 && resumeAt < video.duration - 1) video.currentTime = resumeAt;
-      $("mpBuffering").hidden = false;
       sync();
     }, options);
     video.addEventListener("loadeddata", () => { notice(""); $("mpBuffering").hidden = true; upscale(); }, options);
@@ -227,7 +259,7 @@
     } catch (error) { if (generation === playbackGeneration) notice(error.message); }
   }
 
-  // ---------- 线路与选集 ----------
+  // ---------- 线路 / 选集 ----------
   function lineItems() {
     const direct = (sources[linksKey()] || []).map(url => ({ url, group: linksKey(), saved: url }));
     const rules = (sources[linksKey(true)] || []).map(value => {
@@ -255,22 +287,18 @@
     line = 0;
     const ep = episode();
     $("mpEpisode").value = index;
-    $("mpTitle").textContent = [anime ? name(anime) : "本机播放", ep.display_label, ep.name_cn || ep.name].filter(Boolean).join(" · ");
+    $("mpTitle").textContent = anime ? name(anime) : "本机播放";
     $("mpEpisodeLabel").textContent = [
-      `第 ${index + 1} / ${episodes.length} 集`,
       typeLabel(episodeType(ep)),
+      ep.display_label || ep.key,
       ep.name_cn || ep.name,
     ].filter(Boolean).join(" · ");
-    $("mpPrevious").disabled = index <= 0;
-    $("mpNext").disabled = index >= episodes.length - 1;
     $("mpEndCard").hidden = true;
     refreshWatched();
     renderEpisodeGrid();
     loadLine(refreshLines()[line]);
     dmLoadFor({episode_key:ep.key}, anime ? name(anime) : "", anime?.id, key());
   }
-
-  // 选集面板：按类型分组，标出已看与当前集
   function renderEpisodeGrid() {
     const hostGrid = $("mpEpisodeGrid");
     if (!hostGrid) return;
@@ -282,28 +310,23 @@
       if (!groups.has(type)) groups.set(type, []);
       groups.get(type).push({ ep, i });
     });
-    $("mpEpisodeHint").textContent = `${episodes.length} 集 · 已看 ${episodes.filter(ep => watched.has(String(ep.key))).length}`;
     hostGrid.innerHTML = [...groups].map(([type, items]) => `
       <div class="mp-episode-group">
-        <h3>${typeLabel(type)}</h3>
+        <h3>${typeLabel(type)} · ${items.length} 集</h3>
         <div class="mp-episode-grid">
           ${items.map(({ ep, i }) => `<button type="button" class="mp-episode${i === index ? " is-current" : ""}${watched.has(String(ep.key)) ? " is-watched" : ""}" data-episode-index="${i}">${escapeText(ep.display_label || ep.key)}</button>`).join("")}
         </div>
       </div>`).join("");
     hostGrid.querySelectorAll("[data-episode-index]").forEach(button => {
-      button.onclick = () => { selectEpisode(Number(button.dataset.episodeIndex)); closeSheets(); };
+      button.onclick = () => { selectEpisode(Number(button.dataset.episodeIndex)); closeAll(); };
     });
     hostGrid.querySelector(".mp-episode.is-current")?.scrollIntoView({block:"nearest"});
   }
-  function escapeText(value) {
-    return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  }
-
   function refreshWatched() {
     const current = anime && animes().find(item => Number(item.id) === Number(anime.id));
-    const watched = current && arrayValue(current.watched_episodes).map(String).includes(String(episode()?.key));
+    const watched = Boolean(current && arrayValue(current.watched_episodes).map(String).includes(String(episode()?.key)));
+    $("mpWatched").setAttribute("aria-pressed", String(watched));
     $("mpWatched").disabled = !current || watched;
-    $("mpWatched").textContent = watched ? "已记录" : "记录已看";
   }
 
   // ---------- 打开 / 关闭 ----------
@@ -319,23 +342,19 @@
       [typeLabel(episodeType(ep)), ep.display_label || ep.key, ep.name_cn || ep.name].filter(Boolean).join(" · "), i)));
     overlay.hidden = false;
     document.body.classList.add("mobile-playing");
-    syncQuality();
-    $("mpSpeed").value = prefs.speed;
-    $("mpVolume").value = prefs.volume;
-    $("mpSkipSeconds").value = prefs.skip;
-    $("mpSkip").textContent = `+${prefs.skip} 秒`;
-    $("mpSpeedChip").textContent = `${Number(prefs.speed).toFixed(2).replace(/0$/,"").replace(/\.$/,".0")}×`;
+    $("mpQuality").value = prefs.quality;
+    document.querySelectorAll('input[name="mpQuality"]').forEach(input => { input.checked = input.value === prefs.quality; });
+    applyFit();
     selectEpisode(requested >= 0 ? requested : Math.max(0, unwatched));
+    closeAll();
     if (!source) setSheet("mpSources");
     scheduleHide();
-    $("mpMore").focus();
   }
   function close() {
     remember();
     stopVideo();
     dmClear();
-    closeSheets();
-    $("danmakuPanel").classList.add("hidden");
+    closeAll();
     immersive(false);
     for (const items of local.values()) for (const item of items) URL.revokeObjectURL(item.url);
     local.clear();
@@ -346,6 +365,7 @@
   function immersive(active) {
     overlay.classList.toggle("mp-fullscreen", active);
     $("mpFullscreen").setAttribute("aria-pressed", String(active));
+    $("mpFullscreenPath").setAttribute("d", active ? PATH_EXIT : PATH_FULL);
     host?.bars(active);
     try {
       if (active && screen.orientation?.lock) screen.orientation.lock("landscape").catch(() => {});
@@ -354,23 +374,20 @@
     dmResize(true);
   }
 
-  function syncQuality() {
-    $("mpQuality").value = prefs.quality;
-    document.querySelectorAll('input[name="mpQuality"]').forEach(input => { input.checked = input.value === prefs.quality; });
-  }
-
-  // ---------- 播放结束 ----------
+  // ---------- 结束卡片 ----------
   let endTimer = 0;
   function showEndCard() {
     const hasNext = index < episodes.length - 1;
-    $("mpEndHint").textContent = hasNext ? "即将自动播放下一集，点一下取消。" : "已经是最后一集。";
     $("mpEndNext").hidden = !hasNext;
     $("mpEndCard").hidden = false;
     overlay.classList.remove("mp-controls-hidden");
     clearInterval(endTimer);
-    if (!hasNext || prefs.autoNext === false) return;
+    if (!hasNext || prefs.autoNext === false) {
+      $("mpEndHint").textContent = hasNext ? "" : "已经是最后一集。";
+      return;
+    }
     let left = 5;
-    $("mpEndHint").textContent = `${left} 秒后自动播放下一集，点一下取消。`;
+    $("mpEndHint").textContent = `${left} 秒后自动播放下一集`;
     endTimer = window.setInterval(() => {
       left -= 1;
       if (left <= 0) {
@@ -379,81 +396,97 @@
         if (index < episodes.length - 1) selectEpisode(index + 1);
         return;
       }
-      $("mpEndHint").textContent = `${left} 秒后自动播放下一集，点一下取消。`;
+      $("mpEndHint").textContent = `${left} 秒后自动播放下一集`;
     }, 1000);
   }
 
-  // ---------- 手势 ----------
-  let pointer = null, tapTimer = 0, lastTap = 0, holdTimer = 0, holding = false, volumeStart = 0;
+  // ---------- 手势：单击收放控制条、双击播放/暂停、横向拖动进度、纵向调亮度/音量 ----------
+  let gesture = null, lastTap = 0, tapTimer = 0;
   stage.addEventListener("pointerdown", event => {
-    if (event.target.closest("button, input, select, .mp-sheet, #danmakuPanel, .mp-send")) return;
-    pointer = { x: event.clientX, y: event.clientY, t: Date.now(), moved: false, mode: "" };
-    volumeStart = Number(prefs.volume) || 0;
-    clearTimeout(holdTimer);
-    holding = false;
-    holdTimer = window.setTimeout(() => {
-      if (!pointer || pointer.moved || video.paused) return;
-      holding = true;
-      video.playbackRate = 2;
-      flash("2× 快进中，松手恢复");
-    }, 520);
+    if (event.target.closest("button, input, select, .mp-menu, .mp-sheet, .mp-drawer, #danmakuPanel, .mp-send")) return;
+    gesture = {
+      x: event.clientX, y: event.clientY, t: Date.now(),
+      mode: "", start: video.currentTime, startVolume: Number(prefs.volume) || 0,
+      startBrightness: Number(prefs.brightness) || 1, moved: false, delta: 0,
+    };
   });
   stage.addEventListener("pointermove", event => {
-    if (!pointer) return;
-    const dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
-    if (!pointer.moved && Math.hypot(dx, dy) > 12) {
-      pointer.moved = true;
-      clearTimeout(holdTimer);
-      pointer.mode = Math.abs(dy) > Math.abs(dx) && event.clientX > window.innerWidth * .5 ? "volume" : "";
+    if (!gesture) return;
+    const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+    if (!gesture.mode) {
+      if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+      gesture.moved = true;
+      gesture.mode = Math.abs(dx) >= Math.abs(dy) ? "seek" : (gesture.x > window.innerWidth * .5 ? "volume" : "brightness");
+      if (gesture.mode === "seek") { overlay.classList.add("mp-controls-hidden"); $("mpProgress").classList.add("is-dragging"); }
     }
-    if (pointer.mode === "volume") {
-      const next = Math.max(0, Math.min(1, volumeStart - dy / (window.innerHeight * .6)));
-      prefs.volume = Math.round(next * 100) / 100;
+    if (gesture.mode === "seek") {
+      // 整条屏幕宽度对应 120 秒，跟手且不会太灵敏
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      gesture.delta = dx / window.innerWidth * 120;
+      const target = Math.max(0, Math.min(duration, gesture.start + gesture.delta));
+      const sign = gesture.delta >= 0 ? "+" : "-";
+      showHud(time(target), `${sign}${Math.abs(Math.round(gesture.delta))} 秒`);
+      event.preventDefault();
+    } else if (gesture.mode === "volume") {
+      const value = Math.max(0, Math.min(1, gesture.startVolume - dy / (window.innerHeight * .6)));
+      prefs.volume = Math.round(value * 100) / 100;
       if (host) host.volume(prefs.volume); else video.volume = prefs.volume;
-      $("mpVolume").value = prefs.volume;
       write("prefs", prefs);
-      flash(`音量 ${Math.round(prefs.volume * 100)}%`);
+      showHud(`音量 ${Math.round(prefs.volume * 100)}%`, "");
+      event.preventDefault();
+    } else if (gesture.mode === "brightness") {
+      const value = Math.max(.2, Math.min(1, gesture.startBrightness - dy / (window.innerHeight * .6)));
+      prefs.brightness = Math.round(value * 100) / 100;
+      video.style.filter = `brightness(${prefs.brightness})`;
+      write("prefs", prefs);
+      showHud(`亮度 ${Math.round(prefs.brightness * 100)}%`, "");
       event.preventDefault();
     }
   });
   stage.addEventListener("pointerup", event => {
-    clearTimeout(holdTimer);
-    if (holding) {
-      holding = false;
-      video.playbackRate = Number(prefs.speed) || 1;
-      pointer = null;
+    if (!gesture) return;
+    const state = gesture;
+    gesture = null;
+    $("mpProgress").classList.remove("is-dragging");
+    if (state.mode === "seek") {
+      if (Number.isFinite(video.duration)) {
+        video.currentTime = Math.max(0, Math.min(video.duration, state.start + state.delta));
+      }
+      showHud(time(video.currentTime), `${state.delta >= 0 ? "+" : "-"}${Math.abs(Math.round(state.delta))} 秒`);
+      scheduleHide();
       return;
     }
-    if (!pointer) return;
-    const moved = pointer.moved, quick = Date.now() - pointer.t < 260;
-    pointer = null;
-    if (moved) return;
-    if (!quick) return;
-    if (event.target.closest("button, input, select, .mp-sheet, #danmakuPanel, .mp-send")) return;
-    const x = event.clientX / window.innerWidth;
+    if (state.moved) { scheduleHide(); return; }
+    if (event.target.closest("button, input, select, .mp-menu, .mp-sheet, .mp-drawer, #danmakuPanel, .mp-send")) return;
     const now = Date.now();
     if (now - lastTap < 280) {
       lastTap = 0;
       clearTimeout(tapTimer);
-      if (x < .35) { seek(-10); flash("快退 10 秒"); }
-      else if (x > .65) { seek(10); flash("快进 10 秒"); }
-      else toggleControls();
-      scheduleHide();
+      if (video.paused) play(); else video.pause();
+      sync();
       return;
     }
     lastTap = now;
     clearTimeout(tapTimer);
     tapTimer = window.setTimeout(() => toggleControls(), 250);
   });
-  stage.addEventListener("pointercancel", () => {
-    clearTimeout(holdTimer);
-    if (holding) { holding = false; video.playbackRate = Number(prefs.speed) || 1; }
-    pointer = null;
-  });
-  // 双击时不要选中文字
+  stage.addEventListener("pointercancel", () => { gesture = null; $("mpProgress").classList.remove("is-dragging"); });
   stage.addEventListener("dblclick", event => event.preventDefault());
 
-  // ---------- 事件绑定 ----------
+  // ---------- 通用选择器 ----------
+  function picker(title, options, current, onPick) {
+    $("mpPickerTitle").textContent = title;
+    $("mpPickerBody").innerHTML = options.map(([value, label]) => `
+      <button type="button" class="mp-option" data-value="${escapeText(value)}">
+        <span>${escapeText(label)}</span>${String(value) === String(current) ? "<i>✓</i>" : ""}
+      </button>`).join("");
+    $("mpPickerBody").querySelectorAll("[data-value]").forEach(button => {
+      button.onclick = () => { closeAll(); onPick(button.dataset.value); };
+    });
+    setSheet("mpPicker");
+  }
+
+  // ---------- 事件 ----------
   for (const event of ["play", "pause", "timeupdate", "durationchange", "volumechange", "ended", "progress"]) video.addEventListener(event, sync);
   video.addEventListener("play", () => { overlay.classList.remove("mp-controls-hidden"); scheduleHide(); });
   video.addEventListener("pause", () => { clearTimeout(hideTimer); overlay.classList.remove("mp-controls-hidden"); });
@@ -463,19 +496,7 @@
 
   click("mpClose", close);
   click("mpPlay", () => { if (!source) setSheet("mpSources"); else if (video.paused) play(); else video.pause(); });
-  click("mpBigPlay", () => { if (!source) setSheet("mpSources"); else play(); });
-  click("mpPrevious", () => { if (index > 0) selectEpisode(index - 1); });
-  click("mpNext", () => { if (index < episodes.length - 1) selectEpisode(index + 1); });
-  click("mpEpisodesButton", () => { renderEpisodeGrid(); setSheet("mpEpisodes"); });
-  click("mpMore", () => setSheet("mpMenu"));
-  click("mpSourcesButton", () => setSheet("mpSources"));
-  click("mpRulesButton", () => { window.HandbookRules?.open(); setSheet("mpRules"); });
-  click("mpUpscaleButton", () => setSheet("mpUpscale"));
-  click("mpFullscreen", () => immersive(!overlay.classList.contains("mp-fullscreen")));
-  click("mpMute", () => { video.muted = !video.muted; });
-  click("mpSkip", () => { seek(prefs.skip); flash(`快进 ${prefs.skip} 秒`); });
-  click("mpReplay", () => { $("mpEndCard").hidden = true; video.currentTime = 0; play(); });
-  click("mpEndNext", () => { clearInterval(endTimer); $("mpEndCard").hidden = true; if (index < episodes.length - 1) selectEpisode(index + 1); });
+  click("mpSkip", () => { seek(prefs.skip); showHud(`+${prefs.skip} 秒`, ""); });
   click("mpPip", () => {
     if (!host || video.readyState < 2) { notice("视频载入后可开启画中画"); return; }
     pipPending = true;
@@ -483,47 +504,69 @@
     overlay.classList.add("mp-pip");
     host.pip(video.videoWidth, video.videoHeight);
   });
-  click("mpWatched", () => { if (anime && !$("mpWatched").disabled) toggleEpisode(anime.id, episode().key); refreshWatched(); renderEpisodeGrid(); });
-  click("mpSpeedChip", () => {
-    const steps = [0.75, 1, 1.25, 1.5, 2];
-    const at = steps.indexOf(Number(prefs.speed));
-    setSpeed(steps[(at + 1) % steps.length]);
-    flash(`${prefs.speed}×`);
+  click("mpWatched", () => { if (anime && !$("mpWatched").disabled) { toggleEpisode(anime.id, episode().key); refreshWatched(); renderEpisodeGrid(); notice("已记录本集"); } });
+  click("mpMore", openMenu);
+  click("mpFullscreen", () => immersive(!overlay.classList.contains("mp-fullscreen")));
+  click("mpReplay", () => { $("mpEndCard").hidden = true; video.currentTime = 0; play(); });
+  click("mpEndNext", () => { clearInterval(endTimer); $("mpEndCard").hidden = true; if (index < episodes.length - 1) selectEpisode(index + 1); });
+
+  // 长按快进按钮改步长（Kazumi 的做法）
+  let skipHold = 0;
+  $("mpSkip").addEventListener("pointerdown", () => {
+    skipHold = window.setTimeout(() => {
+      skipHold = 0;
+      picker("快进步长", [[15,"15 秒"],[30,"30 秒"],[60,"60 秒"],[80,"80 秒"],[120,"120 秒"]], prefs.skip, value => {
+        prefs.skip = Number(value) || 80;
+        write("prefs", prefs);
+      });
+    }, 520);
   });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) {
+    $("mpSkip").addEventListener(type, () => { if (skipHold) { clearTimeout(skipHold); skipHold = 0; } });
+  }
+
+  // ⋮ 菜单
+  const MENU_ACTIONS = {
+    episodes() { closeMenu(); renderEpisodeGrid(); $("mpEpisodes").hidden = false; },
+    speed() { picker("倍速", [[0.5,"0.5x"],[0.75,"0.75x"],[1,"1x"],[1.25,"1.25x"],[1.5,"1.5x"],[2,"2x"],[3,"3x"]], prefs.speed, setSpeed); },
+    ratio() { picker("视频比例", [["contain","适应画面"],["cover","填满屏幕"]], prefs.fit, value => { prefs.fit = value; write("prefs", prefs); applyFit(); }); },
+    upscale() { closeMenu(); setSheet("mpUpscale"); },
+    danmaku() { closeMenu(); $("danmakuPanel").classList.remove("hidden"); dmSyncControls(); },
+    subtitle() {
+      closeMenu();
+      if (!subtitle) { $("mpSubtitleFile").click(); return; }
+      subtitle.track.mode = subtitle.track.mode === "showing" ? "disabled" : "showing";
+      notice(subtitle.track.mode === "showing" ? "字幕已开启" : "字幕已关闭");
+    },
+    shot() { closeMenu(); takeScreenshot(); },
+    sources() { closeMenu(); setSheet("mpSources"); },
+    pip() { closeMenu(); $("mpPip").click(); },
+  };
+  $("mpMenu").querySelectorAll("[data-menu]").forEach(button => {
+    button.onclick = () => MENU_ACTIONS[button.dataset.menu]?.();
+  });
+
   function setSpeed(value) {
     prefs.speed = Number(value) || 1;
     video.playbackRate = prefs.speed;
-    $("mpSpeed").value = prefs.speed;
-    $("mpSpeedChip").textContent = `${prefs.speed.toFixed(2).replace(/0$/,"").replace(/\.$/,".0")}×`;
     write("prefs", prefs);
+    showHud(`${prefs.speed}x`, "播放速度");
   }
-  change("mpEpisode", () => { selectEpisode(Number($("mpEpisode").value)); closeSheets(); });
-  change("mpSpeed", () => setSpeed($("mpSpeed").value));
+  change("mpEpisode", () => { selectEpisode(Number($("mpEpisode").value)); closeAll(); });
   document.querySelectorAll('input[name="mpQuality"]').forEach(input => input.addEventListener("change", () => {
     if (!input.checked) return;
     prefs.quality = input.value;
     write("prefs", prefs);
     upscale();
   }));
-  change("mpQuality", () => { prefs.quality = $("mpQuality").value; write("prefs", prefs); upscale(); });
   change("mpSeek", () => {
     if (Number.isFinite(video.duration)) video.currentTime = Number($("mpSeek").value) / 1000 * video.duration;
     dragging = false;
   });
   $("mpSeek").addEventListener("input", () => { dragging = true; });
   $("mpSeek").addEventListener("pointerup", () => { dragging = false; });
-  $("mpVolume").addEventListener("input", () => {
-    prefs.volume = Number($("mpVolume").value);
-    if (host) host.volume(prefs.volume);
-    else video.volume = prefs.volume;
-    write("prefs", prefs);
-  });
-  change("mpSkipSeconds", () => {
-    prefs.skip = Math.max(1, Math.min(600, Math.round(Number($("mpSkipSeconds").value)) || 80));
-    $("mpSkip").textContent = `+${prefs.skip} 秒`;
-    $("mpSkipSeconds").value = prefs.skip;
-    write("prefs", prefs);
-  });
+
+  click("mpRulesButton", () => { window.HandbookRules?.open(); setSheet("mpRules"); });
   click("mpOpenFile", () => $("mpFiles").click());
   change("mpFiles", () => {
     const files = [...$("mpFiles").files];
@@ -543,7 +586,7 @@
     });
     selectEpisode(index);
     if (files.length > episodes.length - index) notice("部分文件超过该番剩余集数，请按集单独选择");
-    closeSheets();
+    closeAll();
   });
   change("mpLine", () => {
     const at = video.currentTime;
@@ -565,7 +608,7 @@
     line = list.findIndex(item => item.group === group && item.saved === (isRule ? value : link(value)));
     loadLine(refreshLines()[line]);
     $("mpUrl").value = "";
-    closeSheets();
+    closeAll();
   });
   click("mpRemoveSource", () => {
     const entry = lineItems()[line];
@@ -581,13 +624,6 @@
   });
   click("mpOriginal", () => { const entry = lineItems()[line]; if (entry && !entry.file) host?.external(entry.url); });
   click("mpSubtitleImport", () => $("mpSubtitleFile").click());
-  click("mpSubtitle", () => {
-    if (!subtitle) $("mpSubtitleFile").click();
-    else {
-      subtitle.track.mode = subtitle.track.mode === "showing" ? "disabled" : "showing";
-      $("mpSubtitle").classList.toggle("selected", subtitle.track.mode === "showing");
-    }
-  });
   change("mpSubtitleFile", async () => {
     const file = $("mpSubtitleFile").files[0];
     $("mpSubtitleFile").value = "";
@@ -605,10 +641,10 @@
       video.append(track);
       track.track.mode = "showing";
       subtitle = track;
-      $("mpSubtitle").classList.add("selected");
+      notice("字幕已加载");
     } catch { notice("无法读取字幕文件"); }
   });
-  click("mpShot", () => {
+  function takeScreenshot() {
     if (video.readyState < 2) { notice("请等待画面加载"); return; }
     try {
       let frame = model?.capture();
@@ -624,12 +660,17 @@
         if (!blob) { notice("无法生成截图"); return; }
         if (blob.size > 16 * 1024 * 1024) { notice("截图超过 16 MB"); return; }
         const reader = new FileReader();
-        reader.onload = () => host?.saveImage(`${label}-${Date.now()}.png`, String(reader.result).split(",")[1]);
+        reader.onload = () => {
+          host?.saveImage(`${label}-${Date.now()}.png`, String(reader.result).split(",")[1]);
+          notice("截图已保存");
+        };
         reader.onerror = () => notice("无法读取截图");
         reader.readAsDataURL(blob);
       }, "image/png");
     } catch { notice("此片源限制读取画面，无法截图"); }
-  });
+  }
+  click("mpShot", takeScreenshot);
+
   submit("mpSend", () => { if (dmSendMine($("dmSendInput").value)) $("dmSendInput").value = ""; });
   submit("mpDanmakuConfig", () => {
     const settings = danmakuView.settings;
@@ -642,16 +683,16 @@
     settings.appSecret = $("mpDmSecret").value.trim();
     dmSavePrefs();
     dmSyncControls();
-    closeSheets();
+    closeAll();
     if (episode()) dmLoadFor({episode_key:episode().key},anime ? name(anime) : "",anime?.id,key());
   });
-  // 面板右上角的关闭键（markup 里写死的那些）
-  overlay.querySelectorAll(".mp-sheet-close").forEach(button => { button.onclick = closeSheets; });
-  // 弹幕开关：快捷按钮转发给原开关，状态由 danmaku.js 写回
+  // 弹幕开关：顶栏快捷按钮转发给隐藏的原开关，状态由 danmaku.js 写回
   click("mpDanmakuQuick", () => $("offlineDanmakuToggle").click());
   new MutationObserver(() => {
     $("mpDanmakuQuick").setAttribute("aria-pressed", $("offlineDanmakuToggle").getAttribute("aria-pressed") ?? "true");
   }).observe($("offlineDanmakuToggle"), {attributes:true, attributeFilter:["aria-pressed"]});
+  overlay.querySelectorAll(".mp-sheet-close").forEach(button => { button.onclick = closeAll; });
+  overlay.querySelectorAll(".mp-drawer .mp-sheet-close").forEach(button => { button.onclick = closeAll; });
 
   window.openHandbookSettings = () => {
     const settings = danmakuView.settings;
@@ -681,7 +722,6 @@
 
   window.HandbookPlayer = {
     show,
-    // 给规则仓库用：把解析出来的播放地址加进当前集的线路并直接播放。
     playUrl(url, label) {
       const value = link(url);
       if (!value) { notice("这条规则没有给出可播放的 HTTPS 地址"); return false; }
@@ -697,8 +737,7 @@
     notice,
     back() {
       if (overlay.hidden) return false;
-      if (sheets.some(sheet => !sheet.hidden)) closeSheets();
-      else if (!$("danmakuPanel").classList.contains("hidden")) $("danmakuPanel").classList.add("hidden");
+      if (menuOpen() || drawerOpen() || sheets.some(sheet => !sheet.hidden) || !$("danmakuPanel").classList.contains("hidden")) closeAll();
       else if (overlay.classList.contains("mp-fullscreen")) immersive(false);
       else close();
       return true;
@@ -726,10 +765,12 @@
         event.target.closest("input,select,textarea,button,[contenteditable]")) return;
     const action = {
       " ":() => $("mpPlay").click(), ArrowLeft:() => seek(-5), ArrowRight:() => seek(5),
-      f:() => $("mpFullscreen").click(), s:() => $("mpShot").click(), m:() => $("mpMute").click(),
-      p:() => $("mpPrevious").click(), n:() => $("mpNext").click(), k:() => $("mpSkip").click(),
-      d:() => $("mpDanmakuQuick").click(),
+      f:() => $("mpFullscreen").click(), s:() => takeScreenshot(), m:() => { video.muted = !video.muted; },
+      p:() => { if (index > 0) selectEpisode(index - 1); }, n:() => { if (index < episodes.length - 1) selectEpisode(index + 1); },
+      k:() => $("mpSkip").click(), d:() => $("mpDanmakuQuick").click(),
     }[event.key.length === 1 ? event.key.toLowerCase() : event.key];
     if (action) { event.preventDefault(); action(); }
   });
+  applyFit();
+  if (prefs.brightness && prefs.brightness !== 1) video.style.filter = `brightness(${prefs.brightness})`;
 })();
