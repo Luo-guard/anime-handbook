@@ -84,7 +84,7 @@ async function main() {
     assert(pausedShot.bottom[2] > 200 && pausedShot.bottom[0] < 40, "bottom remains blue");
     await select("quality");
     await active.waitFor({ timeout: 12000 });
-    assert.match(await active.textContent(), /画质/);
+    assert.match(await active.textContent(), /质量档/);
     assert.equal(await page.evaluate(() => pcLoadPrefs().upscale), "quality");
     await page.evaluate(async () => {
       const video = $("#offlineVideo");
@@ -102,7 +102,7 @@ async function main() {
       await new Promise((resolve) => video.addEventListener("loadeddata", resolve, { once: true }));
     });
     await page.waitForFunction(() => document.querySelector(".pc-native-upscale:not([hidden])")?.width === 320);
-    assert.match(await active.textContent(), /画质/);
+    assert.match(await active.textContent(), /质量档/);
     await select("off");
     assert.equal(await canvas.count(), 0, "disabling releases the renderer");
     assert.equal(await page.evaluate(() => pcLoadPrefs().upscale), "off");
@@ -121,7 +121,7 @@ async function main() {
       return shot.width;
     }), 160);
     assert.deepEqual(errors, []);
-    console.log("Edge Anime4K: two shaders, paused screenshot colors and size, playback, source change and shutdown verified.");
+    console.log("Edge Anime4K: Kazumi quality/lite chains, paused screenshot colors and size, playback, source change and shutdown verified.");
   } finally {
     await browser.close();
   }

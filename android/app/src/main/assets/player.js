@@ -148,7 +148,7 @@
     if (video.paused) overlay.classList.remove("mp-controls-hidden");
   }
   function refreshMenuValues() {
-    const quality = { off: "关闭", fast: "轻量 2×", quality: "画质 2×" }[prefs.quality] || "关闭";
+    const quality = { off: "关闭", fast: "效率档 2×", quality: "质量档 2×" }[prefs.quality] || "关闭";
     $("mpMenuSpeedValue").textContent = `${Number(prefs.speed).toFixed(2).replace(/0$/, "").replace(/\.$/, ".0")}x`;
     $("mpMenuRatioValue").textContent = prefs.fit === "cover" ? "填充" : "适应";
     $("mpMenuUpscaleValue").textContent = quality;

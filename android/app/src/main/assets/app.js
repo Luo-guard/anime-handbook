@@ -132,7 +132,7 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.20'}catch(_){return '1.0.20'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.21'}catch(_){return '1.0.21'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
@@ -156,7 +156,7 @@ function settings(){
 <section class="group"><h3>${ICON.play}播放</h3><div class="group-body">
  <label class="setting-row"><span>默认倍速</span><select id="setSpeed">${options([[0.75,'0.75x'],[1,'1.0x'],[1.25,'1.25x'],[1.5,'1.5x'],[2,'2.0x']],pref.speed??1)}</select></label>
  <label class="setting-row"><span>快进步长</span><select id="setSkip">${options([[15,'15 秒'],[30,'30 秒'],[60,'60 秒'],[80,'80 秒'],[120,'120 秒']],pref.skip??80)}</select></label>
- <label class="setting-row"><span>默认超分</span><select id="setQuality">${options([['off','关闭'],['fast','轻量 2×'],['quality','画质 2×']],pref.quality||'off')}</select></label>
+ <label class="setting-row"><span>默认超分</span><select id="setQuality">${options([['off','关闭'],['fast','效率档 2×'],['quality','质量档 2×']],pref.quality||'off')}</select></label>
  <label class="setting-row stacked"><span>自动连播下一集<small>播完停 5 秒，再进下一集</small></span><input type="checkbox" class="switch-input" id="setAutoNext" ${pref.autoNext!==false?'checked':''}></label>
  <label class="setting-row stacked"><span>记住播放进度<small>关闭后每次从片头开始</small></span><input type="checkbox" class="switch-input" id="setRemember" ${pref.remember!==false?'checked':''}></label>
 </div></section>

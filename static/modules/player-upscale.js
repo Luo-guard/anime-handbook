@@ -1,4 +1,16 @@
-import { S, M } from "./anime4k-shaders.js";
+import { LITE, QUALITY } from "./anime4k-shaders.js?v=2";
+
+/*
+ * 浏览器里的 Anime4K：把 Kazumi 的 mpv glsl-shaders 链逐 pass 翻成 WebGL2。
+ *
+ * Kazumi 用 mpv 的 hook 机制（MAIN / PREKERNEL / OUTPUT / NATIVE），这里用一张
+ * 当前图像 + 若干中间纹理模拟同样的顺序：
+ *   - MAIN 是当前图像，NATIVE 是未放大的原始帧，OUTPUT 是最终画布（源尺寸 ×2）
+ *   - //!SAVE 决定这一 pass 写到哪个名字；同名再写就换一张纹理（ping-pong）
+ *   - //!WHEN 用 mpv 的后缀表达式求值，所以 AutoDownscalePre 在 2× 输出下会像
+ *     mpv 一样自动跳过，不会把已经放大的画面又缩回去
+ * 着色器代码和权重与 Kazumi 完全一致，没有改一行。
+ */
 
 const vertexSource = `#version 300 es
 out vec2 uv;
@@ -18,37 +30,110 @@ function compile(gl, type, source) {
   throw new Error(message);
 }
 
-// Adapt the two bundled mpv shaders. Their feature maps stay at source
-// resolution, and the final pass rearranges their channels into a 2× image.
-function shaderPasses(source) {
-  return source.split(/^\/\/!DESC /m).slice(1).map((pass) => ({
-    inputs: [...pass.matchAll(/^\/\/!BIND (\w+)/gm)].map((match) => match[1]),
-    output: pass.match(/^\/\/!SAVE (\w+)/m)[1],
-    code: pass.split("\n").slice(1).filter((line) => !line.startsWith("//!")).join("\n"),
-  }));
+function parsePasses(source) {
+  return source.split(/^\/\/!DESC /m).slice(1).map((chunk) => {
+    const lines = chunk.split("\n");
+    const pass = { desc: lines[0].trim(), hook: "MAIN", binds: [], save: null, width: null, height: null, when: null };
+    for (const line of lines) {
+      const match = line.match(/^\/\/!(HOOK|BIND|SAVE|WIDTH|HEIGHT|COMPONENTS|WHEN)\s+(.+)$/);
+      if (!match) continue;
+      const value = match[2].trim();
+      if (match[1] === "HOOK") pass.hook = value;
+      else if (match[1] === "BIND") pass.binds.push(value);
+      else if (match[1] === "SAVE") pass.save = value;
+      else if (match[1] === "WIDTH") pass.width = value;
+      else if (match[1] === "HEIGHT") pass.height = value;
+      else if (match[1] === "WHEN") pass.when = value;
+    }
+    pass.code = lines.slice(1).filter((line) => !line.startsWith("//!")).join("\n");
+    return pass;
+  });
+}
+
+// mpv 的后缀表达式：数字、NAME.w / NAME.h、+ - * /、> <。
+function evaluate(expression, sizeOf) {
+  const stack = [];
+  for (const token of expression.trim().split(/\s+/)) {
+    if (/^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(token)) {
+      stack.push(Number(token));
+      continue;
+    }
+    const size = token.match(/^([A-Za-z_]\w*)\.([wh])$/);
+    if (size) {
+      stack.push(sizeOf(size[1], size[2]));
+      continue;
+    }
+    const b = stack.pop();
+    const a = stack.pop();
+    switch (token) {
+      case ">": stack.push(a > b ? 1 : 0); break;
+      case "<": stack.push(a < b ? 1 : 0); break;
+      case "*": stack.push(a * b); break;
+      case "/": stack.push(a / b); break;
+      case "+": stack.push(a + b); break;
+      case "-": stack.push(a - b); break;
+      default: throw new Error(`超分表达式无法解析：${token}`);
+    }
+  }
+  return stack.pop();
 }
 
 function createRenderer(canvas, mode) {
   const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, depth: false, powerPreference: "high-performance" });
   if (!gl || !gl.getExtension("EXT_color_buffer_float")) throw new Error("WebGL 2 浮点渲染不可用");
   const maxSize = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), gl.getParameter(gl.MAX_RENDERBUFFER_SIZE), 4096);
+  const passes = parsePasses(mode === "quality" ? QUALITY : LITE);
   const programs = [];
-  const textures = new Map();
+  const blit = (() => {
+    const program = gl.createProgram();
+    const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource);
+    const fragment = compile(gl, gl.FRAGMENT_SHADER, `#version 300 es
+precision highp float;
+in vec2 uv;
+out vec4 color;
+uniform sampler2D source_sampler;
+void main() { color = texture(source_sampler, uv); }`);
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+    return { program, sampler: gl.getUniformLocation(program, "source_sampler") };
+  })();
+  const cache = new Map();
   const framebuffer = gl.createFramebuffer();
+  let videoTexture = null;
   let width = 0;
   let height = 0;
+  let outputWidth = 0;
+  let outputHeight = 0;
+  const debug = typeof window !== "undefined" && window.__SR_DEBUG;
+  const check = (label) => {
+    if (!debug) return;
+    const code = gl.getError();
+    if (code) throw new Error(`${label} 出错（GL ${code}）`);
+  };
 
   function dispose() {
     for (const { program } of programs) gl.deleteProgram(program);
-    for (const texture of textures.values()) gl.deleteTexture(texture);
+    gl.deleteProgram(blit.program);
+    for (const entry of cache.values()) gl.deleteTexture(entry.texture);
+    cache.clear();
+    if (videoTexture) gl.deleteTexture(videoTexture);
     gl.deleteFramebuffer(framebuffer);
   }
 
   try {
     const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource);
     try {
-      for (const pass of shaderPasses(mode === "quality" ? M : S)) {
-        const bindings = pass.inputs.map((name) => `
+      for (const pass of passes) {
+        const names = new Set([...pass.binds, pass.hook]);
+        // 有些 pass 在代码里直接用了没写进 //!BIND 的纹理（比如 Restore 的 MAIN），
+        // 从代码里补出来，和 mpv 的隐式绑定等价。
+        for (const match of pass.code.matchAll(/\b([A-Za-z_]\w*?)_(tex|texOff|pos|size|pt)\b/g)) names.add(match[1]);
+        names.delete("vec");
+        const bindings = [...names].map((name) => `
 uniform sampler2D ${name}_sampler;
 #define ${name}_size vec2(textureSize(${name}_sampler, 0))
 #define ${name}_pt (1.0 / ${name}_size)
@@ -73,68 +158,122 @@ void main() { color = hook(); }`);
           gl.deleteProgram(program);
           throw new Error(message);
         }
-        const samplers = pass.inputs.map((name) => gl.getUniformLocation(program, `${name}_sampler`));
-        programs.push({ ...pass, program, samplers });
+        const samplers = [...names].map((name) => gl.getUniformLocation(program, `${name}_sampler`));
+        programs.push({ ...pass, program, names: [...names], samplers });
       }
     } finally {
       gl.deleteShader(vertex);
-    }
-    for (const name of new Set(["MAIN", ...programs.map((pass) => pass.output)])) {
-      const texture = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      const filter = name === "MAIN" ? gl.LINEAR : gl.NEAREST;
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      textures.set(name, texture);
     }
   } catch (error) {
     dispose();
     throw error;
   }
 
-  function draw(video) {
-    const resized = width !== video.videoWidth || height !== video.videoHeight;
-    if (resized) {
-      width = video.videoWidth;
-      height = video.videoHeight;
-      if (width * 2 > maxSize || height * 2 > maxSize || width * height > 2048 * 1152) {
-        throw new Error("片源分辨率超过内置超分的处理上限");
-      }
-      canvas.width = width * 2;
-      canvas.height = height * 2;
-      for (const [name, texture] of textures) {
-        if (name === "MAIN") continue;
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null);
-      }
+  function clearTextures() {
+    for (const entry of cache.values()) gl.deleteTexture(entry.texture);
+    cache.clear();
+  }
+
+  function textureFor(name, w, h, slot) {
+    const key = `${name}|${w}x${h}|${slot}`;
+    let entry = cache.get(key);
+    if (entry) return entry;
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // 中间特征图按 texel 精确取样，和 mpv 的 NEAREST 一致
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    entry = { texture, w, h };
+    cache.set(key, entry);
+    return entry;
+  }
+
+  function resize(nextWidth, nextHeight) {
+    if (nextWidth === width && nextHeight === height) return;
+    const nextOutputWidth = nextWidth * 2;
+    const nextOutputHeight = nextHeight * 2;
+    if (nextOutputWidth > maxSize || nextOutputHeight > maxSize || nextWidth * nextHeight > 2048 * 1152) {
+      throw new Error("片源分辨率超过内置超分的处理上限");
     }
+    width = nextWidth;
+    height = nextHeight;
+    outputWidth = nextOutputWidth;
+    outputHeight = nextOutputHeight;
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    clearTextures();
+    if (videoTexture) gl.deleteTexture(videoTexture);
+    videoTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  }
+
+  function draw(video) {
+    resize(video.videoWidth, video.videoHeight);
+    const native = { texture: videoTexture, w: width, h: height };
+    const images = new Map([["MAIN", native], ["NATIVE", native], ["HOOKED", native]]);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, textures.get("MAIN"));
+    gl.bindTexture(gl.TEXTURE_2D, videoTexture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    if (resized) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-    else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, video);
-    for (const { output, inputs, program, samplers } of programs) {
-      const last = output === "MAIN";
-      gl.bindFramebuffer(gl.FRAMEBUFFER, last ? null : framebuffer);
-      if (!last) {
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures.get(output), 0);
-        if (resized && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-          throw new Error("无法分配超分画布");
-        }
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    check("上传视频帧");
+
+    const produced = new Map();
+    const sizeOf = (name, which) => {
+      if (name === "OUTPUT") return which === "w" ? outputWidth : outputHeight;
+      const image = images.get(name);
+      if (!image) throw new Error(`超分表达式引用了未知纹理：${name}`);
+      return which === "w" ? image.w : image.h;
+    };
+
+    for (const pass of programs) {
+      if (pass.when && !evaluate(pass.when, sizeOf)) continue;
+      const target = pass.save || (pass.hook === "PREKERNEL" ? "MAIN" : pass.hook);
+      const hooked = images.get(pass.hook === "PREKERNEL" ? "MAIN" : pass.hook) || images.get("MAIN");
+      const targetWidth = pass.width ? Math.round(evaluate(pass.width, sizeOf)) : hooked.w;
+      const targetHeight = pass.height ? Math.round(evaluate(pass.height, sizeOf)) : hooked.h;
+      // 同名纹理一帧内可能被写多次（Clamp 的 STATSMAX、Restore 的 MAIN），
+      // 每次换一块，避免「读的正是要写的这张」造成反馈环。
+      const count = produced.get(target) || 0;
+      const slot = count % 2;
+      produced.set(target, count + 1);
+      const entry = textureFor(target, targetWidth, targetHeight, slot);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, entry.texture, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        throw new Error("无法分配超分画布");
       }
-      gl.viewport(0, 0, last ? canvas.width : width, last ? canvas.height : height);
-      gl.useProgram(program);
-      inputs.forEach((name, index) => {
+      gl.viewport(0, 0, targetWidth, targetHeight);
+      gl.useProgram(pass.program);
+      pass.names.forEach((name, index) => {
+        const image = images.get(name) || images.get("MAIN");
         gl.activeTexture(gl.TEXTURE0 + index);
-        gl.bindTexture(gl.TEXTURE_2D, textures.get(name));
-        gl.uniform1i(samplers[index], index);
+        gl.bindTexture(gl.TEXTURE_2D, image.texture);
+        gl.uniform1i(pass.samplers[index], index);
       });
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      check(pass.desc);
+      images.set(target, { texture: entry.texture, w: targetWidth, h: targetHeight });
+      if (target === "MAIN") images.set("HOOKED", { texture: entry.texture, w: targetWidth, h: targetHeight });
     }
-    if (resized && gl.getError() !== gl.NO_ERROR) throw new Error("显卡无法处理当前画面");
+    // 链的最后一 pass 写在离屏纹理里，这里再贴到画布上（等价 mpv 的最终输出）。
+    const result = images.get("MAIN");
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, outputWidth, outputHeight);
+    gl.useProgram(blit.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, result.texture);
+    gl.uniform1i(blit.sampler, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (gl.getError() !== gl.NO_ERROR) throw new Error("显卡无法处理当前画面");
   }
 
   return { draw, dispose };

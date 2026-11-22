@@ -3,6 +3,19 @@
 整理范围：2026-10-01 之后至 2026-10-25。
 依据：本次对话、项目说明、源码归档和部署包记录。没有 Git 提交历史；部分早期改动无法精确定位到某一天，单独列为阶段汇总，不以文件修改时间代替实际完成时间。
 
+## 2026-11-22（超分对齐 Kazumi / 安卓 1.0.21）
+
+### 内置超分改成 Kazumi 原版 Anime4K 链
+之前只带了 `Upscale_CNN_x2_S/M` 两个着色器，没有 Clamp、Restore 和 AutoDownscale，和 Kazumi 的实际效果差一截。这次把 Kazumi `assets/shaders` 里的着色器和 `lib/utils/constants.dart` 的链顺序原样搬过来：
+
+- **质量档**：`Clamp_Highlights` → `Restore_CNN_VL` → `Upscale_CNN_x2_VL` → `AutoDownscalePre_x2` → `AutoDownscalePre_x4` → `Upscale_CNN_x2_M`。
+- **效率档**：`Clamp_Highlights` → `Restore_CNN_M` → `Restore_CNN_S` → `Upscale_CNN_x2_M` → `AutoDownscalePre_x2` → `AutoDownscalePre_x4` → `Upscale_CNN_x2_S`。
+- `player-upscale.js` 重写成 mpv 风格的 pass 执行器：解析 `//!HOOK / BIND / SAVE / WIDTH / HEIGHT / WHEN`，用 `//!WHEN` 的后缀表达式判断是否执行；同名 SAVE 做 ping-pong 避免读写同一张纹理；最后把结果贴到画布。
+- 着色器代码、权重、顺序完全一致，没有调参。按源分辨率固定 2× 输出（截图尺寸不变），等价于 Kazumi 在 2× 显示尺寸下的链路：`AutoDownscalePre` 在 2× 时会被 `//!WHEN` 跳过，和 mpv 的行为一致。
+- 实测（RTX 3050 Ti，1920×1080 源）：质量档约 30fps，效率档约 60fps；着色器首次编译约 0.2–0.5 秒。
+- 菜单/设置文案改为「效率档 / 质量档」，安卓默认超分与播放器 ⋮ 菜单同步。
+- 回归：`verify_player_anime4k`（两档起播、暂停截图 2×、颜色、切源、关闭）、`verify_paused_upscale`、`verify_offline_player_layer`、`verify_player_screenshot_clipboard`、`verify_mobile_player` 全部通过。
+
 ## 2026-11-22（安卓 1.0.20）
 
 ### 安卓端界面重做：统一设计系统，功能与交互逻辑不变

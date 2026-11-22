@@ -957,7 +957,7 @@ function pcUpscaleUI(mode, status, active = false) {
   const button = $("#pcUpscale");
   if (!button) return;
   button.dataset.active = String(active);
-  button.textContent = active ? (mode === "quality" ? "超分·画质" : "超分·轻量") : "超分";
+  button.textContent = active ? (mode === "quality" ? "超分·质量档" : "超分·效率档") : "超分";
   button.title = status;
   $("#pcUpscaleStatus").textContent = status;
   $$("#pcUpscaleMenu [data-upscale]").forEach((option) => {
@@ -988,7 +988,7 @@ async function pcStartUpscale(video) {
   };
   pcUpscaleUI(mode, "正在启动内置超分…");
   try {
-    const { startPlayerUpscale } = await import("./player-upscale.js?v=1");
+    const { startPlayerUpscale } = await import("./player-upscale.js?v=2");
     if (generation !== pcUpscaleGeneration || video.currentSrc !== source) return;
     pcUpscaleSession = startPlayerUpscale(video, $("#pcVideoSurface"), mode, report);
   } catch (error) {
