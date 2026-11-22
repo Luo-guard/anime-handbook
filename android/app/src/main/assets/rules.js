@@ -238,7 +238,7 @@
   function renderResults(results) {
     const host = $("mpRuleResults");
     if (!host) return;
-    host.innerHTML = results.map((item, i) => `<div class="mp-rule-item">
+    host.innerHTML = `<p class="mp-hint">搜索结果</p>` + results.map((item, i) => `<div class="mp-rule-item">
       <div><b>${escapeText(item.name)}</b><small>${escapeText(item.href.replace(/^https?:\/\//, "").slice(0, 60))}</small></div>
       <button type="button" data-result="${i}">看分集</button>
     </div>`).join("");
@@ -256,7 +256,7 @@
       const list = await chapters(rule, result.href);
       setStatus("mpRuleStatus", `${result.name} · ${list.length} 集`);
       const host = $("mpRuleEpisodes");
-      host.innerHTML = list.map((item, i) => `<div class="mp-rule-item">
+      host.innerHTML = `<p class="mp-hint">分集</p>` + list.map((item, i) => `<div class="mp-rule-item">
         <div><b>${escapeText(item.name)}</b><small>第 ${item.road + 1} 线路</small></div>
         <button type="button" data-play="${i}">播放</button>
       </div>`).join("");
