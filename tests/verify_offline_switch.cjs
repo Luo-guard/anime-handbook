@@ -77,8 +77,27 @@ window.api=async(url)=>{
     await open(2, '凡人修仙传 第五季');
     assert.equal(await page.locator('#offlineQuery').inputValue(), '凡人修仙传 剧场版', 'custom query survives reopening the same anime');
 
+    // 4) 详情页刷新下载标记会先把 offlineView.animeId 指到新番，不能因此误判「没换番」
+    await open(3, '猫猫的呢喃');
+    assert.equal(await page.locator('#offlineQuery').inputValue(), '猫猫的呢喃');
+    await page.evaluate(async ({ id, name }) => {
+      state.progressAnime = { id, display_name: name };
+      await localFileForEpisode('01');   // 详情页给单集打「已下载」标记时会走这里
+    }, { id: 4, name: '宫河家的空腹' });
+    assert.equal(await page.evaluate(() => offlineView.animeId), 4, 'download marks point offlineView at the new anime');
+    assert.equal(await page.evaluate(() => offlineView.searchAnimeName), '猫猫的呢喃', 'search target is untouched by cache warm-up');
+    await open(4, '宫河家的空腹');
+    assert.equal(await page.locator('#offlineQuery').inputValue(), '宫河家的空腹', 'query still follows the anime after cache warm-up');
+    assert.equal(await page.locator('#offlineTarget').textContent(), '宫河家的空腹');
+    assert.deepEqual(await searchQueries(), ['学生会也有洞！', '凡人修仙传 第五季', '猫猫的呢喃', '宫河家的空腹'], 'search runs for the new anime');
+    assert.match(
+      await page.evaluate(() => window.requests.filter((url) => url.includes('/api/offline/search')).at(-1)),
+      /anime_id=4/,
+      'search request is scoped to the anime in the box, not the cache-warmed one',
+    );
+
     assert.deepEqual(errors, [], 'no page errors');
-    console.log('Offline switch: query, results and requests follow the anime; custom query preserved within the same anime.');
+    console.log('Offline switch: query, results and requests follow the anime; custom query preserved; cache warm-up cannot freeze the previous anime.');
   } finally {
     await browser.close();
   }

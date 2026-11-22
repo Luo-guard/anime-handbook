@@ -3,6 +3,10 @@
 const offlineView = {
   animeId: 0,
   animeName: "",
+  // 「找资源」当前搜索的是哪一部番。animeId/animeName 会被详情页刷新下载标记、
+  // 本地文件缓存等路径改写，不能用来判断搜索框该不该换番名。
+  searchAnimeId: 0,
+  searchAnimeName: "",
   items: [],
   group: "",
   local: { files: [], jobs: [] },
@@ -24,6 +28,12 @@ const offlineView = {
   libraryMode: true,
   // 详情页「我的库」按钮置位：本地文件标签强制进总览（否则默认进当前番）。
 };
+
+// 搜索面板里的搜索、下载、订阅都该关联「搜索框对应的那部番」，
+// 而不是可能被详情页缓存刷新改写的 offlineView.animeId。
+function offlineSearchTargetId() {
+  return Number(offlineView.searchAnimeId) || Number(offlineView.animeId) || 0;
+}
 
 function offlineStatus(target, text, isError = false) {
   const node = $(target);
@@ -70,7 +80,13 @@ function openOffline() {
   const name = anime.display_name || anime.name_cn || anime.name || "";
   // 换了一部番就要把上一部的关键词、结果、字幕组筛选和本地文件缓存全部换掉。
   // 只在「搜索框为空」时填名字会留着旧番的词，用户得手动清空重搜。
-  const switched = offlineView.animeId !== animeId || offlineView.animeName !== name;
+  // 注意：判断依据是「上次搜索的是哪部番」，不是 animeId —— 详情页刷新下载标记时
+  // 会先把 animeId 指到新番，用它会误判成没换番，搜索框就停在上一部。
+  const switched = offlineView.searchAnimeId !== animeId || offlineView.searchAnimeName !== name;
+  if (switched) {
+    offlineView.searchAnimeId = animeId;
+    offlineView.searchAnimeName = name;
+  }
   offlineView.animeId = animeId;
   offlineView.animeName = name;
   $("#offlineHeading").textContent = "媒体库";
@@ -79,7 +95,7 @@ function openOffline() {
   // 同一个番再次打开也要补填：搜索框可能被清空过，再点「找资源」
   // 看到的却是「先输入关键词」，会以为是没带上番名。
   if (switched || !$("#offlineQuery").value.trim()) {
-    $("#offlineQuery").value = name;
+    if (name) $("#offlineQuery").value = name;
     offlineView.items = [];
     offlineView.group = "";
     offlineView.local = { files: [], jobs: [] };
@@ -126,7 +142,7 @@ async function runOfflineSearch() {
     return;
   }
   const button = $("#offlineSearchButton");
-  const animeId = Number(offlineView.animeId);
+  const animeId = offlineSearchTargetId();
   const token = (offlineView.searchToken += 1);
   button.disabled = true;
   offlineStatus("#offlineStatus", "正在搜索蜜柑…");
@@ -135,7 +151,7 @@ async function runOfflineSearch() {
       `/api/offline/search?q=${encodeURIComponent(query)}&anime_id=${animeId}&limit=60`,
     );
     // 搜完之前换了番或又搜了一次：旧结果不能覆盖当前的列表。
-    if (token !== offlineView.searchToken || animeId !== Number(offlineView.animeId)) return;
+    if (token !== offlineView.searchToken || animeId !== offlineSearchTargetId()) return;
     offlineView.items = data.items || [];
     offlineView.group = "";
     renderOfflineGroups();
@@ -146,7 +162,7 @@ async function runOfflineSearch() {
       `在 ${host} 找到 ${offlineView.items.length} 条${data.truncated ? "（蜜柑单次最多 100 条）" : ""}`,
     );
   } catch (error) {
-    if (token !== offlineView.searchToken || animeId !== Number(offlineView.animeId)) return;
+    if (token !== offlineView.searchToken || animeId !== offlineSearchTargetId()) return;
     offlineView.items = [];
     renderOfflineList();
     offlineStatus("#offlineStatus", error.message || "搜索失败", true);
@@ -235,7 +251,7 @@ async function startOfflineDownload(index) {
       method: "POST",
       timeoutMs: 60000,
       body: JSON.stringify({
-        anime_id: offlineView.animeId,
+        anime_id: offlineSearchTargetId(),
         torrent_url: item.torrent_url,
         title: item.title,
         group_name: item.group || "",
@@ -2000,7 +2016,7 @@ async function subscribeFromResult(index) {
     const data = await api("/api/offline/subscribe", {
       method: "POST",
       body: JSON.stringify({
-        anime_id: offlineView.animeId,
+        anime_id: offlineSearchTargetId(),
         keyword,
         group_name: item.group || "",
         enabled: true,
