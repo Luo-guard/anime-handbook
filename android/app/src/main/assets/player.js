@@ -704,7 +704,9 @@
   let downloadTimer = 0;
   function downloadCurrentEpisode() {
     if (!host?.downloadStart) { notice("当前安装包不支持下载，请更新"); return; }
-    if (!source || !/^https?:/i.test(source.url) || !/^https:/i.test(source.url)) { notice("先播放一集在线片源再下载"); return; }
+    // 只允许 https（真机）与回环 http（预览/本地媒体服务）
+    const isLoopback = /^https?:\/\/(127\.0\.0\.1|localhost)(?::\d+)?\//i.test(source?.url || "");
+    if (!source || !(/^https:/i.test(source.url) || isLoopback)) { notice("先播放一集在线片源再下载"); return; }
     if (!anime && !offlineTitle) { notice("先播放一集在线片源再下载"); return; }
     const ep = episode();
     const title = anime ? name(anime) : ($("mpTitle").textContent.trim() || offlineTitle || "在线视频");

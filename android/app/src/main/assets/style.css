@@ -685,6 +685,9 @@ body.page-open { overflow: hidden; }
   min-width: 188px; padding: 4px 0; border-radius: 10px;
   background: #232228f2; box-shadow: 0 8px 28px #000a;
   animation: mp-menu-in .14s ease;
+  /* 菜单项变多后不能顶出屏幕：限制高度并可滚动 */
+  max-height: calc(100dvh - 96px - env(safe-area-inset-bottom) - env(safe-area-inset-top));
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 @keyframes mp-menu-in { from { opacity: 0; transform: translateY(6px); } }
 #mobilePlayer .mp-menu button {
