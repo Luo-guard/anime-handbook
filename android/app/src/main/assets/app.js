@@ -56,7 +56,7 @@ function home(){
  for(const item of animes()){const type=Number(item.collection_type);if(item.active!==0&&type)counts[type]=(counts[type]||0)+1}
  app.innerHTML=`
  <div class="quick-row">
-  <button class="quick" onclick="playLocal()"><span class="quick-icon">${ICON.play}</span><span class="quick-text">本机视频<small>播放本地文件</small></span></button>
+  <button class="quick" onclick="openOfflinePage()"><span class="quick-icon">${ICON.play}</span><span class="quick-text">本机视频<small>手账离线媒体库</small></span></button>
   <button class="quick" onclick="openRulesPage()"><span class="quick-icon">${ICON.rule}</span><span class="quick-text">规则找片源<small>按番名搜站点</small></span></button>
  </div>
  <div class="section-title"><h2>${label}</h2><span>${list.length} 部</span></div>
@@ -127,7 +127,7 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.23'}catch(_){return '1.0.23'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.24'}catch(_){return '1.0.24'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
@@ -138,7 +138,69 @@ function applyTheme(mode){const value=['light','dark'].includes(mode)?mode:'auto
  document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.dataset.themeMode=value;}
 function toast(text){let node=document.querySelector('#appToast');if(!node){node=document.createElement('p');node.id='appToast';node.setAttribute('role','status');document.body.append(node)}
  node.textContent=text;node.classList.add('is-visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('is-visible'),2000)}
-function playLocal(){if(window.HandbookPlayer?.showLocal)window.HandbookPlayer.showLocal();else window.HandbookPlayer?.show()}
+function openOfflinePage(){
+ const node=document.querySelector('#offlinePage');if(!node)return;
+ node.hidden=false;document.body.classList.add('page-open');
+ syncNav();
+ if(window.AndroidPlayer?.scanMedia)window.AndroidPlayer.scanMedia();
+ else renderOfflineLibrary({folders:[],ignored:0});   // 预览环境没有原生桥时直接渲染
+}
+function closeOfflinePage(){
+ const node=document.querySelector('#offlinePage');
+ if(!node||node.hidden)return false;
+ node.hidden=true;document.body.classList.remove('page-open');syncNav();
+ return true;
+}
+function mediaRootPicked(path){
+ if(path)toast('目录已选择，开始扫描');
+ if(window.AndroidPlayer?.scanMedia)window.AndroidPlayer.scanMedia();
+}
+// 原生扫描结果：只含授权目录里手账归档的番剧文件夹；番外文件已在原生侧过滤进 ignored。
+function renderOfflineLibrary(data){
+ data=data&&typeof data==='object'?data:{};
+ const list=document.querySelector('#mpOfflineList'),hint=document.querySelector('#mpOfflineHint'),summary=document.querySelector('#mpOfflineSummary');
+ if(!list)return;
+ const pickHtml=`<button class="offline-pick" onclick="window.AndroidPlayer?window.AndroidPlayer.pickMediaRoot():toast('预览里没有原生目录选择')">选择手账视频目录</button>`;
+ if(data.error==='notSet'){hint.textContent='先指定手账视频目录：把电脑端「media」里按「番名 [bgm-编号]」归档的文件夹拷到手机，再选择那个文件夹。';hint.classList.add('is-error');list.innerHTML=pickHtml;summary.textContent='尚未设置目录';return}
+ if(data.error==='noAccess'){hint.textContent='目录访问权限已失效（重装应用或目录被移动），请重新选择。';hint.classList.add('is-error');list.innerHTML=pickHtml;summary.textContent='权限失效';return}
+ if(data.error){hint.textContent='扫描失败：'+(data.message||'目录读不出来，换个位置再试。');hint.classList.add('is-error');list.innerHTML=pickHtml;summary.textContent='扫描失败';return}
+ hint.classList.remove('is-error');
+ hint.textContent='只读取手账下载流程整理好的视频（「番名 [bgm-编号]」文件夹），其他视频会被过滤。';
+ const folders=Array.isArray(data.folders)?data.folders:[];
+ if(!folders.length){list.innerHTML=`<div class="empty">这里还没有手账离线视频。<br>把电脑端「media」里已整理的番剧文件夹拷到手机，${pickHtml}</div>`;summary.textContent='没有离线视频';return}
+ let total=0;folders.forEach(f=>total+=(f.files||[]).length);
+ summary.textContent=`${folders.length} 部番剧 · ${total} 集`+(data.ignored?` · 忽略 ${data.ignored} 个无关项`:'');
+ const animeTable=animes();
+ const cards=folders.map(folder=>{
+  const tagId=Number(folder.animeId)||0;
+  const animeHit=tagId?animeTable.find(a=>Number(a.id)===tagId):null;
+  const hit=animeHit||animeTable.find(a=>name(a)===folder.clean||(a.name||'')===folder.clean);
+  const title=hit?name(hit):(folder.clean||folder.name);
+  const eps=(folder.files||[]).slice().sort((x,y)=>(x.episode||0)-(y.episode||0)||x.name.localeCompare(y.name));
+  const items=eps.map((ep,i)=>`<button data-offline-ep="${esc(folder.name)}§${i}">${esc(ep.episode?`第 ${ep.episode} 集`:ep.name)}</button>`).join('');
+  const episodes=eps.map(ep=>({label:ep.episode?`第 ${ep.episode} 集`:ep.name,url:ep.url||''}));
+  offlineEpisodes[folder.name]=episodes;
+  return `<div class="card offline-anime">
+   <div class="offline-head"><b>${esc(title)}</b><small>${hit?'':'未匹配到收藏 · '}${eps.length} 集</small></div>
+   <div class="rule-episodes">${items}</div>
+  </div>`;
+ }).join('');
+ list.innerHTML=cards;
+ list.querySelectorAll('[data-offline-ep]').forEach(button=>button.onclick=()=>{
+  const [folder,index]=button.dataset.offlineEp.split('§');
+  const eps=offlineEpisodes[folder]||[];
+  const ep=eps[Number(index)];
+  if(!ep)return;
+  const folderData=folders.find(f=>f.name===folder);
+  const tagId=Number(folderData?.animeId)||0;
+  const anime=tagId?animeTable.find(a=>Number(a.id)===tagId):null;
+  const hit=anime||animeTable.find(a=>name(a)===(folderData?.clean||''));
+  const title=hit?name(hit):(folderData?.clean||folder);
+  if(window.HandbookPlayer?.showOffline)window.HandbookPlayer.showOffline(title,eps);
+  closeOfflinePage();
+ });
+}
+const offlineEpisodes={};
 function openRulesPage(){if(window.HandbookRules?.isOpen())return;window.HandbookRules?.open('app');syncNav('rules')}
 function playAnime(id){
  // Kazumi「开始观看」：详情页悬浮键只负责规则播放（聚合搜索所有规则）；
@@ -253,6 +315,7 @@ function backHome(){persistUi();selected=null;page='home';render();syncNav();res
 function handleBack(){
  const conflict = document.querySelector('#syncConflict');
  if (conflict?.open) { conflict.close(); return true; }
+ if(window.HandbookMobile.closeOfflinePage&&window.HandbookMobile.closeOfflinePage())return true;
  if(window.HandbookRules?.back())return true;
  if(window.HandbookPlayer?.back())return true;
  if(selected!==null){backHome();return true}if(composerOpen){showPage('records');return true}if(page!=='home'){showPage('home');return true}return false;
@@ -276,6 +339,8 @@ window.HandbookMobile={completeSync(raw,silent=false){const r=JSON.parse(raw);if
  if(!editing){const y=window.scrollY;if(selected!==null)updateEpisodeButtons();else render();window.scrollTo(0,y)}
  }if(!silent)alert(r.pendingLocal?'同步已完成；期间的新修改已保留在手机，等待下次同步。':r.message||'同步完成')}};
 document.querySelectorAll('nav button[data-page]').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelector('#sync').onclick=()=>requestSync();
+document.querySelector('#mpOfflineBack')?.addEventListener('click',closeOfflinePage);
+document.querySelector('#mpOfflinePick')?.addEventListener('click',()=>{window.AndroidPlayer?window.AndroidPlayer.pickMediaRoot():toast('预览里没有原生目录选择')});
 document.querySelector('#syncConflict form')?.addEventListener('submit', event => {
  event.preventDefault();
  const resolution = event.submitter?.value;
@@ -286,6 +351,7 @@ app.addEventListener('input',persistUi);app.addEventListener('change',persistUi)
 let scrollTimer;window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);scrollTimer=setTimeout(persistUi,100)},{passive:true});
 window.addEventListener('pagehide',persistUi);
 window.HandbookMobile.handleBack=handleBack;window.HandbookMobile.persistUi=persistUi;window.HandbookMobile.syncNav=syncNav;
+window.HandbookMobile.mediaRootPicked=mediaRootPicked;window.HandbookMobile.renderOfflineLibrary=renderOfflineLibrary;window.HandbookMobile.closeOfflinePage=closeOfflinePage;
 applyTheme(readLocal(THEME_KEY,'auto'));
 const themeMedia=window.matchMedia?.('(prefers-color-scheme: dark)');themeMedia?.addEventListener?.('change',()=>{if(readLocal(THEME_KEY,'auto')==='auto')applyTheme('auto')});
 if(['home','records','settings'].includes(ui.page))page=ui.page;

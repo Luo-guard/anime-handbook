@@ -36,6 +36,18 @@
     <button type="submit" value="cancel" autofocus>暂不同步</button>
   </form>
 </dialog>
+<section class="page" id="offlinePage" hidden aria-label="本机视频">
+  <div class="page-head">
+    <button class="page-back" id="mpOfflineBack" type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+    <div class="page-title"><h1>本机视频</h1><small id="mpOfflineSummary">手账离线媒体库</small></div>
+    <button class="page-action" id="mpOfflinePick" type="button" aria-label="选择手账视频目录">选目录</button>
+  </div>
+  <div class="page-body">
+    <p class="hint" id="mpOfflineHint">只读取手账下载流程整理好的视频：电脑端「media」里按「番名 [bgm-编号]」归档的文件夹拷到手机后，在这里指定目录即可离线播放。</p>
+    <div id="mpOfflineList" class="offline-list"></div>
+  </div>
+</section>
+
 <section class="page" id="rulesPage" hidden aria-label="规则与片源">
   <div class="page-head">
     <button class="page-back" id="mpRuleBack" type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>

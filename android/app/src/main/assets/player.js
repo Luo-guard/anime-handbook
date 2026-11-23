@@ -35,8 +35,9 @@
   function link(value) {
     try {
       const url = new URL(value);
-      // 预览页用 localhost 的示例视频；真机只认 HTTPS。
-      const secure = url.protocol === "https:" || (window.__previewAllowHttp === true && url.hostname === "localhost");
+      // 预览页用 localhost 的示例视频；真机除 HTTPS 外还允许回环（本地媒体服务）。
+      const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+      const secure = url.protocol === "https:" || (window.__previewAllowHttp === true && loopback) || loopback;
       return secure && !url.username && !url.password ? url.href : "";
     } catch { return ""; }
   }
@@ -263,7 +264,10 @@
   }
 
   // ---------- 线路 / 选集 ----------
+  let offlineLines = null;
+  let offlineTitle = "";
   function lineItems() {
+    if (offlineLines) return offlineLines.map(entry => ({ url: entry.url }));
     const direct = (sources[linksKey()] || []).map(url => ({ url, group: linksKey(), saved: url }));
     const rules = (sources[linksKey(true)] || []).map(value => {
       const ep = episode();
@@ -333,11 +337,25 @@
   }
 
   // ---------- 打开 / 关闭 ----------
-  // 主界面「本机视频」直达：打开播放器并立刻弹文件选择，不用先进片源面板再点一次。
-  function showLocal() {
-    show(null);
-    closeAll();
-    $("mpFiles").click();
+  // 离线播放列表（手账整理目录扫描出来的番剧）：一次给全部分集，支持连播。
+  function showOffline(title, list) {
+    if (!Array.isArray(list) || !list.length) { notice("这个文件夹里没有识别出可播放的视频"); return false; }
+    const mapped = list.map(entry => ({ url: link(entry.url) })).filter(entry => entry.url);
+    if (!mapped.length) { notice("视频地址不可用，请重新扫描离线目录"); return false; }
+    offlineTitle = title;
+    offlineLines = mapped;
+    const id = `offline:${title}`;
+    show({
+      id,
+      name_cn: title,
+      collection_type: 1,
+      episodes: JSON.stringify(list.map((entry, i) => ({
+        key: String(i + 1).padStart(2, "0"),
+        display_label: entry.label || String(i + 1),
+        type: 0,
+      }))),
+    }, "01");
+    return true;
   }
 
   function show(item, preferred) {
@@ -357,13 +375,15 @@
     applyFit();
     selectEpisode(requested >= 0 ? requested : Math.max(0, unwatched));
     closeAll();
-    if (!source) setSheet("mpSources");
+    if (!source && !offlineLines) setSheet("mpSources");
     scheduleHide();
   }
   function close() {
     remember();
     stopVideo();
     dmClear();
+    offlineLines = null;
+    offlineTitle = "";
     closeAll();
     immersive(false);
     for (const items of local.values()) for (const item of items) URL.revokeObjectURL(item.url);
@@ -732,7 +752,17 @@
 
   window.HandbookPlayer = {
     show,
-    showLocal,
+    showOffline,
+    scanResult(raw) {
+      const callback = window.HandbookMobile?.renderOfflineLibrary;
+      if (!callback) return;
+      let data = null;
+      try { data = JSON.parse(raw); } catch { data = { error: "scanFailed", message: "扫描结果无法解析" }; }
+      callback(data);
+    },
+    mediaRootPicked(path) {
+      window.HandbookMobile?.mediaRootPicked?.(path);
+    },
     playStandalone(url, title, label) {
       const value = link(url);
       if (!value) { notice("这条规则没有给出可播放的 HTTPS 地址"); return false; }

@@ -470,6 +470,23 @@ body.page-open { overflow: hidden; }
 #rulesPage [hidden] { display: none !important; }
 
 /* ---------------- 弹窗与提示 ---------------- */
+/* 离线媒体库 */
+.page-action {
+  flex: 0 0 auto; margin-left: auto; height: 34px; padding: 0 14px;
+  border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-size: 12.5px; font-weight: 700;
+}
+.offline-list { display: grid; gap: 12px; }
+.offline-anime { padding: 14px; }
+.offline-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.offline-head b { font-size: 14.5px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.offline-head small { flex: 0 0 auto; font-size: 11.5px; color: var(--muted); }
+.offline-pick {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 42px; padding: 0 18px; margin-top: 4px; border-radius: 13px;
+  background: var(--accent); color: #fff; font-size: 13.5px; font-weight: 700;
+}
+
 #syncConflict, #rulePasteDialog {
   width: min(390px, calc(100% - 32px)); max-height: calc(100dvh - 40px);
   border: 0; border-radius: 22px; padding: 20px;

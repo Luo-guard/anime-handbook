@@ -103,6 +103,23 @@ MOCK = """
         : { comments: Array.from({ length: 40 }, (_, i) => ({ p: "1,1,16777215", m: "预览弹幕 " + (i + 1) })) };
       setTimeout(() => window.HandbookPlayer?.danmakuResult(id, JSON.stringify(body), null), 150);
     },
+    scanMedia() {
+      const origin = location.origin + "/_build/sample.mp4";
+      const ep = (n) => ({ name: `葬送的芙莉莲 - 0${n}.mp4`, episode: n, size: 104857600 * n, url: `${origin}?ep=${n}` });
+      const data = {
+        name: "AnimeHandbook",
+        folders: [
+          { name: "葬送的芙莉莲 [bgm-9001]", animeId: 9001, clean: "葬送的芙莉莲", files: [ep(1), ep(2), ep(3)] },
+          { name: "孤独摇滚！ [bgm-9003]", animeId: 9003, clean: "孤独摇滚！", files: [ep(1), ep(2)] },
+        ],
+        ignored: 2,
+      };
+      setTimeout(() => window.HandbookPlayer?.scanResult(JSON.stringify(data)), 250);
+    },
+    pickMediaRoot() {
+      toast("预览里没有原生目录选择，扫描数据是演示用的");
+      window.HandbookPlayer?.mediaRootPicked("AnimeHandbook");
+    },
     fetchText(id, url) {
       const text = respond(url);
       setTimeout(() => window.HandbookRules?.fetchResult(id, text, text ? null : "预览只支持内置的演示站点"), 80);

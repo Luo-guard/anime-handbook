@@ -1,13 +1,19 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { chromium } = require("C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright");
 
 async function main() {
-  const movie = execFileSync("ffmpeg", [
-    "-v","error","-f","lavfi","-i","testsrc2=s=320x180:r=12:d=60",
-    "-c:v","libx264","-pix_fmt","yuv420p","-movflags","frag_keyframe+empty_moov","-f","mp4","pipe:1",
-  ], {maxBuffer: 32 * 1024 * 1024});
+  // 不用 fragmented mp4（duration 未知会让 seek 失效）；普通 mp4 无法走管道，写临时文件
+  const moviePath = path.join(os.tmpdir(), `handbook-test-${Date.now()}.mp4`);
+  execFileSync("ffmpeg", [
+    "-y","-v","error","-f","lavfi","-i","testsrc2=s=320x180:r=12:d=60",
+    "-c:v","libx264","-pix_fmt","yuv420p","-movflags","+faststart","-f","mp4",moviePath,
+  ]);
+  const movie = fs.readFileSync(moviePath);
+  fs.rmSync(moviePath, {force:true});
   const segment = execFileSync("ffmpeg", [
     "-v","error","-f","lavfi","-i","testsrc2=s=320x180:r=12:d=5",
     "-c:v","libx264","-pix_fmt","yuv420p","-f","mpegts","pipe:1",
@@ -50,6 +56,18 @@ async function main() {
           const key = Object.keys(reply).find(item => url.includes(item));
           setTimeout(() => window.HandbookRules?.fetchResult(id, key ? reply[key] : null, key ? null : "没有匹配的测试响应"), 10);
         },
+        scanMedia() {
+          const files = [1,2].map(n => ({
+            name:`测试番剧 - 0${n}.mp4`, episode:n, size:1048576*n,
+            url:`https://video.example.test/off/0${n}.mp4`,
+          }));
+          setTimeout(() => window.HandbookPlayer.scanResult(JSON.stringify({
+            name:"AnimeHandbook",
+            folders:[{name:"测试番剧 [bgm-42]", animeId:42, clean:"测试番剧", files}],
+            ignored:1,
+          })), 20);
+        },
+        pickMediaRoot() { window.HandbookPlayer.mediaRootPicked("AnimeHandbook"); },
         requestDanmaku(id, raw) {
           const {path} = JSON.parse(raw);
           const payload = path.startsWith("/api/v2/search/")
@@ -67,17 +85,33 @@ async function main() {
     const headers = {"Access-Control-Allow-Origin":"*"};
     await page.route("https://video.example.test/**", route => {
       const target = new URL(route.request().url());
+      if (target.pathname.startsWith("/off/") && target.pathname.endsWith(".mp4")) {
+        // 真机的本地媒体服务支持 Range，mock 也必须支持，否则 Chromium 视为不可 seek
+        const range = route.request().headers()["range"];
+        if (range) {
+          const m = /bytes=(\d+)-(\d*)/.exec(range) || [];
+          const start = Number(m[1] || 0), end = m[2] ? Number(m[2]) : movie.length - 1;
+          return route.fulfill({
+            status:206, headers:{...headers,"Content-Range":`bytes ${start}-${end}/${movie.length}`,"Accept-Ranges":"bytes"},
+            contentType:"video/mp4", body:movie.subarray(start, end + 1),
+          });
+        }
+        return route.fulfill({headers:{...headers,"Accept-Ranges":"bytes"},contentType:"video/mp4",body:movie});
+      }
       return target.pathname.endsWith(".m3u8") ? route.fulfill({
         headers,contentType:"application/vnd.apple.mpegurl",
         body:"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:5\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:5,\nclip.ts\n#EXT-X-ENDLIST\n",
       }) : route.fulfill({headers,contentType:"video/mp2t",body:segment});
     });
     await page.goto("https://appassets.androidplatform.net/index.html");
-    // 0) 主界面「本机视频」：一步直达文件选择（Kazumi 本地播放式）
+    // 0) 主界面「本机视频」：离线媒体库（手账整理目录），点番剧选集起播
     await page.getByRole("button",{name:"本机视频"}).click();
-    await page.locator("#mpFiles").setInputFiles(["01.mp4","02.mp4"].map(name => ({name,mimeType:"video/mp4",buffer:movie})));
+    await page.locator("#offlinePage").waitFor();
+    await page.waitForFunction(() => document.querySelectorAll("#mpOfflineList [data-offline-ep]").length === 2);
+    assert.match(await page.locator("#mpOfflineSummary").textContent(),/1 部番剧 · 2 集 · 忽略 1/);
+    await page.locator('[data-offline-ep]').first().click();
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
-    assert.match(await page.locator("#mpTitle").textContent(),/本机播放/);
+    assert.match(await page.locator("#mpTitle").textContent(),/测试番剧/);
     assert.match(await page.locator("#mpEpisodeLabel").textContent(),/第 1 集/);
 
     // 1) 底栏只有 播放/进度/时间/全屏，上下集不再常驻

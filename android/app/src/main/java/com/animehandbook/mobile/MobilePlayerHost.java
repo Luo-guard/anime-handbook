@@ -3,6 +3,9 @@ package com.animehandbook.mobile;
 import android.app.Activity;
 import android.app.PictureInPictureParams;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.provider.DocumentsContract;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.util.Rational;
@@ -15,6 +18,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.CookieManager;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 import java.io.ByteArrayOutputStream;
@@ -32,6 +36,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.ArrayList;
+import java.util.Locale;
 
 final class MobilePlayerHost extends WebChromeClient {
   static final String HOST = "appassets.androidplatform.net";
@@ -43,10 +49,17 @@ final class MobilePlayerHost extends WebChromeClient {
   private byte[] pendingImage;
   private WebView renderView;
   private int renderId;
+  private final SharedPreferences mediaPrefs;
+  private final LocalMediaServer mediaServer;
+  private final ExecutorService mediaTasks = Executors.newSingleThreadExecutor();
+  private static final int PICK_MEDIA_ROOT = 43;
 
   MobilePlayerHost(Activity activity, WebView web) {
     this.activity = activity;
     this.web = web;
+    mediaPrefs = activity.getSharedPreferences("offline-media", Activity.MODE_PRIVATE);
+    mediaServer = new LocalMediaServer(activity);
+    mediaServer.start();
   }
 
   WebResourceResponse asset(WebResourceRequest request) {
@@ -58,7 +71,7 @@ final class MobilePlayerHost extends WebChromeClient {
         path.endsWith(".js") ? "text/javascript" : path.endsWith(".css") ? "text/css" : "text/plain";
       return new WebResourceResponse(mime, "UTF-8", 200, "OK", Collections.singletonMap(
         "Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
-          + "img-src https: blob: data:; connect-src 'self' https:; media-src 'self' https: blob:; "
+          + "img-src https: blob: data:; connect-src 'self' https:; media-src 'self' https: blob: http://127.0.0.1:* http://localhost:*; "
           + "worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"),
         activity.getAssets().open(path.substring(1)));
     } catch (Exception missing) {
@@ -92,6 +105,18 @@ final class MobilePlayerHost extends WebChromeClient {
         if (uri == null || !"content".equals(uri.getScheme())) { selected = null; break; }
       }
       callback.onReceiveValue(selected);
+    } else if (request == PICK_MEDIA_ROOT) {
+      if (code != Activity.RESULT_OK || data == null || data.getData() == null) {
+        script("window.HandbookPlayer?.mediaRootPicked(" + JSONObject.quote("") + ")");
+        return;
+      }
+      Uri tree = data.getData();
+      try {
+        activity.getContentResolver().takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+      } catch (Exception denied) { /* 少数实现不给持久权限，本次会话内仍可扫描 */ }
+      mediaPrefs.edit().putString("root", tree.toString()).apply();
+      mediaServer.clear();
+      script("window.HandbookPlayer?.mediaRootPicked(" + JSONObject.quote(tree.getPath() == null ? "目录已选择" : tree.getPath()) + ")");
     } else if (request == SAVE_IMAGE) {
       byte[] contents = pendingImage;
       pendingImage = null;
@@ -320,6 +345,145 @@ final class MobilePlayerHost extends WebChromeClient {
     else script("window.HandbookRules?.fetchResult(" + id + "," + JSONObject.quote(html) + ",null)");
   }
 
+  // ---------- 离线媒体库：手账整理目录的授权 / 扫描 ----------
+  // 目录结构来自电脑端下载流程的自动归档：media/番名 [bgm-12345]/番名 - 01.mp4。
+  // 扫描只认这个目录（用户通过 SAF 授权），番外散文件和认不出集数的视频会计入 ignored。
+
+  @JavascriptInterface public void pickMediaRoot() {
+    activity.runOnUiThread(() -> {
+      try {
+        activity.startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PICK_MEDIA_ROOT);
+      } catch (Exception unavailable) {
+        script("window.HandbookPlayer?.mediaRootPicked(" + JSONObject.quote("无法打开目录选择器") + ")");
+      }
+    });
+  }
+
+  @JavascriptInterface public void scanMedia() {
+    mediaTasks.execute(this::runScan);
+  }
+
+  @JavascriptInterface public int mediaPort() {
+    return mediaServer.port();
+  }
+
+  private void runScan() {
+    JSONObject result = new JSONObject();
+    try {
+      String raw = mediaPrefs.getString("root", "");
+      if (raw.isEmpty()) { result.put("error", "notSet"); deliverScan(result); return; }
+      Uri tree = Uri.parse(raw);
+      JSONObject payload = new JSONObject();
+      payload.put("name", rootName(raw));
+      JSONArray folders = new JSONArray();
+      int[] ignored = {0};
+      try {
+        for (JSONObject doc : childDocs(tree, DocumentsContract.getTreeDocumentId(tree))) {
+          if (!DocumentIsDirectory(doc)) { ignored[0] += 1; continue; }
+          JSONObject folder = scanFolder(tree, doc, ignored);
+          if (folder != null && folder.getJSONArray("files").length() > 0) folders.put(folder);
+        }
+      } catch (Exception permissionLost) {
+        result.put("error", "noAccess");
+        deliverScan(result);
+        return;
+      }
+      result.put("folders", folders);
+      result.put("ignored", ignored[0]);
+    } catch (Exception failure) {
+      try {
+        result.put("error", "scanFailed");
+        result.put("message", failure.getMessage() == null ? "扫描失败" : failure.getMessage());
+      } catch (Exception ignored) { }
+    }
+    deliverScan(result);
+  }
+
+  private JSONObject scanFolder(Uri tree, JSONObject dir, int[] ignored) throws Exception {
+    String name = dir.getString("name");
+    if (name == null || name.startsWith(".")) { ignored[0] += 1; return null; }
+    JSONArray files = new JSONArray();
+    for (JSONObject doc : childDocs(tree, dir.getString("id"))) {
+      if (DocumentIsDirectory(doc)) {
+        // 一级子目录（特典/合集分卷等）也认一遍，文件仍归属外层番剧
+        for (JSONObject inner : childDocs(tree, doc.getString("id"))) {
+          collectFile(tree, inner, name, files);
+        }
+        continue;
+      }
+      collectFile(tree, doc, name, files);
+    }
+    if (files.length() == 0) { ignored[0] += 1; return null; }
+    java.util.regex.Matcher bgm = java.util.regex.Pattern
+      .compile("(?i)\\[\\s*(?:bgm|bangumi)\\s*[-:#]?\\s*(\\d{3,9})\\s*\\]").matcher(name);
+    JSONObject folder = new JSONObject();
+    folder.put("name", name);
+    folder.put("animeId", bgm.find() ? Long.parseLong(bgm.group(1)) : 0);
+    folder.put("clean", name.replaceAll("(?i)\\s*\\[[^\\]]*\\]", "").trim());
+    folder.put("files", files);
+    return folder;
+  }
+
+  private void collectFile(Uri tree, JSONObject doc, String folder, JSONArray files) throws Exception {
+    String name = doc.optString("name", "");
+    if (name == null || name.startsWith(".")) return;
+    String lower = name.toLowerCase(Locale.ROOT);
+    String mime;
+    if (lower.endsWith(".mp4") || lower.endsWith(".m4v")) mime = "video/mp4";
+    else if (lower.endsWith(".webm")) mime = "video/webm";
+    else if (lower.endsWith(".mkv")) mime = "video/x-matroska";
+    else return;   // 只认视频扩展名，字幕/说明/图片一律过滤
+    Uri uri = DocumentsContract.buildDocumentUriUsingTree(tree, doc.getString("id"));
+    String token = mediaServer.register(uri, mime);
+    if (token == null) return;   // 文件已被移动或删除，按缺失过滤
+    java.util.regex.Matcher episode = java.util.regex.Pattern
+      .compile("(?i)(?:S\\d{1,2}E|第)?\\s*0*(\\d{1,4})\\s*(?:话|話)?\\s*(?:\\.[a-z0-9]{2,4})?\\s*$").matcher(name);
+    JSONObject file = new JSONObject();
+    file.put("name", name);
+    file.put("episode", episode.find() ? Integer.parseInt(episode.group(1)) : 0);
+    file.put("size", doc.optLong("size", 0));
+    file.put("token", token);
+    file.put("url", "http://127.0.0.1:" + mediaServer.port() + "/m/" + token);
+    files.put(file);
+  }
+
+  private ArrayList<JSONObject> childDocs(Uri tree, String parentId) throws Exception {
+    Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId);
+    ArrayList<JSONObject> out = new ArrayList<>();
+    try (Cursor cursor = activity.getContentResolver().query(children, new String[] {
+      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+      DocumentsContract.Document.COLUMN_MIME_TYPE,
+      DocumentsContract.Document.COLUMN_SIZE,
+    }, null, null, null)) {
+      if (cursor == null) throw new Exception("目录不可读");
+      while (cursor.moveToNext()) {
+        JSONObject doc = new JSONObject();
+        doc.put("id", cursor.getString(0));
+        doc.put("name", cursor.getString(1));
+        doc.put("mime", cursor.getString(2));
+        doc.put("size", cursor.getLong(3));
+        out.add(doc);
+      }
+    }
+    return out;
+  }
+
+  private static boolean DocumentIsDirectory(JSONObject doc) {
+    return "vnd.android.document/directory".equals(doc.optString("mime", ""));
+  }
+
+  private static String rootName(String raw) {
+    String path = Uri.parse(raw).getPath();
+    if (path == null) return "手账视频目录";
+    int split = path.lastIndexOf(':');
+    return split >= 0 ? path.substring(split + 1) : path;
+  }
+
+  private void deliverScan(JSONObject result) {
+    script("window.HandbookPlayer?.scanResult(" + JSONObject.quote(result.toString()) + ")");
+  }
+
   Object bridge() { return new PlayerBridge(); }
 
   final class PlayerBridge {
@@ -346,6 +510,10 @@ final class MobilePlayerHost extends WebChromeClient {
         }
       });
     }
+
+    @JavascriptInterface public void pickMediaRoot() { MobilePlayerHost.this.pickMediaRoot(); }
+    @JavascriptInterface public void scanMedia() { MobilePlayerHost.this.scanMedia(); }
+    @JavascriptInterface public int mediaPort() { return MobilePlayerHost.this.mediaPort(); }
 
     @JavascriptInterface public void renderText(int id, String url, String headers) {
       renderPage(id, url, headers);
