@@ -20,7 +20,7 @@ async function main() {
         state: () => snapshot, saveState: () => true, uiState: () => "{}", saveUiState: () => {},
         config: () => JSON.stringify({ url: "https://dav.jianguoyun.com/dav/", username: "demo", account: "", passwordSet: false, autoSync: true }),
         saveConfig: () => true,
-        version: () => "1.0.21",
+        version: () => "1.0.22",
       };
       const rule = { name: "演示站", type: "anime", baseURL: "https://demo.test/",
         searchURL: "https://demo.test/search?wd=@keyword", searchList: "//div[@class='item']",
@@ -54,7 +54,7 @@ async function main() {
     for (const group of ["播放", "弹幕", "外观", "规则", "坚果云同步", "关于"]) {
       assert.ok(text.includes(group), `设置页缺少「${group}」`);
     }
-    assert.ok(text.includes("v1.0.21"), "设置页应显示版本号");
+    assert.ok(text.includes("v1.0.22"), "设置页应显示版本号");
 
     // 2) 播放偏好落到 localStorage，播放器能读到
     await page.locator("#setSpeed").selectOption("1.5");
@@ -118,9 +118,9 @@ async function main() {
     await page.locator("#mpRuleQuery").fill("芙莉莲");
     await page.locator("#mpRuleFindForm button").click();
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleResults [data-result]").length === 1);
-    assert.match(await page.locator("#mpRuleStatus").innerText(), /找到 1 个条目/);
-    await page.locator('#mpRuleResults [data-result="0"]').click();
+    // 搜索完成后第一个条目的分集自动展开，状态停在「…找到 1 集」
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleEpisodes [data-play]").length === 1);
+    assert.match(await page.locator("#mpRuleStatus").innerText(), /找到 1 集/);
     await page.locator('#mpRuleEpisodes [data-play="0"]').click();
     await page.waitForFunction(() => !document.querySelector("#rulesPage").hidden === false);
     await page.waitForFunction(() => document.querySelector("#offlineVideo").currentSrc.includes("rule.m3u8"));

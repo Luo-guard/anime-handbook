@@ -377,6 +377,29 @@
     renderPick();
   }
 
+  // 搜索并把第一个条目的分集直接展开。手动搜索和 playAnime 的自动搜索共用，
+  // 都做到「点一下就能看到集数」，不用再手动点一次「看分集」。
+  async function runSearch(keyword) {
+    const rule = installed.find(entry => entry.name === activeRule)?.rule;
+    if (!rule) { setStatus("mpRuleStatus", "先在「规则仓库」装一条规则", true); return false; }
+    if (!keyword) return false;
+    lastKeyword = keyword;
+    write(QUERY_KEY, keyword);
+    $("mpRuleResults").innerHTML = "";
+    $("mpRuleEpisodes").innerHTML = "";
+    setStatus("mpRuleStatus", `正在用「${activeRule}」搜「${keyword}」…`);
+    try {
+      const results = await search(rule, keyword, text => setStatus("mpRuleStatus", text));
+      renderResults(results);
+      setStatus("mpRuleStatus", `找到 ${results.length} 个条目${results.length ? "，已展开第一个条目的分集" : ""}`);
+      if (results.length) await openChapters(results[0]);
+      return true;
+    } catch (error) {
+      setStatus("mpRuleStatus", error.message || "搜索失败", true);
+      return false;
+    }
+  }
+
   function renderResults(results) {
     const list = $("mpRuleResults");
     if (!list) return;
@@ -446,7 +469,7 @@
   }
 
   // ---------- 面板 ----------
-  function open(from = "app") {
+  function open(from = "app", keyword = "") {
     const node = page();
     if (!node) return;
     node.hidden = false;
@@ -456,8 +479,9 @@
     renderInstalled();
     renderRepo();
     switchTab("find");
+    if (keyword) lastKeyword = keyword;
     const query = $("mpRuleQuery");
-    if (query && !query.value) query.value = lastKeyword;
+    if (query && (keyword || !query.value)) query.value = lastKeyword;
     if (!installed.length && !repo.items.length) loadRepo(false).then(renderRepo).catch(() => {});
   }
   function close() {
@@ -496,25 +520,10 @@
     });
     $("mpRuleFindForm")?.addEventListener("submit", async event => {
       event.preventDefault();
-      const rule = installed.find(entry => entry.name === activeRule)?.rule;
-      const keyword = String($("mpRuleQuery")?.value || "").trim();
-      if (!rule) { setStatus("mpRuleStatus", "先在「规则仓库」装一条规则", true); return; }
-      if (!keyword) return;
-      lastKeyword = keyword;
-      write(QUERY_KEY, keyword);
-      $("mpRuleResults").innerHTML = "";
-      $("mpRuleEpisodes").innerHTML = "";
       const button = event.submitter || $("mpRuleFindForm").querySelector("button");
       button.disabled = true;
-      try {
-        const results = await search(rule, keyword, text => setStatus("mpRuleStatus", text));
-        setStatus("mpRuleStatus", `找到 ${results.length} 个条目`);
-        renderResults(results);
-      } catch (error) {
-        setStatus("mpRuleStatus", error.message || "搜索失败", true);
-      } finally {
-        button.disabled = false;
-      }
+      try { await runSearch(String($("mpRuleQuery")?.value || "").trim()); }
+      finally { button.disabled = false; }
     });
     $("mpRuleRefresh")?.addEventListener("click", async () => {
       const button = $("mpRuleRefresh");
@@ -567,9 +576,16 @@
     toast.timer = window.setTimeout(() => node.classList.remove("is-visible"), 2200);
   }
 
+  // 播放页的一键入口：打开规则页 → 填好番名 → 自动搜索 → 自动展开分集。
+  async function searchNow(keyword) {
+    open("app", String(keyword || "").trim());
+    await runSearch(String(keyword || "").trim());
+  }
+
   window.HandbookRules = {
     open,
     close,
+    searchNow,
     isOpen,
     back() { return close(); },
     count() { return installed.filter(entry => entry.enabled !== false).length; },

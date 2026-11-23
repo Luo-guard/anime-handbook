@@ -85,18 +85,13 @@ function detail(){
  <div class="detail-cover" ${cover(a)}><div class="hero-text"><h2>${esc(name(a))}</h2><div class="hero-meta">${meta.map(text=>`<span>${esc(text)}</span>`).join('')}</div></div></div>
  ${groups.size?[...groups].map(([type,eps])=>`<div class="panel"><div class="episode-heading"><b>${typeLabel(type)}</b><small data-group-count="${type}"></small></div><div class="episode">${eps.map(e=>`<button data-episode-key="${esc(e.key)}" data-episode-type="${type}" class="${done.has(String(e.key))?'done':''}" aria-pressed="${done.has(String(e.key))}">${esc(e.display_label||e.key)}</button>`).join('')}</div></div>`).join(''):'<div class="empty">剧集资料暂缺，暂无可标记的集数。</div>'}`;
  app.querySelectorAll('[data-episode-key]').forEach(button=>button.onclick=()=>toggleEpisode(a.id,button.dataset.episodeKey));
- const actions=document.createElement('div');
- actions.className='detail-actions';
- const playButton=document.createElement('button');
- playButton.className='primary detail-play';
- playButton.textContent='在手账里播放';
- playButton.onclick=()=>window.HandbookPlayer.show(a);
- const sourceButton=document.createElement('button');
- sourceButton.className='secondary detail-play';
- sourceButton.textContent='按规则找源';
- sourceButton.onclick=()=>findSourceFor(a);
- actions.append(playButton,sourceButton);
- app.querySelector('.detail-cover').after(actions);
+ // Kazumi 式播放入口：固定在视口右下角的悬浮键，滚动时不随内容移动
+ const fab=document.createElement('button');
+ fab.className='play-fab';
+ fab.setAttribute('aria-label',`播放 ${name(a)}`);
+ fab.innerHTML=`${ICON.play}<span>播放</span>`;
+ fab.onclick=()=>playAnime(a.id);
+ app.append(fab);
  updateEpisodeButtons();
 }
 function updateEpisodeButtons(){
@@ -132,7 +127,7 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.21'}catch(_){return '1.0.21'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.22'}catch(_){return '1.0.22'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
@@ -145,7 +140,15 @@ function toast(text){let node=document.querySelector('#appToast');if(!node){node
  node.textContent=text;node.classList.add('is-visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('is-visible'),2000)}
 function playLocal(){window.HandbookPlayer?.show()}
 function openRulesPage(){if(window.HandbookRules?.isOpen())return;window.HandbookRules?.open('app');syncNav('rules')}
-function findSourceFor(anime){window.HandbookPlayer?.show(anime);window.HandbookRules?.open('player')}
+function playAnime(id){
+ const a=animes().find(x=>Number(x.id)===Number(id));if(!a)return;
+ // Kazumi 式自动解析：已有线路（手动直链/分集规则/本机文件）直接进播放器；
+ // 没有线路但装了规则 → 打开规则页自动按番名搜索并展开分集，不用手输名字；
+ // 两者都没有 → 进播放器，片源面板会自动弹出来引导添加。
+ if(window.HandbookPlayer?.hasLines?.(a)){window.HandbookPlayer.show(a);return}
+ if((window.HandbookRules?.count?.()||0)>0){window.HandbookRules.searchNow(name(a));return}
+ window.HandbookPlayer.show(a);
+}
 function options(list,current){return list.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(current)?' selected':''}>${esc(label)}</option>`).join('')}
 function settings(){
  const c=JSON.parse(native.config()||'{}');

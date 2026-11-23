@@ -333,6 +333,14 @@
   }
 
   // ---------- 打开 / 关闭 ----------
+  // 这部番有没有已经能用的线路（手动直链 / 分集规则模板）。本机临时选的文件
+  // 只在播放器开着时存在，不算持久线路；详情页的「播放」用它决定直接进播放器还是去搜规则源。
+  function hasLines(item) {
+    if (!item) return false;
+    const prefix = `${item.id}:`;
+    return Object.entries(sources).some(([group, list]) => list.length && group.startsWith(prefix));
+  }
+
   function show(item, preferred) {
     if (!overlay.hidden) close();
     anime = item;
@@ -725,6 +733,7 @@
 
   window.HandbookPlayer = {
     show,
+    hasLines,
     playStandalone(url, title, label) {
       const value = link(url);
       if (!value) { notice("这条规则没有给出可播放的 HTTPS 地址"); return false; }

@@ -21,7 +21,8 @@ async function main() {
     await page.addInitScript(() => {
       const anime = {id:42, name_cn:"测试番剧", collection_type:1,
         episodes:JSON.stringify([{key:"01",display_label:"01",name_cn:"开场"},{key:"02",display_label:"02",name_cn:"续篇"}])};
-      let snapshot = JSON.stringify({tables:{anime:[anime],events:[],settings:[]}});
+      const bare = {id:43, name_cn:"无线路番剧", collection_type:1, episodes:"[]", episode_count:2};
+      let snapshot = JSON.stringify({tables:{anime:[anime,bare],events:[],settings:[]}});
       window.AndroidHandbook = {
         state:() => snapshot, saveState:value => {snapshot=value;return true;},
         uiState:() => "{}", saveUiState:() => {}, config:() => "{}",
@@ -73,7 +74,7 @@ async function main() {
     });
     await page.goto("https://appassets.androidplatform.net/index.html");
     await page.getByRole("button",{name:/测试番剧/}).click();
-    await page.getByRole("button",{name:"在手账里播放"}).click();
+    await page.locator(".play-fab").click();
     await page.locator("#mpFiles").setInputFiles(["01.mp4","02.mp4"].map(name => ({name,mimeType:"video/mp4",buffer:movie})));
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
     assert.match(await page.locator("#mpTitle").textContent(),/测试番剧/);
@@ -184,7 +185,7 @@ async function main() {
     assert.equal(await page.locator("video").getAttribute("src"),null);
 
     // 13) 直链 HLS（从详情页进播放器，片源面板自动弹出）
-    await page.getByRole("button",{name:"在手账里播放"}).click();
+    await page.locator(".play-fab").click();
     await page.locator("#mpUrl").fill("https://video.example.test/01.m3u8");
     await page.getByRole("button",{name:"添加并播放"}).click();
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
@@ -210,8 +211,20 @@ async function main() {
     assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
     await page.screenshot({path:"C:/Users/han/AppData/Local/Temp/hb-shots/mobile-player.png"});
 
+    // 15) 详情页悬浮「播放」：无线路的番自动按番名搜规则源并展开分集（Kazumi 式）
+    await page.evaluate(() => window.HandbookMobile.handleBack());
+    await page.locator(".back").click();
+    await page.getByRole("button",{name:/无线路番剧/}).click();
+    await page.locator(".play-fab").click();
+    await page.locator("#rulesPage").waitFor();
+    await page.waitForFunction(() => document.querySelector("#mpRuleQuery").value === "无线路番剧", null, {timeout:5000});
+    await page.waitForFunction(() => document.querySelectorAll("#mpRuleEpisodes [data-play]").length === 2, null, {timeout:8000});
+    assert.match(await page.locator("#mpRuleStatus").innerText(), /找到 2 集/, "分集应已自动展开");
+    await page.locator('#mpRuleEpisodes [data-play="0"]').click();
+    await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2 && (document.querySelector("#offlineVideo").currentSrc||"").includes("rule.m3u8"));
+
     assert.deepEqual(errors,[]);
-    console.log("Mobile browser: Kazumi-style controls, gestures, menu, drawer, Anime4K, danmaku, rules verified.");
+    console.log("Mobile browser: Kazumi-style controls, gestures, menu, drawer, Anime4K, danmaku, rules, auto-search play verified.");
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode=1; });

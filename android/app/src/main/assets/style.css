@@ -243,11 +243,20 @@ main { padding: 16px 16px 6px; }
   border: 1px solid rgba(255, 255, 255, .22);
   font-size: 11px; font-weight: 600;
 }
-.detail-actions { display: flex; gap: 10px; margin: 14px 0 18px; }
-.detail-actions button { flex: 1; height: 48px; border-radius: 15px; font-size: 14.5px; font-weight: 700; transition: transform .12s ease; }
-.detail-actions button:active { transform: scale(.975); }
-.detail-actions .primary { background: var(--accent); color: #fff; box-shadow: 0 8px 18px rgba(107, 70, 193, .28); }
-.detail-actions .secondary { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+/* 播放悬浮键：固定在视口右下角、底部导航上方，页面滚动时位置不变 */
+.play-fab {
+  position: fixed; right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 82px);
+  z-index: 12;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 52px; padding: 0 22px; border-radius: 999px;
+  background: var(--accent); color: #fff;
+  font-size: 15px; font-weight: 700;
+  box-shadow: 0 10px 26px rgba(107, 70, 193, .42);
+  transition: transform .12s ease, box-shadow .18s ease;
+}
+.play-fab:active { transform: scale(.94); box-shadow: 0 4px 12px rgba(107, 70, 193, .32); }
+.play-fab svg { width: 20px; height: 20px; }
 
 /* 分集 */
 .panel {
@@ -525,7 +534,7 @@ body.page-open { overflow: hidden; }
 [data-theme="dark"] .cover-badge { background: rgba(0, 0, 0, .55); }
 [data-theme="dark"] .anime .cover, [data-theme="dark"] .detail-cover { background-image: linear-gradient(150deg, #3a2c56, #221830); }
 [data-theme="dark"] .primary,
-[data-theme="dark"] .detail-actions .primary,
+[data-theme="dark"] .play-fab,
 [data-theme="dark"] .inline-form button { color: #17131f; }
 [data-theme="dark"] .chip.active { color: #17131f; }
 [data-theme="dark"] .chip.active small { color: rgba(23, 19, 31, .62); }
