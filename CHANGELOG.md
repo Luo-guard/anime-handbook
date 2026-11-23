@@ -9,7 +9,7 @@
 之前 `res` 里只有 `styles.xml`，桌面显示的是系统默认机器人。
 
 - **设计**：紫色渐变底（#8A63D2 → #6B46C1 → #452A7A）+ 白色页面 + 紫色播放三角 + 两条淡紫文字线，表达「手账 + 播放」；与 App 内主色一致。
-- **自适应图标**：`mipmap-anydpi-v26/ic_launcher(_round).xml` + `drawable/ic_launcher_foreground.xml`（矢量，108dp）+ `ic_launcher_background.xml`（渐变），Android 8+ 的方形/圆形/主题色（monochrome）都能正确裁切。
+- **自适应图标**：`mipmap-anydpi-v26/ic_launcher(_round).xml` + `drawable/ic_launcher_foreground.xml`（矢量，108dp）+ `ic_launcher_background.xml`（渐变），Android 8+ 的方形/圆形/主题色（monochrome）都能正确裁切。前景内容收在 66dp 安全圆内（外接半径 32dp），Pixel 的圆形遮罩不会切到页面四角。
 - **兜底 PNG**：mdpi 48 / hdpi 72 / xhdpi 96 / xxhdpi 144 / xxxhdpi 192，方形与圆形各一套，兼容个别不认自适应图标的启动器。
 - 清单补 `android:icon` / `android:roundIcon`；已确认图标打进 APK（`res/mipmap-*`）。
 
