@@ -8,7 +8,6 @@
   const host = window.AndroidPlayer;
   const INSTALLED_KEY = "mobile-player:rules";
   const REPO_KEY = "mobile-player:rule-repo";
-  const ACTIVE_KEY = "mobile-player:active-rule";
   const QUERY_KEY = "mobile-player:rule-query";
   const REPO_INDEX = "https://api.github.com/repos/Predidit/KazumiRules/contents/";
   const REPO_TTL = 12 * 60 * 60 * 1000;
@@ -19,7 +18,6 @@
 
   let installed = read(INSTALLED_KEY, []).filter(entry => entry && entry.rule);
   let repo = read(REPO_KEY, { at: 0, items: [] });
-  let activeRule = read(ACTIVE_KEY, "");
   let lastKeyword = read(QUERY_KEY, "");
   let lastChapters = null;
   let loadingRepo = false;
@@ -47,6 +45,14 @@
   }
   const fetchText = (url, referer = "") => request("fetchText", url, referer, 15000);
   const renderText = (url, referer = "") => request("renderText", url, referer, 32000);
+  // 原生桥同一时间只能跑一个网页渲染（新请求会顶掉旧的）。Kazumi 的聚合搜索是
+  // 所有规则并发；静态抓取可以直接并发，动态渲染在这里排队保证互不干扰。
+  let renderQueue = Promise.resolve();
+  const renderQueued = (url, referer = "") => {
+    const run = renderQueue.then(() => renderText(url, referer));
+    renderQueue = run.then(() => undefined, () => undefined);
+    return run;
+  };
 
   // ---------- XPath ----------
   function xpathAll(node, expression) {
@@ -105,7 +111,7 @@
         throw Error(dynamic ? "这条规则要网页渲染才能用，当前安装包不支持" : "没有解析到结果，换条规则或换个关键词");
       }
       report?.(dynamic ? "这条规则是动态站，正在渲染页面…" : "直接读取没结果，改用网页渲染再试…");
-      results = parseSearch(rule, await renderText(target, rule.baseURL), target);
+      results = parseSearch(rule, await renderQueued(target, rule.baseURL), target);
     }
     if (!results.length) throw Error("站点返回的页面里没有匹配条目，换个关键词或换条规则");
     return results;
@@ -134,7 +140,7 @@
     if (!list.length) {
       if (!host?.renderText) throw Error("没有解析到分集，这条规则可能需要网页渲染");
       report?.("正在渲染分集页面…");
-      list = parseChapters(rule, await renderText(href, rule.baseURL), href);
+      list = parseChapters(rule, await renderQueued(href, rule.baseURL), href);
     }
     if (!list.length) throw Error("这个条目没有可播放的分集");
     return list;
@@ -171,7 +177,7 @@
     }
     if (host?.renderText) {
       report?.("正在渲染播放页…");
-      try { direct = directMedia(await renderText(href, rule.baseURL)); } catch { /* 下面统一报错 */ }
+      try { direct = directMedia(await renderQueued(href, rule.baseURL)); } catch { /* 下面统一报错 */ }
       if (direct) return direct;
     }
     return "";
@@ -191,18 +197,14 @@
 
   function persistInstalled() {
     write(INSTALLED_KEY, installed);
-    if (!installed.some(entry => entry.name === activeRule)) activeRule = installed.find(entry => entry.enabled !== false)?.name || "";
-    write(ACTIVE_KEY, activeRule);
     renderSummary();
     renderInstalled();
-    renderPick();
   }
 
   function saveRule(raw, fallbackName) {
     const rule = normalizeRule(raw, fallbackName);
     installed = installed.filter(entry => entry.name !== rule.name);
     installed.push({ name: rule.name, rule, addedAt: Date.now(), enabled: true });
-    if (!activeRule) activeRule = rule.name;
     persistInstalled();
     return rule.name;
   }
@@ -275,27 +277,6 @@
     node.textContent = installed.length ? `已安装 ${installed.length} 条 · 启用 ${enabled} 条` : "还没有安装规则";
   }
 
-  function renderPick() {
-    const pick = $("mpRulePick");
-    if (!pick) return;
-    const enabled = installed.filter(entry => entry.enabled !== false);
-    if (!enabled.some(entry => entry.name === activeRule)) activeRule = enabled[0]?.name || "";
-    pick.replaceChildren(...(enabled.length
-      ? enabled.map(entry => new Option(entry.name, entry.name))
-      : [new Option("还没有可用规则", "")]));
-    pick.value = activeRule;
-    pick.disabled = !enabled.length;
-    $("mpRuleFindForm")?.querySelectorAll("input, button").forEach(node => { node.disabled = !enabled.length; });
-    const submit = $("mpRuleFindForm")?.querySelector("button");
-    if (submit) submit.disabled = !enabled.length;
-    const hint = $("mpRuleStatus");
-    if (!enabled.length) {
-      setStatus("mpRuleStatus", installed.length ? "规则都被停用了，去「已安装」里启用一条。" : "还没有规则。切到「规则仓库」装一条，或「已安装」里粘贴 JSON。");
-    } else if (/还没有规则|都被停用/.test(hint?.textContent || "")) {
-      setStatus("mpRuleStatus", "");
-    }
-  }
-
   function ruleBadges(entry) {
     const badges = [];
     if (entry.rule.useWebview === true) badges.push("动态站");
@@ -345,7 +326,6 @@
     if (!list) return;
     if (!installed.length) {
       list.innerHTML = `<p class="hint">还没有安装规则。去「规则仓库」挑一条，或粘贴规则 JSON。</p>`;
-      renderPick();
       return;
     }
     list.innerHTML = installed.map(entry => `<div class="rule-item${entry.enabled !== false ? "" : " is-off"}">
@@ -374,53 +354,72 @@
         toast("已删除规则");
       };
     });
-    renderPick();
   }
 
-  // 搜索并把第一个条目的分集直接展开。手动搜索和 playAnime 的自动搜索共用，
-  // 都做到「点一下就能看到集数」，不用再手动点一次「看分集」。
-  async function runSearch(keyword) {
-    const rule = installed.find(entry => entry.name === activeRule)?.rule;
-    if (!rule) { setStatus("mpRuleStatus", "先在「规则仓库」装一条规则", true); return false; }
-    if (!keyword) return false;
-    lastKeyword = keyword;
-    write(QUERY_KEY, keyword);
+  // Kazumi 的 SourceSheet：并发搜所有已启用的规则，每条规则独立显示状态；
+  // 第一个有结果的条目自动展开分集，点集数直接播。手动搜索与悬浮「播放」共用。
+  async function searchAll(keyword) {
     $("mpRuleResults").innerHTML = "";
     $("mpRuleEpisodes").innerHTML = "";
-    setStatus("mpRuleStatus", `正在用「${activeRule}」搜「${keyword}」…`);
-    try {
-      const results = await search(rule, keyword, text => setStatus("mpRuleStatus", text));
-      renderResults(results);
-      setStatus("mpRuleStatus", `找到 ${results.length} 个条目${results.length ? "，已展开第一个条目的分集" : ""}`);
-      if (results.length) await openChapters(results[0]);
-      return true;
-    } catch (error) {
-      setStatus("mpRuleStatus", error.message || "搜索失败", true);
+    if (!keyword) return false;
+    const enabled = installed.filter(entry => entry.enabled !== false);
+    if (!enabled.length) {
+      setStatus("mpRuleStatus", installed.length
+        ? "规则都被停用了，去「已安装」里启用一条。"
+        : "还没有规则。切到「规则仓库」装一条，或「已安装」里粘贴 JSON。", true);
       return false;
     }
+    lastKeyword = keyword;
+    write(QUERY_KEY, keyword);
+    setStatus("mpRuleStatus", `正在用 ${enabled.length} 条规则搜「${keyword}」…`);
+    const outcomes = await Promise.all(enabled.map(async entry => {
+      try { return { entry, results: await search(entry.rule, keyword) }; }
+      catch (error) { return { entry, error }; }
+    }));
+    renderGrouped(outcomes);
+    const found = outcomes.filter(outcome => outcome.results?.length);
+    setStatus("mpRuleStatus", found.length
+      ? `${keyword} · ${found.length}/${enabled.length} 条规则有结果`
+      : `所有规则都没有找到「${keyword}」`);
+    const first = found[0];
+    if (first) await openChapters(first.entry.rule, first.results[0]);
+    return true;
   }
 
-  function renderResults(results) {
+  function renderGrouped(outcomes) {
     const list = $("mpRuleResults");
     if (!list) return;
-    list.innerHTML = `<p class="section-label">搜索结果 · ${results.length} 个</p>` + results.map((item, i) => `<div class="rule-item">
-      <div class="rule-item-text"><b>${escapeText(item.name)}</b><small>${escapeText(item.href.replace(/^https?:\/\//, "").slice(0, 70))}</small></div>
-      <button type="button" data-result="${i}">看分集</button>
-    </div>`).join("");
+    list.innerHTML = outcomes.map(({ entry, results, error }) => {
+      const label = error
+        ? `${escapeText(entry.name)} · 失败：${escapeText(error.message)}`
+        : `${escapeText(entry.name)} · ${results.length ? `找到 ${results.length} 个条目` : "没有找到条目"}`;
+      const items = (results || []).map((item, i) => `<div class="rule-item">
+        <div class="rule-item-text"><b>${escapeText(item.name)}</b><small>${escapeText(item.href.replace(/^https?:\/\//, "").slice(0, 70))}</small></div>
+        <button type="button" data-result="${escapeText(entry.name)}|${i}">看分集</button>
+      </div>`).join("");
+      return `<p class="section-label">${label}</p>${items}`;
+    }).join("");
     list.querySelectorAll("[data-result]").forEach(button => {
-      button.onclick = () => openChapters(results[Number(button.dataset.result)]);
+      button.onclick = () => {
+        const [name, index] = button.dataset.result.split("|");
+        const outcome = outcomes.find(item => item.entry.name === name);
+        if (outcome?.results?.[Number(index)]) openChapters(outcome.entry.rule, outcome.results[Number(index)]);
+      };
     });
   }
 
-  async function openChapters(result) {
-    const rule = installed.find(entry => entry.name === activeRule)?.rule;
+  async function runSearch(keyword) {
+    return searchAll(keyword);
+  }
+
+  async function openChapters(rule, result) {
     if (!rule || !result) return;
     const box = $("mpRuleEpisodes");
     box.innerHTML = "";
     setStatus("mpRuleStatus", `正在读取「${result.name}」…`);
     try {
       const list = await chapters(rule, result.href, text => setStatus("mpRuleStatus", text));
-      lastChapters = { result, list };
+      lastChapters = { rule, result, list };
       setStatus("mpRuleStatus", `${result.name} · 找到 ${list.length} 集`);
       const roads = new Map();
       list.forEach((item, i) => {
@@ -433,7 +432,7 @@
           <div class="rule-episodes">${items.map(({ item, i }) => `<button type="button" data-play="${i}">${escapeText(item.name)}</button>`).join("")}</div>
         </div>`).join("") + `<button type="button" class="text-button" id="mpRuleOpenWeb">在浏览器里打开这个条目</button>`;
       box.querySelectorAll("[data-play]").forEach(button => {
-        button.onclick = () => playEpisode(list[Number(button.dataset.play)], button);
+        button.onclick = () => playEpisode(rule, list[Number(button.dataset.play)], button);
       });
       $("mpRuleOpenWeb").onclick = () => host?.external(result.href);
     } catch (error) {
@@ -441,8 +440,7 @@
     }
   }
 
-  async function playEpisode(item, button) {
-    const rule = installed.find(entry => entry.name === activeRule)?.rule;
+  async function playEpisode(rule, item, button) {
     if (!rule || !item) return;
     const label = button.textContent;
     button.disabled = true;
@@ -475,7 +473,6 @@
     node.hidden = false;
     document.body.classList.add("page-open");
     renderSummary();
-    renderPick();
     renderInstalled();
     renderRepo();
     switchTab("find");
@@ -511,13 +508,6 @@
       button.addEventListener("click", () => switchTab(button.dataset.ruleTab));
     });
     $("mpRuleBack")?.addEventListener("click", close);
-    $("mpRulePick")?.addEventListener("change", () => {
-      activeRule = $("mpRulePick").value;
-      write(ACTIVE_KEY, activeRule);
-      $("mpRuleResults").innerHTML = "";
-      $("mpRuleEpisodes").innerHTML = "";
-      setStatus("mpRuleStatus", "");
-    });
     $("mpRuleFindForm")?.addEventListener("submit", async event => {
       event.preventDefault();
       const button = event.submitter || $("mpRuleFindForm").querySelector("button");
@@ -576,10 +566,18 @@
     toast.timer = window.setTimeout(() => node.classList.remove("is-visible"), 2200);
   }
 
-  // 播放页的一键入口：打开规则页 → 填好番名 → 自动搜索 → 自动展开分集。
+  // 详情页悬浮「播放」的一键入口：填好番名自动搜所有规则；一条规则都没有时
+  // 直接带到「规则仓库」（对应 Kazumi 的「添加规则」动作）。
   async function searchNow(keyword) {
-    open("app", String(keyword || "").trim());
-    await runSearch(String(keyword || "").trim());
+    const query = String(keyword || "").trim();
+    open("app", query);
+    if (!installed.filter(entry => entry.enabled !== false).length) {
+      switchTab("repo");
+      loadRepo(false).then(renderRepo).catch(() => {});
+      toast("还没有规则，先在这里装一条");
+      return;
+    }
+    await searchAll(query);
   }
 
   window.HandbookRules = {

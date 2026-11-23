@@ -127,7 +127,7 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.22'}catch(_){return '1.0.22'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.23'}catch(_){return '1.0.23'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
@@ -138,16 +138,13 @@ function applyTheme(mode){const value=['light','dark'].includes(mode)?mode:'auto
  document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.dataset.themeMode=value;}
 function toast(text){let node=document.querySelector('#appToast');if(!node){node=document.createElement('p');node.id='appToast';node.setAttribute('role','status');document.body.append(node)}
  node.textContent=text;node.classList.add('is-visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('is-visible'),2000)}
-function playLocal(){window.HandbookPlayer?.show()}
+function playLocal(){if(window.HandbookPlayer?.showLocal)window.HandbookPlayer.showLocal();else window.HandbookPlayer?.show()}
 function openRulesPage(){if(window.HandbookRules?.isOpen())return;window.HandbookRules?.open('app');syncNav('rules')}
 function playAnime(id){
+ // Kazumi「开始观看」：详情页悬浮键只负责规则播放（聚合搜索所有规则）；
+ // 本地视频统一走主界面的「本机视频」。
  const a=animes().find(x=>Number(x.id)===Number(id));if(!a)return;
- // Kazumi 式自动解析：已有线路（手动直链/分集规则/本机文件）直接进播放器；
- // 没有线路但装了规则 → 打开规则页自动按番名搜索并展开分集，不用手输名字；
- // 两者都没有 → 进播放器，片源面板会自动弹出来引导添加。
- if(window.HandbookPlayer?.hasLines?.(a)){window.HandbookPlayer.show(a);return}
- if((window.HandbookRules?.count?.()||0)>0){window.HandbookRules.searchNow(name(a));return}
- window.HandbookPlayer.show(a);
+ window.HandbookRules?.searchNow(name(a));
 }
 function options(list,current){return list.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(current)?' selected':''}>${esc(label)}</option>`).join('')}
 function settings(){

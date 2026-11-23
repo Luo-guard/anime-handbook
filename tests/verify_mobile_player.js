@@ -73,12 +73,12 @@ async function main() {
       }) : route.fulfill({headers,contentType:"video/mp2t",body:segment});
     });
     await page.goto("https://appassets.androidplatform.net/index.html");
-    await page.getByRole("button",{name:/测试番剧/}).click();
-    await page.locator(".play-fab").click();
+    // 0) 主界面「本机视频」：一步直达文件选择（Kazumi 本地播放式）
+    await page.getByRole("button",{name:"本机视频"}).click();
     await page.locator("#mpFiles").setInputFiles(["01.mp4","02.mp4"].map(name => ({name,mimeType:"video/mp4",buffer:movie})));
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
-    assert.match(await page.locator("#mpTitle").textContent(),/测试番剧/);
-    assert.match(await page.locator("#mpEpisodeLabel").textContent(),/开场/);
+    assert.match(await page.locator("#mpTitle").textContent(),/本机播放/);
+    assert.match(await page.locator("#mpEpisodeLabel").textContent(),/第 1 集/);
 
     // 1) 底栏只有 播放/进度/时间/全屏，上下集不再常驻
     assert.equal(await page.locator(".mp-bottom .mp-btn").count(), 2, "底栏应只有播放与全屏两个按钮");
@@ -148,14 +148,23 @@ async function main() {
     const shot = Buffer.from(await page.evaluate(() => nativeEvents.find(([type]) => type==="shot")[1]),"base64");
     assert.equal(shot.readUInt32BE(16),640);
 
-    // 9) 选集抽屉（右侧滑出）
+    // 9) 选集抽屉（右侧滑出）：番剧上下文（本机播放没有番剧信息，用 show(anime) 切换）
+    await page.evaluate(() => window.HandbookPlayer.show(animes().find(a => a.id === 42)));
     await page.locator("#mpMore").click();
     await page.locator('#mpMenu [data-menu="episodes"]').click();
     await page.locator("#mpEpisodes").waitFor();
     assert.equal(await page.locator("#mpEpisodeGrid .mp-episode").count(), 2);
     await page.locator('#mpEpisodeGrid .mp-episode[data-episode-index="1"]').click();
-    await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
+    await page.waitForFunction(() => document.querySelector("#mpEpisodeLabel").textContent.includes("续篇"));
     assert.match(await page.locator("#mpEpisodeLabel").textContent(),/续篇/);
+
+    // 9b) 番剧上下文手动加直链并起播（点选集后抽屉已自动收起，先唤回控制层）
+    await page.locator("#mpMore").click();
+    await page.locator('#mpMenu [data-menu="sources"]').click();
+    await page.locator("#mpUrl").fill("https://video.example.test/01.m3u8");
+    await page.getByRole("button",{name:"添加并播放"}).click();
+    await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
+    assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
 
     // 10) 弹幕设置与发送框
     await page.locator("#mpMore").click();
@@ -184,14 +193,6 @@ async function main() {
     assert.equal(await page.locator("#mobilePlayer").isVisible(),false);
     assert.equal(await page.locator("video").getAttribute("src"),null);
 
-    // 13) 直链 HLS（从详情页进播放器，片源面板自动弹出）
-    await page.locator(".play-fab").click();
-    await page.locator("#mpUrl").fill("https://video.example.test/01.m3u8");
-    await page.getByRole("button",{name:"添加并播放"}).click();
-    await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
-    assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
-    await page.evaluate(() => window.HandbookMobile.handleBack());
-
     // 14) 规则：导航「规则」→ 装规则 → 按番名找源 → 解析直链播放
     await page.locator("nav").getByRole("button",{name:"规则",exact:true}).click();
     await page.locator("#rulesPage").waitFor();
@@ -204,20 +205,18 @@ async function main() {
     await page.locator("#mpRuleQuery").fill("测试番");
     await page.locator("#mpRuleFindForm button").click();
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleResults [data-result]").length === 1);
-    await page.locator('#mpRuleResults [data-result="0"]').click();
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleEpisodes [data-play]").length === 2);
     await page.locator('#mpRuleEpisodes [data-play="0"]').click();
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2 && (document.querySelector("#offlineVideo").currentSrc||"").includes("rule.m3u8"));
     assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
     await page.screenshot({path:"C:/Users/han/AppData/Local/Temp/hb-shots/mobile-player.png"});
 
-    // 15) 详情页悬浮「播放」：无线路的番自动按番名搜规则源并展开分集（Kazumi 式）
+    // 15) 详情页悬浮「播放」只管规则播放：即使已有线路也聚合搜规则（Kazumi 式）
     await page.evaluate(() => window.HandbookMobile.handleBack());
-    await page.locator(".back").click();
-    await page.getByRole("button",{name:/无线路番剧/}).click();
+    await page.getByRole("button",{name:/测试番剧/}).click();
     await page.locator(".play-fab").click();
     await page.locator("#rulesPage").waitFor();
-    await page.waitForFunction(() => document.querySelector("#mpRuleQuery").value === "无线路番剧", null, {timeout:5000});
+    await page.waitForFunction(() => document.querySelector("#mpRuleQuery").value === "测试番剧", null, {timeout:5000});
     await page.waitForFunction(() => document.querySelectorAll("#mpRuleEpisodes [data-play]").length === 2, null, {timeout:8000});
     assert.match(await page.locator("#mpRuleStatus").innerText(), /找到 2 集/, "分集应已自动展开");
     await page.locator('#mpRuleEpisodes [data-play="0"]').click();
