@@ -127,7 +127,7 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.24'}catch(_){return '1.0.24'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.25'}catch(_){return '1.0.25'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
