@@ -65,8 +65,14 @@ function home(){
  ${list.length?`<div class="grid">${list.map(animeCard).join('')}</div>`:'<div class="empty">这里还没有番剧。<br>先在电脑端同步收藏，再到手机点右上角同步。</div>'}`;
 }
 function arrayValue(value){try{const result=typeof value==='string'?JSON.parse(value):value;return Array.isArray(result)?result:[]}catch(_){return []}}
+// 桌面端同步来的格式 2 分集是紧凑三元组 [bgm编号或key, 集名, 类型]，这里还原成对象
+function episodeEntry(raw){
+ if(!Array.isArray(raw))return raw;
+ const [key,label,type]=raw;
+ return {key:typeof key==='number'?`bgm:${key}`:String(key),label:String(label||''),display_label:String(label||''),type:Number(type)||0};
+}
 function episodeList(anime){
- const list=arrayValue(anime.episodes);if(list.length)return list;
+ const list=arrayValue(anime.episodes).map(episodeEntry);if(list.length)return list;
  const count=Number(anime.episode_count);if(!Number.isInteger(count)||count<=0)return [];
  return Array.from({length:count},(_,i)=>({key:String(i+1).padStart(2,'0'),display_label:String(i+1),type:0}));
 }
@@ -127,7 +133,7 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.27'}catch(_){return '1.0.27'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.28'}catch(_){return '1.0.28'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function seedDanmakuDefaults(){

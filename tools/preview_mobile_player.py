@@ -47,7 +47,7 @@ MOCK = """
     state: () => snapshot,
     saveState: value => { snapshot = value; return true; },
     uiState: () => "{}", saveUiState: () => {}, config: () => "{}",
-    version: () => "1.0.27-preview",
+    version: () => "1.0.28-preview",
   };
 
   // ---- 预览里的假站点：搜到的条目、分集、播放页都指向本机 sample.mp4 ----

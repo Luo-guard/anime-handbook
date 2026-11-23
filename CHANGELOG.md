@@ -3,6 +3,28 @@
 整理范围：2026-10-01 之后至 2026-10-25。
 依据：本次对话、项目说明、源码归档和部署包记录。没有 Git 提交历史；部分早期改动无法精确定位到某一天，单独列为阶段汇总，不以文件修改时间代替实际完成时间。
 
+## 2026-11-23（同步瘦身 format 2 / 安卓 1.0.28）
+
+### 只同步「用户产生、别处拿不到」的数据
+原来把 9 张表的全部列整体上传，528 部番的库一次 **3773 KB**，其中 64% 是集名/集日期这类能从 bgm API 重新抓的缓存。现在改成 format 2：
+
+- **anime** 只带：`id`（bgm 条目 id）、名称/原名/封面地址、`collection_type`（收藏夹）、`active`、`watched_episodes`（进度）、`personal_score` / `personal_rating_text`、`custom_sort_order`、`collection_added_at`、`kazumi_position`、`updated_at`。**不再带** `summary`（450 KB）、`episode_count`、`air_date`、`bgm_score/rank`、各种 `*_synced_at`（约 100 KB）。
+- **episodes** 压成 `[bgm编号, 集名, 类型]`（类型 0 省略），8787 集从 2281 KB → 184 KB；手机端选集、连播、进度仍可用。
+- **settings** 只同步内容类（记录标签、记录身份别名、bgm 源、追番隐藏、详情链接、主题、每日起点）；快捷键、侧栏顺序、列数等界面偏好留本机。
+- **events / 自建榜单 / 自定义收藏夹** 完整保留——这是唯一丢了找不回的数据。
+- 实测：**3773 KB → 870 KB，省 77%**（每天 10 次 ≈ 255 MB/月，坚果云免费额度 1 GB 用 25%）。
+
+### 配套的恢复逻辑与兼容
+- 导入兼容 format 1/2：缺的列用数据库默认值，紧凑分集还原成 `bgm:<id>` 键的完整对象（保留 `id`，否则键会退化成「类型:集号」，进度对不上）。
+- `enrich_missing` 增加判断：分集存在但**集标题为空**（同步恢复的特征）时自动补一次 bgm 集信息，不依赖「悬停显示集标题」开关。
+- 合并结果直接压成导出同构的行，且 `tables` 键顺序与 `CLOUD_TABLES` 一致——否则 hash 会因 JSON 顺序不同而每次都被判为「有改动」。
+- 设置按 key 合并：本机已有优先，另一端新增的键补进来。
+
+### 安卓 1.0.28
+- `RecordStateMerger` 合并后声明 `format = max(本机, 云端)`，避免把紧凑分集当旧格式解析。
+- 分集读取兼容紧凑三元组（`episodeEntry`），旧数据与桌面新数据都能正常选集/连播。
+- 回归：新增 `tests/test_cloud_state.py`（导出体积与字段、往返无损、旧格式兼容、合并版本与设置合并），`test_app` / `test_webdav_account` / `test_webdav_kazumi` / `test_note_versions` / `test_audit_regressions` 全过。
+
 ## 2026-11-23（安卓 1.0.27：播放器内下载本集）
 
 ### 补齐 Kazumi 式的下载入口

@@ -140,6 +140,9 @@ final class RecordStateMerger {
     }
     JSONArray anime = new JSONArray(); for (JSONObject row : byAnime.values()) anime.put(row);
     tables.put("anime", anime);
+    // 桌面端现在导出 format 2（紧凑分集）；合并结果必须声明为较高版本，
+    // 否则另一端会按旧格式解析紧凑分集。
+    merged.put("format", Math.max(local.optInt("format", 1), remote.optInt("format", 1)));
 
     // A legacy copy may lack a UID. Adopt an existing UID only for an exact,
     // unambiguous full-record match; IDs and overlapping text are not evidence.

@@ -554,7 +554,19 @@ class SyncService:
     ) -> dict[str, Any]:
         existing = existing or {}
         fetch_titles = bool(self.database.get_settings().get("show_episode_titles_on_hover"))
-        initial_titles = fetch_titles and not existing.get("episode_titles_synced")
+        existing_episodes = existing.get("episodes") or []
+        if isinstance(existing_episodes, str):
+            try:
+                existing_episodes = json.loads(existing_episodes)
+            except ValueError:
+                existing_episodes = []
+        # 云同步只带「集号 + 集名 + 类型」，恢复后集标题/放送日是空的；
+        # 这种情况不看开关，直接补一次，否则列表会永远没有集标题。
+        restored_without_titles = bool(existing_episodes) and any(
+            not str(item.get("name") or "") for item in existing_episodes[:5]
+            if isinstance(item, dict)
+        )
+        initial_titles = restored_without_titles or (fetch_titles and not existing.get("episode_titles_synced"))
         subject_error = None
         try:
             metadata = self.fetch_bgm(anime_id)

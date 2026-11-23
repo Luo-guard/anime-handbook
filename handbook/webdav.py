@@ -345,13 +345,28 @@ class WebDAVSyncService:
         remote_tables = remote.get("tables") if isinstance(remote, dict) else None
         if not isinstance(local_tables, dict) or not isinstance(remote_tables, dict):
             raise ValueError("云端手账数据格式不正确")
-        merged = {"format": 1, "exported_at": now_iso(), "tables": {}}
+        # 保留较高版本号：format 2 的紧凑分集必须让导入端按新格式解析
+        merged = {
+            "format": max(int(local.get("format") or 1), int(remote.get("format") or 1)),
+            "exported_at": now_iso(),
+            "tables": {},
+        }
         for table in HandbookDB.CLOUD_TABLES:
             rows = local_tables.get(table, [])
             merged["tables"][table] = [dict(row) for row in rows if isinstance(row, dict)]
 
         aliases = read_aliases(local_tables.get("settings", []), remote_tables.get("settings", []))
         merged["tables"]["settings"] = store_aliases(merged["tables"]["settings"], aliases)
+        # 设置按 key 合并：本机已有的键优先，另一台设备新加的键补进来，
+        # 避免同步方向一换就把对方新增的记录标签/追番隐藏丢掉。
+        seen_settings = {str(row.get("key")) for row in merged["tables"]["settings"]}
+        for row in remote_tables.get("settings", []):
+            if not isinstance(row, dict):
+                continue
+            key = str(row.get("key"))
+            if key and key not in seen_settings:
+                merged["tables"]["settings"].append(dict(row))
+                seen_settings.add(key)
         local_anime = {str(row.get("id")): dict(row) for row in merged["tables"]["anime"] if row.get("id") is not None}
         for raw in remote_tables.get("anime", []):
             if not isinstance(raw, dict) or raw.get("id") is None:
@@ -359,13 +374,17 @@ class WebDAVSyncService:
             key, remote_row = str(raw["id"]), dict(raw)
             local_row = local_anime.get(key)
             if local_row is None:
-                local_anime[key] = cls._with_entry_stamp(remote_row)
+                # 合并结果必须与导出同构：否则多出来的缓存字段会让上传后的
+                # hash 和下一次导出的 hash 不一致，"无变化"快路径永远失效。
+                local_anime[key] = HandbookDB.compact_anime_row(cls._with_entry_stamp(remote_row))
                 continue
             chosen = dict(cls._newer_row(local_row, remote_row, "updated_at"))
             watched = sorted({str(key) for key in json_list(local_row.get("watched_episodes")) + json_list(remote_row.get("watched_episodes"))})
             chosen["watched_episodes"] = json_dumps(watched)
-            local_anime[key] = cls._with_entry_stamp(chosen)
-        merged["tables"]["anime"] = list(local_anime.values())
+            local_anime[key] = HandbookDB.compact_anime_row(cls._with_entry_stamp(chosen))
+        merged["tables"]["anime"] = [
+            HandbookDB.compact_anime_row(dict(row)) for row in local_anime.values()
+        ]
 
         # Split legacy multi-episode records before merging, so episode 1 on
         # one device can never erase episode 2 recorded on the other device.

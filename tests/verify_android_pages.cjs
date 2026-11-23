@@ -20,7 +20,7 @@ async function main() {
         state: () => snapshot, saveState: () => true, uiState: () => "{}", saveUiState: () => {},
         config: () => JSON.stringify({ url: "https://dav.jianguoyun.com/dav/", username: "demo", account: "", passwordSet: false, autoSync: true }),
         saveConfig: () => true,
-        version: () => "1.0.27",
+        version: () => "1.0.28",
       };
       const rule = { name: "演示站", type: "anime", baseURL: "https://demo.test/",
         searchURL: "https://demo.test/search?wd=@keyword", searchList: "//div[@class='item']",
@@ -54,7 +54,7 @@ async function main() {
     for (const group of ["播放", "弹幕", "外观", "规则", "坚果云同步", "关于"]) {
       assert.ok(text.includes(group), `设置页缺少「${group}」`);
     }
-    assert.ok(text.includes("v1.0.27"), "设置页应显示版本号");
+    assert.ok(text.includes("v1.0.28"), "设置页应显示版本号");
 
     // 2) 播放偏好落到 localStorage，播放器能读到
     await page.locator("#setSpeed").selectOption("1.5");

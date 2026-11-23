@@ -203,8 +203,9 @@ async function main() {
     assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
 
     // 9c) 下载本集：菜单触发原生下载，进度与完成回传
-    await page.mouse.click(195, 300);
-    await page.locator("#mpMore").click();
+    // 控制层可能已经自动收起，用脚本开菜单避免点击被视频层拦截
+    await page.evaluate(() => document.querySelector("#mpMore").click());
+    await page.locator("#mpMenu").waitFor({state:"visible"});
     await page.locator('#mpMenu [data-menu="download"]').click();
     const request = await page.evaluate(() => nativeEvents.filter(([type]) => type === "download").at(-1)?.[1]);
     assert.ok(request, "点下载应调用原生下载");

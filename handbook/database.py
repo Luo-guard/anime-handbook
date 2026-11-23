@@ -2186,28 +2186,164 @@ class HandbookDB:
         "ranking_tiers", "ranking_items",
     )
 
+    # 云同步只带「用户产生、别处拿不到」的数据。
+    # 集名/集日期/简介/封面尺寸等都能从 bgm API 重新抓，属于本地缓存；
+    # 但名称、封面地址仍随包同步：榜单、搜索、排序、离线目录匹配都要用，
+    # 恢复后不必等 API 就能正常显示（代价约 66 KB）。
+    CLOUD_FORMAT = 2
+    CLOUD_ANIME_FIELDS = (
+        "id", "name", "name_cn", "image_url", "collection_type", "active",
+        "watched_episodes", "progress_initialized", "custom_sort_order",
+        "collection_added_at", "personal_score", "personal_rating_text",
+        "updated_at", "kazumi_position",
+    )
+    # 只同步影响数据含义的设置；快捷键、侧栏顺序、列数这类界面偏好留在本机。
+    CLOUD_SETTINGS_KEYS = frozenset({
+        "record_themes", "record_identity_aliases", "bgm_sources", "active_bgm_source",
+        "bgm_api_base", "bgm_site_base", "schedule_hidden", "schedule_hidden_titles",
+        "schedule_origins", "detail_links", "schedule_detail_links", "theme_profiles",
+        "active_theme_profile", "day_start_hour",
+    })
+
+    CLOUD_ANIME_DEFAULTS: dict[str, Any] = {
+        "name": "", "name_cn": "", "summary": "", "air_date": "", "image_url": "",
+        "collection_type": 0, "kazumi_updated_at": "", "active": 1,
+        "watched_episodes": "[]", "progress_initialized": 0, "created_at": lambda row: (
+            row.get("collection_added_at") or row.get("updated_at") or now_iso()
+        ), "updated_at": lambda row: row.get("collection_added_at") or now_iso(),
+        "episodes": "[]", "bgm_rating_version": 0, "kazumi_position": 0,
+        "custom_sort_order": 0, "episode_titles_synced": 0, "personal_rating_text": "",
+        "aired_episode_count": 0, "collection_added_at": "",
+    }
+
+    @staticmethod
+    def _compact_episodes(raw: Any) -> list[list[Any]]:
+        """分集列表压成 [bgm编号或key, 集名, 类型] —— 8787 集从 2.3 MB 降到 180 KB。
+
+        只保留播放器/选集要用的三样；集标题、放送日、时长由 bgm 重新抓。
+        类型为 0 时省略第三个元素。
+        """
+        try:
+            episodes = json.loads(raw) if isinstance(raw, str) else (raw or [])
+        except ValueError:
+            return []
+        compact: list[list[Any]] = []
+        for item in episodes:
+            if isinstance(item, list):
+                compact.append(item)      # 已经是压缩过的分集，原样带走
+                continue
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "")
+            label = str(item.get("display_label") or item.get("label") or "")
+            kind = int(item.get("type") or 0)
+            if key.startswith("bgm:") and key[4:].isdigit():
+                encoded: list[Any] = [int(key[4:]), label]
+            else:
+                encoded = [key, label]
+            if kind:
+                encoded.append(kind)
+            compact.append(encoded)
+        return compact
+
+    @staticmethod
+    def _expand_episodes(raw: Any) -> str:
+        """把格式 2 的紧凑分集还原成数据库里的完整 JSON 字符串。"""
+        if isinstance(raw, str):
+            return raw or "[]"
+        if not isinstance(raw, list):
+            return "[]"
+        episodes: list[dict[str, Any]] = []
+        for index, item in enumerate(raw):
+            if isinstance(item, dict):
+                episodes.append(item)
+                continue
+            if not isinstance(item, list) or not item:
+                continue
+            key = item[0]
+            label = str(item[1] or "")
+            kind = int(item[2] or 0) if len(item) > 2 else 0
+            episode: dict[str, Any] = {
+                "key": f"bgm:{key}" if isinstance(key, int) else str(key),
+                "label": label,
+                "display_label": label,
+                "type": kind,
+                "sort": index + 1,
+                "ep": index + 1 if kind == 0 else 0,
+            }
+            # bgm 分集必须带上 id：读取端会用它重建 bgm: 开头的 key，
+            # 缺了就会退化成「类型:集号」，观看进度（按 key 记录）随之对不上。
+            if isinstance(key, int):
+                episode["id"] = key
+            episodes.append(episode)
+        return json_dumps(episodes)
+
+    @classmethod
+    def compact_anime_row(cls, row: dict[str, Any]) -> dict[str, Any]:
+        """把一条番剧记录压成同步用的形态（导出与合并共用，保证两次结果一致）。"""
+        compact = {field: row.get(field) for field in cls.CLOUD_ANIME_FIELDS}
+        compact["episodes"] = cls._compact_episodes(row.get("episodes"))
+        return compact
+
     def export_cloud_state(self) -> dict[str, Any]:
         """Return portable account data without local image/API caches."""
         with self.connect() as db:
-            tables = {
-                table: [dict(row) for row in db.execute(f"SELECT * FROM {table}").fetchall()]
-                for table in self.CLOUD_TABLES
-            }
-        return {"format": 1, "exported_at": now_iso(), "tables": tables}
+            anime_rows = [
+                self.compact_anime_row(dict(row))
+                for row in db.execute("SELECT * FROM anime").fetchall()
+            ]
+            settings = [
+                dict(row) for row in db.execute("SELECT * FROM settings").fetchall()
+                if str(row["key"]) in self.CLOUD_SETTINGS_KEYS
+            ]
+            # 表的键顺序必须与 CLOUD_TABLES 一致：状态 hash 是 JSON 序列化后算的，
+            # 顺序不同会被当成「有改动」，让同步每次都走完整流程。
+            tables: dict[str, list[dict[str, Any]]] = {}
+            for table in self.CLOUD_TABLES:
+                if table == "anime":
+                    tables[table] = anime_rows
+                elif table == "settings":
+                    tables[table] = settings
+                else:
+                    tables[table] = [
+                        dict(row) for row in db.execute(f"SELECT * FROM {table}").fetchall()
+                    ]
+        return {"format": self.CLOUD_FORMAT, "exported_at": now_iso(), "tables": tables}
 
     def import_cloud_state(self, state: Any) -> None:
-        """Replace account-owned tables with a validated WebDAV state."""
-        if not isinstance(state, dict) or int(state.get("format") or 0) != 1:
+        """Replace account-owned tables with a validated WebDAV state.
+
+        兼容 format 1（全量列）与 format 2（白名单列 + 紧凑分集）：
+        缺的列交给 SQLite 默认值，紧凑分集在这里还原成完整 JSON；
+        format 2 的设置只覆盖它带来的键，本机界面偏好保持不变。
+        """
+        if not isinstance(state, dict) or int(state.get("format") or 0) not in (1, 2):
             raise ValueError("云端手账数据格式不受支持")
+        version = int(state.get("format") or 0)
         raw_tables = state.get("tables")
         if not isinstance(raw_tables, dict):
             raise ValueError("云端手账数据不完整")
         tables: dict[str, list[dict[str, Any]]] = {}
         for table in self.CLOUD_TABLES:
             rows = raw_tables.get(table)
+            if rows is None and version >= 2:
+                rows = []
             if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                 raise ValueError(f"云端数据缺少 {table}")
-            tables[table] = rows
+            tables[table] = [dict(row) for row in rows]
+        for row in tables["anime"]:
+            row["episodes"] = self._expand_episodes(row.get("episodes"))
+            # 白名单导出不会带缓存列，这里补上数据库的非空默认值
+            for field, fallback in self.CLOUD_ANIME_DEFAULTS.items():
+                if row.get(field) is None:
+                    row[field] = fallback(row) if callable(fallback) else fallback
+        if version >= 2:
+            with self.connect() as db:
+                local_settings = [dict(item) for item in db.execute("SELECT * FROM settings").fetchall()]
+            incoming = {str(row.get("key")): row for row in tables["settings"]}
+            merged = [row for row in local_settings if str(row.get("key")) not in incoming]
+            merged.extend(incoming.values())
+            tables["settings"] = merged
         # Keep the amount sensible before opening a transaction.  A normal
         # handbook is far below this ceiling; it avoids a malformed DAV file
         # exhausting SQLite with an accidental giant import.
