@@ -47,7 +47,7 @@ MOCK = """
     state: () => snapshot,
     saveState: value => { snapshot = value; return true; },
     uiState: () => "{}", saveUiState: () => {}, config: () => "{}",
-    version: () => "1.0.26-preview",
+    version: () => "1.0.27-preview",
   };
 
   // ---- 预览里的假站点：搜到的条目、分集、播放页都指向本机 sample.mp4 ----
@@ -103,6 +103,21 @@ MOCK = """
         : { comments: Array.from({ length: 40 }, (_, i) => ({ p: "1,1,16777215", m: "预览弹幕 " + (i + 1) })) };
       setTimeout(() => window.HandbookPlayer?.danmakuResult(id, JSON.stringify(body), null), 150);
     },
+    downloadStart(payload) {
+      const data = JSON.parse(payload);
+      const report = (status, percent, message) => window.HandbookPlayer?.downloadState(
+        JSON.stringify({id:data.id, status, percent, message:message||"", episode:data.episode, title:data.title}));
+      report("start", 0);
+      let percent = 0;
+      const timer = setInterval(() => {
+        percent = Math.min(100, percent + 20);
+        if (percent < 100) { report("downloading", percent); return; }
+        clearInterval(timer);
+        window.__previewDownloads = (window.__previewDownloads || 0) + 1;
+        report("done", 100);
+      }, 350);
+    },
+    downloadCancel(id) { window.HandbookPlayer?.downloadState(JSON.stringify({id, status:"cancelled", percent:0, message:""})); },
     scanMedia() {
       const origin = location.origin + "/_build/sample.mp4";
       const ep = (n) => ({ name: `葬送的芙莉莲 - 0${n}.mp4`, episode: n, size: 104857600 * n, url: `${origin}?ep=${n}` });
@@ -111,6 +126,7 @@ MOCK = """
         folders: [
           { name: "葬送的芙莉莲 [bgm-9001]", animeId: 9001, clean: "葬送的芙莉莲", files: [ep(1), ep(2), ep(3)] },
           { name: "孤独摇滚！ [bgm-9003]", animeId: 9003, clean: "孤独摇滚！", files: [ep(1), ep(2)] },
+          { name: "药屋少女的呢喃 [bgm-9004]", animeId: 9004, clean: "药屋少女的呢喃", files: [ep(1)] },
         ],
         ignored: 2,
       };

@@ -568,6 +568,7 @@
       subtitle.track.mode = subtitle.track.mode === "showing" ? "disabled" : "showing";
       notice(subtitle.track.mode === "showing" ? "字幕已开启" : "字幕已关闭");
     },
+    download() { closeMenu(); downloadCurrentEpisode(); },
     shot() { closeMenu(); takeScreenshot(); },
     sources() { closeMenu(); setSheet("mpSources"); },
     pip() { closeMenu(); $("mpPip").click(); },
@@ -699,6 +700,30 @@
       }, "image/png");
     } catch { notice("此片源限制读取画面，无法截图"); }
   }
+  // 下载当前这一集到 App 的媒体目录（「本机视频」里自动出现）
+  let downloadTimer = 0;
+  function downloadCurrentEpisode() {
+    if (!host?.downloadStart) { notice("当前安装包不支持下载，请更新"); return; }
+    if (!source || !/^https?:/i.test(source.url) || !/^https:/i.test(source.url)) { notice("先播放一集在线片源再下载"); return; }
+    if (!anime && !offlineTitle) { notice("先播放一集在线片源再下载"); return; }
+    const ep = episode();
+    const title = anime ? name(anime) : ($("mpTitle").textContent.trim() || offlineTitle || "在线视频");
+    const id = `${anime?.id || title}:${ep?.key || "01"}`;
+    host.downloadStart(JSON.stringify({
+      id,
+      url: source.url,
+      referer: source.rule ? "" : "",
+      title,
+      animeId: Number(anime?.id) || 0,
+      episode: ep?.display_label || ep?.key || "01",
+      key: ep?.key || "01",
+    }));
+    $("mpMenuDownloadValue").textContent = "准备中…";
+    notice("开始下载：" + (ep?.display_label || ep?.key || "本集"));
+    clearTimeout(downloadTimer);
+    downloadTimer = setTimeout(() => { $("mpMenuDownloadValue").textContent = "离线保存"; }, 4000);
+  }
+
   click("mpShot", takeScreenshot);
 
   submit("mpSend", () => { if (dmSendMine($("dmSendInput").value)) $("dmSendInput").value = ""; });
@@ -774,6 +799,27 @@
       let data = null;
       try { data = JSON.parse(raw); } catch { data = { error: "scanFailed", message: "扫描结果无法解析" }; }
       callback(data);
+    },
+    downloadState(raw) {
+      let state = null;
+      try { state = JSON.parse(raw); } catch { return; }
+      const value = $("mpMenuDownloadValue");
+      if (state.status === "downloading" || state.status === "start") {
+        if (value) value.textContent = `${state.percent || 0}%`;
+        return;
+      }
+      if (value) value.textContent = state.status === "done" ? "已完成" : "离线保存";
+      clearTimeout(downloadTimer);
+      if (state.status === "done") {
+        notice("");
+        window.HandbookMobile?.toast?.(`已下载：${state.episode}，可在「本机视频」离线观看`);
+        window.HandbookMobile?.refreshOfflineLibrary?.();
+      } else if (state.status === "error") {
+        notice(state.message || "下载失败");
+        window.HandbookMobile?.toast?.("下载失败：" + (state.message || "检查网络后再试"));
+      } else if (state.status === "cancelled") {
+        window.HandbookMobile?.toast?.("已取消下载");
+      }
     },
     mediaRootPicked(path) {
       window.HandbookMobile?.mediaRootPicked?.(path);

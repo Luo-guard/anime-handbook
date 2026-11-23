@@ -22,6 +22,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -51,6 +52,7 @@ final class MobilePlayerHost extends WebChromeClient {
   private int renderId;
   private final SharedPreferences mediaPrefs;
   private final LocalMediaServer mediaServer;
+  private final MediaDownloader downloader;
   private final ExecutorService mediaTasks = Executors.newSingleThreadExecutor();
   private static final int PICK_MEDIA_ROOT = 43;
 
@@ -60,6 +62,8 @@ final class MobilePlayerHost extends WebChromeClient {
     mediaPrefs = activity.getSharedPreferences("offline-media", Activity.MODE_PRIVATE);
     mediaServer = new LocalMediaServer(activity);
     mediaServer.start();
+    downloader = new MediaDownloader(activity, mediaServer,
+      state -> script("window.HandbookPlayer?.downloadState(" + JSONObject.quote(state.toString()) + ")"));
   }
 
   WebResourceResponse asset(WebResourceRequest request) {
@@ -388,6 +392,7 @@ final class MobilePlayerHost extends WebChromeClient {
         deliverScan(result);
         return;
       }
+      scanDownloaded(folders, ignored);
       result.put("folders", folders);
       result.put("ignored", ignored[0]);
     } catch (Exception failure) {
@@ -397,6 +402,80 @@ final class MobilePlayerHost extends WebChromeClient {
       } catch (Exception ignored) { }
     }
     deliverScan(result);
+  }
+
+  /** 扫描 App 自己的下载目录（与 SAF 目录同构：番名 [bgm-编号]/番名 - 01.mp4）。 */
+  private void scanDownloaded(JSONArray folders, int[] ignored) throws Exception {
+    File root = downloader.root();
+    File[] dirs = root == null ? null : root.listFiles();
+    if (dirs == null) return;
+    java.util.Map<String, JSONObject> existing = new java.util.HashMap<>();
+    for (int i = 0; i < folders.length(); i++) {
+      JSONObject folder = folders.optJSONObject(i);
+      if (folder != null) existing.put(folder.optString("name"), folder);
+    }
+    for (File dir : dirs) {
+      if (dir == null || !dir.isDirectory() || dir.getName().startsWith(".")) continue;
+      JSONArray files = new JSONArray();
+      File[] children = dir.listFiles();
+      if (children == null) continue;
+      for (File child : children) {
+        if (child.isDirectory()) {
+          // 下载得到的 HLS：目录里是 playlist.m3u8 + 分片
+          if (!child.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".hls")) continue;
+          try {
+            String token = mediaServer.registerDir(child);
+            if (token == null) { ignored[0] += 1; continue; }
+            files.put(downloadEntry(child.getName().replaceFirst("\\.hls$", ""), token, true));
+          } catch (Exception unreadable) { ignored[0] += 1; }
+          continue;
+        }
+        String mime = downloadedMime(child.getName());
+        if (mime == null) continue;
+        try {
+          String token = mediaServer.registerFile(child, mime);
+          if (token == null) { ignored[0] += 1; continue; }
+          files.put(downloadEntry(child.getName(), token, false));
+        } catch (Exception unreadable) { ignored[0] += 1; }
+      }
+      if (files.length() == 0) continue;
+      JSONObject folder = existing.get(dir.getName());
+      if (folder == null) {
+        folder = new JSONObject();
+        folder.put("name", dir.getName());
+        java.util.regex.Matcher bgm = java.util.regex.Pattern
+          .compile("(?i)\\[\\s*(?:bgm|bangumi)\\s*[-:#]?\\s*(\\d{3,9})\\s*\\]").matcher(dir.getName());
+        folder.put("animeId", bgm.find() ? Long.parseLong(bgm.group(1)) : 0);
+        folder.put("clean", dir.getName().replaceAll("(?i)\\s*\\[[^\\]]*\\]", "").trim());
+        folder.put("files", new JSONArray());
+        folders.put(folder);
+        existing.put(dir.getName(), folder);
+      }
+      JSONArray target = folder.optJSONArray("files");
+      if (target == null) { target = new JSONArray(); folder.put("files", target); }
+      for (int i = 0; i < files.length(); i++) target.put(files.opt(i));
+    }
+  }
+
+  private JSONObject downloadEntry(String fileName, String token, boolean hls) throws Exception {
+    String base = hls ? fileName : fileName.replaceFirst("(?i)\\.[a-z0-9]{2,5}$", "");
+    java.util.regex.Matcher episode = java.util.regex.Pattern
+      .compile("(?i)(?:S\\d{1,2}E|第)?\\s*0*(\\d{1,4})\\s*(?:话|話)?\\s*$").matcher(base);
+    JSONObject file = new JSONObject();
+    file.put("name", fileName);
+    file.put("episode", episode.find() ? Integer.parseInt(episode.group(1)) : 0);
+    file.put("token", token);
+    file.put("url", "http://127.0.0.1:" + mediaServer.port() + "/m/" + token + (hls ? "/playlist.m3u8" : ""));
+    file.put("downloaded", true);
+    return file;
+  }
+
+  private static String downloadedMime(String name) {
+    String lower = name.toLowerCase(java.util.Locale.ROOT);
+    if (lower.endsWith(".mp4") || lower.endsWith(".m4v")) return "video/mp4";
+    if (lower.endsWith(".webm")) return "video/webm";
+    if (lower.endsWith(".mkv")) return "video/x-matroska";
+    return null;
   }
 
   private JSONObject scanFolder(Uri tree, JSONObject dir, int[] ignored) throws Exception {
@@ -514,6 +593,18 @@ final class MobilePlayerHost extends WebChromeClient {
     @JavascriptInterface public void pickMediaRoot() { MobilePlayerHost.this.pickMediaRoot(); }
     @JavascriptInterface public void scanMedia() { MobilePlayerHost.this.scanMedia(); }
     @JavascriptInterface public int mediaPort() { return MobilePlayerHost.this.mediaPort(); }
+
+    @JavascriptInterface public void downloadStart(String payload) {
+      try {
+        JSONObject data = new JSONObject(payload == null ? "{}" : payload);
+        downloader.start(
+          data.optString("id"), data.optString("url"), data.optString("referer"),
+          data.optString("title"), data.optInt("animeId", 0),
+          data.optString("episode"), data.optString("key"));
+      } catch (Exception ignored) { /* 参数不合法就当没点 */ }
+    }
+
+    @JavascriptInterface public void downloadCancel(String id) { downloader.cancel(id); }
 
     @JavascriptInterface public void renderText(int id, String url, String headers) {
       renderPage(id, url, headers);

@@ -127,7 +127,7 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.26'}catch(_){return '1.0.26'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.27'}catch(_){return '1.0.27'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
 function seedDanmakuDefaults(){
@@ -174,7 +174,7 @@ function renderOfflineLibrary(data){
  if(data.error==='noAccess'){hint.textContent='目录访问权限已失效（重装应用或目录被移动），请重新选择。';hint.classList.add('is-error');list.innerHTML=pickHtml;summary.textContent='权限失效';return}
  if(data.error){hint.textContent='扫描失败：'+(data.message||'目录读不出来，换个位置再试。');hint.classList.add('is-error');list.innerHTML=pickHtml;summary.textContent='扫描失败';return}
  hint.classList.remove('is-error');
- hint.textContent='只读取手账下载流程整理好的视频（「番名 [bgm-编号]」文件夹），其他视频会被过滤。';
+ hint.textContent='包含两部分：播放器里「下载本集」保存的视频，以及你从电脑端 media 拷进来并授权的手账文件夹；其他视频会被过滤。';
  const folders=Array.isArray(data.folders)?data.folders:[];
  if(!folders.length){list.innerHTML=`<div class="empty">这里还没有手账离线视频。<br>把电脑端「media」里已整理的番剧文件夹拷到手机，${pickHtml}</div>`;summary.textContent='没有离线视频';return}
  let total=0;folders.forEach(f=>total+=(f.files||[]).length);
@@ -361,6 +361,7 @@ let scrollTimer;window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);
 window.addEventListener('pagehide',persistUi);
 window.HandbookMobile.handleBack=handleBack;window.HandbookMobile.persistUi=persistUi;window.HandbookMobile.syncNav=syncNav;
 window.HandbookMobile.mediaRootPicked=mediaRootPicked;window.HandbookMobile.renderOfflineLibrary=renderOfflineLibrary;window.HandbookMobile.closeOfflinePage=closeOfflinePage;
+window.HandbookMobile.refreshOfflineLibrary=()=>{const node=document.querySelector('#offlinePage');if(node&&!node.hidden&&window.AndroidPlayer?.scanMedia)window.AndroidPlayer.scanMedia()};
 applyTheme(readLocal(THEME_KEY,'auto'));
 const themeMedia=window.matchMedia?.('(prefers-color-scheme: dark)');themeMedia?.addEventListener?.('change',()=>{if(readLocal(THEME_KEY,'auto')==='auto')applyTheme('auto')});
 if(['home','records','settings'].includes(ui.page))page=ui.page;

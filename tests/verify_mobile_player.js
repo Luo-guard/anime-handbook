@@ -56,6 +56,8 @@ async function main() {
           const key = Object.keys(reply).find(item => url.includes(item));
           setTimeout(() => window.HandbookRules?.fetchResult(id, key ? reply[key] : null, key ? null : "没有匹配的测试响应"), 10);
         },
+        downloadStart(payload) { nativeEvents.push(["download", payload]); },
+        downloadCancel(id) { nativeEvents.push(["download-cancel", id]); },
         scanMedia() {
           const files = [1,2].map(n => ({
             name:`测试番剧 - 0${n}.mp4`, episode:n, size:1048576*n,
@@ -199,6 +201,22 @@ async function main() {
     await page.getByRole("button",{name:"添加并播放"}).click();
     await page.waitForFunction(() => document.querySelector("#offlineVideo").readyState >= 2);
     assert.equal(await page.locator("video").evaluate(v => v.videoWidth),320);
+
+    // 9c) 下载本集：菜单触发原生下载，进度与完成回传
+    await page.mouse.click(195, 300);
+    await page.locator("#mpMore").click();
+    await page.locator('#mpMenu [data-menu="download"]').click();
+    const request = await page.evaluate(() => nativeEvents.filter(([type]) => type === "download").at(-1)?.[1]);
+    assert.ok(request, "点下载应调用原生下载");
+    const payload = JSON.parse(request);
+    assert.match(payload.url, /video\.example\.test\/01\.m3u8/, "应下载当前片源地址");
+    assert.equal(payload.animeId, 42, "应带上番剧 ID");
+    assert.equal(payload.title, "测试番剧");
+    assert.match(payload.episode, /第 2 集|02/, "应带上当前集数");
+    await page.evaluate(() => window.HandbookPlayer.downloadState(JSON.stringify({status:"downloading", percent:42, episode:"第 2 集"})));
+    assert.match(await page.locator("#mpMenuDownloadValue").innerText(), /42%/);
+    await page.evaluate(() => window.HandbookPlayer.downloadState(JSON.stringify({status:"done", percent:100, episode:"第 2 集"})));
+    assert.match(await page.locator("#mpMenuDownloadValue").innerText(), /已完成/);
 
     // 10) 弹幕设置与发送框
     await page.locator("#mpMore").click();
