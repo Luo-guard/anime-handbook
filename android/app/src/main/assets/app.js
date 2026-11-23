@@ -127,9 +127,18 @@ function noteForm(){
 function readLocal(key,fallback){try{const raw=localStorage.getItem(key);return raw===null?fallback:JSON.parse(raw)}catch(_){return fallback}}
 function writeLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(_){/* 存储不可写时不影响其它功能 */}}
 const PREF_KEY='mobile-player:prefs',DM_KEY='handbook.danmaku.settings',THEME_KEY='mobile-app:theme';
-const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.25'}catch(_){return '1.0.25'}})();
+const APP_VERSION=(()=>{try{return String(native.version?native.version():'')||'1.0.26'}catch(_){return '1.0.26'}})();
 function playerPrefs(){const value=readLocal(PREF_KEY,{});return value&&typeof value==='object'?value:{}}
 function savePref(patch){writeLocal(PREF_KEY,{...playerPrefs(),...patch});try{window.HandbookPlayer?.applyPrefs?.()}catch(_){}}
+function seedDanmakuDefaults(){
+ // 内置的弹弹play 凭据（桌面版已配置）只在用户从未填过时补进去，填过就以用户的为准
+ const builtin=window.HANDBOOK_DANMAKU_DEFAULTS;
+ if(!builtin||!builtin.appId||!builtin.appSecret)return;
+ const saved=readLocal(DM_KEY,{});
+ if(saved&&saved.appId&&saved.appSecret)return;
+ writeLocal(DM_KEY,{...saved,sourceMode:saved.sourceMode||builtin.sourceMode||'dandanplay',appId:builtin.appId,appSecret:builtin.appSecret});
+}
+seedDanmakuDefaults();
 function dmPrefs(){const value=readLocal(DM_KEY,{});return value&&typeof value==='object'?value:{}}
 function saveDm(patch){writeLocal(DM_KEY,{...dmPrefs(),...patch});if(typeof dmLoadPrefs==='function'){try{dmLoadPrefs();dmSyncControls();}catch(_){}}
  if(window.HandbookPlayer?.commitDanmakuPrefs)window.HandbookPlayer.commitDanmakuPrefs();}

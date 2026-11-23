@@ -1,7 +1,7 @@
 plugins { id 'com.android.application' }
 
 android { namespace 'com.animehandbook.mobile'; compileSdk 35
-    defaultConfig { applicationId 'com.animehandbook.mobile'; minSdk 26; targetSdk 35; versionCode 26; versionName '1.0.25' }
+    defaultConfig { applicationId 'com.animehandbook.mobile'; minSdk 26; targetSdk 35; versionCode 27; versionName '1.0.26' }
     sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/player-assets'))
 }
 

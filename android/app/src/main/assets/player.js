@@ -724,6 +724,21 @@
   overlay.querySelectorAll(".mp-sheet-close").forEach(button => { button.onclick = closeAll; });
   overlay.querySelectorAll(".mp-drawer .mp-sheet-close").forEach(button => { button.onclick = closeAll; });
 
+  // 与 app.js 的 seedDanmakuDefaults 同逻辑：内置凭据只在没填过时生效
+  (function seedDanmakuDefaults() {
+    const builtin = window.HANDBOOK_DANMAKU_DEFAULTS;
+    if (!builtin?.appId || !builtin?.appSecret) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem("handbook.danmaku.settings") || "{}");
+      if (saved.appId && saved.appSecret) return;
+      localStorage.setItem("handbook.danmaku.settings", JSON.stringify({
+        ...saved,
+        sourceMode: saved.sourceMode || builtin.sourceMode || "dandanplay",
+        appId: builtin.appId,
+        appSecret: builtin.appSecret,
+      }));
+    } catch { /* 存储不可写就跳过 */ }
+  })();
   window.openHandbookSettings = () => {
     const settings = danmakuView.settings;
     $("mpDmMode").value = settings.sourceMode;

@@ -20,3 +20,6 @@ node_modules/
 static/vendor/jassub/
 static/vendor/.jassub-build-*/
 static/vendor/.jassub-backup-*/
+
+# 内置弹幕凭据（含密钥，不入库/不同步）
+android/app/src/main/assets/danmaku-defaults.js
