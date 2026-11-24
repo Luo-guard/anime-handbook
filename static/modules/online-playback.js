@@ -337,6 +337,7 @@ window.onlinePlayback = (() => {
     downloadSheet.rows = episodes.map(item => ({
       id: String(item.episode.id),
       number: item.number,
+      episodeTitle: String(item.episode.title || ""),
       label: `第 ${String(item.number).padStart(2, "0")} 集${item.episode.title ? ` · ${item.episode.title}` : ""}`,
     }));
     downloadSheet.selected = new Set(
@@ -353,6 +354,14 @@ window.onlinePlayback = (() => {
     const dialog = $("#episodeDownloadSheet");
     if (dialog && !dialog.open) dialog.showModal();
     markDownloadSheetStates(session);
+  }
+
+  // 批量下载时每集自己的标题：番名 · 第 XX 集[ · 本集标题] · 线路
+  function batchEpisodeTitle(session, row) {
+    const name = session.catalogue?.title || "未命名番剧";
+    const line = session.source?.name || "";
+    const episode = `第 ${String(row.number).padStart(2, "0")} 集${row.episodeTitle ? ` · ${row.episodeTitle}` : ""}`;
+    return line ? `${name} · ${episode} · ${line}` : `${name} · ${episode}`;
   }
 
   async function submitDownloadSheet(event) {
@@ -402,7 +411,12 @@ window.onlinePlayback = (() => {
           source: String(session.source?.id ?? ""),
           title: downloadEpisodeName(session),
           group_name: session.catalogue?.ruleName || session.catalogue?.rule || "",
-          items: picked.map(row => ({ episode_key: `0:${row.number}`, episode_id: row.id })),
+          items: picked.map(row => ({
+            episode_key: `0:${row.number}`,
+            episode_id: row.id,
+            // 标题按这一集自己拼：批量时后端不能拿「当前播放那集」的标题套给所有集。
+            title: batchEpisodeTitle(session, row),
+          })),
         }),
       });
       $("#episodeDownloadSheet")?.close();

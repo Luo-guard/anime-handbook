@@ -34,7 +34,8 @@ assert(html.indexOf('>番剧<', menuAt) > siteAt, '「番剧」分组要独立�
 assert(source.includes('$("#onlinePlayerDownload").addEventListener("click", openDownloadSheet)'), '下载按钮没有打开选集');
 assert(source.includes('"/api/offline/web-download-batch"'), '没有走批量下载接口');
 assert(source.includes('"/api/offline/web-download"'), '单集接口丢了');
-assert(source.includes('items: picked.map(row => ({ episode_key: `0:${row.number}`, episode_id: row.id }))'), '批量请求缺少集号与片源集 ID');
+assert(source.includes('episode_key: `0:${row.number}`') && source.includes('episode_id: row.id'), '批量请求缺少集号与片源集 ID');
+assert(source.includes('title: batchEpisodeTitle(session, row)'), '批量请求要按集提交各自的标题');
 assert(source.includes('episodes.length === 1 && !preset'), '只有一集时应该直接下载，不弹空对话框');
 
 // 5) 详情页入口复用同一套解析：先选站点/线路，再读选集，最后交给下载对话框。

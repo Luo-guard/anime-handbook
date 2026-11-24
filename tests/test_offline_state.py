@@ -133,5 +133,38 @@ class OfflineStateMissingTest(unittest.TestCase):
         self.assertEqual(row["group_name"], "云光字幕组")
 
 
+
+    def test_web_batch_titles_get_their_own_episode_number(self):
+        """一批下 8~13 集时，标题不能全都写「第 8 集」。"""
+        data = self.service.download_web_batch(
+            anime_id=11,
+            items=[
+                {"episode_key": "0:8", "episode_id": "e8"},
+                {"episode_key": "0:13", "episode_id": "e13"},
+            ],
+            resolve=lambda _id: ("", "", {}),
+            title="测试番 · 第 8 集 · 稀饭动漫",
+            group_name="稀饭动漫",
+        )
+        try:
+            titles = [job["source_title"] for job in data["jobs"]]
+            self.assertIn("第 08 集", titles[0])
+            self.assertIn("第 13 集", titles[1])
+            self.assertNotEqual(titles[0], titles[1], "每个任务的标题要写自己那一集")
+        finally:
+            self.service.stop_web_batches()
+
+    def test_old_batch_titles_are_corrected_when_read(self):
+        """老任务标题全写着「第 8 集」：读的时候按文件所在集纠正显示。"""
+        job = self.store.create_job(
+            anime_id=11, source_kind="web",
+            source_title="测试番 · 第 8 集 · 稀饭动漫", group_name="稀饭动漫", status="ready",
+        )
+        self.make_file("0:13", name="ep13.mp4", media_id=int(job["id"]))
+        row = next(item for item in self.service.state(11)["files"] if item["episode_key"] == "0:13")
+        self.assertIn("第 13 集", row["source_title"])
+        self.assertNotIn("第 8 集", row["source_title"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -298,6 +298,26 @@ class OfflineService:
         )
         return job, True
 
+    def _episode_title(self, title: str, key: str, *, drop_stale: bool = False) -> str:
+        """批量下载时传进来的标题是照「当前播放的那一集」拼的。
+
+        不改的话，一批 8~13 集的任务全都写着「第 8 集」，媒体库里原视频名整列一样。
+        这里把集号换成这一集自己的；``drop_stale`` 时连「第 8 集」后面那句本集标题
+        一并丢掉——那句话属于原来那一集，留在别的集上就是错的。
+        """
+        label = media_tools.label_for_key(key)
+        if not label:
+            return title
+        parts = [part.strip() for part in str(title or "").split(" · ")]
+        if len(parts) >= 3 and re.fullmatch(r"第\s*\d+(?:\.\d+)?\s*集", parts[1]):
+            # 「番名 · 第 N 集 · [本集标题] · 线路」：保留番名和线路，换掉中间那段。
+            if drop_stale and len(parts) > 3:
+                return " · ".join([parts[0], label, parts[-1]])
+            return " · ".join([parts[0], label, *parts[2:]])
+        if not re.search(r"第\s*\d+(?:\.\d+)?\s*集", title or ""):
+            return title
+        return re.sub(r"第\s*\d+(?:\.\d+)?\s*集", label, title, count=1)
+
     def download_web_batch(
         self,
         *,
@@ -323,8 +343,10 @@ class OfflineService:
             episode_id = str((item or {}).get("episode_id") or "").strip()
             if not key or not episode_id:
                 continue
+            item_title = str((item or {}).get("title") or "").strip() or self._episode_title(title, key)
             job, fresh = self._web_job_for(
-                anime_id, key, title, group_name, status="queued", ref=(item or {}).get("ref") or None
+                anime_id, key, item_title, group_name,
+                status="queued", ref=(item or {}).get("ref") or None,
             )
             if not fresh:
                 skipped += 1
@@ -1285,6 +1307,10 @@ class OfflineService:
             if linked:
                 title = str(linked.get("source_title") or linked.get("torrent_name") or "").strip()
                 group = str(linked.get("group_name") or "").strip()
+                # 老数据里一批任务共用「第 8 集」的标题：读的时候按这一集自己的集号纠正，
+                # 只动我们自己拼的网站资源标题，种子原名一个字都不碰。
+                if str(linked.get("source_kind") or "") == "web":
+                    title = self._episode_title(title, key, drop_stale=True)
             else:
                 title = jobs_by_key.get(key, "")
                 group = groups_by_key.get(key, "")
