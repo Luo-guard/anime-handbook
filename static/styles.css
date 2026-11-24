@@ -6142,7 +6142,10 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
   background: rgba(255, 255, 255, .96);
   box-shadow: 0 6px 16px rgb(var(--theme-rgb) / .08);
 }
-.lib-episode.watched { background: rgba(var(--theme-rgb), .035); border-left: 3px solid var(--green-500); padding-left: 10px; }
+/* 「看过」只在文字上体现：以前整行加深色底 + 左侧 3px 竖条 + 内边距变化，
+   同一张列表里就会有两种长相（全看过的番 vs 一集没看的番像两套 UI）。
+   行高、边框、底色现在对所有集一致，看过的信息仍在「看到 mm:ss」和「继续」上。 */
+.lib-episode.watched .lib-ep-info b { color: var(--green-800); }
 .lib-ep-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .lib-ep-info b { font-size: 13px; }
 .lib-ep-info small { color: var(--muted); font-size: 11.5px; }
