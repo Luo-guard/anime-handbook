@@ -1255,6 +1255,12 @@ class OfflineService:
         # 把下载任务的原始种子标题带给前端：播放器标题下能显示「原视频原名」，
         # local_files 本身不存这个字段（归档后的文件名已经格式化过）。
         # 早期任务没写 episode_key，就按番内 job 的种子标题里的 [05] 集数对回去。
+        # 文件行里存着产出它的任务号：直接按任务号对回去最准，不看标题长什么样。
+        # 以前只靠从标题里抠 [04] 这类集号，遇到 "- 07" 的命名就抠不出来，
+        # 界面于是显示「来源未知」且不显示原视频名——同一份数据两种长相。
+        jobs_by_id: dict[int, dict[str, Any]] = {}
+        for job in jobs:
+            jobs_by_id[int(job["id"])] = job
         jobs_by_key: dict[str, str] = {}
         groups_by_key: dict[str, str] = {}
         fallback: list[tuple[int, str, str]] = []
@@ -1275,8 +1281,13 @@ class OfflineService:
                     fallback.append((numbers[-1], title, group))
         for item in files:
             key = str(item.get("episode_key") or "")
-            title = jobs_by_key.get(key, "")
-            group = groups_by_key.get(key, "")
+            linked = jobs_by_id.get(int(item.get("media_id") or 0))
+            if linked:
+                title = str(linked.get("source_title") or linked.get("torrent_name") or "").strip()
+                group = str(linked.get("group_name") or "").strip()
+            else:
+                title = jobs_by_key.get(key, "")
+                group = groups_by_key.get(key, "")
             if not title and fallback:
                 match = re.search(r"(\d+)$", key.rsplit(":", 1)[-1])
                 if match:

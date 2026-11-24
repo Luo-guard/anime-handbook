@@ -27,7 +27,7 @@ class OfflineStateMissingTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def make_file(self, key: str, *, name: str, subtitle: str = "") -> dict:
+    def make_file(self, key: str, *, name: str, subtitle: str = "", media_id: int = 0) -> dict:
         path = self.media / name
         path.write_bytes(b"x" * 32)
         subtitle_path = ""
@@ -41,6 +41,7 @@ class OfflineStateMissingTest(unittest.TestCase):
             file_path=str(path),
             file_size=32,
             duration_ms=1440000,
+            media_id=media_id,
             subtitle_path=subtitle_path,
         )
 
@@ -97,6 +98,39 @@ class OfflineStateMissingTest(unittest.TestCase):
             Path(row["file_path"]).unlink()
         state = self.service.state(11, refresh=False)
         self.assertEqual(state["missing_keys"], ["0:2", "0:10"])
+
+
+
+    def test_source_label_comes_from_the_job_that_produced_the_file(self):
+        """文件行记着产出它的任务号：按任务号取来源，别再从标题里抠集号。
+
+        「[Dynamis One] Yowaki Max - 06」这种命名没有 [06]，旧逻辑抠不出来，
+        界面就显示「来源未知」、原视频名也不显示，看起来像另一套 UI。
+        """
+        job = self.store.create_job(
+            anime_id=11,
+            torrent_name="[Dynamis One] Yowaki Max - 06 (CR 1920x1080 AVC AAC MKV).mkv",
+            source_title="[黒ネズミたち] 极致软弱千金小姐 / Yowaki Max",
+            group_name="黒ネズミたち",
+            status="ready",
+        )
+        self.make_file("0:6", name="ep6.mp4", media_id=int(job["id"]))
+        data = self.service.state(11)
+        row = next(item for item in data["files"] if item["episode_key"] == "0:6")
+        self.assertEqual(row["group_name"], "黒ネズミたち", "来源要按任务号取，不靠标题格式")
+        self.assertIn("Yowaki Max", row["source_title"])
+
+    def test_bracket_number_titles_still_map_without_a_job_link(self):
+        """老数据没有 media_id 时，原来的「从标题里找 [04]」兜底还得能用。"""
+        self.store.create_job(
+            anime_id=11,
+            torrent_name="[云光字幕组] 学生会也有洞！ [04][简体双语][1080p].mp4",
+            group_name="云光字幕组",
+            status="ready",
+        )
+        self.make_file("0:4", name="ep4.mp4")
+        row = next(item for item in self.service.state(11)["files"] if item["episode_key"] == "0:4")
+        self.assertEqual(row["group_name"], "云光字幕组")
 
 
 if __name__ == "__main__":
