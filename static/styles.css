@@ -7639,3 +7639,11 @@ body.schedule-picking [data-floating-view="schedule"] {
 .lib-download-main > small { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-download-main > .library-bar { margin-top: 5px; height: 3px; }
 .lib-download-actions { flex: 0 0 auto; display: flex; gap: 4px; }
+
+/* 失败的一集留在原位：淡红底 + 红色图标 + 原因；重试就在这一行 */
+.lib-download-row.is-failed { border-color: color-mix(in srgb, #a24d4d 26%, transparent); background: color-mix(in srgb, #a24d4d 5%, var(--surface)); }
+.lib-download-badge[data-state="failed"] { background: color-mix(in srgb, #a24d4d 14%, transparent); color: #9b3434; }
+.lib-download-badge[data-state="failed"]::after {
+  content: "!"; font-size: 12px; font-weight: 700; line-height: 1;
+}
+.lib-download-main > small.lib-download-error { color: #9b3434; }

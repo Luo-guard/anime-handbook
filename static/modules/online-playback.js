@@ -24,6 +24,16 @@ function episodePickRow(row, index, checked) {
       </label>`;
 }
 
+// 下载时把「怎么再找到这一集」一并交给后端：失败后才能在原地重试，
+// 不用让用户回播放器重新选集（Kazumi 的失败重试也是这个前提）。
+function episodeRef(session) {
+  const rule = String(session?.catalogue?.rule || "");
+  const catalogue = String(session?.catalogue?.id ?? "");
+  const source = String(session?.source?.id ?? "");
+  const episode = String(session?.episode?.id ?? "");
+  return rule && catalogue && source && episode ? { rule, catalogue, source, episode } : null;
+}
+
 function onlineEpisodeLabel(session, episode = session.episode) {
   const { animeId, context, source } = session;
   const number = onlineLocalEpisodeNumber(episode, source, context?.target.first);
@@ -374,6 +384,7 @@ window.onlinePlayback = (() => {
             episode_key: `0:${currentNumber}`,
             title: downloadEpisodeName(session),
             group_name: session.catalogue?.ruleName || session.catalogue?.rule || "",
+            ref: episodeRef(session),
           }),
         });
         $("#episodeDownloadSheet")?.close();
@@ -438,6 +449,7 @@ window.onlinePlayback = (() => {
           episode_key: `0:${number}`,
           title: downloadEpisodeName(session),
           group_name: session.catalogue?.ruleName || session.catalogue?.rule || "",
+          ref: episodeRef(session),
         }),
       });
       toast(data.reused ? "这一集已经在下载或已入库" : "已开始下载，完成后出现在媒体库");

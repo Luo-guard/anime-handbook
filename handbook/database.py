@@ -221,6 +221,9 @@ class HandbookDB:
                     error TEXT NOT NULL DEFAULT '',
                     -- 归档自动重试已进行的次数；手动重试会清零。
                     archive_retries INTEGER NOT NULL DEFAULT 0,
+                    -- 网站资源的「怎么再找到这一集」：规则/片源/线路/集 ID（JSON）。
+                    -- 失败后要能原地重试，就得把解析所需的信息留在任务上。
+                    source_ref TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -446,6 +449,10 @@ class HandbookDB:
             if "archive_retries" not in local_media_columns:
                 db.execute(
                     "ALTER TABLE local_media ADD COLUMN archive_retries INTEGER NOT NULL DEFAULT 0"
+                )
+            if "source_ref" not in local_media_columns:
+                db.execute(
+                    "ALTER TABLE local_media ADD COLUMN source_ref TEXT NOT NULL DEFAULT ''"
                 )
             if "source_kind" not in local_media_columns:
                 db.execute(

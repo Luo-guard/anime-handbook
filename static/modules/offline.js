@@ -559,11 +559,16 @@ function renderOfflineLocal() {
           : attempts
             ? `还会自动再试（已用 ${attempts}/${limit} 次）；也可以现在点「重试归档」`
             : "点「重试归档」立即再试一次";
-        const actionLabel = isWeb ? "重试下载" : "重试归档";
-        // 解析失败 / 中断 / 排队超时：内存里已经没有可续的下载线程，重试按钮只会弹一句
-        // 「地址已失效」。这类失败只能回播放器重新发起，所以不给按钮，只留一句说明。
-        const deadEnd = isWeb && /^(解析这一集失败|下载已中断|排队太久)/.test(String(job.error || ""));
-        const actionHint = isWeb ? "地址失效就回播放器重新点「下载」" : hint;
+        // 网站资源只要当初留下了片源信息，就能在这一行里原地重解析、原地重下，
+        // 不用回播放器重新选集（和 Kazumi 的失败重试一致）。
+        const canRetryWeb = isWeb && Boolean(job.retryable);
+        const actionLabel = canRetryWeb ? "重试下载" : "重试归档";
+        // 老任务没有片源信息：内存里也没有可续的线程，重试只会弹「地址已失效」，
+        // 所以不给按钮，只留一句能照做的说明。
+        const deadEnd = isWeb && !canRetryWeb;
+        const actionHint = isWeb
+          ? (canRetryWeb ? "用记录下来的片源信息重新解析并下载这一集" : "地址失效就回播放器重新点「下载」")
+          : hint;
         return `
         <article class="offline-row">
           ${taskBadge("failed")}
@@ -573,7 +578,7 @@ function renderOfflineLocal() {
             <p class="offline-row-hint">${escapeHtml(deadEnd ? "回到播放器重新播放这一集，再点「下载」；已入库的集会跳过" : `${actionHint}｜已入库的集会跳过，只补缺的`)}</p>
           </div>
           <div class="offline-row-actions">
-            ${deadEnd ? "" : `<button type="button" class="offline-play" data-retry="${job.id}" title="${escapeHtml(actionHint)}">${actionLabel}</button>`}
+            ${deadEnd ? "" : `<button type="button" class="offline-play" data-retry="${job.id}" data-retry-kind="${canRetryWeb ? "web" : "archive"}" title="${escapeHtml(actionHint)}">${actionLabel}</button>`}
             <button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button>
           </div>
         </article>`;
@@ -942,6 +947,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#offlineCheckSubs")?.addEventListener("click", checkSubscriptions);
   $("#offlineLocalList")?.addEventListener("click", (event) => {
     const retry = event.target.closest("[data-retry]");
+    if (retry && retry.dataset.retryKind === "web") { retryWebEpisode(retry.dataset.retry); return; }
     if (retry) return retryEpisodeArchive(retry.dataset.retry);
     const task = event.target.closest("[data-task]");
     if (task) return taskAction(task.dataset.task, task.dataset.action);
@@ -1887,6 +1893,22 @@ function formatEta(seconds) {
   if (hours > 0) return `${hours} 小时 ${minutes} 分`;
   if (minutes > 0) return `${minutes} 分`;
   return `${value} 秒`;
+}
+
+async function retryWebEpisode(mediaId) {
+  const button = $(`#offlineLocalList [data-retry="${mediaId}"]`);
+  if (button) { button.disabled = true; button.textContent = "重试中…"; }
+  try {
+    await api("/api/offline/web-retry", {
+      method: "POST",
+      body: JSON.stringify({ media_id: Number(mediaId) }),
+    });
+    toast("已重新开始下载这一集");
+    refreshOfflineLocal();
+  } catch (error) {
+    if (button) { button.disabled = false; button.textContent = "重试下载"; }
+    toast(error.message || "重试失败", "error");
+  }
 }
 
 async function retryEpisodeArchive(mediaId) {

@@ -172,6 +172,7 @@ class OfflineService:
         episode_key: str = "",
         title: str = "",
         group_name: str = "",
+        ref: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """从播放器解析出的网站地址发起下载（m3u8 或直链）。
 
@@ -187,7 +188,7 @@ class OfflineService:
         paths = offline_config.ensure_dirs(self.config())
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可用"))
-        job, fresh = self._web_job_for(anime_id, key, title, group_name, status="downloading")
+        job, fresh = self._web_job_for(anime_id, key, title, group_name, status="downloading", ref=ref)
         if not fresh:
             return {"ok": True, "job": job, "reused": True}
         web_download.start(
@@ -196,8 +197,56 @@ class OfflineService:
         )
         return {"ok": True, "job": job, "reused": False}
 
+    def web_ref(self, media_id: int) -> dict[str, Any]:
+        """取出这条任务记下的片源信息；没有就抛给用户一句能照做的话。"""
+        job = self.store.job(int(media_id))
+        if not job:
+            raise OfflineError("下载记录不存在")
+        if str(job.get("source_kind") or "") != "web":
+            raise OfflineError("这不是网站资源任务")
+        try:
+            ref = json.loads(str(job.get("source_ref") or "") or "{}")
+        except ValueError:
+            ref = {}
+        if not str(ref.get("rule") or "") or not str(ref.get("episode") or ""):
+            raise OfflineError("这条任务没有留下片源信息，请回到播放器重新点一次「下载」")
+        return ref
+
+    def retry_web(self, media_id: int, resolve: Any) -> dict[str, Any]:
+        """原地重试一集：用记下的片源信息重新解析地址，然后照常下载。
+
+        Kazumi 的失败重试就是这个语义——不用回播放器，也不用重新选集。
+        """
+        media_id = int(media_id)
+        job = self.store.job(media_id)
+        if not job:
+            raise OfflineError("下载记录不存在")
+        status = str(job.get("status") or "")
+        if status in ("downloading", "queued", "processing"):
+            raise OfflineError("这一集正在处理，先别重复点")
+        if status == "ready":
+            raise OfflineError("这一集已经入库了")
+        ref = self.web_ref(media_id)
+        try:
+            url, kind, headers = resolve(str(ref["episode"]))
+        except OfflineError:
+            raise
+        except Exception as error:  # noqa: BLE001 - 解析失败也要给一句人话
+            raise OfflineError(f"重新解析这一集失败：{error}") from None
+        paths = offline_config.ensure_dirs(self.config())
+        if not paths["ok"]:
+            raise OfflineError(str(paths.get("error") or "媒体库目录不可用"))
+        self.store.set_status(media_id, "downloading", error="", progress=0)
+        folder = self._web_folder(media_id)
+        web_download.clear_folder(folder)
+        web_download.start(
+            self._web_owner(), media_id, str(url), str(kind or ""), dict(headers or {}), folder,
+        )
+        return {"ok": True, "job": self.store.job(media_id) or job}
+
     def _web_job_for(
-        self, anime_id: int, key: str, title: str, group_name: str, *, status: str
+        self, anime_id: int, key: str, title: str, group_name: str, *, status: str,
+        ref: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         """按「番 + 集」复用网站资源任务；返回 (任务, 是否需要重新下载)。
 
@@ -225,6 +274,7 @@ class OfflineService:
                 torrent_name=name,
                 source_title=str(title or existing.get("source_title") or ""),
                 group_name=str(group_name or existing.get("group_name") or ""),
+                **({"source_ref": json.dumps(ref, ensure_ascii=True)} if ref else {}),
             ) or existing
             folder = self._web_folder(int(job["id"]))
             # 上次可能只留下半截分片：已有成品就留着等归档，没有就清干净重下。
@@ -244,6 +294,7 @@ class OfflineService:
             episode_key=key,
             save_path=str(paths["download_root"]),
             status=status,
+            source_ref=json.dumps(ref, ensure_ascii=True) if ref else "",
         )
         return job, True
 
@@ -272,11 +323,18 @@ class OfflineService:
             episode_id = str((item or {}).get("episode_id") or "").strip()
             if not key or not episode_id:
                 continue
-            job, fresh = self._web_job_for(anime_id, key, title, group_name, status="queued")
+            job, fresh = self._web_job_for(
+                anime_id, key, title, group_name, status="queued", ref=(item or {}).get("ref") or None
+            )
             if not fresh:
                 skipped += 1
                 continue
-            queue.append({"media_id": int(job["id"]), "episode_id": episode_id, "key": key})
+            queue.append({
+                "media_id": int(job["id"]),
+                "episode_id": episode_id,
+                "key": key,
+                "ref": (item or {}).get("ref") or {},
+            })
         if not queue:
             raise OfflineError("选中的集都已经在下载或已入库了" if skipped else "没有选中任何一集")
         epoch = self._batch_epoch
@@ -1186,6 +1244,10 @@ class OfflineService:
             jobs = self.store.jobs_for_anime(int(anime_id))
         for job in jobs:
             job["live"] = live.get(int(job["id"]), {})
+            # 失败集能不能就地重试：网站资源只要当时留了「怎么再找到这一集」就行。
+            job["retryable"] = bool(
+                str(job.get("source_kind") or "") == "web" and str(job.get("source_ref") or "").strip()
+            )
         self.maybe_auto_check()
         files = self._annotate_files(self.store.files_for_anime(int(anime_id)))
         # 文件不在了不算「可以播放」：详情页的手势、面板的播放按钮都据此判断，

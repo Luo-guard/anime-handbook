@@ -113,6 +113,7 @@ class PostRoutes:
                 if playback is None:
                     raise ValueError("播放地址已过期，请重新播放后再点「下载」")
                 media_url, media_kind = playback_stream.main_resource(playback)
+                ref = body.get("ref") if isinstance(body.get("ref"), dict) else None
                 self.send_json(OfflineService(self.database).download_web(
                     anime_id=int(body.get("anime_id") or 0),
                     url=media_url,
@@ -121,6 +122,7 @@ class PostRoutes:
                     episode_key=str(body.get("episode_key") or ""),
                     title=str(body.get("title") or ""),
                     group_name=str(body.get("group_name") or ""),
+                    ref=ref,
                 ))
             elif path == "/api/offline/web-download-batch":
                 # 批量选集：先入队，再由后台线程一集一集解析 + 下载。
@@ -146,13 +148,44 @@ class PostRoutes:
                     url, kind = playback_stream.main_resource(playback)
                     return url, kind, playback.headers
 
+                enriched = []
+                for item in items:
+                    episode_id = str((item or {}).get("episode_id") or "")
+                    enriched.append({
+                        **(item or {}),
+                        "ref": {
+                            "rule": rule_id,
+                            "catalogue": catalogue_id,
+                            "source": source_id,
+                            "episode": episode_id,
+                        } if episode_id else {},
+                    })
                 self.send_json(OfflineService(self.database).download_web_batch(
                     anime_id=int(body.get("anime_id") or 0),
-                    items=items,
+                    items=enriched,
                     resolve=resolve,
                     title=str(body.get("title") or ""),
                     group_name=str(body.get("group_name") or ""),
                 ))
+            elif path == "/api/offline/web-retry":
+                # 失败集原地重试：任务里存了「规则 + 片源 + 线路 + 集 ID」，重新解析一次即可。
+                service = OfflineService(self.database)
+                ref = service.web_ref(int(body.get("media_id") or 0))
+                rule = playback_rules.installed_rule(str(ref["rule"]))
+
+                def resolve(episode_id: str):
+                    issued = playback_rules.play(
+                        str(ref["rule"]), rule, str(ref.get("catalogue") or ""),
+                        str(ref.get("source") or ""), str(episode_id or ref["episode"]),
+                    )
+                    token = str(issued.get("url") or "").split("/stream/", 1)[-1].split("/")[0]
+                    playback = playback_stream.lookup(token)
+                    if playback is None:
+                        raise OfflineError("这一集的解析结果已失效，请重试")
+                    url, kind = playback_stream.main_resource(playback)
+                    return url, kind, playback.headers
+
+                self.send_json(service.retry_web(int(body.get("media_id") or 0), resolve))
             elif path == "/api/offline/resume":
                 anime_id = int(body.get("anime_id") or 0)
                 episode_key = str(body.get("episode_key") or "")

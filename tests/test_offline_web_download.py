@@ -427,6 +427,38 @@ class BatchDownloadTest(ServerMixin, unittest.TestCase):
         if good.get("status") == "failed":
             self.assertIn("归档失败", str(good.get("error")))
 
+    def test_failed_episode_keeps_its_slot_and_can_retry_in_place(self):
+        """失败的一集留在任务里，并记住「怎么再找到这一集」，重试不用回播放器。"""
+        ref = {"rule": "demo", "catalogue": "1", "source": "1", "episode": "ep-8"}
+        job, _fresh = self.service._web_job_for(95, "0:8", "测试番", "", status="failed", ref=ref)
+        self.store.set_status(int(job["id"]), "failed", error="解析这一集失败：未找到可用视频")
+
+        state = self.service.state(95)
+        self.assertEqual(len(state["jobs"]), 1, "失败集不能被从任务列表里丢掉")
+        self.assertEqual(state["jobs"][0]["episode_key"], "0:8")
+        self.assertTrue(state["jobs"][0]["retryable"], "留了片源信息就应该能就地重试")
+
+        calls: list[str] = []
+
+        def resolve(episode_id: str):
+            calls.append(episode_id)
+            return (f"{self.base}/video.mp4", "file", {})
+
+        with patch.object(web_download, "start", lambda *args, **kwargs: None):
+            self.service.retry_web(int(job["id"]), resolve)
+        self.assertEqual(calls, ["ep-8"])
+        again = self.store.job(int(job["id"])) or {}
+        self.assertEqual(again.get("status"), "downloading")
+        self.assertEqual(again.get("error"), "", "重试要把上一次的错误清掉")
+
+    def test_retry_without_source_ref_is_refused_with_a_usable_message(self):
+        job, _fresh = self.service._web_job_for(96, "0:1", "测试番", "", status="failed")
+        self.store.set_status(int(job["id"]), "failed", error="下载已中断")
+        self.assertFalse(self.service.state(96)["jobs"][0]["retryable"])
+        with self.assertRaises(OfflineError) as caught:
+            self.service.retry_web(int(job["id"]), lambda _id: ("", "", {}))
+        self.assertIn("片源信息", str(caught.exception))
+
     def test_empty_selection_is_refused(self):
         with self.assertRaises(OfflineError):
             self.service.download_web_batch(anime_id=1, items=[], resolve=lambda _id: ("", "", {}))

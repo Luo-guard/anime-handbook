@@ -389,11 +389,11 @@ function libSortedFiles() {
 }
 
 // 下载中的任务：一条概览 + 一集一行，和「本地文件」弹窗里那套视觉一致。
-function renderLibDownloads(active) {
+function renderLibDownloads(active, failed = []) {
   const host = $("#libDownloads");
   if (!host) return;
-  host.classList.toggle("hidden", !active.length);
-  if (!active.length) {
+  host.classList.toggle("hidden", !active.length && !failed.length);
+  if (!active.length && !failed.length) {
     host.innerHTML = "";
     return;
   }
@@ -402,16 +402,19 @@ function renderLibDownloads(active) {
   );
   const speed = active.reduce((sum, job) => sum + Number((job.live || {}).dlspeed || 0), 0);
   const moving = active.filter((job) => job.status !== "queued").length;
-  const bits = [`${moving} 集在下载`];
+  const bits = [];
+  if (active.length) bits.push(`${moving} 集在下载`);
   if (active.length > moving) bits.push(`${active.length - moving} 集排队`);
+  if (failed.length) bits.push(`${failed.length} 集失败`);
   if (speed > 0) bits.push(`${formatSpeed(speed)}/s`);
   host.innerHTML = `
     <div class="lib-download-head">
       <span>${escapeHtml(bits.join(" · "))}</span>
-      <b>${average}%</b>
-      <div class="library-bar"><i style="width:${average}%"></i></div>
+      ${active.length ? `<b>${average}%</b>` : ""}
+      ${active.length ? `<div class="library-bar"><i style="width:${average}%"></i></div>` : ""}
     </div>
-    ${active.map(libDownloadRow).join("")}`;
+    ${active.map(libDownloadRow).join("")}
+    ${failed.map(libFailedRow).join("")}`;
 }
 
 function libDownloadRow(job) {
@@ -440,6 +443,42 @@ function libDownloadRow(job) {
         <button type="button" class="pc-btn pc-text danger" data-lib-job="${job.id}">移除</button>
       </div>
     </div>`;
+}
+
+// 失败的一集留在原位：写清原因，并给一个不用离开这一页的重试。
+function libFailedRow(job) {
+  const reason = String(job.error || "下载失败");
+  const web = String(job.source_kind || "") === "web";
+  // 网站资源：任务里留了片源信息就能重新解析；BT：归档失败才会自动重试。
+  const canRetry = web ? Boolean(job.retryable) : reason.startsWith("归档失败");
+  const hint = web && !job.retryable ? "这条任务没有留下片源信息，回播放器重新点「下载」" : "";
+  return `<div class="lib-download-row is-failed">
+      <span class="lib-download-badge" data-state="failed"></span>
+      <div class="lib-download-main">
+        <b>${escapeHtml(episodeLabelOf(job.episode_key))}</b>
+        <small class="lib-download-error">${escapeHtml(reason)}</small>
+        ${hint ? `<small>${escapeHtml(hint)}</small>` : ""}
+      </div>
+      <div class="lib-download-actions">
+        ${canRetry ? `<button type="button" class="pc-btn pc-text" data-lib-retry="${job.id}">重试</button>` : ""}
+        <button type="button" class="pc-btn pc-text danger" data-lib-job="${job.id}">移除</button>
+      </div>
+    </div>`;
+}
+
+async function libRetryJob(mediaId) {
+  const row = document.querySelector(`[data-lib-retry="${mediaId}"]`);
+  if (row) { row.disabled = true; row.textContent = "重试中…"; }
+  try {
+    const job = (librarySidebar.jobs || []).find((entry) => Number(entry.id) === Number(mediaId)) || {};
+    const url = String(job.source_kind || "") === "web" ? "/api/offline/web-retry" : "/api/offline/retry";
+    await api(url, { method: "POST", body: JSON.stringify({ media_id: Number(mediaId) }) });
+    toast("已重新开始，稍等一下");
+    await refreshLibraryDetail();
+  } catch (error) {
+    toast(error.message || "重试失败", "error");
+    if (row) { row.disabled = false; row.textContent = "重试"; }
+  }
 }
 
 async function libTaskAction(mediaId, action) {
@@ -486,15 +525,17 @@ function renderLibraryDetail() {
   if (multiple) metaParts.push(`${groups.length} 个来源`);
   meta.textContent = metaParts.join(" · ");
   const active = libActiveJobs(librarySidebar.jobs);
+  const failed = (librarySidebar.jobs || []).filter((job) => String(job.status || "") === "failed");
   const hint = $("#libDetailHint");
   if (hint) {
     const bits = [`${libSortedFiles().length} 集可播放`];
     if (active.length) bits.push(`${active.length} 集下载中`);
+    if (failed.length) bits.push(`${failed.length} 集失败`);
     if (multiple) bits.push(`${groups.length} 个来源`);
     if (librarySidebar.missing) bits.push(`另有 ${librarySidebar.missing} 集的文件已不在磁盘上`);
     hint.textContent = bits.join(" · ");
   }
-  renderLibDownloads(active);
+  renderLibDownloads(active, failed);
   const host = $("#libEpisodes");
   host.innerHTML = files.length
     ? files.map((file) => {
@@ -1271,6 +1312,8 @@ function initLibraryView() {
   $("#libDownloads")?.addEventListener("click", (event) => {
     const task = event.target.closest("[data-lib-task]");
     if (task) { libTaskAction(task.dataset.libTask, task.dataset.action); return; }
+    const retry = event.target.closest("[data-lib-retry]");
+    if (retry) { libRetryJob(retry.dataset.libRetry); return; }
     const remove = event.target.closest("[data-lib-job]");
     if (remove) libRemoveJob(remove.dataset.libJob);
   });
