@@ -581,26 +581,40 @@ class WebTask:
 
 # ---------------------------------------------------------------- 注册表
 
-_TASKS: dict[int, WebTask] = {}
+_TASKS: dict[tuple[str, int], WebTask] = {}
 _LOCK = threading.Lock()
 
 
-def start(media_id: int, url: str, kind: str, headers: dict[str, str], dest: Path) -> WebTask:
+def _key(owner: str, media_id: int) -> tuple[str, int]:
+    """任务号只在同一个库里唯一：切账号后新库的 #3 不是旧库的 #3。"""
+    return (str(owner), int(media_id))
+
+
+def start(owner: str, media_id: int, url: str, kind: str, headers: dict[str, str], dest: Path) -> WebTask:
     task = WebTask(media_id, url, kind, headers, dest)
     with _LOCK:
-        _TASKS[int(media_id)] = task
+        _TASKS[_key(owner, media_id)] = task
     task.start()
     return task
 
 
-def get(media_id: int) -> WebTask | None:
+def get(owner: str, media_id: int) -> WebTask | None:
     with _LOCK:
-        return _TASKS.get(int(media_id))
+        return _TASKS.get(_key(owner, media_id))
 
 
-def drop(media_id: int) -> WebTask | None:
+def drop(owner: str, media_id: int) -> WebTask | None:
     with _LOCK:
-        return _TASKS.pop(int(media_id), None)
+        return _TASKS.pop(_key(owner, media_id), None)
+
+
+def reset() -> None:
+    """清空注册表（切账号、测试收尾用）：先摘掉再取消，避免回调写回旧库。"""
+    with _LOCK:
+        tasks = list(_TASKS.values())
+        _TASKS.clear()
+    for task in tasks:
+        task.cancel()
 
 
 def clear_folder(dest: Path) -> None:

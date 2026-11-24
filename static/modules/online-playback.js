@@ -15,6 +15,15 @@ function playbackToken(url) {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
+// 选集对话框里的一行：勾选框 + 集名 + 状态位。抽出来便于单独验证转义与勾选态。
+function episodePickRow(row, index, checked) {
+  return `<label class="episode-pick-row">
+        <input type="checkbox" data-pick="${index}" ${checked ? "checked" : ""} />
+        <span class="episode-pick-label">${escapeHtml(row.label)}</span>
+        <span class="episode-pick-state" data-state="${index}"></span>
+      </label>`;
+}
+
 function onlineEpisodeLabel(session, episode = session.episode) {
   const { animeId, context, source } = session;
   const number = onlineLocalEpisodeNumber(episode, source, context?.target.first);
@@ -106,7 +115,7 @@ window.onlinePlayback = (() => {
     current.controller.abort();
     current = null;
     clearInterval(downloadTimer);
-    downloadLabel("下载本集", false);
+    downloadLabel("下载", false);
     $("#onlinePlayerOptions").classList.add("hidden");
     return true;
   }
@@ -215,7 +224,7 @@ window.onlinePlayback = (() => {
   // 换集/换线路时按钮要跟着变：同一集已经在下载或已入库就直接显示对应状态。
   async function reflectDownload(session, number) {
     clearInterval(downloadTimer);
-    downloadLabel("下载本集", false);
+    downloadLabel("下载", false);
     const animeId = Number(session?.animeId || 0);
     // 没有番剧上下文（直接从链接打开）时不预查，点下去会给一句明确提示。
     if (!animeId || !number) return;
@@ -233,6 +242,167 @@ window.onlinePlayback = (() => {
     } catch { /* 读不到就保持默认状态 */ }
   }
 
+  // ---- 选集下载：和 Kazumi 一样，先选集再入队 ----
+
+  const downloadSheet = { session: null, rows: [], selected: new Set(), busy: false };
+
+  function sheetNumber(session, episode) {
+    const first = session?.context?.target?.first || 1;
+    return onlineLocalEpisodeNumber(episode, session?.source, first)
+      || Number(session?.context?.target?.number || 0);
+  }
+
+  function updateDownloadSheet() {
+    const count = downloadSheet.selected.size;
+    const hint = $("#episodeDownloadHint");
+    if (hint) hint.textContent = count ? `已选 ${count} 集` : "还没选";
+    const confirm = $("#episodeDownloadConfirm");
+    if (confirm) {
+      confirm.disabled = downloadSheet.busy || count === 0;
+      confirm.textContent = downloadSheet.busy ? "提交中…" : count ? `下载选中（${count} 集）` : "开始下载";
+    }
+    const all = $("#episodeDownloadSelectAll");
+    if (all) all.textContent = count && count === downloadSheet.rows.length ? "取消全选" : "全选";
+  }
+
+  function renderDownloadSheet() {
+    const list = $("#episodeDownloadList");
+    if (!list) return;
+    list.innerHTML = downloadSheet.rows
+      .map((row, index) => episodePickRow(row, index, downloadSheet.selected.has(index)))
+      .join("");
+    updateDownloadSheet();
+  }
+
+  // 已经在下载或已入库的集标出来：用户不用点开媒体库才知道哪几集有了。
+  async function markDownloadSheetStates(session) {
+    const animeId = Number(session?.animeId || 0);
+    if (!animeId) return;
+    try {
+      const data = await api(`/api/offline/state?anime_id=${animeId}`);
+      if (downloadSheet.session !== session) return;
+      const status = new Map();
+      (data.jobs || []).forEach(job => {
+        if (String(job.source_kind || "") === "web") status.set(String(job.episode_key || ""), job.status);
+      });
+      downloadSheet.rows.forEach((row, index) => {
+        const node = document.querySelector(`#episodeDownloadList [data-state="${index}"]`);
+        if (!node) return;
+        const value = status.get(`0:${row.number}`);
+        node.textContent = value === "ready" ? "已入库"
+          : value ? "在下载" : "";
+        node.dataset.kind = value || "";
+      });
+      updateDownloadSheet();
+    } catch { /* 状态只是锦上添花，读不到不挡下载 */ }
+  }
+
+  function openDownloadSheet() {
+    const session = current;
+    if (!session) return;
+    const animeId = Number(session.animeId || 0);
+    if (!animeId) {
+      toast("从详情页打开这一集后再下载，才能归档到对应的番剧里。", "error");
+      return;
+    }
+    const episodes = (session.source?.episodes || [])
+      .map((episode, index) => ({ episode, index, number: sheetNumber(session, episode) }))
+      .filter(item => item.number > 0);
+    if (!episodes.length) {
+      toast("这条线路认不出集数，先切换到带集数的线路。", "error");
+      return;
+    }
+    // 只有一集没什么好选的，直接走单集下载。
+    if (episodes.length === 1) {
+      startWebDownload();
+      return;
+    }
+    downloadSheet.session = session;
+    downloadSheet.rows = episodes.map(item => ({
+      id: String(item.episode.id),
+      number: item.number,
+      label: `第 ${String(item.number).padStart(2, "0")} 集${item.episode.title ? ` · ${item.episode.title}` : ""}`,
+    }));
+    downloadSheet.selected = new Set(
+      downloadSheet.rows.reduce((picked, row, index) => {
+        if (row.number === sheetNumber(session, session.episode)) picked.push(index);
+        return picked;
+      }, []),
+    );
+    if (!downloadSheet.selected.size && downloadSheet.rows.length) downloadSheet.selected.add(0);
+    downloadSheet.busy = false;
+    $("#episodeDownloadTarget").textContent = `${session.catalogue?.title || ""}${session.source?.name ? ` · ${session.source.name}` : ""}`;
+    $("#episodeDownloadStatus").textContent = "";
+    renderDownloadSheet();
+    const dialog = $("#episodeDownloadSheet");
+    if (dialog && !dialog.open) dialog.showModal();
+    markDownloadSheetStates(session);
+  }
+
+  async function submitDownloadSheet(event) {
+    event?.preventDefault();
+    const session = downloadSheet.session;
+    if (!session || downloadSheet.busy) return;
+    const picked = [...downloadSheet.selected]
+      .sort((a, b) => a - b)
+      .map(index => downloadSheet.rows[index])
+      .filter(Boolean);
+    if (!picked.length) {
+      toast("先勾选要下载的集", "error");
+      return;
+    }
+    downloadSheet.busy = true;
+    updateDownloadSheet();
+    const currentNumber = sheetNumber(session, session.episode);
+    const onlyCurrent = picked.length === 1 && picked[0].number === currentNumber;
+    const token = playbackToken(session.playback?.url);
+    try {
+      if (onlyCurrent && token) {
+        // 只下正在播的这一集：直接用已经解析好的地址，省一次解析。
+        const data = await api("/api/offline/web-download", {
+          method: "POST",
+          timeoutMs: 30000,
+          body: JSON.stringify({
+            anime_id: session.animeId,
+            token,
+            episode_key: `0:${currentNumber}`,
+            title: downloadEpisodeName(session),
+            group_name: session.catalogue?.ruleName || session.catalogue?.rule || "",
+          }),
+        });
+        $("#episodeDownloadSheet")?.close();
+        toast(data.reused ? "这一集已经在下载或已入库" : "已开始下载，完成后出现在媒体库");
+        watchDownload(session, data.job?.id);
+        return;
+      }
+      const data = await api("/api/offline/web-download-batch", {
+        method: "POST",
+        timeoutMs: 60000,
+        body: JSON.stringify({
+          anime_id: session.animeId,
+          rule: session.catalogue?.rule || "",
+          catalogue: String(session.catalogue?.id ?? ""),
+          source: String(session.source?.id ?? ""),
+          title: downloadEpisodeName(session),
+          group_name: session.catalogue?.ruleName || session.catalogue?.rule || "",
+          items: picked.map(row => ({ episode_key: `0:${row.number}`, episode_id: row.id })),
+        }),
+      });
+      $("#episodeDownloadSheet")?.close();
+      const skipped = Number(data.skipped || 0);
+      toast(`已加入 ${data.queued} 集下载队列${skipped ? `（${skipped} 集本来就在下载或已入库）` : ""}，进度见 媒体库 → 本地文件`);
+      const currentJob = (data.jobs || []).find(
+        job => String(job.episode_key || "") === `0:${currentNumber}`,
+      );
+      if (currentJob) watchDownload(session, currentJob.id);
+      else downloadLabel("队列中…", true);
+    } catch (error) {
+      toast(error.message || "没能加入下载队列", "error");
+      downloadSheet.busy = false;
+      updateDownloadSheet();
+    }
+  }
+
   async function startWebDownload() {
     const session = current;
     if (!session) return;
@@ -241,9 +411,7 @@ window.onlinePlayback = (() => {
       toast("从详情页打开这一集后再下载，才能归档到对应的番剧里。", "error");
       return;
     }
-    const first = session.context?.target?.first || 1;
-    const number = onlineLocalEpisodeNumber(session.episode, session.source, first)
-      || Number(session.context?.target?.number || 0);
+    const number = sheetNumber(session, session.episode);
     if (!number) {
       toast("认不出这是第几集，先切换到带集数的线路。", "error");
       return;
@@ -269,7 +437,7 @@ window.onlinePlayback = (() => {
       toast(data.reused ? "这一集已经在下载或已入库" : "已开始下载，完成后出现在媒体库");
       watchDownload(session, data.job?.id);
     } catch (error) {
-      downloadLabel("下载本集", false);
+      downloadLabel("下载", false);
       toast(error.message || "下载没能开始", "error");
     }
   }
@@ -810,7 +978,22 @@ window.onlinePlayback = (() => {
       openHandbookSettings("playback", "#playbackRulesHeading");
     });
     $("#onlineRuleCheckUpdates").addEventListener("click", () => refreshRuleCatalogue({ fresh: true }));
-    $("#onlinePlayerDownload").addEventListener("click", startWebDownload);
+    $("#onlinePlayerDownload").addEventListener("click", openDownloadSheet);
+    $("#episodeDownloadForm").addEventListener("submit", submitDownloadSheet);
+    $("#episodeDownloadClose").addEventListener("click", () => $("#episodeDownloadSheet").close());
+    $("#episodeDownloadCancel").addEventListener("click", () => $("#episodeDownloadSheet").close());
+    $("#episodeDownloadSelectAll").addEventListener("click", () => {
+      const all = downloadSheet.selected.size === downloadSheet.rows.length;
+      downloadSheet.selected = all ? new Set() : new Set(downloadSheet.rows.map((_row, index) => index));
+      renderDownloadSheet();
+    });
+    $("#episodeDownloadList").addEventListener("change", (event) => {
+      const input = event.target.closest("input[data-pick]");
+      if (!input) return;
+      const index = Number(input.dataset.pick);
+      if (input.checked) downloadSheet.selected.add(index); else downloadSheet.selected.delete(index);
+      updateDownloadSheet();
+    });
     $("#onlinePlayerRule").addEventListener("click", () => {
       const context = current?.context;
       if (!context) return;

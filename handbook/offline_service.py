@@ -96,7 +96,8 @@ MAX_ARCHIVE_RETRIES = 5
 # 后台心跳的间隔：下载进度 5 秒刷新一次足够顺滑，qB 的压力也可忽略。
 WORKER_INTERVAL_SECONDS = 5.0
 
-_ARCHIVING: set[int] = set()
+# 正在归档的 (库, 任务号)：只按任务号认会串库（不同库的 #3 是不同的记录）。
+_ARCHIVING: set[tuple[str, int]] = set()
 _ARCHIVE_LOCK = threading.Lock()
 _AUTO_CHECK_LOCK = threading.Lock()
 _AUTO_CHECK_RUNNING = False
@@ -128,6 +129,16 @@ class OfflineService:
         self.db = db
         self.asset_root = Path(db.asset_root)
         self.store = OfflineStore(db)
+        # 批量下载的“代”：切账号 / 测试收尾时 +1，正在跑的批次看到代变了就停手，
+        # 免得把旧库的任务写进新库（两边任务号会撞）。
+        self._batch_epoch = 0
+        self._batch_threads: list[threading.Thread] = []
+
+    def stop_web_batches(self, timeout: float = 15.0) -> None:
+        self._batch_epoch += 1
+        for thread in list(self._batch_threads):
+            thread.join(timeout)
+        self._batch_threads.clear()
 
     # ---- 基础设施 -----------------------------------------------------
 
@@ -141,6 +152,10 @@ class OfflineService:
     def paths(self) -> dict[str, Any]:
         config = self.config()
         return offline_config.ensure_dirs(config)
+
+    def _web_owner(self) -> str:
+        """当前库的标识：下载任务按库隔离，切账号后任务号不会串。"""
+        return str(self.db.path)
 
     def _web_folder(self, media_id: int) -> Path:
         """网站资源的落地目录：按任务号隔离，归档成功后整目录删掉。"""
@@ -172,25 +187,39 @@ class OfflineService:
         paths = offline_config.ensure_dirs(self.config())
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可用"))
-        label = media_tools.label_for_key(key) or "单集"
-        name = f"网站资源 · {label}"
+        job, fresh = self._web_job_for(anime_id, key, title, group_name, status="downloading")
+        if not fresh:
+            return {"ok": True, "job": job, "reused": True}
+        web_download.start(
+            self._web_owner(), int(job["id"]), str(url), str(kind or ""), dict(headers or {}),
+            self._web_folder(int(job["id"])),
+        )
+        return {"ok": True, "job": job, "reused": False}
+
+    def _web_job_for(
+        self, anime_id: int, key: str, title: str, group_name: str, *, status: str
+    ) -> tuple[dict[str, Any], bool]:
+        """按「番 + 集」复用网站资源任务；返回 (任务, 是否需要重新下载)。
+
+        同集已经在排队、下载或已入库时不再新建：批量选集里重复点、或先单集后
+        批量，都不该在媒体库里叠出两条一模一样的记录。
+        """
+        name = f"网站资源 · {media_tools.label_for_key(key) or '单集'}"
         existing = next(
             (
                 job
-                for job in self.store.jobs_for_anime(anime_id)
+                for job in self.store.jobs_for_anime(int(anime_id))
                 if str(job.get("source_kind") or "") == "web"
                 and str(job.get("episode_key") or "") == key
             ),
             None,
         )
+        if existing and str(existing.get("status") or "") in ("queued", "downloading", "processing", "ready"):
+            return existing, False
         if existing:
-            status = str(existing.get("status") or "")
-            # 同一集已经在跑或已经入库：直接复用，避免任务列表里叠两条。
-            if status in ("queued", "downloading", "processing", "ready"):
-                return {"ok": True, "job": existing, "reused": True}
             job = self.store.update_job(
                 int(existing["id"]),
-                status="downloading",
+                status=status,
                 error="",
                 progress=0,
                 torrent_name=name,
@@ -204,20 +233,112 @@ class OfflineService:
                 for item in (web_download.DIRECT_NAME, web_download.PLAYLIST_NAME)
             ):
                 web_download.clear_folder(folder)
-        else:
-            job = self.store.create_job(
-                anime_id=anime_id,
-                source_kind="web",
-                torrent_name=name,
-                source_title=str(title or ""),
-                group_name=str(group_name or ""),
-                episode_key=key,
-                save_path=str(paths["download_root"]),
-                status="downloading",
-            )
-            folder = self._web_folder(int(job["id"]))
-        web_download.start(int(job["id"]), str(url), str(kind or ""), dict(headers or {}), folder)
-        return {"ok": True, "job": job, "reused": False}
+            return job, True
+        paths = offline_config.ensure_dirs(self.config())
+        job = self.store.create_job(
+            anime_id=int(anime_id),
+            source_kind="web",
+            torrent_name=name,
+            source_title=str(title or ""),
+            group_name=str(group_name or ""),
+            episode_key=key,
+            save_path=str(paths["download_root"]),
+            status=status,
+        )
+        return job, True
+
+    def download_web_batch(
+        self,
+        *,
+        anime_id: int,
+        items: list[dict[str, Any]],
+        resolve: Any,
+        title: str = "",
+        group_name: str = "",
+    ) -> dict[str, Any]:
+        """批量下载：先排进队列，再一集一集地解析、下载。
+
+        Kazumi 的选集下载就是这个模型——一次点十几集，真正解析和下载是串行的，
+        免得同时开十几路把源站惹毛。``resolve(episode_id)`` 由 HTTP 层传入
+        （它知道用哪条规则、哪个线路解析），解析失败只让那一集失败，不拖累整批。
+        """
+        anime_id = int(anime_id or 0)
+        if anime_id <= 0:
+            raise OfflineError("缺少番剧信息，没法归档到媒体库")
+        queue: list[dict[str, Any]] = []
+        skipped = 0
+        for item in items or []:
+            key = str((item or {}).get("episode_key") or "").strip()
+            episode_id = str((item or {}).get("episode_id") or "").strip()
+            if not key or not episode_id:
+                continue
+            job, fresh = self._web_job_for(anime_id, key, title, group_name, status="queued")
+            if not fresh:
+                skipped += 1
+                continue
+            queue.append({"media_id": int(job["id"]), "episode_id": episode_id, "key": key})
+        if not queue:
+            raise OfflineError("选中的集都已经在下载或已入库了" if skipped else "没有选中任何一集")
+        epoch = self._batch_epoch
+        worker = threading.Thread(
+            target=self._run_web_batch, args=(queue, resolve, epoch),
+            name="handbook-web-batch", daemon=True,
+        )
+        self._batch_threads = [thread for thread in self._batch_threads if thread.is_alive()]
+        self._batch_threads.append(worker)
+        worker.start()
+        jobs = [self.store.job(int(item["media_id"])) or {} for item in queue]
+        return {"ok": True, "jobs": jobs, "queued": len(queue), "skipped": skipped}
+
+    def _run_web_batch(self, queue: list[dict[str, Any]], resolve: Any, epoch: int) -> None:
+        try:
+            self._run_web_batch_inner(queue, resolve, epoch)
+        except Exception:  # noqa: BLE001 - 切账号/删库后线程不能带着异常炸掉
+            return
+
+    def _run_web_batch_inner(self, queue: list[dict[str, Any]], resolve: Any, epoch: int) -> None:
+        owner = Path(self.db.path)
+        for item in queue:
+            # 批次跑着的时候用户切了账号 / 删了库：立刻停手，别把旧任务写进新库，
+            # 也别让两个库的任务号撞在一起。
+            if epoch != self._batch_epoch or not owner.exists():
+                return
+            media_id = int(item["media_id"])
+            job = self.store.job(media_id)
+            # 排队期间被用户移除或改过状态：跳过，不把删掉的任务又拉起来。
+            if not job or str(job.get("status") or "") != "queued":
+                continue
+            try:
+                url, kind, headers = resolve(item["episode_id"])
+            except Exception as error:  # noqa: BLE001 - 单集失败不该中断整批
+                self.store.set_status(
+                    media_id, "failed", error=f"解析这一集失败：{error}"
+                )
+                continue
+            if self.store.job(media_id) is None:
+                continue
+            self.store.set_status(media_id, "downloading", error="", progress=0)
+            folder = self._web_folder(media_id)
+            web_download.clear_folder(folder)
+            web_download.start(self._web_owner(), media_id, str(url), str(kind or ""), dict(headers or {}), folder)
+            self._await_web_task(media_id, epoch)
+
+    def _await_web_task(self, media_id: int, epoch: int) -> None:
+        """等当前这一集下完再开下一集；任务被移除或批次被叫停时立刻返回。"""
+        owner = Path(self.db.path)
+        while True:
+            if epoch != self._batch_epoch or not owner.exists():
+                return
+            task = web_download.get(self._web_owner(), media_id)
+            if task is None:
+                return
+            status = str(task.snapshot().get("status") or "")
+            if status in ("done", "failed"):
+                if status == "done":
+                    self.store.set_status(media_id, "processing", progress=100, error="")
+                    self._schedule_archive(media_id)
+                return
+            time.sleep(0.5)
 
     # ---- 搜索 ---------------------------------------------------------
 
@@ -402,12 +523,25 @@ class OfflineService:
         web_jobs = [job for job in active if str(job.get("source_kind") or "") == "web"]
         for job in web_jobs:
             media_id = int(job["id"])
-            task = web_download.get(media_id)
+            task = web_download.get(self._web_owner(), media_id)
             if task is None:
+                current = str(job.get("status") or "")
+                if current == "queued":
+                    # 批量选集里还没轮到的：排队线程会来取。只有久到不合理才判失败，
+                    # 否则正常排队会被误标成「下载已中断」。
+                    if _seconds_stale(job.get("updated_at") or "") > 900:
+                        self.store.set_status(
+                            media_id, "failed",
+                            error="排队太久没有开始，可能被打断了，请回到播放器重新点下载",
+                        )
+                    continue
+                if current == "processing":
+                    # 归档线程接手后会从注册表摘掉任务，这不是中断。
+                    continue
                 # 进程重启后线程没了，地址也只活在内存里，只能让人重新点一次。
                 self.store.set_status(
                     media_id, "failed",
-                    error="下载已中断（程序重启或任务被清理），请回到播放器重新点「下载本集」",
+                    error="下载已中断（程序重启或任务被清理），请回到播放器重新点「下载」",
                 )
                 continue
             snap = task.snapshot()
@@ -432,7 +566,11 @@ class OfflineService:
                     progress=float(snap.get("progress") or 0),
                 )
             elif snap.get("status") == "done":
-                self.store.set_status(media_id, "processing", progress=100, error="")
+                # 这一拍拿到的 job 可能是归档前的快照：先看一眼现状，已经入库的别倒回去。
+                # 这里不写 processing，交给归档线程写：否则归档刚置 ready，这一拍又把
+                # 它改回 processing，界面就永远停在「正在整理」。
+                if str((self.store.job(media_id) or {}).get("status") or "") == "ready":
+                    continue
                 self._schedule_archive(media_id)
             else:
                 self.store.set_status(
@@ -576,21 +714,28 @@ class OfflineService:
 
     def _schedule_archive(self, media_id: int) -> None:
         with _ARCHIVE_LOCK:
-            if media_id in _ARCHIVING:
+            key = (self._web_owner(), int(media_id))
+            if key in _ARCHIVING:
                 return
-            _ARCHIVING.add(media_id)
+            _ARCHIVING.add(key)
         threading.Thread(target=self._archive_job, args=(media_id,), daemon=True).start()
 
     def _archive_job(self, media_id: int) -> None:
         try:
             self._archive(media_id)
         except (OfflineError, media_tools.MediaError, QBError) as error:
-            self._mark_archive_failed(media_id, error)
+            try:
+                self._mark_archive_failed(media_id, error)
+            except Exception:  # noqa: BLE001 - 库被切走/删掉时只能放弃记录
+                pass
         except Exception as error:  # noqa: BLE001 - 后台线程必须兜住一切，否则任务永远卡在 processing
-            self._mark_archive_failed(media_id, error)
+            try:
+                self._mark_archive_failed(media_id, error)
+            except Exception:  # noqa: BLE001
+                pass
         finally:
             with _ARCHIVE_LOCK:
-                _ARCHIVING.discard(media_id)
+                _ARCHIVING.discard((self._web_owner(), int(media_id)))
 
     def _mark_archive_failed(self, media_id: int, error: Exception) -> None:
         """记失败，并把「还剩几次自动重试 / 已经停止」写进错误信息。
@@ -599,6 +744,9 @@ class OfflineService:
         明确说自动重试已停、要用户处理什么之后点「重试归档」。
         """
         job = self.store.job(media_id)
+        # 已经入库的任务不再改成失败：归档可能被排两次，后一次看到的目录已经清空。
+        if str((job or {}).get("status") or "") == "ready":
+            return
         attempts = int((job or {}).get("archive_retries") or 0)
         if attempts >= MAX_ARCHIVE_RETRIES:
             suffix = (
@@ -741,7 +889,7 @@ class OfflineService:
             if path.is_file() and path.stat().st_size > 0:
                 return [path]
         raise OfflineError(
-            "下载目录里没有这一集的成品，可能上次没下完：回到播放器重新点一次「下载本集」"
+            "下载目录里没有这一集的成品，可能上次没下完：回到播放器重新点一次「下载」"
         )
 
     def _archive(self, media_id: int) -> None:
@@ -753,12 +901,26 @@ class OfflineService:
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可写"))
         if str(job.get("source_kind") or "") == "web":
+            # 归档可能被排了两次（心跳和请求线程各一次）。第一次已经把成品入库并
+            # 清掉中转目录，第二次再来时目录是空的——这时必须认「已完成」，不能判失败。
+            if str(job.get("status") or "") == "ready":
+                return
+            self.store.set_status(media_id, "processing", progress=100, error="")
             # 网站资源没有下载器可问，成品就在自己的临时目录里；找不到就是没下完。
-            files = self._web_sources(media_id)
+            try:
+                files = self._web_sources(media_id)
+            except OfflineError:
+                # 两次归档撞在一起时，先跑完的那次已经入库并清掉了临时目录。
+                # 这一集确实已经在库里，就不是失败。
+                recorded = self.store.file_for(int(job["anime_id"]), str(job.get("episode_key") or ""))
+                if recorded and Path(str(recorded.get("file_path") or "")).is_file():
+                    self.store.set_status(media_id, "ready", progress=100, error="")
+                    return
+                raise
             try:
                 self._archive_into_library(job, files, paths)
             finally:
-                web_download.drop(media_id)
+                web_download.drop(self._web_owner(), media_id)
             web_download.clear_folder(self._web_folder(media_id))
             return
         torrent_hash = str(job.get("torrent_hash") or "")
@@ -1133,9 +1295,9 @@ class OfflineService:
                 self.store.set_status(int(media_id), "processing", error="", archive_retries=0)
                 self._schedule_archive(int(media_id))
                 return {"ok": True, "media_id": int(media_id)}
-            task = web_download.get(int(media_id))
+            task = web_download.get(self._web_owner(), int(media_id))
             if task is None:
-                raise OfflineError("原来的下载地址已经失效，请回到播放器重新点「下载本集」")
+                raise OfflineError("原来的下载地址已经失效，请回到播放器重新点「下载」")
             task.resume()
             self.store.set_status(int(media_id), "downloading", error="", archive_retries=0)
             return {"ok": True, "media_id": int(media_id), "restarted": True}
@@ -1149,9 +1311,11 @@ class OfflineService:
         if not job:
             raise OfflineError("下载记录不存在")
         if str(job.get("source_kind") or "") == "web":
-            task = web_download.get(int(media_id))
+            task = web_download.get(self._web_owner(), int(media_id))
             if task is None:
-                raise OfflineError("下载已中断，请回到播放器重新点「下载本集」")
+                if str(job.get("status") or "") == "queued":
+                    raise OfflineError("这一集还在排队，等它开始下载后再暂停")
+                raise OfflineError("下载已中断，请回到播放器重新点「下载」")
             if action == "pause":
                 task.pause()
                 paused = True
@@ -1190,7 +1354,7 @@ class OfflineService:
         if not job:
             raise OfflineError("下载记录不存在")
         if str(job.get("source_kind") or "") == "web":
-            task = web_download.drop(int(media_id))
+            task = web_download.drop(self._web_owner(), int(media_id))
             if task is not None:
                 task.cancel()
             # 网站资源的临时目录只是中转，删任务就一起清掉，不留孤儿文件。

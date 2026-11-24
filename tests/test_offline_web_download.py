@@ -13,11 +13,19 @@ from pathlib import Path
 from unittest.mock import patch
 
 from handbook import database, offline_config, web_download
+from handbook import offline_service as offline_service_module
 from handbook.offline import OfflineStore
 from handbook.offline_service import OfflineError, OfflineService
 
 SEGMENTS = [b"segment-one-bytes", b"segment-two-bytes!", b"segment-three!!"]
 KEY_BYTES = b"0123456789abcdef"
+
+
+def _wait_archives(timeout: float = 20.0) -> None:
+    """等后台归档线程收尾：它还在 remux 时删临时目录会让 sqlite 报只读。"""
+    deadline = time.time() + timeout
+    while time.time() < deadline and offline_service_module._ARCHIVING:
+        time.sleep(0.1)
 
 
 class FixtureHandler(http.server.BaseHTTPRequestHandler):
@@ -89,7 +97,7 @@ class ServerMixin:
 
 class WebDownloaderTest(ServerMixin, unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.dest = Path(self.tmp.name) / "web"
         FixtureHandler.master = (
             "#EXTM3U\n"
@@ -156,9 +164,22 @@ class WebDownloaderTest(ServerMixin, unittest.TestCase):
 
 
 class ServiceIntegrationTest(ServerMixin, unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # 整个类共用一个根目录，每个用例用子目录：临时目录在用例中途被删掉，
+        # 后台线程就会写进一个不存在的库（sqlite 报 readonly）。
+        cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cls.class_root = Path(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+        super().tearDownClass()
+
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
+        self.root = self.class_root / self._testMethodName
+        self.root.mkdir(parents=True, exist_ok=True)
         self.db = database.HandbookDB(self.root / "handbook.db", asset_root=self.root)
         self.store = OfflineStore(self.db)
         offline_config.save(self.root, {"media_root": str(self.root / "media"), "seed_after_done": True})
@@ -171,9 +192,12 @@ class ServiceIntegrationTest(ServerMixin, unittest.TestCase):
         )
 
     def tearDown(self):
+        # 先让批次线程收手并 join，再清注册表、等归档线程；否则线程会写进已删除的临时库。
+        self.service.stop_web_batches()
+        web_download.reset()
+        _wait_archives()
         self.env.stop()
         web_download.clear_folder(self.root)
-        self.tmp.cleanup()
 
     def _wait(self, media_id: int, wanted: str, timeout: float = 20.0) -> dict:
         deadline = time.time() + timeout
@@ -236,22 +260,176 @@ class ServiceIntegrationTest(ServerMixin, unittest.TestCase):
             episode_key="0:5", title="测试番 · 第 05 集",
         )
         media_id = int(data["job"]["id"])
-        self._wait(media_id, "downloading")
-        # 下载线程结束后由心跳推进到归档。
+        # 等下载线程自己跑完（不碰数据库），再同步归档：避免测试线程和下载线程
+        # 同时读写同一个库，sqlite 在这种并发下偶发 readonly。
         deadline = time.time() + 30
         while time.time() < deadline:
-            self.service._sync(self.store.jobs_for_sync())
-            job = self.store.job(media_id) or {}
-            if job.get("status") in ("ready", "failed"):
+            task = web_download.get(self.service._web_owner(), media_id)
+            if task is None:
                 break
-            time.sleep(0.2)
+            if task.snapshot().get("status") in ("done", "failed"):
+                break
+            time.sleep(0.05)
+        self.service._archive(media_id)
         job = self.store.job(media_id) or {}
-        self.assertEqual(job.get("status"), "ready", job.get("error"))
+        folder = self.service._web_folder(media_id)
+        listing = sorted(item.name for item in folder.iterdir()) if folder.exists() else "目录不存在"
+        self.assertEqual(job.get("status"), "ready", f"{job.get('error')} | {folder} | {listing}")
         files = self.store.files_for_anime(77)
         self.assertEqual([item["episode_key"] for item in files], ["0:5"])
         self.assertTrue(Path(files[0]["file_path"]).is_file())
         # 归档完临时目录要清掉，别留第二份。
         self.assertFalse(self.service._web_folder(media_id).exists())
+
+
+class _FakeTask:
+    """只回「已完成」的下载任务替身：串行顺序和状态流转不依赖真实网络与文件。"""
+
+    total_bytes = 0
+    error = ""
+
+    def __init__(self, media_id: int) -> None:
+        self.media_id = media_id
+
+    def snapshot(self) -> dict:
+        return {"status": "done", "paused": False, "progress": 100.0, "speed": 0.0, "bytes": 0}
+
+    def pause(self) -> None: ...
+    def resume(self) -> None: ...
+    def cancel(self) -> None: ...
+
+
+class BatchDownloadTest(ServerMixin, unittest.TestCase):
+    """选集下载：入队、串行解析、跳过已有、单集失败不拖累整批。"""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cls.class_root = Path(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.root = self.class_root / self._testMethodName
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.db = database.HandbookDB(self.root / "handbook.db", asset_root=self.root)
+        self.store = OfflineStore(self.db)
+        offline_config.save(self.root, {"media_root": str(self.root / "media"), "seed_after_done": True})
+        self.service = OfflineService(self.db)
+        self.env = patch.dict("os.environ", {"ANIME_HANDBOOK_SANDBOX": "1"})
+        self.env.start()
+        FixtureHandler.video = b"y" * 2048
+
+    def tearDown(self):
+        # 先让批次线程收手并 join，再清注册表、等归档线程；否则线程会写进已删除的临时库。
+        self.service.stop_web_batches()
+        web_download.reset()
+        _wait_archives()
+        self.env.stop()
+        web_download.clear_folder(self.root)
+
+    def _queue(self, anime_id: int, pairs: list[tuple[str, str]]) -> list[dict]:
+        """直接建排队中的任务，但不启动线程：下面用同步方式跑 worker，避免和
+        测试自己的临时库赛跑（后台线程在临时目录被删时会写失败）。"""
+        queue = []
+        for key, episode_id in pairs:
+            job, _fresh = self.service._web_job_for(anime_id, key, "测试番", "", status="queued")
+            queue.append({"media_id": int(job["id"]), "episode_id": episode_id, "key": key})
+        return queue
+
+    def _run_worker(self, queue: list[dict], resolve) -> None:
+        """同步跑 worker，但把「下载」换成即时完成的替身：这一层要验的是排队、
+        解析顺序和失败隔离，真实下载由 WebDownloaderTest 覆盖。"""
+        tasks: dict[int, _FakeTask] = {}
+
+        def fake_start(owner, media_id, url, kind, headers, folder):
+            tasks[int(media_id)] = _FakeTask(int(media_id))
+            return tasks[int(media_id)]
+
+        with patch.object(web_download, "start", fake_start), \
+             patch.object(web_download, "get", lambda owner, media_id: tasks.get(int(media_id))), \
+             patch.object(OfflineService, "_schedule_archive", lambda self, media_id: None):
+            self.service._run_web_batch_inner(queue, resolve, self.service._batch_epoch)
+
+    def test_api_queues_all_selected_episodes(self):
+        data = self.service.download_web_batch(
+            anime_id=88,
+            items=[
+                {"episode_key": "0:1", "episode_id": "ep-1"},
+                {"episode_key": "0:2", "episode_id": "ep-2"},
+            ],
+            resolve=lambda episode_id: (f"{self.base}/video.mp4", "file", {}),
+            title="测试番",
+        )
+        self.assertEqual(data["queued"], 2)
+        self.assertEqual(data["skipped"], 0)
+        self.assertEqual([job["status"] for job in data["jobs"]], ["queued", "queued"])
+        # 线程已经起来在跑了，这里立刻叫停，免得它跑进下一个用例的临时目录。
+        self.service.stop_web_batches()
+        web_download.reset()
+
+    def test_worker_resolves_and_downloads_one_episode_at_a_time(self):
+        calls: list[str] = []
+
+        def resolve(episode_id: str):
+            calls.append(episode_id)
+            return (f"{self.base}/video.mp4", "file", {})
+
+        queue = self._queue(88, [("0:1", "ep-1"), ("0:2", "ep-2")])
+        self._run_worker(queue, resolve)
+        # 串行：第二集的解析只能发生在第一集下完之后。
+        self.assertEqual(calls, ["ep-1", "ep-2"])
+        for item in queue:
+            job = self.store.job(item["media_id"]) or {}
+            status = job.get("status")
+            # 夹具是假字节，归档可能封装失败；下载本身必须成功（进了 processing 之后）。
+            self.assertIn(status, ("processing", "ready", "failed"), job.get("error"))
+            if status == "failed":
+                self.assertIn("归档失败", str(job.get("error")))
+
+    def test_batch_skips_episodes_already_in_the_queue(self):
+        self.service.download_web(
+            anime_id=90, url=f"{self.base}/video.mp4", kind="file",
+            episode_key="0:1", title="测试番",
+        )
+        data = self.service.download_web_batch(
+            anime_id=90,
+            items=[
+                {"episode_key": "0:1", "episode_id": "ep-1"},
+                {"episode_key": "0:2", "episode_id": "ep-2"},
+            ],
+            resolve=lambda episode_id: (f"{self.base}/video.mp4", "file", {}),
+            title="测试番",
+        )
+        self.assertEqual(data["queued"], 1)
+        self.assertEqual(data["skipped"], 1)
+        self.assertEqual(data["jobs"][0]["episode_key"], "0:2")
+        self.service.stop_web_batches()
+        web_download.reset()
+
+    def test_one_failed_resolve_does_not_stop_the_rest(self):
+        def resolve(episode_id: str):
+            if episode_id == "bad":
+                raise OfflineError("这条线路没有这一集")
+            return (f"{self.base}/video.mp4", "file", {})
+
+        queue = self._queue(91, [("0:1", "bad"), ("0:2", "good")])
+        self._run_worker(queue, resolve)
+        bad = self.store.job(queue[0]["media_id"]) or {}
+        self.assertEqual(bad.get("status"), "failed")
+        self.assertIn("解析这一集失败", str(bad.get("error")))
+        good = self.store.job(queue[1]["media_id"]) or {}
+        self.assertIn(good.get("status"), ("processing", "ready", "failed"), good.get("error"))
+        if good.get("status") == "failed":
+            self.assertIn("归档失败", str(good.get("error")))
+
+    def test_empty_selection_is_refused(self):
+        with self.assertRaises(OfflineError):
+            self.service.download_web_batch(anime_id=1, items=[], resolve=lambda _id: ("", "", {}))
 
 
 class PlaybackTokenTest(unittest.TestCase):

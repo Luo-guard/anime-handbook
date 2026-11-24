@@ -111,7 +111,7 @@ class PostRoutes:
                 # 播放器刚解析出来的地址只在内存里，凭令牌取回，和正在播的是同一份。
                 playback = playback_stream.lookup(str(body.get("token") or ""))
                 if playback is None:
-                    raise ValueError("播放地址已过期，请重新播放后再点「下载本集」")
+                    raise ValueError("播放地址已过期，请重新播放后再点「下载」")
                 media_url, media_kind = playback_stream.main_resource(playback)
                 self.send_json(OfflineService(self.database).download_web(
                     anime_id=int(body.get("anime_id") or 0),
@@ -119,6 +119,37 @@ class PostRoutes:
                     kind=media_kind,
                     headers=playback.headers,
                     episode_key=str(body.get("episode_key") or ""),
+                    title=str(body.get("title") or ""),
+                    group_name=str(body.get("group_name") or ""),
+                ))
+            elif path == "/api/offline/web-download-batch":
+                # 批量选集：先入队，再由后台线程一集一集解析 + 下载。
+                rule_id = str(body.get("rule") or "").strip()
+                if not rule_id:
+                    raise ValueError("缺少播放规则")
+                rule = playback_rules.installed_rule(rule_id)
+                catalogue_id = str(body.get("catalogue") or "").strip()
+                source_id = str(body.get("source") or "").strip()
+                items = body.get("items")
+                if not isinstance(items, list) or not items:
+                    raise ValueError("没有选中任何一集")
+                if len(items) > 60:
+                    raise ValueError("一次最多下载 60 集")
+
+                def resolve(episode_id: str):
+                    # 用和播放完全相同的一条路径解析，避免「下到的不是播的那条」。
+                    issued = playback_rules.play(rule_id, rule, catalogue_id, source_id, str(episode_id))
+                    token = str(issued.get("url") or "").split("/stream/", 1)[-1].split("/")[0]
+                    playback = playback_stream.lookup(token)
+                    if playback is None:
+                        raise OfflineError("这一集的解析结果已失效，请重试")
+                    url, kind = playback_stream.main_resource(playback)
+                    return url, kind, playback.headers
+
+                self.send_json(OfflineService(self.database).download_web_batch(
+                    anime_id=int(body.get("anime_id") or 0),
+                    items=items,
+                    resolve=resolve,
                     title=str(body.get("title") or ""),
                     group_name=str(body.get("group_name") or ""),
                 ))

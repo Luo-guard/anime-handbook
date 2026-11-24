@@ -7550,3 +7550,18 @@ body.schedule-picking [data-floating-view="schedule"] {
   [data-detail-size="large"] .detail-tabs { margin-top: 8px; }
   [data-detail-size="large"] .episode-group-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 }
+
+/* 选集下载：一行一集，勾选后一次入队。样式跟着媒体库列表走，不另起一套。 */
+.episode-pick-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:10px 0 8px; }
+.episode-pick-hint { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.episode-pick-list { max-height:46vh; overflow:auto; border:1px solid var(--line); border-radius:12px; background:var(--surface); display:grid; align-content:start; }
+.episode-pick-row { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; }
+.episode-pick-row + .episode-pick-row { border-top:1px solid var(--line); }
+.episode-pick-row:hover { background:var(--green-50); }
+.episode-pick-row input { width:15px; height:15px; flex:none; accent-color:var(--green-700); cursor:pointer; }
+.episode-pick-label { flex:1 1 auto; min-width:0; font-size:13px; line-height:1.5; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.episode-pick-state { flex:none; font-size:11px; color:var(--muted); }
+.episode-pick-state[data-kind="ready"] { color:var(--green-700); }
+.episode-pick-state[data-kind="queued"],
+.episode-pick-state[data-kind="downloading"],
+.episode-pick-state[data-kind="processing"] { color:var(--warm); }
