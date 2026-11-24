@@ -7650,3 +7650,27 @@ body.schedule-picking [data-floating-view="schedule"] {
   content: "!"; font-size: 12px; font-weight: 700; line-height: 1;
 }
 .lib-download-main > small.lib-download-error { color: #9b3434; }
+
+/* 媒体库批量删除：详情右上角「批量」开关 + 底部操作条 */
+.lib-select-toggle {
+  margin-left: auto; padding: 4px 12px; height: 28px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--green-800);
+  font-size: 12px; cursor: pointer;
+}
+.lib-select-toggle[aria-pressed="true"] { border-color: var(--green-600); background: var(--green-50); }
+.lib-bulk {
+  position: sticky; bottom: 0; z-index: 3;
+  display: flex; align-items: center; gap: 8px;
+  margin: 4px 18px 14px; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--green-50));
+  box-shadow: 0 8px 20px rgb(var(--theme-rgb) / .10);
+}
+.lib-bulk-count { margin-right: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lib-bulk.hidden { display: none; }
+.lib-episode.picking { cursor: pointer; }
+.lib-episode.picking .lib-ep-info { pointer-events: none; }
+.lib-episode.picked { border-color: var(--green-600); background: var(--green-50); }
+.lib-ep-check { flex: 0 0 auto; display: grid; place-items: center; padding-right: 2px; }
+.lib-ep-check input { width: 15px; height: 15px; accent-color: var(--green-700); cursor: pointer; }

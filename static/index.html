@@ -390,6 +390,7 @@
                 <span>返回媒体库</span>
               </button>
               <span class="lib-detail-hint" id="libDetailHint"></span>
+              <button type="button" class="lib-select-toggle" id="libSelectToggle" aria-pressed="false">批量</button>
             </div>
             <div class="lib-detail-head">
               <img id="libDetailCover" alt="" />
@@ -401,6 +402,12 @@
             </div>
             <div class="lib-downloads hidden" id="libDownloads"></div>
             <div class="lib-episodes" id="libEpisodes"></div>
+            <div class="lib-bulk hidden" id="libBulkBar">
+              <span class="lib-bulk-count" id="libBulkCount">已选 0 集</span>
+              <button type="button" class="pc-btn pc-text" id="libBulkAll">全选</button>
+              <button type="button" class="pc-btn pc-text danger" id="libBulkDelete" disabled>删除选中</button>
+              <button type="button" class="pc-btn pc-text" id="libBulkCancel">取消</button>
+            </div>
           </div>
 
           <div class="library-shell library-panel hidden" id="librarySubsPanel">

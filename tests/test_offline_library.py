@@ -138,5 +138,24 @@ class LibraryTest(unittest.TestCase):
         )
 
 
+
+    def test_batch_delete_removes_files_and_reports_the_rest(self):
+        """批量删除：能删的都删掉，删不掉的单独报出来，不整批放弃。"""
+        self._make_anime(7, "测试番", watched=[])
+        self._make_file(7, "0:1", "a1.mp4")
+        self._make_file(7, "0:2", "a2.mp4")
+        (self.media / "a2.mp4").unlink()   # 文件早就不在了，记录还在
+
+        data = self.service.delete_episode_files(7, ["0:1", "0:2", "0:9"])
+        self.assertEqual(data["deleted"], 2, "有记录的集都要清掉（文件不在也能清记录）")
+        self.assertEqual([item["episode_key"] for item in data["failed"]], ["0:9"], "没有记录的集报失败")
+        self.assertEqual(self.service.store.files_for_anime(7), [])
+        self.assertFalse((self.media / "a1.mp4").exists(), "文件要真的从磁盘删掉")
+
+    def test_batch_delete_needs_a_selection(self):
+        with self.assertRaises(Exception):
+            self.service.delete_episode_files(7, [])
+
+
 if __name__ == "__main__":
     unittest.main()

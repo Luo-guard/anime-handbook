@@ -1403,6 +1403,28 @@ class OfflineService:
         self.store.delete_file(int(anime_id), str(episode_key))
         return {"ok": True, "deleted": removed}
 
+    def delete_episode_files(self, anime_id: int, episode_keys: list[str]) -> dict[str, Any]:
+        """批量删除本地文件。
+
+        一集失败不影响其它集：整个批次一起删，最后把失败的集和原因报回来，
+        免得用户点一次「删除 12 集」因为第 3 集被占用就整批放弃。
+        """
+        keys = [str(key or "").strip() for key in (episode_keys or [])]
+        keys = [key for key in keys if key]
+        if not keys:
+            raise OfflineError("没有选中任何一集")
+        if len(keys) > 500:
+            raise OfflineError("一次最多删除 500 集")
+        deleted: list[str] = []
+        failed: list[dict[str, str]] = []
+        for key in keys:
+            try:
+                self.delete_episode_file(int(anime_id), key)
+                deleted.append(key)
+            except OfflineError as error:
+                failed.append({"episode_key": key, "error": str(error)})
+        return {"ok": True, "deleted": len(deleted), "failed": failed}
+
     def retry_archive(self, media_id: int) -> dict[str, Any]:
         """手动重试一次归档，让已经卡在 failed 的任务立刻重新整理。
 

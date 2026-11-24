@@ -236,6 +236,13 @@ class PostRoutes:
                     self.send_json(service.delete_episode_file(
                         int(body.get("anime_id") or 0), str(body.get("episode_key") or "")
                     ))
+                elif mode == "files":
+                    keys = body.get("episode_keys")
+                    if not isinstance(keys, list):
+                        raise ValueError("缺少要删除的集数")
+                    self.send_json(service.delete_episode_files(
+                        int(body.get("anime_id") or 0), [str(key) for key in keys]
+                    ))
                 elif mode in ("task", "task_files"):
                     self.send_json(service.delete_job(
                         int(body.get("media_id") or 0),

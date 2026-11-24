@@ -346,6 +346,8 @@ async function openLibraryDetail(animeId, name) {
   librarySidebar.files = [];
   librarySidebar.jobs = [];
   librarySidebar.missing = 0;
+  librarySidebar.selecting = false;
+  librarySidebar.selected = new Set();
   switchLibraryTab("media");
   const panel = $("#libraryDetailPanel");
   if (panel) panel.classList.remove("hidden");
@@ -506,6 +508,85 @@ async function libRemoveJob(mediaId) {
   }
 }
 
+// ---- 批量删除 ----
+// 一集一集点确认太慢：进「批量」态后勾选，全选/反选，一次确认删掉。
+function libToggleSelecting(on) {
+  librarySidebar.selecting = Boolean(on);
+  if (!librarySidebar.selecting) librarySidebar.selected = new Set();
+  renderLibraryDetail();
+}
+
+function renderLibBulk() {
+  const bar = $("#libBulkBar");
+  const toggle = $("#libSelectToggle");
+  const selecting = Boolean(librarySidebar.selecting);
+  toggle?.setAttribute("aria-pressed", String(selecting));
+  if (toggle) toggle.textContent = selecting ? "退出批量" : "批量";
+  if (!bar) return;
+  bar.classList.toggle("hidden", !selecting);
+  if (!selecting) return;
+  const picked = librarySidebar.selected.size;
+  const count = $("#libBulkCount");
+  if (count) count.textContent = `已选 ${picked} 集`;
+  const all = $("#libBulkAll");
+  if (all) all.textContent = picked && picked === libSortedFiles().length ? "取消全选" : "全选";
+  const remove = $("#libBulkDelete");
+  if (remove) {
+    remove.disabled = picked === 0;
+    remove.textContent = picked ? `删除选中（${picked} 集）` : "删除选中";
+  }
+}
+
+function libSyncPicked() {
+  // 只改类名和勾选态，不整块重绘：重绘会丢掉滚动位置。
+  for (const row of document.querySelectorAll("#libEpisodes .lib-episode")) {
+    const key = row.dataset.key || "";
+    const picked = librarySidebar.selected.has(key);
+    row.classList.toggle("picked", picked);
+    const box = row.querySelector("input[data-pick]");
+    if (box) box.checked = picked;
+  }
+  renderLibBulk();
+}
+
+function libTogglePick(key, on) {
+  const value = String(key || "");
+  if (!value) return;
+  if (on) librarySidebar.selected.add(value);
+  else librarySidebar.selected.delete(value);
+  libSyncPicked();
+}
+
+async function libDeleteSelected() {
+  const keys = [...librarySidebar.selected];
+  if (!keys.length) return;
+  // 删盘不可逆：确认一次说清楚删几集、进不进回收站。
+  if (!window.confirm(`删除选中的 ${keys.length} 集？视频文件会直接从硬盘删掉，不进回收站，删了找不回来。`)) return;
+  const button = $("#libBulkDelete");
+  if (button) { button.disabled = true; button.textContent = "删除中…"; }
+  try {
+    const data = await api("/api/offline/delete", {
+      method: "POST",
+      body: JSON.stringify({
+        mode: "files",
+        anime_id: Number(librarySidebar.detail?.animeId) || 0,
+        episode_keys: keys,
+      }),
+    });
+    const failed = data.failed || [];
+    toast(failed.length
+      ? `已删除 ${data.deleted} 集，${failed.length} 集没删掉：${failed[0].error}`
+      : `已删除 ${data.deleted} 集`, failed.length ? "error" : undefined);
+    librarySidebar.selected = new Set();
+    await refreshLibraryDetail();
+    loadLibrarySidebar(true).catch(() => {});
+  } catch (error) {
+    toast(error.message || "删除失败", "error");
+  } finally {
+    renderLibBulk();
+  }
+}
+
 function renderLibraryDetail() {
   const groups = libSourceGroups();
   const chips = $("#libSourceChips");
@@ -546,19 +627,23 @@ function renderLibraryDetail() {
         const bits = [group || "来源未知", libBytes(file.file_size)];
         if (file.subtitle_path) bits.push("内封字幕");
         if (resume > 0) bits.push(`看到 ${minutes}:${seconds}`);
-        return `<div class="lib-episode${resume > 0 ? " watched" : ""}" data-id="${file.id}">
+        const picking = librarySidebar.selecting;
+        const picked = picking && librarySidebar.selected.has(String(file.episode_key));
+        return `<div class="lib-episode${resume > 0 ? " watched" : ""}${picking ? " picking" : ""}${picked ? " picked" : ""}" data-id="${file.id}" data-key="${escapeHtml(file.episode_key)}">
+          ${picking ? `<label class="lib-ep-check"><input type="checkbox" data-pick="${escapeHtml(file.episode_key)}" ${picked ? "checked" : ""} aria-label="选择这一集" /></label>` : ""}
           <div class="lib-ep-info">
             <b>${escapeHtml(episodeLabelOf(file.episode_key))}</b>
             <small>${escapeHtml(bits.join(" · "))}</small>
             ${file.source_title ? `<small class="lib-source-title" title="${escapeHtml(file.source_title)}">${escapeHtml(file.source_title)}</small>` : ""}
           </div>
-          <div class="lib-ep-actions">
+          ${picking ? "" : `<div class="lib-ep-actions">
             <button type="button" class="pc-btn pc-text lib-play" data-id="${file.id}">${resume > 0 ? "继续" : "播放"}</button>
             <button type="button" class="pc-btn pc-text lib-delete danger" data-id="${file.id}">删除</button>
-          </div>
+          </div>`}
         </div>`;
       }).join("")
     : '<p class="offline-empty">这一番的文件都不在磁盘上了</p>';
+  renderLibBulk();
 
   // 只有还在跑的任务才值得盯着；没有就停表，别空转。
   stopLibDetailPolling();
@@ -1293,6 +1378,8 @@ function initLibraryView() {
   });
   $("#libDetailBack")?.addEventListener("click", () => {
     stopLibDetailPolling();
+    librarySidebar.selecting = false;
+    librarySidebar.selected = new Set();
     librarySidebar.detail = null;
     librarySidebar.sourceFilter = "";
     switchLibraryTab("media");
@@ -1303,7 +1390,29 @@ function initLibraryView() {
     librarySidebar.sourceFilter = chip.dataset.group;
     renderLibraryDetail();
   });
+  $("#libSelectToggle")?.addEventListener("click", () => libToggleSelecting(!librarySidebar.selecting));
+  $("#libBulkCancel")?.addEventListener("click", () => libToggleSelecting(false));
+  $("#libBulkAll")?.addEventListener("click", () => {
+    const keys = libSortedFiles().map((file) => String(file.episode_key));
+    const allPicked = keys.length > 0 && keys.every((key) => librarySidebar.selected.has(key));
+    librarySidebar.selected = new Set(allPicked ? [] : keys);
+    libSyncPicked();
+  });
+  $("#libBulkDelete")?.addEventListener("click", libDeleteSelected);
+  $("#libEpisodes")?.addEventListener("change", (event) => {
+    const box = event.target.closest("input[data-pick]");
+    if (box) libTogglePick(box.dataset.pick, box.checked);
+  });
   $("#libEpisodes")?.addEventListener("click", (event) => {
+    // 批量态下点整行也能勾选，不用非得点中那个小方框。
+    if (librarySidebar.selecting && !event.target.closest("input[data-pick]")) {
+      const row = event.target.closest(".lib-episode");
+      if (row) {
+        const key = row.dataset.key || "";
+        libTogglePick(key, !librarySidebar.selected.has(key));
+        return;
+      }
+    }
     const play = event.target.closest(".lib-play");
     if (play) { libPlay(Number(play.dataset.id)); return; }
     const remove = event.target.closest(".lib-delete");
