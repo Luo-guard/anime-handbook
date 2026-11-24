@@ -194,7 +194,12 @@ window.onlinePlayback = (() => {
     clearInterval(downloadTimer);
     const animeId = Number(session.animeId || 0);
     const tick = async () => {
-      if (!current || current !== session) { clearInterval(downloadTimer); return; }
+      // 会话可能是从详情页「从网站下载」临时造的，没有在播的 current；
+      // 只要选集对话框还记着它，就继续轮询进度。
+      if (current !== session && downloadSheet.session !== session) {
+        clearInterval(downloadTimer);
+        return;
+      }
       try {
         const data = await api(`/api/offline/state?anime_id=${animeId}`);
         const job = (data.jobs || []).find(item => Number(item.id) === Number(mediaId));
@@ -297,12 +302,13 @@ window.onlinePlayback = (() => {
     } catch { /* 状态只是锦上添花，读不到不挡下载 */ }
   }
 
-  function openDownloadSheet() {
-    const session = current;
+  function openDownloadSheet(preset = null) {
+    // preset：从「从网站下载」进来时还没有在播的会话，直接把线路与目标集传进来。
+    const session = preset || current;
     if (!session) return;
     const animeId = Number(session.animeId || 0);
     if (!animeId) {
-      toast("从详情页打开这一集后再下载，才能归档到对应的番剧里。", "error");
+      toast("先在详情页打开这一部，再下载才能归档到对应的番剧里。", "error");
       return;
     }
     const episodes = (session.source?.episodes || [])
@@ -312,8 +318,8 @@ window.onlinePlayback = (() => {
       toast("这条线路认不出集数，先切换到带集数的线路。", "error");
       return;
     }
-    // 只有一集没什么好选的，直接走单集下载。
-    if (episodes.length === 1) {
+    // 只有一集、而且就是正在播的那一集：直接走单集下载（有现成的令牌）。
+    if (episodes.length === 1 && !preset) {
       startWebDownload();
       return;
     }
@@ -815,8 +821,44 @@ window.onlinePlayback = (() => {
     let resultCount = 0;
     let latestForSource;
 
+    // 下载模式：拿着搜索结果去读选集，再把选集交给下载对话框（不播放）。
+    async function downloadResult(item) {
+      if (!isCurrent()) return;
+      sourceOpening?.abort();
+      const opening = new AbortController();
+      sourceOpening = opening;
+      latestForSource = opening;
+      const openingSignal = AbortSignal.any([signal, opening.signal]);
+      hint.textContent = "正在读取选集…";
+      feedback.textContent = "";
+      try {
+        const catalogue = await request("catalogue", { rule, anime: item.id }, openingSignal);
+        if (!isCurrent() || openingSignal.aborted || $("#settingsModal").open) return;
+        const { source, episode } = matchOnlineEpisode(catalogue, target);
+        lastRule = rule;
+        try { localStorage.setItem("handbook:online-rule", rule); }
+        catch { /* 存不下也能下载 */ }
+        dialog.close();
+        openDownloadSheet({
+          animeId: Number(anime.id) || 0,
+          catalogue,
+          source,
+          episode,
+          context,
+        });
+      } catch (error) {
+        if (isCurrent() && !openingSignal.aborted) {
+          hint.textContent = "无法下载";
+          feedback.textContent = errorMessage(error, "读取选集超时");
+        }
+      } finally {
+        if (sourceOpening === opening) sourceOpening = null;
+      }
+    }
+
     async function playResult(item) {
       if (!isCurrent() || (auto && sourceOpening)) return;
+      if (context.mode === "download") return downloadResult(item);
       sourceOpening?.abort();
       const opening = new AbortController();
       sourceOpening = opening;
@@ -877,16 +919,18 @@ window.onlinePlayback = (() => {
     }
   }
 
-  async function openAnime(anime, key, _button, { choose = false } = {}) {
+  async function openAnime(anime, key, _button, { choose = false, mode = "play" } = {}) {
     let target;
     try { target = mainPlaybackEpisode(anime, key); }
     catch (error) { toast(error.message, "error"); return; }
     abortLookup();
     clearSourceSearches();
-    const context = { anime, target };
+    const context = { anime, target, mode };
     selection = context;
     const dialog = $("#onlinePlaybackPicker");
     const status = $("#onlineRuleStatus");
+    // 同一个面板两种用途：播还是下。标题写清楚，免得用户以为点错了。
+    $("#onlinePlaybackPickerTitle").textContent = mode === "download" ? "从网站下载" : "播放来源";
     $("#onlineSourceAnime").textContent = `${anime.display_name || anime.name_cn || anime.name} · 第 ${target.number} 集`;
     $("#onlinePlaybackResults").replaceChildren();
     status.textContent = "正在读取已安装来源…";
@@ -896,7 +940,7 @@ window.onlinePlayback = (() => {
       if (!dialog.open || selection !== context) return;
       installed = result.items;
       defaultRule = result.default_rule || "";
-      renderInstalled({ autoPlay: !choose });
+      renderInstalled({ autoPlay: !choose && mode !== "download" });
     } catch (error) {
       if (dialog.open && selection === context) status.textContent = error.message;
     }
@@ -931,6 +975,17 @@ window.onlinePlayback = (() => {
     $("#detailOnlinePlay")?.classList.remove("hidden");
     $("#detailOnlinePlay")?.addEventListener("click", event => {
       playDetailEpisode("", event.currentTarget);
+    });
+    // 详情页「⋯ → 从网站下载」：先选站点/线路，再选集，最后批量入队。
+    $("#openSiteDownload")?.addEventListener("click", event => {
+      const menu = $("#modernDetailMenu");
+      if (menu) menu.open = false;
+      const anime = state.progressAnime;
+      if (!anime) {
+        toast("先打开一部番剧的详情，再选择下载来源。", "error");
+        return;
+      }
+      openAnime(anime, "", event.currentTarget, { choose: true, mode: "download" });
     });
     $("#closeOnlinePlaybackPicker")?.addEventListener("click", () => $("#onlinePlaybackPicker").close());
     $("#onlinePlaybackPicker").addEventListener("close", () => {

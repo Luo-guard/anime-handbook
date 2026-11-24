@@ -7570,3 +7570,6 @@ body.schedule-picking [data-floating-view="schedule"] {
 .library-size.library-downloading { background: rgba(229, 167, 79, .92); color: #2a1e08; }
 .library-bar-active { margin-top: 4px; height: 3px; }
 .library-bar-active i { background: var(--warm); }
+
+/* 更多菜单里「下载 / 番剧」两组的标题：和第一条区分开，避免看成同一组。 */
+.modern-menu-actions > .modern-menu-section-label:not(:first-child) { margin-top: 6px; }
