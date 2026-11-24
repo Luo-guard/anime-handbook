@@ -55,10 +55,6 @@ function libBytes(bytes) {
   return `${Math.max(1, Math.round(value / 1024))} KB`;
 }
 
-function libVisible() {
-  return !$("#libraryNavButton")?.classList.contains("hidden");
-}
-
 // 侧边栏显示开关：show / hide / auto（媒体库为空时隐藏）。
 async function applyLibrarySidebarVisibility() {
   const button = $("#libraryNavButton");
@@ -150,7 +146,7 @@ function libFilteredItems() {
     size: (a, b) => (Number(b.size_bytes) || 0) - (Number(a.size_bytes) || 0),
     episodes: (a, b) => (Number(b.file_count) || 0) - (Number(a.file_count) || 0) || byRecent(a, b),
   };
-  return [...list].sort(comparators[sort] || byRecent);
+  return list.sort(comparators[sort] || byRecent);
 }
 
 function libProgress(item) {
@@ -222,12 +218,19 @@ function renderLibraryGrid() {
 function renderLibraryHero() {
   const host = $("#libContinueHero");
   if (!host) return;
-  const q = librarySidebar.query.trim().toLowerCase();
-  const candidates = librarySidebar.items.filter((entry) =>
-    entry.continue_file_id
-    && (librarySidebar.filter === "all" || String(entry.collection_type) === librarySidebar.filter)
-    && (!q || entry.name.toLowerCase().includes(q)));
-  const item = candidates.sort((a, b) => String(b.last_updated || "").localeCompare(String(a.last_updated || "")))[0];
+  const { items, filter, query } = librarySidebar;
+  const q = query.trim().toLowerCase();
+  let item;
+  let latest = "";
+  for (const entry of items) {
+    if (!entry.continue_file_id || (filter !== "all" && String(entry.collection_type) !== filter)) continue;
+    if (q && !entry.name.toLowerCase().includes(q)) continue;
+    const updated = String(entry.last_updated || "");
+    if (!item || updated.localeCompare(latest) > 0) {
+      item = entry;
+      latest = updated;
+    }
+  }
   if (!item) {
     host.classList.add("hidden");
     host.innerHTML = "";
@@ -294,6 +297,40 @@ function updateLibrarySubtitle() {
 
 // ---------- 番详情：按字幕组区分来源 ----------
 
+// 详情页的下载进度：面板本身不刷新，用户只能看到打开那一刻的快照，
+// 于是「下了半天还是 0 集」。有任务在跑时按 3 秒静默重取一次。
+let libDetailTimer = 0;
+
+function stopLibDetailPolling() {
+  window.clearTimeout(libDetailTimer);
+  libDetailTimer = 0;
+}
+
+function libActiveJobs(jobs) {
+  return (jobs || []).filter((job) => ["queued", "downloading", "processing"].includes(String(job.status || "")));
+}
+
+async function refreshLibraryDetail(silent = true) {
+  const detail = librarySidebar.detail;
+  if (!detail?.animeId) return;
+  try {
+    const data = await api(`/api/offline/state?anime_id=${detail.animeId}`);
+    if (librarySidebar.detail !== detail) return;
+    const activeBefore = libActiveJobs(librarySidebar.jobs).length;
+    const raw = data.files || [];
+    librarySidebar.files = raw.filter((file) => file.exists !== false);
+    librarySidebar.missing = Number(data.missing_count ?? (raw.length - librarySidebar.files.length)) || 0;
+    librarySidebar.jobs = data.jobs || [];
+    renderLibraryDetail();
+    // 这一番的下载刚好全部结束：媒体库卡片上的「已收 N 集」也变了，顺手刷一次总览。
+    if (activeBefore > 0 && !libActiveJobs(librarySidebar.jobs).length) {
+      loadLibrarySidebar(true).catch(() => {});
+    }
+  } catch (error) {
+    if (!silent) throw error;
+  }
+}
+
 async function openLibraryDetail(animeId, name) {
   // episode_count 只有总览列表里带着，详情单独取一次 state 拿不到它，
   // 这里顺手带上，否则「全 N 集」永远显示不出来。
@@ -303,6 +340,7 @@ async function openLibraryDetail(animeId, name) {
     name: String(name || ""),
     episodeCount: Number(known?.episode_count) || 0,
   };
+  stopLibDetailPolling();
   if (librarySidebar.detail?.animeId !== detail.animeId) librarySidebar.sourceFilter = "";
   librarySidebar.detail = detail;
   librarySidebar.files = [];
@@ -320,16 +358,10 @@ async function openLibraryDetail(animeId, name) {
   // 从总览卡片进来时要滚到详情，否则停在原来的网格位置像没反应。
   panel?.scrollIntoView({ behavior: "smooth", block: "start" });
   try {
-    const data = await api(`/api/offline/state?anime_id=${detail.animeId}`);
+    // 记录还在、文件却没了的集数：卡片和详情现在都只数能播的，但这件事得说出来，
+    // 否则用户会以为「已收」无故少了一集。missing_count 由后台算好，别在前端再判一遍。
+    await refreshLibraryDetail(false);
     if (librarySidebar.detail !== detail) return;
-    const raw = data.files || [];
-    librarySidebar.files = raw.filter((file) => file.exists !== false);
-    // 记录还在、文件却没了的集数：卡片和详情现在都只数能播的，
-    // 但这件事得说出来，否则用户会以为「已收」无故少了一集。
-    // 后台 state 已经算好 missing_count，优先用它，别在前端重复一套判断。
-    librarySidebar.missing = Number(data.missing_count ?? (raw.length - librarySidebar.files.length)) || 0;
-    librarySidebar.jobs = data.jobs || [];
-    renderLibraryDetail();
   } catch (error) {
     if (librarySidebar.detail !== detail) return;
     $("#libDetailMeta").textContent = `加载失败：${error.message || error}`;
@@ -356,6 +388,85 @@ function libSortedFiles() {
     .sort((a, b) => keyOrder(a.episode_key) - keyOrder(b.episode_key));
 }
 
+// 下载中的任务：一条概览 + 一集一行，和「本地文件」弹窗里那套视觉一致。
+function renderLibDownloads(active) {
+  const host = $("#libDownloads");
+  if (!host) return;
+  host.classList.toggle("hidden", !active.length);
+  if (!active.length) {
+    host.innerHTML = "";
+    return;
+  }
+  const average = Math.round(
+    active.reduce((sum, job) => sum + Math.max(0, Math.min(100, Number(job.progress || 0))), 0) / active.length,
+  );
+  const speed = active.reduce((sum, job) => sum + Number((job.live || {}).dlspeed || 0), 0);
+  const moving = active.filter((job) => job.status !== "queued").length;
+  const bits = [`${moving} 集在下载`];
+  if (active.length > moving) bits.push(`${active.length - moving} 集排队`);
+  if (speed > 0) bits.push(`${formatSpeed(speed)}/s`);
+  host.innerHTML = `
+    <div class="lib-download-head">
+      <span>${escapeHtml(bits.join(" · "))}</span>
+      <b>${average}%</b>
+      <div class="library-bar"><i style="width:${average}%"></i></div>
+    </div>
+    ${active.map(libDownloadRow).join("")}`;
+}
+
+function libDownloadRow(job) {
+  const live = job.live || {};
+  const percent = Math.max(0, Math.min(100, Number(job.progress || 0)));
+  const paused = typeof live.paused === "boolean"
+    ? live.paused
+    : /^(paused|stopped)/.test(String(live.state || "").toLowerCase());
+  const state = job.status === "processing" ? "正在整理" : job.status === "queued" ? "排队中" : paused ? "已暂停" : `${percent.toFixed(1)}%`;
+  const detail = [];
+  if (Number(live.dlspeed) > 0) detail.push(`${formatSpeed(live.dlspeed)}/s`);
+  if (Number(live.segments) > 0) detail.push(`${Number(live.done_segments || 0)}/${live.segments} 分片`);
+  else if (Number(live.size) > 0) detail.push(`${libBytes(Number(live.downloaded || 0))} / ${libBytes(live.size)}`);
+  if (live.eta > 0 && live.eta < 604800) detail.push(`剩余 ${formatEta(live.eta)}`);
+  const badge = job.status === "queued" ? "queued" : job.status === "processing" ? "processing" : paused ? "paused" : "downloading";
+  const canPause = job.status !== "queued" && job.status !== "processing";
+  return `<div class="lib-download-row">
+      <span class="lib-download-badge" data-state="${badge}" style="--p:${percent}"></span>
+      <div class="lib-download-main">
+        <b>${escapeHtml(episodeLabelOf(job.episode_key))}</b>
+        <small>${escapeHtml([state, ...detail].filter(Boolean).join(" · "))}</small>
+        <div class="library-bar"><i style="width:${percent}%"></i></div>
+      </div>
+      <div class="lib-download-actions">
+        ${canPause ? `<button type="button" class="pc-btn pc-text" data-lib-task="${job.id}" data-action="${paused ? "resume" : "pause"}">${paused ? "继续" : "暂停"}</button>` : ""}
+        <button type="button" class="pc-btn pc-text danger" data-lib-job="${job.id}">移除</button>
+      </div>
+    </div>`;
+}
+
+async function libTaskAction(mediaId, action) {
+  try {
+    await api("/api/offline/task", {
+      method: "POST",
+      body: JSON.stringify({ media_id: Number(mediaId), action }),
+    });
+    await refreshLibraryDetail();
+  } catch (error) {
+    toast(error.message || "操作失败", "error");
+  }
+}
+
+async function libRemoveJob(mediaId) {
+  if (!window.confirm("从下载器移除这个任务？已经下好的文件会保留。")) return;
+  try {
+    await api("/api/offline/delete", {
+      method: "POST",
+      body: JSON.stringify({ mode: "task", media_id: Number(mediaId) }),
+    });
+    await refreshLibraryDetail();
+  } catch (error) {
+    toast(error.message || "移除失败", "error");
+  }
+}
+
 function renderLibraryDetail() {
   const groups = libSourceGroups();
   const chips = $("#libSourceChips");
@@ -374,13 +485,16 @@ function renderLibraryDetail() {
   metaParts.push(libBytes(totalSize));
   if (multiple) metaParts.push(`${groups.length} 个来源`);
   meta.textContent = metaParts.join(" · ");
+  const active = libActiveJobs(librarySidebar.jobs);
   const hint = $("#libDetailHint");
   if (hint) {
     const bits = [`${libSortedFiles().length} 集可播放`];
+    if (active.length) bits.push(`${active.length} 集下载中`);
     if (multiple) bits.push(`${groups.length} 个来源`);
     if (librarySidebar.missing) bits.push(`另有 ${librarySidebar.missing} 集的文件已不在磁盘上`);
     hint.textContent = bits.join(" · ");
   }
+  renderLibDownloads(active);
   const host = $("#libEpisodes");
   host.innerHTML = files.length
     ? files.map((file) => {
@@ -404,6 +518,16 @@ function renderLibraryDetail() {
         </div>`;
       }).join("")
     : '<p class="offline-empty">这一番的文件都不在磁盘上了</p>';
+
+  // 只有还在跑的任务才值得盯着；没有就停表，别空转。
+  stopLibDetailPolling();
+  if (active.length) {
+    // 停在媒体库页上按 3 秒走；切去别的页就放慢到 8 秒，别在后台空转。
+    const visible = Boolean($("#libraryView")?.classList.contains("active"));
+    libDetailTimer = window.setTimeout(() => {
+      refreshLibraryDetail().catch(() => {});
+    }, visible ? 3000 : 8000);
+  }
 }
 
 function setLibraryPlaybackContext(animeId, name, files, jobs) {
@@ -1127,6 +1251,7 @@ function initLibraryView() {
     card.click();
   });
   $("#libDetailBack")?.addEventListener("click", () => {
+    stopLibDetailPolling();
     librarySidebar.detail = null;
     librarySidebar.sourceFilter = "";
     switchLibraryTab("media");
@@ -1142,6 +1267,12 @@ function initLibraryView() {
     if (play) { libPlay(Number(play.dataset.id)); return; }
     const remove = event.target.closest(".lib-delete");
     if (remove) libDelete(Number(remove.dataset.id));
+  });
+  $("#libDownloads")?.addEventListener("click", (event) => {
+    const task = event.target.closest("[data-lib-task]");
+    if (task) { libTaskAction(task.dataset.libTask, task.dataset.action); return; }
+    const remove = event.target.closest("[data-lib-job]");
+    if (remove) libRemoveJob(remove.dataset.libJob);
   });
   $("#libAutoFollow")?.addEventListener("change", saveSubscriptionAutoDownload);
   $("#libCheckSubs")?.addEventListener("click", libCheckSubs);
