@@ -387,6 +387,7 @@ def search(rule_id, rule, title):
     else:
         url = _template(rule["searchURL"], values, encode=True).replace("{keyword}", quote(title, safe=""))
         page, base = _page(rule, url)
+        _remember_host(rule_id, base)
         for row in _xpath(page, rule["searchList"])[:40]:
             name = _node_text(next(iter(_xpath(row, rule["searchName"], relative=True)), ""))
             source = _link(base, next(iter(_xpath(row, rule["searchResult"], relative=True)), ""))
@@ -451,12 +452,81 @@ def _api_roads(rule, provider):
         yield name, pairs
 
 
-def _html_roads(rule, provider):
+# 站点换域名时（例如 baseURL 里写的是 www.baimaodm.com，实际 301 到 www.bmddm.com），
+# 搜索结果的绝对链接落在新域名上，只比对规则里写死的域名就会误报「链接与站点不一致」。
+# 这里记住每个规则实际跳转到的域名，再用来校验——仍然只放行这条规则自己的站点。
+_RULE_HOSTS: dict[str, set[str]] = {}
+_HOST_PROBE: dict[str, tuple[set[str], float]] = {}
+_HOST_PROBE_TTL = 600.0
+_HOST_PROBE_LOCK = threading.Lock()
+
+
+def _configured_hosts(rule):
+    hosts = set()
+    for key in ("baseURL", "searchURL"):
+        try:
+            host = urlsplit(str(rule.get(key) or "")).hostname
+        except ValueError:
+            host = None
+        if host:
+            hosts.add(host)
+    return hosts
+
+
+def _remember_host(rule_id, url):
+    try:
+        host = urlsplit(str(url or "")).hostname
+    except ValueError:
+        host = None
+    if not rule_id or not host:
+        return
+    with _LOCK:
+        _RULE_HOSTS.setdefault(rule_id, set()).add(host)
+
+
+def _rule_hosts(rule_id, rule):
+    with _LOCK:
+        return _configured_hosts(rule) | _RULE_HOSTS.get(rule_id, set())
+
+
+def _discover_hosts(rule_id, rule):
+    """探一次规则首页，把跳转后的域名记下来（换域名/换 www 前缀都能自愈）。"""
+    if not rule_id:
+        return set()
+    now = time.monotonic()
+    with _HOST_PROBE_LOCK:
+        cached, expiry = _HOST_PROBE.get(rule_id, (set(), 0.0))
+    if expiry > now:
+        return cached
+    found: set[str] = set()
+    try:
+        _raw, final_url = _read(str(rule.get("baseURL") or ""), _headers(rule))
+        host = urlsplit(final_url).hostname
+        if host:
+            found.add(host)
+    except (RequestProblem, OSError, ValueError):
+        found = set()
+    with _HOST_PROBE_LOCK:
+        _HOST_PROBE[rule_id] = (found, now + _HOST_PROBE_TTL)
+    for host in found:
+        _remember_host(rule_id, f"https://{host}/")
+    return found
+
+
+def _html_roads(rule, provider, rule_id=""):
     url, _ = public_url(provider)
-    hosts = {urlsplit(rule["baseURL"]).hostname, urlsplit(rule.get("searchURL", "")).hostname}
+    hosts = _rule_hosts(rule_id, rule)
     if url.hostname not in hosts:
-        raise RequestProblem("番剧链接与所选规则站点不一致")
+        # 可能是站点换了域名：探一次首页，确认它现在落在哪一个域名上。
+        hosts |= _discover_hosts(rule_id, rule)
+    if url.hostname not in hosts:
+        raise RequestProblem(
+            f"番剧链接与所选规则站点不一致（链接在 {url.hostname}，规则站点是 "
+            f"{'、'.join(sorted(hosts)) or '未知'}）"
+        )
+    _remember_host(rule_id, provider)
     page, base = _page(rule, provider)
+    _remember_host(rule_id, base)
     for road in _xpath(page, rule["chapterRoads"])[:30]:
         yield "", [(_node_text(row), _link(base, row))
                    for row in _xpath(road, rule["chapterResult"], relative=True)[:2000]]
@@ -476,7 +546,7 @@ def catalogue(rule_id, rule, provider):
             for episode in source["episodes"]:
                 episode["url"] = f"{xifan_preview.SITE}/anime/{data['id']}/play/{episode['id']}"
     else:
-        roads = _api_roads(rule, provider) if rule.get("chapterMode") == "api" else _html_roads(rule, provider)
+        roads = _api_roads(rule, provider) if rule.get("chapterMode") == "api" else _html_roads(rule, provider, rule_id)
         sources = []
         for index, (name, pairs) in enumerate(roads, 1):
             episodes = _episodes(pairs)
