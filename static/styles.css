@@ -7573,3 +7573,27 @@ body.schedule-picking [data-floating-view="schedule"] {
 
 /* 更多菜单里「下载 / 番剧」两组的标题：和第一条区分开，避免看成同一组。 */
 .modern-menu-actions > .modern-menu-section-label:not(:first-child) { margin-top: 6px; }
+
+/* 下载任务的进度徽标与整体概览（参考 Kazumi 的任务行：左徽标、中进度、右操作） */
+.offline-task-badge { flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center; color: var(--muted); }
+.offline-task-badge svg { width: 17px; height: 17px; }
+.offline-task-badge[data-state="paused"] { color: var(--green-700); }
+.offline-task-badge[data-state="failed"] { color: #9b3434; }
+.offline-task-badge[data-state="processing"] svg { animation: offline-task-spin 1.4s linear infinite; }
+.offline-task-ring {
+  width: 28px; height: 28px; border-radius: 50%;
+  /* 注意：rgb(46, 109, 78 / .14) 这种「逗号 + 斜杠透明度」是非法语法，整条声明会被丢掉；
+     color-mix 才能跟着主题色走。 */
+  background: conic-gradient(var(--green-600) calc(var(--p, 0) * 1%), color-mix(in srgb, var(--green-600) 16%, transparent) 0);
+  display: grid; place-items: center;
+}
+.offline-task-ring::after { content: ""; width: 21px; height: 21px; border-radius: 50%; background: var(--surface); }
+@keyframes offline-task-spin { to { transform: rotate(360deg); } }
+.offline-task-summary {
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  gap: 2px 10px; margin: 6px 0 6px; padding: 7px 11px;
+  border-radius: 10px; background: var(--green-50);
+}
+.offline-task-summary > span { font-size: 11.5px; color: var(--muted); }
+.offline-task-summary > b { font-size: 11.5px; color: var(--green-800); font-variant-numeric: tabular-nums; }
+.offline-task-summary > .offline-bar { grid-column: 1 / -1; margin: 2px 0 0; }

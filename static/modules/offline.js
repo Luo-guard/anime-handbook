@@ -403,6 +403,63 @@ async function continueWatching(animeId, fileId) {
   playLocalFile(Number(fileId));
 }
 
+// ---- 下载进度：徽标、概览与状态明细 ----
+// 参考 Kazumi 的做法：一行一集，左边一个状态徽标（下载中是进度环），
+// 中间进度条，下面一行「速度 · 分片/体积 · 剩余时间」，右边暂停/移除。
+
+function taskBadge(state, percent) {
+  if (state === "downloading") {
+    return `<span class="offline-task-badge"><span class="offline-task-ring" style="--p:${Math.max(0, Math.min(100, Math.round(percent)))}" aria-hidden="true"></span></span>`;
+  }
+  const icons = {
+    paused: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.4" height="14" rx="1.2"/><rect x="13.6" y="5" width="3.4" height="14" rx="1.2"/></svg>',
+    queued: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg>',
+    processing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 1-6 2.5"/><path d="M6 3v4h4"/></svg>',
+    failed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v5"/><path d="M12 16.2v.1"/></svg>',
+  };
+  return `<span class="offline-task-badge" data-state="${state}">${icons[state] || icons.queued}</span>`;
+}
+
+function formatBytesShort(bytes) {
+  const value = Number(bytes || 0);
+  if (value <= 0) return "0 B";
+  if (value >= 1 << 30) return `${(value / (1 << 30)).toFixed(1)} GB`;
+  if (value >= 1 << 20) return `${(value / (1 << 20)).toFixed(0)} MB`;
+  if (value >= 1 << 10) return `${(value / (1 << 10)).toFixed(0)} KB`;
+  return `${value} B`;
+}
+
+function taskDetail(job) {
+  const live = job.live || {};
+  const parts = [];
+  if (Number(live.dlspeed) > 0) parts.push(`${formatSpeed(live.dlspeed)}/s`);
+  const segments = Number(live.segments || 0);
+  if (segments > 0) {
+    parts.push(`${Number(live.done_segments || 0)}/${segments} 分片`);
+  } else if (Number(live.size) > 0 && live.downloaded != null) {
+    parts.push(`${formatBytesShort(live.downloaded)} / ${formatBytesShort(live.size)}`);
+  }
+  if (live.eta > 0 && live.eta < 604800) parts.push(`剩余 ${formatEta(live.eta)}`);
+  if (live.seeds) parts.push(`${live.seeds} 个做种`);
+  return parts.join(" · ");
+}
+
+// 这一批任务的整体情况：几集在跑、总速度、平均进度。任务多时先看这一条就够。
+function downloadOverview(active) {
+  const total = active.reduce((sum, job) => sum + Math.max(0, Math.min(100, Number(job.progress || 0))), 0);
+  const average = Math.round(total / active.length);
+  const speed = active.reduce((sum, job) => sum + Number((job.live || {}).dlspeed || 0), 0);
+  const moving = active.filter((job) => job.status !== "queued").length;
+  const parts = [`${moving} 集在下载`];
+  if (active.length > moving) parts.push(`${active.length - moving} 集排队`);
+  if (speed > 0) parts.push(`${formatSpeed(speed)}/s`);
+  return `<div class="offline-task-summary">
+      <span>${escapeHtml(parts.join(" · "))}</span>
+      <b>${average}%</b>
+      <div class="offline-bar"><span style="width:${average}%"></span></div>
+    </div>`;
+}
+
 function renderOfflineLocal() {
   const { files, jobs } = offlineView.local;
   // 后端每次 state 都会核对 file_path 是否还在。外接盘没插、文件被手动删/挪，
@@ -456,6 +513,7 @@ function renderOfflineLocal() {
   if (active.length) {
     blocks.push(
       `<h3 class="offline-section-title">正在下载 · ${active.length}</h3>`,
+      downloadOverview(active),
       ...active.map((job) => {
         const live = job.live || {};
         const percent = Math.max(0, Math.min(100, Number(job.progress || 0)));
@@ -465,22 +523,20 @@ function renderOfflineLocal() {
           ? live.paused
           : /^(paused|stopped)/.test(String(live.state || "").toLowerCase());
         const label = job.status === "processing" ? "正在整理" : paused ? "已暂停" : job.status === "queued" ? "排队中" : `${percent.toFixed(1)}%`;
-        const detail = [
-          live.dlspeed ? `${formatSpeed(live.dlspeed)}/s` : "",
-          live.eta && live.eta > 0 && live.eta < 604800 ? `剩余 ${formatEta(live.eta)}` : "",
-          live.seeds ? `${live.seeds} 个做种` : "",
-        ]
-          .filter(Boolean)
-          .join(" · ");
+        const detail = taskDetail(job);
+        const pausedDetail = paused ? [`${percent.toFixed(1)}%`, detail].filter(Boolean).join(" · ") : detail;
+        // 排队中和整理中没什么可暂停的，给个按钮只会点出一个「还在排队」的提示。
+        const canPause = job.status !== "queued" && job.status !== "processing";
         return `
           <article class="offline-row offline-row-task">
+            ${taskBadge(label === "正在整理" ? "processing" : paused ? "paused" : job.status === "queued" ? "queued" : "downloading", percent)}
             <div class="offline-row-main">
               <p class="offline-row-title" title="${escapeHtml(job.source_title || job.torrent_name)}">${escapeHtml(job.torrent_name || job.source_title || "未命名任务")}</p>
               <div class="offline-bar"><span style="width:${percent}%"></span></div>
-              <p class="offline-row-meta"><span class="offline-tag">${escapeHtml(label)}</span>${detail ? `<span>${escapeHtml(detail)}</span>` : ""}${job.error ? `<span class="offline-error">${escapeHtml(job.error)}</span>` : ""}</p>
+              <p class="offline-row-meta"><span class="offline-tag">${escapeHtml(label)}</span>${pausedDetail ? `<span>${escapeHtml(pausedDetail)}</span>` : ""}${job.error ? `<span class="offline-error">${escapeHtml(job.error)}</span>` : ""}</p>
             </div>
             <div class="offline-row-actions">
-              <button type="button" class="offline-play" data-task="${job.id}" data-action="${paused ? "resume" : "pause"}">${paused ? "继续" : "暂停"}</button>
+              ${canPause ? `<button type="button" class="offline-play" data-task="${job.id}" data-action="${paused ? "resume" : "pause"}">${paused ? "继续" : "暂停"}</button>` : ""}
               <button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button>
             </div>
           </article>`;
@@ -504,16 +560,20 @@ function renderOfflineLocal() {
             ? `还会自动再试（已用 ${attempts}/${limit} 次）；也可以现在点「重试归档」`
             : "点「重试归档」立即再试一次";
         const actionLabel = isWeb ? "重试下载" : "重试归档";
-        const actionHint = isWeb ? "地址失效就回播放器重新点「下载本集」" : hint;
+        // 解析失败 / 中断 / 排队超时：内存里已经没有可续的下载线程，重试按钮只会弹一句
+        // 「地址已失效」。这类失败只能回播放器重新发起，所以不给按钮，只留一句说明。
+        const deadEnd = isWeb && /^(解析这一集失败|下载已中断|排队太久)/.test(String(job.error || ""));
+        const actionHint = isWeb ? "地址失效就回播放器重新点「下载」" : hint;
         return `
         <article class="offline-row">
+          ${taskBadge("failed")}
           <div class="offline-row-main">
             <p class="offline-row-title" title="${escapeHtml(job.source_title || job.torrent_name)}">${escapeHtml(job.torrent_name || job.source_title || "未命名任务")}</p>
             <p class="offline-row-meta"><span class="offline-error">${escapeHtml(job.error || "未知原因")}</span></p>
-            <p class="offline-row-hint">${escapeHtml(actionHint)}｜已入库的集会跳过，只补缺的</p>
+            <p class="offline-row-hint">${escapeHtml(deadEnd ? "回到播放器重新播放这一集，再点「下载」；已入库的集会跳过" : `${actionHint}｜已入库的集会跳过，只补缺的`)}</p>
           </div>
           <div class="offline-row-actions">
-            <button type="button" class="offline-play" data-retry="${job.id}" title="${escapeHtml(actionHint)}">${actionLabel}</button>
+            ${deadEnd ? "" : `<button type="button" class="offline-play" data-retry="${job.id}" title="${escapeHtml(actionHint)}">${actionLabel}</button>`}
             <button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button>
           </div>
         </article>`;

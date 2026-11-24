@@ -558,6 +558,10 @@ class OfflineService:
                 "paused": bool(snap.get("paused")),
                 "seeds": 0,
                 "size": total_bytes,
+                # 已下载字节与分片进度：界面要显示「12/48 分片」而不只是百分比。
+                "downloaded": int(snap.get("bytes") or 0),
+                "segments": int(snap.get("segments") or 0),
+                "done_segments": int(snap.get("done_segments") or 0),
             }
             if snap.get("status") == "failed":
                 self.store.set_status(
@@ -612,6 +616,7 @@ class OfflineService:
                     job["id"], "failed", error="qBittorrent 里找不到这个任务，可能被手动删除了"
                 )
                 continue
+            size = int(task.get("size") or 0)
             live[int(job["id"])] = {
                 "dlspeed": int(task.get("dlspeed") or 0),
                 "upspeed": int(task.get("upspeed") or 0),
@@ -619,7 +624,10 @@ class OfflineService:
                 "state": str(task.get("state") or ""),
                 "paused": is_paused_state(task.get("state") or ""),
                 "seeds": int(task.get("num_seeds") or 0),
-                "size": int(task.get("size") or 0),
+                "size": size,
+                "downloaded": int(size * float(task.get("progress") or 0)),
+                "segments": 0,
+                "done_segments": 0,
             }
             progress = float(task.get("progress") or 0) * 100
             status = map_qb_state(str(task.get("state") or ""), task.get("progress") or 0)
