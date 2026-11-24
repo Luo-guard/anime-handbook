@@ -31,6 +31,9 @@ window.api=async(url,options)=>{
     await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}`);
     await page.addScriptTag({ content: setup + fs.readFileSync('static/modules/offline.js', 'utf8') });
     // 动态注入时 DOMContentLoaded 已经过去，手动补一次让 offline.js 完成事件绑定。
+    // 启动时会读媒体库设置；这里只注入离线面板，先把设置加载换成空实现，
+    // 免得脚本因为找不到设置弹窗里的输入框而报错（与本用例要验证的行为无关）。
+    await page.evaluate(() => { window.loadOfflineSettings = () => {}; });
     await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
     await page.evaluate(() => {
       offlineView.animeId = 554779;

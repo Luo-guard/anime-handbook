@@ -9,7 +9,7 @@ from . import offline_config
 from . import screenshots as screenshot_tools
 from . import detail_wallpapers
 from . import danmaku as danmaku_tools
-from . import playback_rules, xifan_preview
+from . import playback_rules, playback_stream, xifan_preview
 from .offline_service import OfflineError, OfflineService
 
 
@@ -106,6 +106,21 @@ class PostRoutes:
                     group_name=str(body.get("group_name") or ""),
                     resolution=str(body.get("resolution") or ""),
                     codec=str(body.get("codec") or ""),
+                ))
+            elif path == "/api/offline/web-download":
+                # 播放器刚解析出来的地址只在内存里，凭令牌取回，和正在播的是同一份。
+                playback = playback_stream.lookup(str(body.get("token") or ""))
+                if playback is None:
+                    raise ValueError("播放地址已过期，请重新播放后再点「下载本集」")
+                media_url, media_kind = playback_stream.main_resource(playback)
+                self.send_json(OfflineService(self.database).download_web(
+                    anime_id=int(body.get("anime_id") or 0),
+                    url=media_url,
+                    kind=media_kind,
+                    headers=playback.headers,
+                    episode_key=str(body.get("episode_key") or ""),
+                    title=str(body.get("title") or ""),
+                    group_name=str(body.get("group_name") or ""),
                 ))
             elif path == "/api/offline/resume":
                 anime_id = int(body.get("anime_id") or 0)

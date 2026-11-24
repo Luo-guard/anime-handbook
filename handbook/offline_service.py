@@ -18,7 +18,7 @@ import re
 from typing import Any
 
 from . import media as media_tools
-from . import mikan, offline_config
+from . import mikan, offline_config, web_download
 from .torrent_meta import TorrentMetaError, torrent_infohash, torrent_name
 from .offline import OfflineStore
 from .common import now_iso
@@ -141,6 +141,83 @@ class OfflineService:
     def paths(self) -> dict[str, Any]:
         config = self.config()
         return offline_config.ensure_dirs(config)
+
+    def _web_folder(self, media_id: int) -> Path:
+        """网站资源的落地目录：按任务号隔离，归档成功后整目录删掉。"""
+        root = Path(offline_config.resolved(self.config())["download_root"])
+        return root / f".web-{int(media_id)}"
+
+    def download_web(
+        self,
+        *,
+        anime_id: int,
+        url: str,
+        kind: str = "",
+        headers: dict[str, str] | None = None,
+        episode_key: str = "",
+        title: str = "",
+        group_name: str = "",
+    ) -> dict[str, Any]:
+        """从播放器解析出的网站地址发起下载（m3u8 或直链）。
+
+        和 BT 的唯一区别是「谁在搬字节」：这里由进程内线程负责，进度同样写回
+        local_media，归档复用同一段代码，媒体库看到的成品没有区别。
+        """
+        anime_id = int(anime_id or 0)
+        key = str(episode_key or "").strip()
+        if not key:
+            raise OfflineError("不知道这一集是第几集，暂时不能下载")
+        if not str(url or "").strip():
+            raise OfflineError("没有拿到可下载的地址，请重新播放后再试")
+        paths = offline_config.ensure_dirs(self.config())
+        if not paths["ok"]:
+            raise OfflineError(str(paths.get("error") or "媒体库目录不可用"))
+        label = media_tools.label_for_key(key) or "单集"
+        name = f"网站资源 · {label}"
+        existing = next(
+            (
+                job
+                for job in self.store.jobs_for_anime(anime_id)
+                if str(job.get("source_kind") or "") == "web"
+                and str(job.get("episode_key") or "") == key
+            ),
+            None,
+        )
+        if existing:
+            status = str(existing.get("status") or "")
+            # 同一集已经在跑或已经入库：直接复用，避免任务列表里叠两条。
+            if status in ("queued", "downloading", "processing", "ready"):
+                return {"ok": True, "job": existing, "reused": True}
+            job = self.store.update_job(
+                int(existing["id"]),
+                status="downloading",
+                error="",
+                progress=0,
+                torrent_name=name,
+                source_title=str(title or existing.get("source_title") or ""),
+                group_name=str(group_name or existing.get("group_name") or ""),
+            ) or existing
+            folder = self._web_folder(int(job["id"]))
+            # 上次可能只留下半截分片：已有成品就留着等归档，没有就清干净重下。
+            if not any(
+                (folder / item).is_file()
+                for item in (web_download.DIRECT_NAME, web_download.PLAYLIST_NAME)
+            ):
+                web_download.clear_folder(folder)
+        else:
+            job = self.store.create_job(
+                anime_id=anime_id,
+                source_kind="web",
+                torrent_name=name,
+                source_title=str(title or ""),
+                group_name=str(group_name or ""),
+                episode_key=key,
+                save_path=str(paths["download_root"]),
+                status="downloading",
+            )
+            folder = self._web_folder(int(job["id"]))
+        web_download.start(int(job["id"]), str(url), str(kind or ""), dict(headers or {}), folder)
+        return {"ok": True, "job": job, "reused": False}
 
     # ---- 搜索 ---------------------------------------------------------
 
@@ -321,6 +398,49 @@ class OfflineService:
         """刷新任务状态，并顺手把「速度、剩余时间、qB 原始状态」带回去给界面。"""
         active = [job for job in jobs if job.get("status") in ("queued", "downloading", "processing")]
         live: dict[int, dict[str, Any]] = {}
+        # 网站资源的进度来自进程内线程，和 qBittorrent 没有关系，先单独推进。
+        web_jobs = [job for job in active if str(job.get("source_kind") or "") == "web"]
+        for job in web_jobs:
+            media_id = int(job["id"])
+            task = web_download.get(media_id)
+            if task is None:
+                # 进程重启后线程没了，地址也只活在内存里，只能让人重新点一次。
+                self.store.set_status(
+                    media_id, "failed",
+                    error="下载已中断（程序重启或任务被清理），请回到播放器重新点「下载本集」",
+                )
+                continue
+            snap = task.snapshot()
+            speed = float(snap.get("speed") or 0)
+            remaining = max(0, int(snap.get("bytes") or 0))
+            total_bytes = int(task.total_bytes or 0)
+            if total_bytes:
+                remaining = max(0, total_bytes - int(snap.get("bytes") or 0))
+            live[media_id] = {
+                "dlspeed": int(speed),
+                "upspeed": 0,
+                "eta": int(remaining / speed) if speed > 0 and remaining else 0,
+                "state": str(snap.get("status") or ""),
+                "paused": bool(snap.get("paused")),
+                "seeds": 0,
+                "size": total_bytes,
+            }
+            if snap.get("status") == "failed":
+                self.store.set_status(
+                    media_id, "failed",
+                    error=str(snap.get("error") or "下载失败"),
+                    progress=float(snap.get("progress") or 0),
+                )
+            elif snap.get("status") == "done":
+                self.store.set_status(media_id, "processing", progress=100, error="")
+                self._schedule_archive(media_id)
+            else:
+                self.store.set_status(
+                    media_id, "downloading",
+                    progress=float(snap.get("progress") or 0),
+                    error="",
+                )
+        active = [job for job in active if str(job.get("source_kind") or "") != "web"]
         # 归档失败以前会让任务永远停在 failed，刷新也不再处理。给一个限频的自动重试，
         # 文件晚一点就绪、或 qB 当时还没写好 content_path 都能自己恢复；
         # 重试到上限就停，免得一个真坏掉的任务每 30 秒空转一次，按钮始终可用。
@@ -613,26 +733,34 @@ class OfflineService:
                     except OSError:
                         pass
 
+    def _web_sources(self, media_id: int) -> list[Path]:
+        """网站资源任务的成品：直链是 video.mp4，HLS 是本地重建的 playlist.m3u8。"""
+        folder = self._web_folder(media_id)
+        for name in (web_download.DIRECT_NAME, web_download.PLAYLIST_NAME):
+            path = folder / name
+            if path.is_file() and path.stat().st_size > 0:
+                return [path]
+        raise OfflineError(
+            "下载目录里没有这一集的成品，可能上次没下完：回到播放器重新点一次「下载本集」"
+        )
+
     def _archive(self, media_id: int) -> None:
         job = self.store.job(media_id)
         if not job:
-            return
-        anime_id = int(job["anime_id"])
-        done_rows = [
-            row
-            for row in self.store.files_for_anime(anime_id)
-            if int(row.get("media_id") or 0) == media_id
-        ]
-        done_keys = {str(row["episode_key"]) for row in done_rows}
-        # 只有已经整体标记为 ready 的任务才直接跳过，避免每次刷新都重新封装；
-        # 部分入库的失败任务要继续跑，已入库的集数在下面的循环里按 key 跳过。
-        if done_keys and job.get("status") == "ready":
-            self.store.set_status(media_id, "ready", progress=100, error="")
             return
         config = self.config()
         paths = offline_config.ensure_dirs(config)
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可写"))
+        if str(job.get("source_kind") or "") == "web":
+            # 网站资源没有下载器可问，成品就在自己的临时目录里；找不到就是没下完。
+            files = self._web_sources(media_id)
+            try:
+                self._archive_into_library(job, files, paths)
+            finally:
+                web_download.drop(media_id)
+            web_download.clear_folder(self._web_folder(media_id))
+            return
         torrent_hash = str(job.get("torrent_hash") or "")
         client = self.client(config)
         files: list[Any] = []
@@ -657,6 +785,29 @@ class OfflineService:
                 "下载目录里没有找到这个任务的视频文件：确认 qBittorrent 里这个任务已完成、"
                 "文件还在下载目录（被移走或改名过就放回原处），再点「重试归档」"
             )
+        self._archive_into_library(job, files, paths)
+        if not config.get("seed_after_done"):
+            # 不保留做种时，归档完就清掉原始文件，免得同一集占两份空间。
+            try:
+                client.delete([torrent_hash], delete_files=True)
+            except QBError:
+                pass
+
+    def _archive_into_library(self, job: dict[str, Any], files: list[Any], paths: dict[str, Any]) -> None:
+        """把已经落地的视频文件封装进媒体库；BT 和网站资源共用这一段。"""
+        media_id = int(job["id"])
+        anime_id = int(job["anime_id"])
+        done_rows = [
+            row
+            for row in self.store.files_for_anime(anime_id)
+            if int(row.get("media_id") or 0) == media_id
+        ]
+        done_keys = {str(row["episode_key"]) for row in done_rows}
+        # 只有已经整体标记为 ready 的任务才直接跳过，避免每次刷新都重新封装；
+        # 部分入库的失败任务要继续跑，已入库的集数在下面的循环里按 key 跳过。
+        if done_keys and job.get("status") == "ready":
+            self.store.set_status(media_id, "ready", progress=100, error="")
+            return
         anime = self.db.get_anime(anime_id) or {}
         target_dir = self._archive_directory(
             Path(paths["media_root"]).resolve(), anime_id,
@@ -744,12 +895,6 @@ class OfflineService:
                 "「番名 - 01」这类格式，然后点「重试归档」，已入库的集会跳过"
             )
         self.store.set_status(media_id, "ready", progress=100, error="", archive_retries=0)
-        if not config.get("seed_after_done"):
-            # 不保留做种时，归档完就清掉原始文件，免得同一集占两份空间。
-            try:
-                client.delete([torrent_hash], delete_files=True)
-            except QBError:
-                pass
 
     @staticmethod
     def _annotate_files(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -977,6 +1122,23 @@ class OfflineService:
         job = self.store.job(int(media_id))
         if not job:
             raise OfflineError("下载记录不存在")
+        if str(job.get("source_kind") or "") == "web":
+            # 成品还在：只是归档没成功，再整理一次即可；成品没了说明没下完，
+            # 只能让内存里的下载线程接着跑，线程也没了就得回播放器重点一次。
+            folder = self._web_folder(int(media_id))
+            if any(
+                (folder / item).is_file()
+                for item in (web_download.DIRECT_NAME, web_download.PLAYLIST_NAME)
+            ):
+                self.store.set_status(int(media_id), "processing", error="", archive_retries=0)
+                self._schedule_archive(int(media_id))
+                return {"ok": True, "media_id": int(media_id)}
+            task = web_download.get(int(media_id))
+            if task is None:
+                raise OfflineError("原来的下载地址已经失效，请回到播放器重新点「下载本集」")
+            task.resume()
+            self.store.set_status(int(media_id), "downloading", error="", archive_retries=0)
+            return {"ok": True, "media_id": int(media_id), "restarted": True}
         self.store.set_status(int(media_id), "processing", error="", archive_retries=0)
         self._schedule_archive(int(media_id))
         return {"ok": True, "media_id": int(media_id)}
@@ -986,6 +1148,20 @@ class OfflineService:
         job = self.store.job(int(media_id))
         if not job:
             raise OfflineError("下载记录不存在")
+        if str(job.get("source_kind") or "") == "web":
+            task = web_download.get(int(media_id))
+            if task is None:
+                raise OfflineError("下载已中断，请回到播放器重新点「下载本集」")
+            if action == "pause":
+                task.pause()
+                paused = True
+            elif action == "resume":
+                task.resume()
+                paused = False
+            else:
+                raise ValueError("任务操作无效")
+            self.store.set_status(int(media_id), "downloading", error="")
+            return {"ok": True, "action": action, "paused": paused}
         torrent_hash = str(job.get("torrent_hash") or "")
         if not torrent_hash:
             raise OfflineError("这个任务没有对应的种子，无法操作")
@@ -1013,6 +1189,14 @@ class OfflineService:
         job = self.store.job(int(media_id))
         if not job:
             raise OfflineError("下载记录不存在")
+        if str(job.get("source_kind") or "") == "web":
+            task = web_download.drop(int(media_id))
+            if task is not None:
+                task.cancel()
+            # 网站资源的临时目录只是中转，删任务就一起清掉，不留孤儿文件。
+            web_download.clear_folder(self._web_folder(int(media_id)))
+            self.store.delete_job(int(media_id))
+            return {"ok": True, "kept_files": False}
         torrent_hash = str(job.get("torrent_hash") or "")
         if torrent_hash:
             client = self.client()

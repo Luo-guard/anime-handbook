@@ -31,6 +31,9 @@ async function prepare(browser) {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setContent(`<style>${fs.readFileSync('static/styles.css', 'utf8')}</style>${modal}`);
   await page.addScriptTag({ content: setup + fs.readFileSync('static/modules/offline.js', 'utf8') });
+  // 启动时会读媒体库设置；这里只注入离线面板，先把设置加载换成空实现，
+  // 免得脚本因为找不到设置弹窗里的输入框而报错（与本用例要验证的行为无关）。
+  await page.evaluate(() => { window.loadOfflineSettings = () => {}; });
   await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
   return { page, errors };
 }

@@ -207,6 +207,9 @@ class HandbookDB:
                     anime_id INTEGER NOT NULL DEFAULT 0,
                     episode_key TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT 'queued',
+                    -- 任务来源：'' 是 BT 种子（qBittorrent），'web' 是播放器里
+                    -- 解析出来的网站资源（m3u8 / 直链）。两者共用一套状态与归档流程。
+                    source_kind TEXT NOT NULL DEFAULT '',
                     torrent_hash TEXT NOT NULL DEFAULT '',
                     torrent_name TEXT NOT NULL DEFAULT '',
                     source_title TEXT NOT NULL DEFAULT '',
@@ -443,6 +446,10 @@ class HandbookDB:
             if "archive_retries" not in local_media_columns:
                 db.execute(
                     "ALTER TABLE local_media ADD COLUMN archive_retries INTEGER NOT NULL DEFAULT 0"
+                )
+            if "source_kind" not in local_media_columns:
+                db.execute(
+                    "ALTER TABLE local_media ADD COLUMN source_kind TEXT NOT NULL DEFAULT ''"
                 )
             # 自定义收藏夹 → Kazumi 收藏夹的映射（NULL 表示不映射）。
             custom_columns = {

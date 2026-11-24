@@ -488,21 +488,26 @@ function renderOfflineLocal() {
         const limit = Number(offlineView.retryLimit || 5);
         const attempts = Number(job.archive_retries || 0);
         const stopped = attempts >= limit;
+        // 网站资源的失败多数是「没下完」而不是「归档不成」，按钮文案要能对上，
+        // 否则用户会以为是去整理一个已经下好的文件。
+        const isWeb = String(job.source_kind || "") === "web";
         // 提示要能指导下一步：还在自动重试就说明会自己再试，到顶了就说要人处理什么。
         const hint = stopped
           ? "自动重试已用完：按上面的原因处理后点「重试归档」"
           : attempts
             ? `还会自动再试（已用 ${attempts}/${limit} 次）；也可以现在点「重试归档」`
             : "点「重试归档」立即再试一次";
+        const actionLabel = isWeb ? "重试下载" : "重试归档";
+        const actionHint = isWeb ? "地址失效就回播放器重新点「下载本集」" : hint;
         return `
         <article class="offline-row">
           <div class="offline-row-main">
             <p class="offline-row-title" title="${escapeHtml(job.source_title || job.torrent_name)}">${escapeHtml(job.torrent_name || job.source_title || "未命名任务")}</p>
             <p class="offline-row-meta"><span class="offline-error">${escapeHtml(job.error || "未知原因")}</span></p>
-            <p class="offline-row-hint">${escapeHtml(hint)}｜已入库的集会跳过，只补缺的</p>
+            <p class="offline-row-hint">${escapeHtml(actionHint)}｜已入库的集会跳过，只补缺的</p>
           </div>
           <div class="offline-row-actions">
-            <button type="button" class="offline-play" data-retry="${job.id}" title="${escapeHtml(hint)}">重试归档</button>
+            <button type="button" class="offline-play" data-retry="${job.id}" title="${escapeHtml(actionHint)}">${actionLabel}</button>
             <button type="button" class="offline-remove" data-job="${job.id}" title="从下载器移除并删除记录">移除</button>
           </div>
         </article>`;

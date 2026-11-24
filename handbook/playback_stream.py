@@ -103,6 +103,24 @@ class Playback:
 _PLAYBACKS: dict[str, Playback] = {}
 
 
+def lookup(token: str) -> Playback | None:
+    """按播放令牌取回原始地址与请求头，供「下载本集」复用同一份解析结果。
+
+    令牌只活在内存里：程序重启或过期后，用户重新播放一次即可。
+    """
+    with _LOCK:
+        playback = _PLAYBACKS.get(str(token or ""))
+        if playback is None or playback.expires <= time.time():
+            return None
+        return playback
+
+
+def main_resource(playback: Playback) -> tuple[str, str]:
+    """返回 (原始地址, 'hls'/'file')。"""
+    url, kind = playback.resources.get("main", (playback.url, "file"))
+    return str(url), str(kind)
+
+
 def issue(url, kind, headers=None, *, expires=None):
     public_url(url)
     now = time.time()

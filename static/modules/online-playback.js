@@ -9,6 +9,12 @@ function isOnlinePlaybackLink(value) {
   } catch { return false; }
 }
 
+// 播放代理地址里带着一次性令牌；下载要靠它复用同一份解析结果。
+function playbackToken(url) {
+  const match = String(url || "").match(/\/api\/playback\/stream\/([^/]+)\//);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
 function onlineEpisodeLabel(session, episode = session.episode) {
   const { animeId, context, source } = session;
   const number = onlineLocalEpisodeNumber(episode, source, context?.target.first);
@@ -99,6 +105,8 @@ window.onlinePlayback = (() => {
     saveResume();
     current.controller.abort();
     current = null;
+    clearInterval(downloadTimer);
+    downloadLabel("下载本集", false);
     $("#onlinePlayerOptions").classList.add("hidden");
     return true;
   }
@@ -151,6 +159,119 @@ window.onlinePlayback = (() => {
 
   function errorMessage(error, timeoutMessage) {
     return error.name === "TimeoutError" ? timeoutMessage : error.message;
+  }
+
+  // ---- 网站资源下载：把当前线路的这一集存进媒体库 ----
+  // Kazumi 的下载入口在播放器里，这里保持一致：地址只在解析后才知道，
+  // 所以按钮跟着「当前正在播的这一集」走，而不是另开一个粘贴框。
+
+  let downloadTimer = 0;
+
+  function downloadLabel(text, disabled) {
+    const button = $("#onlinePlayerDownload");
+    if (!button) return;
+    button.textContent = text;
+    button.disabled = Boolean(disabled);
+  }
+
+  function downloadEpisodeName(session) {
+    const title = session?.catalogue?.title || "未命名番剧";
+    const episode = onlineEpisodeLabel(session);
+    const line = session?.source?.name || "";
+    return line ? `${title} · ${episode} · ${line}` : `${title} · ${episode}`;
+  }
+
+  function watchDownload(session, mediaId) {
+    clearInterval(downloadTimer);
+    const animeId = Number(session.animeId || 0);
+    const tick = async () => {
+      if (!current || current !== session) { clearInterval(downloadTimer); return; }
+      try {
+        const data = await api(`/api/offline/state?anime_id=${animeId}`);
+        const job = (data.jobs || []).find(item => Number(item.id) === Number(mediaId));
+        if (!job) return;
+        if (job.status === "ready") {
+          clearInterval(downloadTimer);
+          downloadLabel("已入库", true);
+          offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
+          if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(animeId, data.files || []);
+          toast("这一集已经存进媒体库");
+          return;
+        }
+        if (job.status === "failed") {
+          clearInterval(downloadTimer);
+          downloadLabel("重试下载", false);
+          toast(job.error || "下载失败", "error");
+          return;
+        }
+        const percent = Math.round(Number(job.progress || 0));
+        downloadLabel(job.status === "processing" ? "正在整理…" : `下载 ${percent}%`, true);
+      } catch { /* 轮询失败不打扰用户，下一拍再试 */ }
+    };
+    tick();
+    downloadTimer = setInterval(tick, 2500);
+  }
+
+  // 换集/换线路时按钮要跟着变：同一集已经在下载或已入库就直接显示对应状态。
+  async function reflectDownload(session, number) {
+    clearInterval(downloadTimer);
+    downloadLabel("下载本集", false);
+    const animeId = Number(session?.animeId || 0);
+    // 没有番剧上下文（直接从链接打开）时不预查，点下去会给一句明确提示。
+    if (!animeId || !number) return;
+    try {
+      const data = await api(`/api/offline/state?anime_id=${animeId}`);
+      if (!current || current !== session) return;
+      const key = `0:${number}`;
+      const job = (data.jobs || []).find(
+        item => String(item.source_kind || "") === "web" && String(item.episode_key || "") === key,
+      );
+      if (!job) return;
+      if (job.status === "ready") { downloadLabel("已入库", true); return; }
+      if (job.status === "failed") return;
+      watchDownload(session, job.id);
+    } catch { /* 读不到就保持默认状态 */ }
+  }
+
+  async function startWebDownload() {
+    const session = current;
+    if (!session) return;
+    const animeId = Number(session.animeId || 0);
+    if (!animeId) {
+      toast("从详情页打开这一集后再下载，才能归档到对应的番剧里。", "error");
+      return;
+    }
+    const first = session.context?.target?.first || 1;
+    const number = onlineLocalEpisodeNumber(session.episode, session.source, first)
+      || Number(session.context?.target?.number || 0);
+    if (!number) {
+      toast("认不出这是第几集，先切换到带集数的线路。", "error");
+      return;
+    }
+    const token = playbackToken(session.playback?.url);
+    if (!token) {
+      toast("这一集的地址还没解析好，稍等一下再点。", "error");
+      return;
+    }
+    downloadLabel("提交中…", true);
+    try {
+      const data = await api("/api/offline/web-download", {
+        method: "POST",
+        timeoutMs: 30000,
+        body: JSON.stringify({
+          anime_id: animeId,
+          token,
+          episode_key: `0:${number}`,
+          title: downloadEpisodeName(session),
+          group_name: session.catalogue?.ruleName || session.catalogue?.rule || "",
+        }),
+      });
+      toast(data.reused ? "这一集已经在下载或已入库" : "已开始下载，完成后出现在媒体库");
+      watchDownload(session, data.job?.id);
+    } catch (error) {
+      downloadLabel("下载本集", false);
+      toast(error.message || "下载没能开始", "error");
+    }
   }
 
   function selectEpisode(id) {
@@ -213,6 +334,9 @@ window.onlinePlayback = (() => {
     try {
       const result = await request("play", { rule: catalogue.rule, anime: catalogue.id, source: source.id, episode: episode.id }, controller.signal);
       if (controller.signal.aborted) return;
+      // 记下这次解析出来的地址：下载按钮复用它，保证下到的和正在播的是同一个片源。
+      session.playback = { url: result.url, format: result.format };
+      reflectDownload(session, danmakuNumber);
       video.addEventListener("canplay", () => {
         if (!video.videoWidth) return;
         clearTimeout(timer);
@@ -686,6 +810,7 @@ window.onlinePlayback = (() => {
       openHandbookSettings("playback", "#playbackRulesHeading");
     });
     $("#onlineRuleCheckUpdates").addEventListener("click", () => refreshRuleCatalogue({ fresh: true }));
+    $("#onlinePlayerDownload").addEventListener("click", startWebDownload);
     $("#onlinePlayerRule").addEventListener("click", () => {
       const context = current?.context;
       if (!context) return;

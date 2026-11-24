@@ -21,6 +21,7 @@ ACTIVE_STATUSES = ("queued", "downloading", "processing")
 _JOB_FIELDS = {
     "episode_key",
     "status",
+    "source_kind",
     "torrent_hash",
     "torrent_name",
     "source_title",
@@ -72,6 +73,7 @@ class OfflineStore:
         codec: str = "",
         save_path: str = "",
         status: str = "queued",
+        source_kind: str = "",
     ) -> dict[str, Any]:
         """登记一个下载任务。
 
@@ -101,14 +103,15 @@ class OfflineStore:
         stamp = now_iso()
         with self.db.connect() as db:
             cursor = db.execute(
-                "INSERT INTO local_media (anime_id, episode_key, status, torrent_hash, torrent_name,"
-                " source_title, group_name, resolution, codec, progress, save_path, error,"
+                "INSERT INTO local_media (anime_id, episode_key, status, source_kind, torrent_hash,"
+                " torrent_name, source_title, group_name, resolution, codec, progress, save_path, error,"
                 " created_at, updated_at)"
-                " VALUES (?,?,?,?,?,?,?,?,?,0,?,'',?,?)",
+                " VALUES (?,?,?,?,?,?,?,?,?,?,0,?,'',?,?)",
                 (
                     int(anime_id),
                     str(episode_key or ""),
                     status,
+                    str(source_kind or ""),
                     str(torrent_hash or ""),
                     str(torrent_name or ""),
                     str(source_title or ""),
