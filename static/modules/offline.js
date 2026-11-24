@@ -317,9 +317,10 @@ async function openAnimeLocalView(animeId, name) {
   await refreshOfflineLocal();
 }
 
-async function loadLibrary() {
+async function loadLibrary({ silent = false } = {}) {
   const token = ++offlineView.library.token;
-  offlineStatus("#offlineLocalStatus", "媒体库加载中…");
+  // 轮询刷新用 silent：每 3 秒闪一次「加载中」会让人以为一直在转圈。
+  if (!silent) offlineStatus("#offlineLocalStatus", "媒体库加载中…");
   try {
     const data = await api("/api/offline/library");
     if (token !== offlineView.library.token) return;
@@ -364,9 +365,13 @@ function libraryCard(item) {
   const total = Math.max(item.episode_count || 0, item.file_count, 1);
   const downloadPct = Math.min(100, Math.round((item.file_count / total) * 100));
   const watchedPct = Math.min(100, Math.round((item.watched_count / total) * 100));
-  const size = item.size_bytes >= (1 << 30)
-    ? `${(item.size_bytes / (1 << 30)).toFixed(1)} GB`
-    : `${Math.max(1, Math.round(item.size_bytes / (1 << 20)))} MB`;
+  const activeCount = Number(item.active_count || 0);
+  const activePct = Math.max(0, Math.min(100, Math.round(Number(item.active_progress || 0))));
+  const size = item.size_bytes
+    ? (item.size_bytes >= (1 << 30)
+      ? `${(item.size_bytes / (1 << 30)).toFixed(1)} GB`
+      : `${Math.max(1, Math.round(item.size_bytes / (1 << 20)))} MB`)
+    : "";
   const category = CATEGORIES.find((entry) => entry.id === item.collection_type);
   const resume = item.continue_resume_ms;
   const minutes = Math.floor(resume / 60000);
@@ -377,13 +382,14 @@ function libraryCard(item) {
       <div class="library-cover">
         <img src="/api/covers/${item.anime_id}" loading="lazy" alt="" onerror="this.style.visibility='hidden'" />
         ${category ? `<span class="library-badge">${escapeHtml(category.name)}</span>` : ""}
-        <span class="library-size">${escapeHtml(size)}</span>
+        ${activeCount ? `<span class="library-size library-downloading">下载中 ${activePct}%</span>` : `<span class="library-size">${escapeHtml(size)}</span>`}
         ${item.continue_file_id ? `<button type="button" class="library-play-fab" data-continue="${item.continue_file_id}" data-anime="${item.anime_id}" title="继续播放" aria-label="继续播放"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button>` : ""}
       </div>
       <div class="library-body">
         <p class="library-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</p>
-        <p class="library-meta">已收 ${item.file_count}${item.episode_count ? ` / 全 ${item.episode_count}` : ""} 集 · 已看 ${item.watched_count}</p>
+        <p class="library-meta">${activeCount ? `正在下载 ${activeCount} 集 · ` : ""}已收 ${item.file_count}${item.episode_count ? ` / 全 ${item.episode_count}` : ""} 集 · 已看 ${item.watched_count}</p>
         <div class="library-bar" title="绿色：已收 ${item.file_count} 集；深色：已看 ${item.watched_count} 集"><i style="width:${downloadPct}%"></i><i class="watched" style="width:${watchedPct}%"></i></div>
+        ${activeCount ? `<div class="library-bar library-bar-active" title="正在下载 ${activeCount} 集：${activePct}%"><i style="width:${activePct}%"></i></div>` : ""}
         ${item.continue_file_id ? `<button type="button" class="library-continue" data-continue="${item.continue_file_id}" data-anime="${item.anime_id}">▶ ${escapeHtml(continueLabel)}</button>` : ""}
       </div>
     </article>`;
@@ -800,7 +806,17 @@ function offlinePollDelay() {
       Number(job.archive_retries || 0) < limit
     );
   });
-  return moving ? OFFLINE_POLL_FAST_MS : OFFLINE_POLL_IDLE_MS;
+  // 媒体库视图看的是聚合卡片，任务在 library.items 里；有番在下载就照样快跑。
+  const libraryMoving = (offlineView.library.items || []).some((item) => Number(item.active_count || 0) > 0);
+  return moving || libraryMoving ? OFFLINE_POLL_FAST_MS : OFFLINE_POLL_IDLE_MS;
+}
+
+// 全库视图没有「当前番」，要刷新聚合卡片；单番视图刷新任务与文件。
+// 判断依据是 DOM 里谁在显示，不依赖可能过期的 libraryMode 标记。
+async function refreshOfflinePanel() {
+  const libraryVisible = !$("#offlineLibraryView")?.classList.contains("hidden");
+  if (libraryVisible) await loadLibrary({ silent: true });
+  else await refreshOfflineLocal();
 }
 
 function setOfflinePolling(on) {
@@ -812,7 +828,7 @@ function setOfflinePolling(on) {
     if (!offlinePolling) return;
     if ($("#offlineModal")?.open && !document.hidden) {
       try {
-        await refreshOfflineLocal();
+        await refreshOfflinePanel();
       } catch (error) {
         // 轮询失败不该弹提示打断观看，下一轮会自己重试。
       }
@@ -826,7 +842,7 @@ function setOfflinePolling(on) {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden || !offlinePolling) return;
   if (!$("#offlineModal")?.open) return;
-  refreshOfflineLocal().catch(() => {});
+  refreshOfflinePanel().catch(() => {});
   setOfflinePolling(true);
 });
 

@@ -1089,9 +1089,17 @@ class OfflineService:
         for row in files:
             grouped.setdefault(int(row.get("anime_id") or 0), []).append(row)
 
+        # 正在下载的任务也要进媒体库：否则从动漫库进来只看到「已入库」的番，
+        # 刚点完批量下载反而什么都没有，用户会以为没开始。
+        active: dict[int, list[dict[str, Any]]] = {}
+        for job in self.store.active_jobs():
+            active.setdefault(int(job.get("anime_id") or 0), []).append(job)
+
         items: list[dict[str, Any]] = []
         with self.store.db.connect() as db:
-            for anime_id, rows in grouped.items():
+            for anime_id in sorted(set(grouped) | set(active)):
+                rows = grouped.get(anime_id, [])
+                jobs = active.get(anime_id, [])
                 anime = db.execute(
                     "SELECT name, name_cn, image_url, collection_type, episode_count, watched_episodes, episodes"
                     " FROM anime WHERE id = ?",
@@ -1100,8 +1108,8 @@ class OfflineService:
                 info = dict(anime) if anime else {}
                 ordered = sorted(rows, key=lambda row: media_tools.key_sort_value(row.get("episode_key")))
                 playable = [row for row in ordered if Path(str(row.get("file_path") or "")).is_file()]
-                if not playable:
-                    continue  # 文件全不在了的番不进媒体库，去「本地文件」看记录更合适
+                if not playable and not jobs:
+                    continue  # 文件全不在了、也没在下载的番不进媒体库
 
                 # 已看集合：watched_episodes 里混着旧格式（bgm:123），用该番的
                 # episodes 资料把这类 key 换算成统一的「类型:集数」再比。
@@ -1126,12 +1134,18 @@ class OfflineService:
                 continue_row = (
                     max(started, key=lambda row: int(row.get("resume_ms") or 0))
                     if started
-                    else next((row for row in playable if not is_watched(row)), playable[0])
-                )
+                    else next((row for row in playable if not is_watched(row)), playable[0] if playable else None)
+                ) or None
                 size_bytes = sum(int(row.get("file_size") or 0) for row in playable)
+                progress = (
+                    round(sum(float(job.get("progress") or 0) for job in jobs) / len(jobs), 1) if jobs else 0.0
+                )
                 items.append({
                     "anime_id": anime_id,
-                    "name": (info.get("name_cn") or info.get("name") or f"番剧 {anime_id}").strip(),
+                    "name": (
+                        info.get("name_cn") or info.get("name")
+                        or (jobs[0].get("torrent_name") if jobs else "") or f"番剧 {anime_id}"
+                    ).strip(),
                     "cover": f"/api/covers/{anime_id}",
                     "collection_type": int(info.get("collection_type") or 0),
                     "episode_count": int(info.get("episode_count") or 0),
@@ -1141,10 +1155,17 @@ class OfflineService:
                     "missing_count": len(ordered) - len(playable),
                     "watched_count": sum(1 for row in playable if is_watched(row)),
                     "size_bytes": size_bytes,
-                    "continue_file_id": int(continue_row["id"]),
-                    "continue_episode_key": str(continue_row.get("episode_key") or ""),
-                    "continue_resume_ms": int(continue_row.get("resume_ms") or 0),
-                    "last_updated": max(str(row.get("updated_at") or "") for row in rows),
+                    "continue_file_id": int(continue_row["id"]) if continue_row else 0,
+                    "continue_episode_key": str((continue_row or {}).get("episode_key") or ""),
+                    "continue_resume_ms": int((continue_row or {}).get("resume_ms") or 0),
+                    # 正在下载的集数 / 平均进度：卡片上直接显示，不用点进去才知道。
+                    "active_count": len(jobs),
+                    "active_progress": progress,
+                    "last_updated": max(
+                        [str(row.get("updated_at") or "") for row in rows]
+                        + [str(job.get("updated_at") or "") for job in jobs]
+                        + [""]
+                    ),
                 })
         items.sort(key=lambda item: item["last_updated"], reverse=True)
         return {"ok": True, "items": items, "disk": disk}

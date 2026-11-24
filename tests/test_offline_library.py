@@ -100,6 +100,43 @@ class LibraryTest(unittest.TestCase):
         a = next(item for item in data["items"] if item["anime_id"] == 1)
         self.assertEqual(a["watched_count"], 1, "旧 bgm:xxx 已看记录要经 episodes 映射统计进已看")
 
+    def test_downloading_anime_shows_up_with_progress(self):
+        """刚点下载、还没有成品文件的番也要进媒体库：否则从动漫库进来像什么都没发生。"""
+        self._make_anime(3, "测试番C", watched=[])
+        self.service.store.create_job(
+            anime_id=3, source_kind="web", torrent_name="网站资源 · 第 01 集",
+            episode_key="0:1", status="downloading",
+        )
+        item = next(row for row in self.service.library()["items"] if row["anime_id"] == 3)
+        self.assertEqual(item["file_count"], 0)
+        self.assertEqual(item["active_count"], 1)
+        self.assertEqual(item["name"], "测试番C")
+        self.assertEqual(item["continue_file_id"], 0, "没有成品时不该给「继续观看」")
+
+    def test_progress_is_averaged_over_active_jobs(self):
+        self._make_anime(4, "测试番D", watched=[])
+        for key, value in (("0:1", 50), ("0:2", 10)):
+            job = self.service.store.create_job(
+                anime_id=4, source_kind="web", torrent_name=f"网站资源 · {key}",
+                episode_key=key, status="downloading",
+            )
+            self.service.store.set_status(int(job["id"]), "downloading", progress=value)
+        item = next(row for row in self.service.library()["items"] if row["anime_id"] == 4)
+        self.assertEqual(item["active_count"], 2)
+        self.assertEqual(item["active_progress"], 30.0)
+
+    def test_finished_job_stops_counting_as_active(self):
+        self._make_anime(5, "测试番E", watched=[])
+        job = self.service.store.create_job(
+            anime_id=5, source_kind="web", torrent_name="网站资源 · 第 01 集",
+            episode_key="0:1", status="downloading",
+        )
+        self.service.store.set_status(int(job["id"]), "ready", progress=100)
+        self.assertEqual(
+            [row for row in self.service.library()["items"] if row["anime_id"] == 5], [],
+            "已经入库又没有文件记录的番不该以「下载中」的身份留着",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

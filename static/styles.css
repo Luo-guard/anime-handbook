@@ -7565,3 +7565,8 @@ body.schedule-picking [data-floating-view="schedule"] {
 .episode-pick-state[data-kind="queued"],
 .episode-pick-state[data-kind="downloading"],
 .episode-pick-state[data-kind="processing"] { color:var(--warm); }
+
+/* 媒体库卡片上的「正在下载」：角标换暖色，下面多一条细进度。 */
+.library-size.library-downloading { background: rgba(229, 167, 79, .92); color: #2a1e08; }
+.library-bar-active { margin-top: 4px; height: 3px; }
+.library-bar-active i { background: var(--warm); }

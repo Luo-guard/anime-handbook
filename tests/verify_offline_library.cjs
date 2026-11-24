@@ -8,21 +8,22 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   await page.goto('http://127.0.0.1:43127/', { waitUntil: 'domcontentloaded', timeout: 20000 });
   await page.waitForTimeout(1400);
 
-  // 1) 详情页右上角是合并后的下载角标按钮，「我的库」独立按钮已移除
+  // 1) 详情页的「找资源」位于更多菜单
   const button = await page.evaluate(() => {
     openProgress(state.animes.find((a) => a.id)?.id);
-    const corner = document.querySelector('#openOffline.detail-corner-download');
+    const action = document.querySelector('#modernDetailMenu #openOffline');
     const mine = document.querySelector('#openLibrary');
-    return { exists: Boolean(corner), mineRemoved: !mine, cornerInModal: Boolean(corner?.closest('#progressModal')) };
+    return { exists: Boolean(action), mineRemoved: !mine, inDetail: Boolean(action?.closest('#progressModal')) };
   });
-  assert.equal(button.exists, true, '详情页要有右上角下载角标按钮');
-  assert.equal(button.cornerInModal, true, '角标按钮应在详情弹窗内');
+  assert.equal(button.exists, true, '更多菜单要有找资源按钮');
+  assert.equal(button.inDetail, true, '找资源按钮应在详情弹窗内');
   assert.equal(button.mineRemoved, true, '「我的库」独立按钮应已移除');
 
-  // 2) 点角标 → 离线面板默认进「找资源」（番名已填），切到本地页签看媒体库卡片
-  await page.evaluate(() => document.querySelector('#openOffline').click());
+  // 2) 点「找资源」打开离线面板，切到本地页签看媒体库卡片
+  await page.click('#modernDetailMenu > summary');
+  await page.click('#openOffline');
   await page.waitForTimeout(900);
-  assert.equal(await page.evaluate(() => document.querySelector('[data-offline-tab="search"]').classList.contains('active')), true, '角标默认进找资源');
+  assert.equal(await page.evaluate(() => document.querySelector('[data-offline-tab="search"]').classList.contains('active')), true, '默认进找资源');
   await page.evaluate(() => document.querySelector('[data-offline-tab="local"]').click());
   await page.waitForTimeout(500);
   // 本地页签默认显示当前番；「返回媒体库」进总览
@@ -45,7 +46,9 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   assert.equal(library.animeViewHidden, true);
   assert.ok(library.cards.length >= 1, '库里要列出有本地文件的番');
   const card = library.cards[0];
-  assert.equal(card.name, '学生会也有洞！');
+  // 断言「渲染出卡片」而不是某一部具体的番：这个脚本连的是本机真实库，
+  // 谁最近更新过就排第一，写死番名会随用户数据变化而误报。
+  assert.ok(card.name && card.name.length > 0, '卡片要有番名');
   assert.ok(card.continueText.includes('第'), `继续观看按钮要带集名，实际：${card.continueText}`);
   assert.ok(library.disk.includes('GB'), `底部要显示磁盘容量，实际：${library.disk}`);
 
@@ -85,7 +88,7 @@ const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-r
   assert.equal(animeView.animeVisible, true);
   assert.equal(animeView.backVisible, true, '进番视图后要有返回按钮');
   assert.ok(animeView.rows >= 1, '番视图要列出这一番的文件');
-  assert.equal(animeView.target, '学生会也有洞！');
+  assert.ok(animeView.target && animeView.target.length > 0, '进番视图后标题要是番名');
 
   await page.locator('#offlineLibraryBack').click();
   await page.waitForTimeout(700);
