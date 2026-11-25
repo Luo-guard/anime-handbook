@@ -20,16 +20,17 @@ from handbook.http_support import RequestProblem
 
 class XifanPreviewTest(unittest.TestCase):
     def test_search_uses_the_kazumi_rule_only_for_the_known_endpoint(self):
-        url = f"{preview.API}/rest/v1/rpc/search_animes"
         key = "sb_publishable_" + "example" * 2
+        rule = {"baseURL": "https://next.xifanacg.com/"}
+        url = f"{preview.api_base(rule)}/rest/v1/rpc/search_animes"
         search_request = {"url": url, "method": "POST", "headers": {"apikey": key}}
-        rule = {"searchApiConfig": {"request": search_request}}
+        rule["searchApiConfig"] = {"request": search_request}
         rows = [{"id": 42, "title": "Example", "title_original": "Original", "extra": "ignored"}]
         with patch.object(preview, "_json_request", return_value=rows) as request:
             self.assertEqual(preview.search(" Original ", rule), {
                 "items": [{"id": 42, "title": "Example", "original": "Original"}],
             })
-            request.assert_called_once_with(url, {"search_term": "Original", "page_number": 1, "items_per_page": 24}, key)
+            request.assert_called_once_with(url, {"search_term": "Original", "page_number": 1, "items_per_page": 24}, key, rule)
             request.reset_mock()
             search_request["url"] = "https://elsewhere.test/search"
             with self.assertRaises(preview.PreviewError):
@@ -47,6 +48,63 @@ class XifanPreviewTest(unittest.TestCase):
                 with self.subTest(url=url), self.assertRaises(preview.PreviewError):
                     preview.catalogue(url, {})
             request.assert_not_called()
+
+    def test_rule_driven_play_endpoint_keeps_number_types(self):
+        """规则里的「签发播放地址」接口：数字要按数字发，字段按 $. 路径取。"""
+        rule = {
+            "baseURL": "https://next.example.test/",
+            "chapterApiConfig": {"request": {"headers": {"apikey": "k"}}},
+            "_handbook_play": {
+                "request": {
+                    "url": "https://api.example.test/functions/v1/issue-web-playback",
+                    "method": "POST",
+                    "body": {"action": "fallback", "episode_id": "@episode", "source_id": "@source"},
+                },
+                "okPath": "$.ok", "urlPath": "$.url", "expiresPath": "$.expires_at", "animePath": "$.anime_id",
+            },
+        }
+        reply = json.dumps({"ok": True, "anime_id": 3435, "url": "https://cdn.test/a.mp4", "expires_at": 1795618800}).encode()
+        with patch.object(rules, "_read", return_value=(reply, "https://api.example.test/x")) as read:
+            media, expires = rules._issue_play(rule, rule["_handbook_play"], "3435", "4", "203809")
+        self.assertEqual(media, "https://cdn.test/a.mp4")
+        self.assertEqual(expires, 1795618800)
+        body = json.loads(read.call_args.kwargs["body"])
+        self.assertEqual(body, {"action": "fallback", "episode_id": 203809, "source_id": 4}, "编号要按数字发")
+        headers = read.call_args.args[1]
+        self.assertEqual(headers.get("Origin"), "https://next.example.test", "缺 Origin 会被站点判成非法调用")
+
+    def test_rule_driven_catalogue_uses_real_ids_and_numbers(self):
+        """站点自己给了线路/集编号时，选集要沿用真实编号，别用位置序号。"""
+        payload = {
+            "anime": {"title": "示例番"},
+            "sources": [{"id": 7, "name": "主线", "episodes": [
+                {"id": 203809, "episode_number": 1.0, "title": "第一话"},
+                {"id": 203810, "episode_number": 2.0, "title": "第二话"},
+            ]}],
+        }
+        rule = {
+            "baseURL": "https://next.example.test/",
+            "chapterMode": "api",
+            "chapterApiConfig": {
+                "request": {"url": "https://api.example.test/detail", "method": "POST", "body": {"p_id": "@source"}},
+                "format": "nested", "roadsPath": "$.sources[*]", "roadNamePath": "$.name",
+                "episodesPath": "$.episodes[*]", "episodeNamePath": "$.title", "episodeUrlPath": "$.id",
+                "episodePage": {"url": "https://next.example.test/anime/@source/play/@episodeUrl"},
+            },
+            "_handbook_chapter": {
+                "roadIdPath": "$.id", "episodeNumberPath": "$.episode_number",
+                "episodeIdPath": "$.id", "titlePath": "$.anime.title",
+            },
+        }
+        with patch.object(rules, "_read", return_value=(json.dumps(payload).encode(), "https://api.example.test/detail")), \
+                patch.object(rules, "_CATALOGUES", {}):
+            data = rules.catalogue("custom-test", rule, "3435")
+        self.assertEqual(data["title"], "示例番")
+        source = data["sources"][0]
+        self.assertEqual(source["id"], 7, "线路用站点给的真实编号")
+        self.assertEqual([episode["id"] for episode in source["episodes"]], [203809, 203810])
+        self.assertEqual([episode["number"] for episode in source["episodes"]], ["1", "2"])
+        self.assertEqual(source["episodes"][0]["url"], "https://next.example.test/anime/3435/play/203809")
 
     def test_nonstandard_public_media_ports_and_private_dns(self):
         self.assertEqual(public_url("https://example.com:8088/video.mp4")[1], 8088)

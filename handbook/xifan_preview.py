@@ -8,10 +8,29 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 PREFIX = "/api/preview/xifan/"
-SITE = "https://next.xifanacg.com"
-API = "https://api.xifanacg.com"
-SAMPLE_URL = f"{SITE}/anime/3435/play/203809"
 TIMEOUT = 10
+
+
+def site(rule) -> str:
+    """站点地址跟着规则走：换域名只要改规则里的 baseURL，不用改代码。"""
+    return str((rule or {}).get("baseURL") or "").rstrip("/")
+
+
+def api_base(rule) -> str:
+    """接口地址同样从规则里取（搜索/选集配置里写的那个），取不到就退回站点地址。"""
+    for key in ("searchApiConfig", "chapterApiConfig", "playApiConfig"):
+        try:
+            url = str((rule.get(key) or {}).get("request", {}).get("url") or "")
+        except AttributeError:
+            url = ""
+        if url.startswith("http"):
+            parts = urlsplit(url)
+            return f"{parts.scheme}://{parts.netloc}"
+    return site(rule)
+
+
+def sample_url(rule) -> str:
+    return f"{site(rule) or 'https://example.com'}/anime/3435/play/203809"
 
 
 class PreviewError(ValueError):
@@ -20,10 +39,11 @@ class PreviewError(ValueError):
         self.status = status
 
 
-def _allowed_title_url(url: str) -> bool:
+def _allowed_title_url(url: str, rule) -> bool:
     try:
         parts = urlsplit(url)
-        return (parts.scheme == "https" and parts.hostname == "next.xifanacg.com"
+        host = urlsplit(site(rule)).hostname
+        return (parts.scheme == "https" and bool(host) and parts.hostname == host
                 and parts.port in (None, 443) and parts.username is None and parts.password is None)
     except ValueError:
         return False
@@ -34,12 +54,12 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def _json_request(url: str, body: dict | None = None, key: str = ""):
+def _json_request(url: str, body: dict | None = None, key: str = "", rule=None):
     headers = {"Accept": "application/json", "User-Agent": "AnimeHandbook Xifan Preview"}
     data = None
     if body is not None:
         data = json.dumps(body).encode("utf-8")
-        headers.update({"Content-Type": "application/json", "Origin": SITE,
+        headers.update({"Content-Type": "application/json", "Origin": site(rule),
                         "apikey": key, "Authorization": f"Bearer {key}"})
     try:
         with build_opener(_NoRedirect()).open(Request(url, data, headers), timeout=TIMEOUT) as reply:
@@ -76,10 +96,10 @@ def search(title: str, rule) -> dict:
         key = request["headers"]["apikey"]
     except (KeyError, TypeError):
         raise PreviewError("KazumiRules 的稀饭搜索规则已变更") from None
-    if (url != f"{API}/rest/v1/rpc/search_animes" or method != "POST"
+    if (url != f"{api_base(rule)}/rest/v1/rpc/search_animes" or method != "POST"
             or not isinstance(key, str) or not re.fullmatch(r"sb_publishable_[A-Za-z0-9_-]{10,100}", key)):
         raise PreviewError("KazumiRules 的稀饭搜索规则已变更")
-    result = _json_request(url, {"search_term": title, "page_number": 1, "items_per_page": 24}, key)
+    result = _json_request(url, {"search_term": title, "page_number": 1, "items_per_page": 24}, key, rule)
     if not isinstance(result, list):
         raise PreviewError("稀饭未返回可用的搜索结果")
     return {"items": [
@@ -96,13 +116,13 @@ def _id(value) -> int:
 
 
 def catalogue(url: str, rule) -> dict:
-    if not _allowed_title_url(url):
+    if not _allowed_title_url(url, rule):
         raise PreviewError("请粘贴稀饭动漫 Next 的番剧详情或播放链接", 400)
     match = re.fullmatch(r"/anime/([1-9][0-9]{0,8})(?:/play/([1-9][0-9]{0,8}))?/?", urlsplit(url).path)
     if not match:
         raise PreviewError("请粘贴稀饭动漫 Next 的番剧详情或播放链接", 400)
     anime_id, selected = int(match[1]), int(match[2] or 0)
-    result = _json_request(f"{API}/rest/v1/rpc/get_anime_detail", {"p_id": anime_id}, _public_key(rule))
+    result = _json_request(f"{api_base(rule)}/rest/v1/rpc/get_anime_detail", {"p_id": anime_id}, _public_key(rule))
     if not isinstance(result, dict) or not isinstance(result.get("anime"), dict):
         raise PreviewError("稀饭没有返回这部番的详情")
     anime = result["anime"]
@@ -127,9 +147,9 @@ def catalogue(url: str, rule) -> dict:
 
 def resolve(anime_id: str, episode_id: str, source_id: str, rule) -> tuple[str, int | float | None]:
     anime, episode, source = map(_id, (anime_id, episode_id, source_id))
-    result = _json_request(f"{API}/functions/v1/issue-web-playback",
+    result = _json_request(f"{api_base(rule)}/functions/v1/issue-web-playback",
                            {"action": "fallback", "episode_id": episode, "source_id": source},
-                           _public_key(rule))
+                           _public_key(rule), rule)
     if not isinstance(result, dict) or not result.get("ok") or result.get("anime_id") != anime:
         raise PreviewError("稀饭未提供这一集的公开播放地址，请打开原网页")
     media = result.get("url")
@@ -155,7 +175,7 @@ def serve(handler, path: str, query: dict) -> None:
     if path == PREFIX + "search":
         handler.send_json(search(query.get("title", [""])[0], rule))
     elif path == PREFIX + "catalogue":
-        handler.send_json(catalogue(query.get("url", [SAMPLE_URL])[0], rule))
+        handler.send_json(catalogue(query.get("url", [sample_url(rule)])[0], rule))
     elif path == PREFIX + "play":
         values = [query.get(key, [""])[0] for key in ("anime", "source", "episode")]
         handler.send_json(playback_rules.play("xfdmnext", rule, *values))

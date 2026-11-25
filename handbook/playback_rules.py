@@ -118,7 +118,7 @@ def _newer_rule(local, remote):
 
 
 def _display_name(rule_id, rule):
-    return rule.get("_handbook_name") or ("稀饭动漫 Next" if rule_id == "xfdmnext" else str(rule.get("name") or rule_id))
+    return rule.get("_handbook_name") or str(rule.get("name") or rule_id)
 
 
 def _preferred_rule():
@@ -218,8 +218,12 @@ def change_rule(rule_id, action, *, name=None, config=None):
                 if action == "update":
                     raise RequestProblem("当前规则已是最新版本")
                 return rule_list()
-            if local and (alias := local.get("_handbook_name")):
-                rule = {**rule, "_handbook_name": alias}
+            if local:
+                # 规则更新只覆盖站点自带的内容，本地补的扩展（别名、站点接口细节）要留住，
+                # 否则更新一次规则，这些站点就退化回「按位置编号 + 浏览器嗅探」。
+                extras = {key: value for key, value in local.items() if key.startswith("_handbook_")}
+                if extras:
+                    rule = {**rule, **extras}
             _write_rule(path, rule)
         for key in [key for key in _CATALOGUES if key[0] == rule_id]:
             del _CATALOGUES[key]
@@ -369,8 +373,6 @@ def _link(base, node):
 def search(rule_id, rule, title):
     if not title.strip() or len(title) > 200:
         raise RequestProblem("请输入有效的番剧名称")
-    if rule_id == "xfdmnext":
-        return xifan_preview.search(title, rule)
     values = {"@keyword": title}
     items = []
     if rule.get("searchMode") == "api":
@@ -383,7 +385,12 @@ def search(rule_id, rule, title):
             if template and source:
                 source = _template(template, {"@source": source}, encode=True)
             if name and source:
-                items.append({"id": source, "title": name})
+                item = {"id": source, "title": name}
+                if config.get("originalPath"):
+                    original = _text(_value(row, config["originalPath"]), 180)
+                    if original:
+                        item["original"] = original
+                items.append(item)
     else:
         url = _template(rule["searchURL"], values, encode=True).replace("{keyword}", quote(title, safe=""))
         page, base = _page(rule, url)
@@ -404,17 +411,28 @@ def _episode_number(label, index):
 
 
 def _episodes(pairs):
+    """把「标签 + 地址」整理成选集。
+
+    规则可以在分集配置里给出真实的集号与集 ID（站点自己有编号字段时用），
+    这时直接采用；没给才按标题里的数字/顺序推算。
+    """
     episodes = []
     seen_urls = set()
     seen_ids = set()
     index = 0
-    for label, url in pairs:
+    for entry in pairs:
+        label, url = entry[0], entry[1]
+        number_hint = str(entry[2] or "").strip() if len(entry) > 2 else ""
+        id_hint = str(entry[3] or "").strip() if len(entry) > 3 else ""
         if not url or url in seen_urls:
             continue
         seen_urls.add(url)
-        number = _episode_number(label, index + 1)
+        number = number_hint or _episode_number(label, index + 1)
         index += bool(number)
-        episode_id = f"episode-{number}" if number else f"special-{label}"
+        if id_hint.isdigit():
+            episode_id = int(id_hint)   # 站点给的是数字编号：保持数字，别和历史记录里的类型对不上
+        else:
+            episode_id = id_hint or (f"episode-{number}" if number else f"special-{label}")
         if episode_id in seen_ids:
             episode_id += f"-{len(episodes) + 1}"
         seen_ids.add(episode_id)
@@ -422,9 +440,14 @@ def _episodes(pairs):
     return episodes
 
 
-def _api_roads(rule, provider):
-    config = rule["chapterApiConfig"]
+def _api_roads(rule, provider, meta=None):
+    config = {**rule["chapterApiConfig"], **(rule.get("_handbook_chapter") or {})}
     data = _api(rule, config, {"@source": provider})
+    # 站点的详情接口顺带给了番名：记到 meta 里，选集面板和播放记录就有名字可用。
+    if isinstance(meta, dict) and config.get("titlePath"):
+        title = _text(_value(data, config["titlePath"]), 180)
+        if title:
+            meta["title"] = title
     if config["format"] == "delimited":
         names = _text(_value(data, config["roadNamesPath"]), 4000).split(config["roadSeparator"])
         roads = _text(_value(data, config["roadEpisodesPath"]), _MAX_RESPONSE).split(config["roadSeparator"])
@@ -434,22 +457,25 @@ def _api_roads(rule, provider):
                 name, separator, url = item.partition(config["fieldSeparator"])
                 if separator:
                     pairs.append((_text(name), _link(rule["baseURL"], url)))
-            yield names[index] if index < len(names) else "", pairs
+            yield names[index] if index < len(names) else "", pairs, ""
         return
     for road in _json_nodes(data, config["roadsPath"])[:30]:
         name = _text(_value(road, config.get("roadNamePath")), 80) if config.get("roadNamePath") else ""
+        road_id = _text(_value(road, config.get("roadIdPath")), 20) if config.get("roadIdPath") else ""
         pairs = []
         for episode in _json_nodes(road, config["episodesPath"])[:2000]:
             label = _text(_value(episode, config["episodeNamePath"]))
             target = _text(_value(episode, config["episodeUrlPath"]), 2000)
             if not target:
                 continue
+            number = _text(_value(episode, config.get("episodeNumberPath")), 12).removesuffix(".0") if config.get("episodeNumberPath") else ""
+            episode_id = _text(_value(episode, config.get("episodeIdPath")), 40) if config.get("episodeIdPath") else ""
             page = config.get("episodePage") or {}
             if page.get("url"):
                 values = {"@source": provider, "@episodeUrl": target}
                 target = _with_query(_template(page["url"], values, encode=True), page.get("query"), values)
-            pairs.append((label, _link(rule["baseURL"], target)))
-        yield name, pairs
+            pairs.append((label, _link(rule["baseURL"], target), number, episode_id))
+        yield name, pairs, road_id
 
 
 # 站点换域名时（例如 baseURL 里写的是 www.baimaodm.com，实际 301 到 www.bmddm.com），
@@ -540,19 +566,19 @@ def catalogue(rule_id, rule, provider):
         cached, expiry = _CATALOGUES.get(key, (None, 0))
     if cached and time.monotonic() < expiry:
         return cached
-    if rule_id == "xfdmnext":
-        data = xifan_preview.catalogue(f"{xifan_preview.SITE}/anime/{xifan_preview._id(provider)}", rule)
-        for source in data["sources"]:
-            for episode in source["episodes"]:
-                episode["url"] = f"{xifan_preview.SITE}/anime/{data['id']}/play/{episode['id']}"
-    else:
-        roads = _api_roads(rule, provider) if rule.get("chapterMode") == "api" else _html_roads(rule, provider, rule_id)
-        sources = []
-        for index, (name, pairs) in enumerate(roads, 1):
-            episodes = _episodes(pairs)
-            if episodes:
-                sources.append({"id": index, "name": name or f"线路 {index}", "episodes": episodes})
-        data = {"id": provider, "sources": sources}
+    meta: dict[str, Any] = {}
+    roads = _api_roads(rule, provider, meta) if rule.get("chapterMode") == "api" else _html_roads(rule, provider, rule_id)
+    sources = []
+    for index, road in enumerate(roads, 1):
+        name, pairs = road[0], road[1]
+        road_id = str(road[2]).strip() if len(road) > 2 and str(road[2]).strip() else ""
+        episodes = _episodes(pairs)
+        if episodes:
+            sources.append({"id": int(road_id) if road_id.isdigit() else index,
+                            "name": name or f"线路 {index}", "episodes": episodes})
+    data = {"id": provider, "sources": sources}
+    if meta.get("title"):
+        data["title"] = meta["title"]
     if not data["sources"]:
         raise RequestProblem("这个站点没有返回可用的选集，请切换规则", 502)
     data["rule"] = rule_id
@@ -564,6 +590,56 @@ def catalogue(rule_id, rule, provider):
     return data
 
 
+def _typed_value(value, values):
+    """整格就是一个占位符时保留类型：站点接口要的是数字，传字符串会被判 400。"""
+    if isinstance(value, str) and value in values:
+        text = str(values[value])
+        return int(text) if re.fullmatch(r"[1-9][0-9]{0,9}", text) else text
+    return _template(value, values)
+
+
+def _issue_play(rule, config, provider, source_id, episode_id):
+    """规则自带「签发播放地址」的接口时走这里。
+
+    有些站点不把视频地址放在播放页里，而是让你调一个接口换一个带时效的地址。
+    这属于站点能力，所以写在规则里（``_handbook_play`` / ``playApiConfig``），
+    和规则站点走同一条路，不再按规则 ID 特判。
+    """
+    request = config.get("request") or {}
+    if not request.get("url"):
+        raise RequestProblem("这条规则没有配置播放地址接口")
+    values = {"@source": str(source_id), "@episode": str(episode_id), "@anime": str(provider)}
+    url = _template(str(request["url"]), values, encode=True)
+    headers = {**_headers(rule), **(request.get("headers") or {})}
+    # 这类接口通常按网页端的跨域请求校验来源，缺 Origin 会被判成非法调用。
+    parts = urlsplit(str(rule.get("baseURL") or ""))
+    if parts.scheme and parts.netloc:
+        headers.setdefault("Origin", f"{parts.scheme}://{parts.netloc}")
+    headers.setdefault("Accept", "application/json")
+    body = None
+    method = str(request.get("method") or "GET").upper()
+    if method == "POST":
+        payload = {key: _typed_value(value, values) for key, value in (request.get("body") or {}).items()}
+        body = json.dumps(payload).encode()
+        headers.setdefault("Content-Type", "application/json")
+    try:
+        raw = _read(url, headers, method=method, body=body)[0]
+        data = json.loads(raw)
+    except (UnicodeError, json.JSONDecodeError):
+        raise RequestProblem("站点的播放接口没有返回可读的数据", 502) from None
+    if config.get("okPath") and not _value(data, config["okPath"]):
+        raise RequestProblem("站点没有提供这一集的播放地址，请打开原网页")
+    if config.get("animePath"):
+        expected = _value(data, config["animePath"])
+        if expected not in (None, "") and str(expected) != str(provider):
+            raise RequestProblem("站点返回的是另一部番的播放地址")
+    media = _text(_value(data, config.get("urlPath") or "url"), 4000)
+    if not media:
+        raise RequestProblem("当前线路无法在手账内播放，请打开原网页")
+    expires = _value(data, config["expiresPath"]) if config.get("expiresPath") else None
+    return media, expires if type(expires) in (int, float) else None
+
+
 def play(rule_id, rule, provider, source_id, episode_id):
     data = catalogue(rule_id, rule, provider)
     source = next((item for item in data["sources"] if str(item["id"]) == source_id), None)
@@ -572,23 +648,29 @@ def play(rule_id, rule, provider, source_id, episode_id):
         raise RequestProblem("这条线路没有这一集", 404)
     url = episode["url"]
     headers = _headers(rule)
-    if rule_id == "xfdmnext":
+    play_cfg = rule.get("_handbook_play") or rule.get("playApiConfig")
+    if play_cfg:
         try:
-            media, expires = xifan_preview.resolve(provider, episode_id, source_id, rule)
-            headers["Referer"] = xifan_preview.SITE + "/"
-            kind = playback_stream.media_format(media) or "file"
-            playback_stream.probe_media(media, kind, headers)
-            return playback_stream.issue(media, kind, headers, expires=expires)
-        except xifan_preview.PreviewError:
-            pass
+            media, expires = _issue_play(rule, play_cfg, provider, source_id, episode_id)
         except RequestProblem as direct_error:
-            # The public fallback endpoint and the playback page can return different media.
+            # 接口不给地址时再退回「打开播放页嗅探」，两条路拿到的可能是不同的源。
             try:
                 media, kind, browser_headers = playback_stream.resolve_in_browser(url, rule)
                 playback_stream.probe_media(media, kind, browser_headers)
                 return playback_stream.issue(media, kind, browser_headers)
             except RequestProblem:
                 raise direct_error from None
+        # Referer 只发给「和规则同一个站点」的地址：很多 CDN 对带 Referer 的直链直接回
+        # 400（稀饭的 apn CDN 就是），带上反而会把能播的地址判成不能播，白白退到浏览器嗅探。
+        site = urlsplit(str(rule.get("baseURL") or "")).hostname
+        media_host = urlsplit(media).hostname
+        if site and media_host == site:
+            headers["Referer"] = str(rule.get("baseURL") or "").rstrip("/") + "/"
+        else:
+            headers.pop("Referer", None)
+        kind = playback_stream.media_format(media) or "file"
+        playback_stream.probe_media(media, kind, headers)
+        return playback_stream.issue(media, kind, headers, expires=expires)
     if kind := playback_stream.media_format(url):
         return playback_stream.issue(url, kind, headers)
     return playback_stream.issue(*playback_stream.resolve_in_browser(url, rule))

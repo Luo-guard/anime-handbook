@@ -1,12 +1,25 @@
-const XIFAN_SITE = "https://next.xifanacg.com";
-const XIFAN_SAMPLE = XIFAN_SITE + "/anime/3435/play/203809";
-
+// 链接入口不再绑死某一个站点：只要形态对得上，就按「已安装规则里谁认这个域名」去解析。
+// 站点换域名时改规则里的 baseURL 即可，前端跟着规则走。
 function isOnlinePlaybackLink(value) {
   try {
     const url = new URL(value);
-    return url.origin === XIFAN_SITE && !url.username && !url.password
+    return url.protocol === "https:" && !url.username && !url.password
       && /^\/anime\/[1-9]\d{0,8}(?:\/play\/[1-9]\d{0,8})?\/?$/.test(url.pathname);
   } catch { return false; }
+}
+
+function ruleForUrl(value) {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    const hit = installed.find(rule => String(rule.host || "").toLowerCase() === host);
+    if (hit) return hit.id;
+  } catch { /* 不是合法网址就交给调用方报错 */ }
+  return "";
+}
+
+function samplePlaybackLink() {
+  const rule = installed.find(item => item.id === "xfdmnext") || installed[0];
+  return rule?.host ? `https://${rule.host}/anime/3435/play/203809` : "https://站点/anime/番剧编号/play/集编号";
 }
 
 // 播放代理地址里带着一次性令牌；下载要靠它复用同一份解析结果。
@@ -565,9 +578,17 @@ window.onlinePlayback = (() => {
     status.textContent = "正在读取选集…";
     button.disabled = true;
     try {
-      if (!isOnlinePlaybackLink(url)) throw new Error("请输入稀饭动漫 Next 的番剧或单集链接。");
+      if (!isOnlinePlaybackLink(url)) throw new Error("请输入番剧详情或单集播放链接（站点需已安装规则）。");
+      // 规则列表还没拉过（例如刚刷新页面就粘贴链接）时先取一次，否则认不出站点。
+      if (!installed.length) {
+        try { installed = (await request("rules", {})).items || []; } catch { /* 取不到就走下面的报错 */ }
+      }
       const [, id, selected] = /^\/anime\/(\d+)(?:\/play\/(\d+))?/.exec(new URL(url).pathname);
-      const catalogue = await request("catalogue", { rule: "xfdmnext", anime: id }, controller.signal);
+      const rule = ruleForUrl(url);
+      if (!rule) {
+        throw new Error(`没有规则认这个网址（${new URL(url).hostname}）：先到「管理规则」里装一个，或确认链接没写错。`);
+      }
+      const catalogue = await request("catalogue", { rule, anime: id }, controller.signal);
       if (controller.signal.aborted) return;
       if (animeId && (!$("#progressModal").open || state.progressAnime?.id !== animeId)) return;
       const source = catalogue.sources.find(line => line.episodes.some(item => String(item.id) === selected))
@@ -1088,8 +1109,8 @@ window.onlinePlayback = (() => {
       open($("#onlinePlaybackUrl").value.trim());
     });
     $("#onlinePlaybackSample").addEventListener("click", () => {
-      $("#onlinePlaybackUrl").value = XIFAN_SAMPLE;
-      open(XIFAN_SAMPLE);
+      $("#onlinePlaybackUrl").value = samplePlaybackLink();
+      open(samplePlaybackLink());
     });
     $("#onlinePlaybackClose").addEventListener("click", () => $("#onlinePlaybackDialog").close());
     $("#onlinePlaybackDialog").addEventListener("close", () => {
@@ -1123,7 +1144,7 @@ window.onlinePlayback = (() => {
     window.addEventListener("pagehide", saveResume);
     const url = new URL(location.href);
     if (url.searchParams.has("xifan")) {
-      show(url.searchParams.get("xifan") || XIFAN_SAMPLE);
+      show(url.searchParams.get("xifan") || samplePlaybackLink());
       url.searchParams.delete("xifan");
       history.replaceState(history.state, "", url);
     }
