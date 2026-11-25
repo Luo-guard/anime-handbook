@@ -577,6 +577,99 @@ def backdate(store: OfflineStore, media_id: int, seconds: float = 60.0) -> None:
         db.execute("UPDATE local_media SET updated_at = ? WHERE id = ?", (stale, media_id))
 
 
+class ArchiveCancelTest(unittest.TestCase):
+    """归档途中删任务：不该再把成品写回媒体库（「删掉的集又冒出来」）。
+
+    这组用例只碰数据库和文件，不跑 ffmpeg，所以单独起一套最轻的夹具。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.db = database.HandbookDB(self.root / "handbook.db", asset_root=self.root)
+        self.store = OfflineStore(self.db)
+        self.media_root = self.root / "media"
+        self.media_root.mkdir(parents=True, exist_ok=True)
+        offline_config.save(self.root, {"media_root": str(self.media_root), "seed_after_done": True})
+        self.service = OfflineService(self.db)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_removing_a_processing_job_takes_back_what_it_already_wrote(self):
+        target = self.media_root / "测试番" / "第 01 集.mp4"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"x" * 64)
+        job = self.store.create_job(
+            anime_id=99, source_kind="web", episode_key="0:1", status="processing",
+            torrent_name="网站资源 · 第 01 集",
+        )
+        self.store.replace_file(
+            anime_id=99, episode_key="0:1", file_path=str(target), file_size=64, media_id=int(job["id"]),
+        )
+
+        self.service.delete_job(int(job["id"]))
+
+        self.assertIsNone(self.store.job(int(job["id"])), "任务记录要删掉")
+        self.assertFalse(target.exists(), "已经写进媒体库的半集要一起收回")
+        self.assertEqual(self.store.files_for_anime(99), [], "不该留下这一集的记录")
+
+    def test_archive_does_not_publish_after_the_job_was_removed(self):
+        job = self.store.create_job(
+            anime_id=99, source_kind="web", episode_key="0:1", status="processing", torrent_name="x",
+        )
+        self.service._abort_archive(int(job["id"]))
+        self.service.delete_job(int(job["id"]))
+        # 直接跑归档（模拟线程晚了半拍进来）：应当安静退出，不写库也不报错。
+        self.service._archive(int(job["id"]))
+        self.assertEqual(self.store.files_for_anime(99), [])
+
+    def test_deleting_one_file_stops_the_archive_that_produced_it(self):
+        """删单集文件时，如果这一集正在归档，归档也要停，否则又会写回来。"""
+        from handbook import offline_service as module
+
+        target = self.media_root / "测试番" / "第 03 集.mp4"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"z" * 16)
+        job = self.store.create_job(
+            anime_id=99, source_kind="web", episode_key="0:3", status="processing", torrent_name="网站资源 · 第 03 集",
+        )
+        self.store.replace_file(
+            anime_id=99, episode_key="0:3", file_path=str(target), file_size=16, media_id=int(job["id"]),
+        )
+        with module._ARCHIVE_LOCK:
+            module._ARCHIVING.add((self.service._web_owner(), int(job["id"])))
+        try:
+            self.service.delete_episode_file(99, "0:3")
+        finally:
+            with module._ARCHIVE_LOCK:
+                module._ARCHIVING.discard((self.service._web_owner(), int(job["id"])))
+
+        self.assertFalse(target.exists())
+        self.assertTrue(self.service._archive_cancelled(int(job["id"])), "归档应当被叫停")
+        job_after = self.store.job(int(job["id"])) or {}
+        self.assertEqual(job_after.get("status"), "failed", "任务要留一条能看懂的原因")
+        self.assertIn("已被删除", str(job_after.get("error")))
+        self.service._clear_archive_abort(int(job["id"]))
+
+    def test_removing_a_finished_job_keeps_the_file(self):
+        """已入库的任务点移除 = 只删任务，文件留着（原有语义不能变）。"""
+        target = self.media_root / "测试番" / "第 02 集.mp4"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"y" * 32)
+        job = self.store.create_job(
+            anime_id=99, source_kind="web", episode_key="0:2", status="ready", torrent_name="网站资源 · 第 02 集",
+        )
+        self.store.replace_file(
+            anime_id=99, episode_key="0:2", file_path=str(target), file_size=32, media_id=int(job["id"]),
+        )
+
+        self.service.delete_job(int(job["id"]))
+
+        self.assertTrue(target.exists(), "已入库的文件不该被这个操作删掉")
+        self.assertEqual(len(self.store.files_for_anime(99)), 1)
+
+
 class ArchiveRetryTest(unittest.TestCase):
     """归档失败后的自动重试：限频、有上限、手动介入清零。"""
 

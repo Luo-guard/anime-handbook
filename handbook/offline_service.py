@@ -99,6 +99,14 @@ WORKER_INTERVAL_SECONDS = 5.0
 # 正在归档的 (库, 任务号)：只按任务号认会串库（不同库的 #3 是不同的记录）。
 _ARCHIVING: set[tuple[str, int]] = set()
 _ARCHIVE_LOCK = threading.Lock()
+# 用户删掉任务时要让正在跑的归档立刻停手，并且不许再往媒体库里写。
+# 用独立的锁：归档主流程持有 _ARCHIVE_LOCK 时也要能读到这个标记，不能被自己卡住。
+_ARCHIVE_ABORTS: set[tuple[str, int]] = set()
+_ABORT_LOCK = threading.Lock()
+
+
+class _ArchiveCancelled(Exception):
+    """用户在归档途中删掉了任务：安静退出，不写库、不报失败。"""
 _AUTO_CHECK_LOCK = threading.Lock()
 _AUTO_CHECK_RUNNING = False
 # Limit failed feed retries as well as successful subscription checks.
@@ -153,6 +161,48 @@ class OfflineService:
         config = self.config()
         return offline_config.ensure_dirs(config)
 
+    def _archive_slot(self, media_id: int) -> tuple[str, int]:
+        return (self._web_owner(), int(media_id))
+
+    def _abort_archive(self, media_id: int) -> None:
+        with _ABORT_LOCK:
+            _ARCHIVE_ABORTS.add(self._archive_slot(media_id))
+
+    def _clear_archive_abort(self, media_id: int) -> None:
+        with _ABORT_LOCK:
+            _ARCHIVE_ABORTS.discard(self._archive_slot(media_id))
+
+    def _archive_cancelled(self, media_id: int) -> bool:
+        with _ABORT_LOCK:
+            aborted = self._archive_slot(media_id) in _ARCHIVE_ABORTS
+        # 任务记录都没了，说明已经被删掉：同样算取消。
+        return aborted or self.store.job(int(media_id)) is None
+
+    def _release_abort_if_idle(self, media_id: int) -> None:
+        """没有归档线程在跑时把停止标记撤掉，避免它一直占着一个任务号。"""
+        with _ARCHIVE_LOCK:
+            running = (self._web_owner(), int(media_id)) in _ARCHIVING
+        if not running:
+            self._clear_archive_abort(int(media_id))
+
+    def _purge_job_outputs(self, media_id: int) -> None:
+        """清掉这条任务已经产出的成品（文件 + 记录）。"""
+        media_id = int(media_id)
+        for row in self.store.all_files():
+            if int(row.get("media_id") or 0) != media_id:
+                continue
+            for field in ("file_path", "subtitle_path"):
+                target = Path(str(row.get(field) or ""))
+                if target.is_file():
+                    try:
+                        target.unlink()
+                    except OSError:
+                        pass
+            try:
+                self.store.delete_file(int(row["anime_id"]), str(row["episode_key"]))
+            except Exception:  # noqa: BLE001 - 记录已经不在就跳过
+                pass
+
     def _web_owner(self) -> str:
         """当前库的标识：下载任务按库隔离，切账号后任务号不会串。"""
         return str(self.db.path)
@@ -189,6 +239,7 @@ class OfflineService:
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可用"))
         job, fresh = self._web_job_for(anime_id, key, title, group_name, status="downloading", ref=ref)
+        self._clear_archive_abort(int(job["id"]))
         if not fresh:
             return {"ok": True, "job": job, "reused": True}
         web_download.start(
@@ -236,6 +287,7 @@ class OfflineService:
         paths = offline_config.ensure_dirs(self.config())
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可用"))
+        self._clear_archive_abort(media_id)
         self.store.set_status(media_id, "downloading", error="", progress=0)
         folder = self._web_folder(media_id)
         web_download.clear_folder(folder)
@@ -348,6 +400,7 @@ class OfflineService:
                 anime_id, key, item_title, group_name,
                 status="queued", ref=(item or {}).get("ref") or None,
             )
+            self._clear_archive_abort(int(job["id"]))
             if not fresh:
                 skipped += 1
                 continue
@@ -811,6 +864,8 @@ class OfflineService:
     def _archive_job(self, media_id: int) -> None:
         try:
             self._archive(media_id)
+        except _ArchiveCancelled:
+            return
         except (OfflineError, media_tools.MediaError, QBError) as error:
             try:
                 self._mark_archive_failed(media_id, error)
@@ -824,6 +879,7 @@ class OfflineService:
         finally:
             with _ARCHIVE_LOCK:
                 _ARCHIVING.discard((self._web_owner(), int(media_id)))
+            self._clear_archive_abort(media_id)
 
     def _mark_archive_failed(self, media_id: int, error: Exception) -> None:
         """记失败，并把「还剩几次自动重试 / 已经停止」写进错误信息。
@@ -940,6 +996,9 @@ class OfflineService:
                 published: list[Path] = []
                 try:
                     with self.db.transaction():
+                        # 用户可能刚点了「移除」：写入媒体库前最后确认一次。
+                        if self._archive_cancelled(media_id):
+                            raise _ArchiveCancelled()
                         self._check_archive_targets(anime_id, key, video, subtitle)
                         if extracted:
                             self._publish_archive_file(Path(extracted), subtitle)
@@ -951,6 +1010,9 @@ class OfflineService:
                             file_size=result["size"], duration_ms=info["duration_ms"],
                             media_id=media_id, subtitle_path=str(subtitle) if extracted else "",
                         )
+                        # 写记录的同时也可能被删：这里再确认，抛出去让事务回滚。
+                        if self._archive_cancelled(media_id):
+                            raise _ArchiveCancelled()
                 except Exception:
                     self._rollback(published)
                     raise
@@ -983,6 +1045,8 @@ class OfflineService:
     def _archive(self, media_id: int) -> None:
         job = self.store.job(media_id)
         if not job:
+            return
+        if self._archive_cancelled(media_id):
             return
         config = self.config()
         paths = offline_config.ensure_dirs(config)
@@ -1144,6 +1208,8 @@ class OfflineService:
                 f"只入库 {ingested}/{len(files)} 集{reason}：认不出集数的文件在下载器里改名成"
                 "「番名 - 01」这类格式，然后点「重试归档」，已入库的集会跳过"
             )
+        if self._archive_cancelled(media_id):
+            return
         self.store.set_status(media_id, "ready", progress=100, error="", archive_retries=0)
 
     @staticmethod
@@ -1401,6 +1467,22 @@ class OfflineService:
             except OSError:
                 pass
         self.store.delete_file(int(anime_id), str(episode_key))
+        # 这一集正在归档（同一个任务的成品刚写出去就被删）：把归档也停掉，
+        # 否则线程跑完又会把它写回来，用户看到「删了又回来」。任务留在列表里并写清原因，
+        # 用户还能自己重下或移除。
+        media_id = int(row.get("media_id") or 0)
+        if media_id:
+            with _ARCHIVE_LOCK:
+                archiving = (self._web_owner(), media_id) in _ARCHIVING
+            if archiving:
+                self._abort_archive(media_id)
+                try:
+                    self.store.set_status(
+                        media_id, "failed",
+                        error="这一集的文件已被删除，归档已取消；需要就回播放器重新下载",
+                    )
+                except Exception:  # noqa: BLE001 - 任务已被删掉就只停归档
+                    pass
         return {"ok": True, "deleted": removed}
 
     def delete_episode_files(self, anime_id: int, episode_keys: list[str]) -> dict[str, Any]:
@@ -1503,6 +1585,11 @@ class OfflineService:
         job = self.store.job(int(media_id))
         if not job:
             raise OfflineError("下载记录不存在")
+        # 还没入库的任务：用户点移除就是「这一集我不要了」。先给归档线程挂上停止标记，
+        # 免得这边删完、它那边又把成品写回媒体库（删掉的任务过一会又冒出来就是这么来的）。
+        unfinished = str(job.get("status") or "") != "ready"
+        if unfinished:
+            self._abort_archive(int(media_id))
         if str(job.get("source_kind") or "") == "web":
             task = web_download.drop(self._web_owner(), int(media_id))
             if task is not None:
@@ -1510,6 +1597,10 @@ class OfflineService:
             # 网站资源的临时目录只是中转，删任务就一起清掉，不留孤儿文件。
             web_download.clear_folder(self._web_folder(int(media_id)))
             self.store.delete_job(int(media_id))
+            if unfinished:
+                # 归档可能已经写出半集：一起清掉，别让「删掉的那集」留在媒体库里。
+                self._purge_job_outputs(int(media_id))
+                self._release_abort_if_idle(int(media_id))
             return {"ok": True, "kept_files": False}
         torrent_hash = str(job.get("torrent_hash") or "")
         if torrent_hash:
@@ -1520,8 +1611,14 @@ class OfflineService:
                     if client.torrent(torrent_hash) is not None:
                         raise QBError("任务仍在下载器中，请稍后重试")
             except QBError as error:
+                if unfinished:
+                    # 没删成功：把停止标记撤掉，免得归档线程被永久卡住。
+                    self._clear_archive_abort(int(media_id))
                 raise OfflineError(f"未能确认下载器已删除任务，已保留手账记录：{error}") from error
         self.store.delete_job(int(media_id))
+        if unfinished:
+            self._purge_job_outputs(int(media_id))
+            self._release_abort_if_idle(int(media_id))
         return {"ok": True, "kept_files": not delete_files and keep_files}
 
 
