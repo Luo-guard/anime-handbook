@@ -8,9 +8,17 @@ from .common import MAX_JSON_BODY_BYTES
 
 
 class RequestProblem(ValueError):
-    def __init__(self, message, status=400):
+    """请求无法完成。
+
+    ``code`` 是给前端的归类（site_unreachable / site_changed / episode_missing /
+    no_media ...），前端据此换一句「能照着做」的话和一个对应按钮；``message``
+    仍保留具体原因，用于「详情」一行。没有合适归类时留空，前端就只显示 message。
+    """
+
+    def __init__(self, message, status=400, code=""):
         super().__init__(message)
         self.status = status
+        self.code = code
 
 
 def request_integer(value, label):

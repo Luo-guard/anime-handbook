@@ -72,6 +72,8 @@ async function loadLinkRules() { return linkRulesState.items; }
     assert.equal(await page.locator('#detailLinks a.detail-link').count(), 2, '默认只渲染 bangumi + bilibili，已存视频默认关闭');
 
     // 2) 点开弹窗，列出本地缓存的站点。
+    // 站点链接现在收在详情页「⋯」菜单里（细节页改版后的分组），先展开这一层。
+    await page.evaluate(() => { const menu = document.querySelector('#modernDetailMenu'); if (menu) menu.open = true; });
     await page.locator('#detailLinks .detail-link-menu').click();
     assert.equal(await page.locator('#rulesMenuModal').evaluate((node) => node.open), true);
     assert.equal(await page.locator('#rulesMenuList .rules-menu-row').count(), 3);
@@ -104,6 +106,7 @@ async function loadLinkRules() { return linkRulesState.items; }
     assert.equal((await page.evaluate(() => window.__jumps.length)), 0, 'external links do not enter playback history');
 
     // 5) 固定：写库、回到详情页立刻多一条，按钮变成已固定。
+    await page.evaluate(() => { const menu = document.querySelector('#modernDetailMenu'); if (menu) menu.open = true; });
     await page.locator('#detailLinks .detail-link-menu').click();
     const freeRow = page.locator('#rulesMenuList .rules-menu-row').filter({ has: page.locator('.rules-menu-pin:not(:disabled)') }).first();
     await freeRow.locator('.rules-menu-pin').click();

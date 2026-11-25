@@ -102,7 +102,7 @@ def installed_rule(rule_id):
     except (OSError, UnicodeError, ValueError):
         rule = None
     if not supported(rule):
-        raise RequestProblem("请先下载这个播放规则", 404)
+        raise RequestProblem("请先下载这个播放规则", 404, "rule_missing")
     return rule
 
 
@@ -247,13 +247,15 @@ def _read(url, headers, *, method="GET", body=None):
     try:
         with request_public(url, method=method, headers=headers, body=body) as (response, final_url):
             if response.status != 200:
-                raise RequestProblem(f"片源站点返回 HTTP {response.status}", 502)
+                # 404 是「站点上没有这一页」，5xx/403 更像站点本身出问题，分开给前端。
+                code = "not_found" if response.status == 404 else "site_unreachable"
+                raise RequestProblem(f"片源站点返回 HTTP {response.status}", 502, code)
             raw = response.read(_MAX_RESPONSE + 1)
             if len(raw) > _MAX_RESPONSE:
                 raise RequestProblem("片源站点返回的资料过大", 502)
             return raw, final_url
     except (OSError, HTTPException):
-        raise RequestProblem("片源站点连接失败，请重试或切换规则", 502) from None
+        raise RequestProblem("片源站点连接失败，请重试或切换规则", 502, "site_unreachable") from None
 
 
 _PLACEHOLDER = re.compile(r"@(keyword|source|episodeUrl)\b")
@@ -297,18 +299,18 @@ def _api(rule, config, values):
         headers["Content-Type"] = "application/json"
         body = json.dumps({key: _template(value, values) for key, value in request.get("body", {}).items()}).encode()
     elif method != "GET":
-        raise RequestProblem("此规则的接口请求格式暂未支持", 502)
+        raise RequestProblem("此规则的接口请求格式暂未支持", 502, "site_changed")
     try:
         return json.loads(_read(url, headers, method=method, body=body)[0])
     except (UnicodeError, json.JSONDecodeError):
-        raise RequestProblem("站点没有返回可读取的 JSON 数据", 502) from None
+        raise RequestProblem("站点没有返回可读取的 JSON 数据", 502, "site_changed") from None
 
 
 def _json_nodes(document, path):
     if not path or path == "$":
         return [document]
     if not re.fullmatch(r"\$(?:\.[\w-]+|\[\*\])+", path):
-        raise RequestProblem("此规则的 JSONPath 格式暂未支持", 502)
+        raise RequestProblem("此规则的 JSONPath 格式暂未支持", 502, "site_changed")
     nodes = [document]
     for name in re.findall(r"\.([\w-]+)|\[\*\]", path):
         if name:
@@ -339,7 +341,7 @@ def _page(rule, url):
             pass  # Let the HTML parser honor the page's declared charset.
         return html.fromstring(raw, parser=html.HTMLParser(no_network=True)), final_url
     except (ValueError, etree.ParserError):
-        raise RequestProblem("站点没有返回可读取的页面", 502) from None
+        raise RequestProblem("站点没有返回可读取的页面", 502, "site_changed") from None
 
 
 def _xpath(node, expression, relative=False):
@@ -350,7 +352,7 @@ def _xpath(node, expression, relative=False):
     try:
         value = node.xpath(expression)
     except etree.XPathError:
-        raise RequestProblem("规则的 XPath 无效，请更新规则", 502) from None
+        raise RequestProblem("规则的 XPath 无效，请更新规则", 502, "site_changed") from None
     return value if isinstance(value, list) else [value]
 
 
@@ -375,10 +377,15 @@ def search(rule_id, rule, title):
         raise RequestProblem("请输入有效的番剧名称")
     values = {"@keyword": title}
     items = []
+    # rows / skipped 用来区分「站点真没有」和「站点有、但链接解析不出来」：
+    # 后者以前是静默返回 0 条，看起来就像站点没这部番。
+    rows = 0
+    skipped = 0
     if rule.get("searchMode") == "api":
         config = rule["searchApiConfig"]
         result = _api(rule, config, values)
         for row in _json_nodes(result, config["listPath"])[:40]:
+            rows += 1
             name = _text(_value(row, config["namePath"]))
             source = _text(_value(row, config["sourcePath"]), 2000)
             template = config.get("sourceTemplate")
@@ -391,16 +398,32 @@ def search(rule_id, rule, title):
                     if original:
                         item["original"] = original
                 items.append(item)
+            elif name or source:
+                skipped += 1
     else:
         url = _template(rule["searchURL"], values, encode=True).replace("{keyword}", quote(title, safe=""))
         page, base = _page(rule, url)
         _remember_host(rule_id, base)
         for row in _xpath(page, rule["searchList"])[:40]:
+            rows += 1
             name = _node_text(next(iter(_xpath(row, rule["searchName"], relative=True)), ""))
             source = _link(base, next(iter(_xpath(row, rule["searchResult"], relative=True)), ""))
             if name and source:
                 items.append({"id": source, "title": name})
-    return {"items": list({item["id"]: item for item in items}.values())}
+            elif name or source:
+                skipped += 1
+    unique = list({item["id"]: item for item in items}.values())
+    if rows and not unique:
+        # 列表节点对上了，却一条可用链接都没有：多半是站点把 href 换成了脚本跳转。
+        # 这种情况说「没有结果」会把人带偏（以为是站点没这部番），直接讲清楚。
+        raise RequestProblem(
+            f"站点返回了 {rows} 条结果，但一条链接都解析不出来（可能改成了脚本跳转）",
+            502, "site_changed",
+        )
+    data = {"items": unique}
+    if skipped and unique:
+        data["skipped"] = skipped
+    return data
 
 
 def _episode_number(label, index):
@@ -410,11 +433,14 @@ def _episode_number(label, index):
     return "" if re.search(r"\b(?:SP|OVA|PV|OP|ED)\d*\b|预告|番外|特典|总集篇", label, re.I) else str(index)
 
 
-def _episodes(pairs):
+def _episodes(pairs, skipped=None):
     """把「标签 + 地址」整理成选集。
 
     规则可以在分集配置里给出真实的集号与集 ID（站点自己有编号字段时用），
     这时直接采用；没给才按标题里的数字/顺序推算。
+
+    ``skipped`` 传一个 ``[0]`` 进来时，会把「有集名、但链接不可用」的条目数记进去：
+    这些集以前会无声消失，导致集数变少、甚至顺序错位。
     """
     episodes = []
     seen_urls = set()
@@ -425,6 +451,8 @@ def _episodes(pairs):
         number_hint = str(entry[2] or "").strip() if len(entry) > 2 else ""
         id_hint = str(entry[3] or "").strip() if len(entry) > 3 else ""
         if not url or url in seen_urls:
+            if skipped is not None and label and not url:
+                skipped[0] += 1
             continue
         seen_urls.add(url)
         number = number_hint or _episode_number(label, index + 1)
@@ -548,7 +576,8 @@ def _html_roads(rule, provider, rule_id=""):
     if url.hostname not in hosts:
         raise RequestProblem(
             f"番剧链接与所选规则站点不一致（链接在 {url.hostname}，规则站点是 "
-            f"{'、'.join(sorted(hosts)) or '未知'}）"
+            f"{'、'.join(sorted(hosts)) or '未知'}）",
+            400, "site_mismatch",
         )
     _remember_host(rule_id, provider)
     page, base = _page(rule, provider)
@@ -569,18 +598,25 @@ def catalogue(rule_id, rule, provider):
     meta: dict[str, Any] = {}
     roads = _api_roads(rule, provider, meta) if rule.get("chapterMode") == "api" else _html_roads(rule, provider, rule_id)
     sources = []
+    dropped = [0]
     for index, road in enumerate(roads, 1):
         name, pairs = road[0], road[1]
         road_id = str(road[2]).strip() if len(road) > 2 and str(road[2]).strip() else ""
-        episodes = _episodes(pairs)
+        episodes = _episodes(pairs, dropped)
         if episodes:
             sources.append({"id": int(road_id) if road_id.isdigit() else index,
                             "name": name or f"线路 {index}", "episodes": episodes})
     data = {"id": provider, "sources": sources}
+    if dropped[0]:
+        # 有集名却没链接的条目：告诉前端「少了的那些是解析不出来，不是站点没有」。
+        data["skipped"] = dropped[0]
     if meta.get("title"):
         data["title"] = meta["title"]
     if not data["sources"]:
-        raise RequestProblem("这个站点没有返回可用的选集，请切换规则", 502)
+        raise RequestProblem(
+            "页面打开了，但这个站点没有解析出任何选集——多半是站点改版，规则需要更新",
+            502, "site_changed",
+        )
     data["rule"] = rule_id
     data["ruleName"] = _display_name(rule_id, rule)
     with _LOCK:
@@ -607,7 +643,7 @@ def _issue_play(rule, config, provider, source_id, episode_id):
     """
     request = config.get("request") or {}
     if not request.get("url"):
-        raise RequestProblem("这条规则没有配置播放地址接口")
+        raise RequestProblem("这条规则没有配置播放地址接口", 502, "rule_stale")
     values = {"@source": str(source_id), "@episode": str(episode_id), "@anime": str(provider)}
     url = _template(str(request["url"]), values, encode=True)
     headers = {**_headers(rule), **(request.get("headers") or {})}
@@ -626,16 +662,16 @@ def _issue_play(rule, config, provider, source_id, episode_id):
         raw = _read(url, headers, method=method, body=body)[0]
         data = json.loads(raw)
     except (UnicodeError, json.JSONDecodeError):
-        raise RequestProblem("站点的播放接口没有返回可读的数据", 502) from None
+        raise RequestProblem("站点的播放接口没有返回可读的数据", 502, "no_media") from None
     if config.get("okPath") and not _value(data, config["okPath"]):
-        raise RequestProblem("站点没有提供这一集的播放地址，请打开原网页")
+        raise RequestProblem("站点没有提供这一集的播放地址，请打开原网页", 400, "no_media")
     if config.get("animePath"):
         expected = _value(data, config["animePath"])
         if expected not in (None, "") and str(expected) != str(provider):
-            raise RequestProblem("站点返回的是另一部番的播放地址")
+            raise RequestProblem("站点返回的是另一部番的播放地址", 502, "no_media")
     media = _text(_value(data, config.get("urlPath") or "url"), 4000)
     if not media:
-        raise RequestProblem("当前线路无法在手账内播放，请打开原网页")
+        raise RequestProblem("当前线路无法在手账内播放，请打开原网页", 400, "no_media")
     expires = _value(data, config["expiresPath"]) if config.get("expiresPath") else None
     return media, expires if type(expires) in (int, float) else None
 
@@ -645,7 +681,7 @@ def play(rule_id, rule, provider, source_id, episode_id):
     source = next((item for item in data["sources"] if str(item["id"]) == source_id), None)
     episode = next((item for item in (source or {}).get("episodes", []) if str(item["id"]) == episode_id), None)
     if not episode:
-        raise RequestProblem("这条线路没有这一集", 404)
+        raise RequestProblem("这条线路没有这一集（可能下架了，也可能这条线路集数不同）", 404, "episode_missing")
     url = episode["url"]
     headers = _headers(rule)
     play_cfg = rule.get("_handbook_play") or rule.get("playApiConfig")
@@ -705,5 +741,5 @@ def serve(handler, path, query):
         else:
             result = play(rule_id, rule, arg("anime"), arg("source"), arg("episode"))
     except (KeyError, TypeError):
-        raise RequestProblem("站点返回的数据与当前规则不符，请更新或切换规则", 502) from None
+        raise RequestProblem("站点返回的数据与当前规则不符，请更新或切换规则", 502, "site_changed") from None
     handler.send_json(result)

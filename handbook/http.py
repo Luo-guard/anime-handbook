@@ -251,8 +251,11 @@ class RequestHandler(ReadRoutes, PostRoutes, PatchRoutes, DeleteRoutes, BaseHTTP
             self._profile_snapshot = desktop.service_snapshot()
         return True
 
-    def send_error_json(self, status: int, message: str) -> None:
-        self.send_json({"ok": False, "message": message}, status)
+    def send_error_json(self, status: int, message: str, code: str = "") -> None:
+        payload = {"ok": False, "message": message}
+        if code:
+            payload["code"] = code
+        self.send_json(payload, status)
 
 
     @staticmethod

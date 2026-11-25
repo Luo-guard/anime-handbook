@@ -86,10 +86,10 @@ def resolve_in_browser(url, rule):
             finally:
                 browser.close()
     except Error:
-        raise RequestProblem("播放页无法加载，请重试或切换规则", 502) from None
+        raise RequestProblem("播放页无法加载，请重试或切换规则", 502, "site_unreachable") from None
     finally:
         _BROWSER_SLOTS.release()
-    raise RequestProblem("未从播放页找到可用视频，请切换线路或规则", 502)
+    raise RequestProblem("未从播放页找到可用视频，请切换线路或规则", 502, "no_media")
 
 
 @dataclass
@@ -126,7 +126,7 @@ def issue(url, kind, headers=None, *, expires=None):
     now = time.time()
     until = min(now + 5400, expires) if expires is not None else now + 5400
     if until <= now:
-        raise RequestProblem("视频地址已过期，请重试", 410)
+        raise RequestProblem("视频地址已过期，请重试", 410, "no_media")
     token = secrets.token_urlsafe(24)
     with _LOCK:
         for old_token in [key for key, item in _PLAYBACKS.items() if item.expires <= now]:
@@ -147,11 +147,11 @@ def _playlist_text(response):
 
 def _validate_playlist(lines):
     if not lines or lines[0].strip() != "#EXTM3U":
-        raise RequestProblem("片源返回了无效的 HLS 列表", 502)
+        raise RequestProblem("片源返回了无效的 HLS 列表", 502, "no_media")
     if not any(line and (not line.startswith("#")
                         or (line.startswith("#EXT-X-I-FRAME-STREAM-INF:") and 'URI="' in line))
                for line in map(str.strip, lines[1:])):
-        raise RequestProblem("片源返回了空的播放列表，请切换线路或规则", 502)
+        raise RequestProblem("片源返回了空的播放列表，请切换线路或规则", 502, "no_media")
 
 
 def probe_media(url, kind, headers):
@@ -163,13 +163,13 @@ def probe_media(url, kind, headers):
         with request_public(url, headers=probe_headers) as (response, _):
             content_type = response.headers.get_content_type()
             if response.status not in (200, 206) or content_type in {"text/html", "application/json"}:
-                raise RequestProblem(f"片源返回 HTTP {response.status} 或非视频内容，请切换线路或规则", 502)
+                raise RequestProblem(f"片源返回 HTTP {response.status} 或非视频内容，请切换线路或规则", 502, "no_media")
             if kind == "hls":
                 _validate_playlist(_playlist_text(response).splitlines())
             elif not response.read(1):
-                raise RequestProblem("片源返回了空的视频，请切换线路或规则", 502)
+                raise RequestProblem("片源返回了空的视频，请切换线路或规则", 502, "no_media")
     except (OSError, HTTPException, UnicodeError):
-        raise RequestProblem("无法读取片源，请重试或切换规则", 502) from None
+        raise RequestProblem("无法读取片源，请重试或切换规则", 502, "site_unreachable") from None
 
 
 def rewrite_playlist(data, base, token, playback):

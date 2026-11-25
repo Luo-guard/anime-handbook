@@ -532,6 +532,6 @@ class PostRoutes:
         except OfflineError as error:
             self.send_error_json(502, str(error))
         except (ValueError, KeyError) as error:
-            self.send_error_json(getattr(error, "status", 400), str(error))
+            self.send_error_json(getattr(error, "status", 400), str(error), getattr(error, "code", ""))
         except Exception as error:
             self.unexpected_error(error)

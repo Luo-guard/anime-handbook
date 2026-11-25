@@ -37,6 +37,37 @@ function episodePickRow(row, index, checked) {
       </label>`;
 }
 
+// 片源失败分四种「能照着做」的说法。后端在错误里带 code，这里只负责翻译成动作，
+// 不再拿一句「没有可用的选集」让人猜是站点坏了、规则过期，还是这条线路没这集。
+const PLAYBACK_ERRORS = {
+  site_unreachable: { short: "连不上", text: "站点连不上：检查网络后重试，或换一个站点。" },
+  site_changed: { short: "规则需更新", text: "站点改版了，这条规则需要更新。", update: true },
+  rule_stale: { short: "规则需更新", text: "这条规则缺少播放所需的配置，需要更新。", update: true },
+  episode_missing: { short: "这条线路没有这集", text: "这条线路没有这一集：换一条线路试试。" },
+  no_media: { short: "拿不到地址", text: "这条线路拿不到播放地址：换一条线路，或打开原网页。" },
+  not_found: { short: "站点上没有", text: "站点上找不到这一部（可能已下架）：换一个站点，或检查链接。" },
+  rule_missing: { short: "规则没装", text: "这条规则还没安装：先到「管理规则」里下载它。" },
+  site_mismatch: { short: "站点不匹配", text: "这个链接不属于这条规则：换一条规则，或确认链接没贴错。" },
+};
+
+function playbackErrorText(error, fallback) {
+  const info = PLAYBACK_ERRORS[error?.code];
+  if (info) return info.text;
+  return error?.name === "TimeoutError" ? fallback : (error?.message || fallback);
+}
+
+function playbackErrorDetail(error) {
+  const info = PLAYBACK_ERRORS[error?.code];
+  const message = String(error?.message || "").trim();
+  return info && message && message !== info.text ? message : "";
+}
+
+// 播放器浮层只有一行字：一句结论 + 括号里的具体原因。
+function playbackErrorLine(error, fallback) {
+  const detail = playbackErrorDetail(error);
+  return detail ? `${playbackErrorText(error, fallback)}（${detail}）` : playbackErrorText(error, fallback);
+}
+
 // 下载时把「怎么再找到这一集」一并交给后端：失败后才能在原地重试，
 // 不用让用户回播放器重新选集（Kazumi 的失败重试也是这个前提）。
 function episodeRef(session) {
@@ -91,7 +122,11 @@ function matchOnlineEpisode(catalogue, target) {
     const episode = source.episodes.find(item => Number(item.number) === wanted);
     if (episode) return { source, episode };
   }
-  throw new Error(`所选规则暂无第 ${target.number} 集的可用线路。`);
+  const skipped = Number(catalogue?.skipped) || 0;
+  // 站点上有这集、但链接解析不出来时，别让人以为是站点没这一集。
+  throw new Error(skipped
+    ? `第 ${target.number} 集没能解析出来（另有 ${skipped} 条链接无法识别，站点可能改成了脚本跳转）：换一条线路，或更新规则。`
+    : `所选规则暂无第 ${target.number} 集的可用线路。`);
 }
 
 window.onlinePlayback = (() => {
@@ -104,6 +139,8 @@ window.onlinePlayback = (() => {
   let hlsLibrary;
   let managing = false;
   let checkingRules = false;
+  // 规则刚更新完要自动再检索一次的那条规则（在 renderInstalled 里消费）。
+  let pendingRuleSearch = "";
 
   try { lastRule = localStorage.getItem("handbook:online-rule") || ""; }
   catch { /* Private browsing can deny storage. */ }
@@ -187,10 +224,6 @@ window.onlinePlayback = (() => {
     pcPrepareVideo(readResume(session));
     hls.loadSource(result.url);
     hls.attachMedia(video);
-  }
-
-  function errorMessage(error, timeoutMessage) {
-    return error.name === "TimeoutError" ? timeoutMessage : error.message;
   }
 
   // ---- 网站资源下载：把当前线路的这一集存进媒体库 ----
@@ -362,7 +395,11 @@ window.onlinePlayback = (() => {
     if (!downloadSheet.selected.size && downloadSheet.rows.length) downloadSheet.selected.add(0);
     downloadSheet.busy = false;
     $("#episodeDownloadTarget").textContent = `${session.catalogue?.title || ""}${session.source?.name ? ` · ${session.source.name}` : ""}`;
-    $("#episodeDownloadStatus").textContent = "";
+    const skipped = Number(session.catalogue?.skipped) || 0;
+    // 少了集多半不是站点没有，而是链接解析不出来：这里讲清楚，顺便指条路。
+    $("#episodeDownloadStatus").textContent = skipped
+      ? `另有 ${skipped} 条链接无法识别，已跳过（站点可能改成了脚本跳转）；缺的集可以换一条线路再下。`
+      : "";
     renderDownloadSheet();
     const dialog = $("#episodeDownloadSheet");
     if (dialog && !dialog.open) dialog.showModal();
@@ -565,7 +602,7 @@ window.onlinePlayback = (() => {
       video.addEventListener("error", () => fail("视频读取中断，可重试或切换线路。"), options);
       await loadMedia(result, session, fail);
     } catch (error) {
-      if (error.name !== "NotAllowedError") fail(errorMessage(error, "连接视频超时，可重试。"));
+      if (error.name !== "NotAllowedError") fail(playbackErrorLine(error, "连接视频超时，可重试。"));
     }
   }
 
@@ -602,7 +639,7 @@ window.onlinePlayback = (() => {
       play(catalogue, source, episode, animeId, context);
     } catch (error) {
       if (controller.signal.aborted) return;
-      const message = errorMessage(error, "读取选集超时，请重试。");
+      const message = playbackErrorLine(error, "读取选集超时，请重试。");
       status.textContent = message;
       if (!$("#onlinePlaybackDialog").open) toast(message, "error");
     } finally {
@@ -628,6 +665,33 @@ window.onlinePlayback = (() => {
     sourceOpening = null;
     for (const controller of sourceSearches.values()) controller.abort();
     sourceSearches.clear();
+  }
+
+  // 检索/选集失败时的提示：一句能照做的话 + 小字原因 + 需要时给「更新规则」。
+  function showSourceError(feedback, ruleId, error, fallback) {
+    if (!feedback) return;
+    const info = PLAYBACK_ERRORS[error?.code] || null;
+    const text = document.createElement("span");
+    text.textContent = playbackErrorText(error, fallback);
+    const detail = document.createElement("small");
+    detail.className = "online-source-detail";
+    detail.textContent = playbackErrorDetail(error);
+    feedback.replaceChildren(text);
+    if (detail.textContent) feedback.append(detail);
+    if (!info?.update || !ruleId) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-button compact-button";
+    button.textContent = "更新规则";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "更新中…";
+      pendingRuleSearch = ruleId;
+      const ok = await manageRule({ id: ruleId, action: "update" }, button, feedback);
+      if (ok) toast("规则已更新，正在重新检索");
+      else pendingRuleSearch = "";
+    });
+    feedback.append(button);
   }
 
   function renderInstalled({ autoPlay = false } = {}) {
@@ -690,6 +754,11 @@ window.onlinePlayback = (() => {
         searched = true;
         group.open = true;
         searchSource(titles, true);
+      }
+      // 刚点了「更新规则」：重新展开这一条并再检索一次，不用用户自己再点两下。
+      if (pendingRuleSearch === rule.id) {
+        pendingRuleSearch = "";
+        group.open = true;
       }
     }
   }
@@ -866,6 +935,7 @@ window.onlinePlayback = (() => {
     feedback.textContent = "";
     results.replaceChildren();
     let resultCount = 0;
+    let skippedCount = 0;
     let latestForSource;
 
     // 下载模式：拿着搜索结果去读选集，再把选集交给下载对话框（不播放）。
@@ -895,8 +965,8 @@ window.onlinePlayback = (() => {
         });
       } catch (error) {
         if (isCurrent() && !openingSignal.aborted) {
-          hint.textContent = "无法下载";
-          feedback.textContent = errorMessage(error, "读取选集超时");
+          hint.textContent = PLAYBACK_ERRORS[error?.code]?.short || "无法下载";
+          showSourceError(feedback, rule, error, "读取选集超时");
         }
       } finally {
         if (sourceOpening === opening) sourceOpening = null;
@@ -926,8 +996,8 @@ window.onlinePlayback = (() => {
         play(catalogue, source, episode, anime.id, context, new Set([source.id]));
       } catch (error) {
         if (isCurrent() && !openingSignal.aborted) {
-          hint.textContent = "无法播放";
-          feedback.textContent = errorMessage(error, "读取选集超时");
+          hint.textContent = PLAYBACK_ERRORS[error?.code]?.short || "无法播放";
+          showSourceError(feedback, rule, error, "读取选集超时");
         }
       } finally {
         if (sourceOpening === opening) sourceOpening = null;
@@ -944,11 +1014,14 @@ window.onlinePlayback = (() => {
       for (const title of titles) {
         const result = await request("search", { rule, title }, signal);
         if (!isCurrent()) return;
+        skippedCount += Number(result.skipped || 0);
         for (const item of result.items) matches.set(item.id, item);
         if ([...matches.values()].filter(isExact).length === 1) break;
       }
       resultCount = matches.size;
-      hint.textContent = matches.size ? `${matches.size} 个结果` : "无结果";
+      // 有些条目在站点上存在、但链接解析不出来：说出来，别让人以为站点没有这几条。
+      const skippedNote = skippedCount ? ` · ${skippedCount} 条链接无法识别` : "";
+      hint.textContent = matches.size ? `${matches.size} 个结果${skippedNote}` : "无结果";
       for (const item of matches.values()) {
         const button = document.createElement("button");
         button.type = "button";
@@ -960,8 +1033,8 @@ window.onlinePlayback = (() => {
       if (auto && exact.length === 1 && !$("#settingsModal").open) await playResult(exact[0]);
     } catch (error) {
       if (isCurrent()) {
-        hint.textContent = "检索失败";
-        feedback.textContent = errorMessage(error, "检索超时");
+        hint.textContent = PLAYBACK_ERRORS[error?.code]?.short || "检索失败";
+        showSourceError(feedback, rule, error, "检索超时");
       }
     }
   }

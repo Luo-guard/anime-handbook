@@ -7674,3 +7674,8 @@ body.schedule-picking [data-floating-view="schedule"] {
 .lib-episode.picked { border-color: var(--green-600); background: var(--green-50); }
 .lib-ep-check { flex: 0 0 auto; display: grid; place-items: center; padding-right: 2px; }
 .lib-ep-check input { width: 15px; height: 15px; accent-color: var(--green-700); cursor: pointer; }
+
+/* 片源失败提示：一句「能照着做」的话 + 小字原因 + 需要时给一个「更新规则」 */
+.online-source-feedback > span { display: block; color: var(--ink); }
+.online-source-feedback > small { display: block; margin-top: 2px; font-size: 11.5px; opacity: .8; }
+.online-source-feedback > .compact-button { margin-top: 6px; }

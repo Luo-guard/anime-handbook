@@ -55,7 +55,14 @@ async function api(path, options = {}) {
         if (error.name === "AbortError") throw error;
         throw new Error("后台响应不完整，请稍后重试；保存结果尚未确认");
       }
-      if (!response.ok) throw new Error(payload.message || `请求失败（${response.status}）`);
+      if (!response.ok) {
+        // 后端会带一个原因码（例如 site_changed）：调用方据此换成「能照着做」的提示，
+        // 不用去解析中文文案。没有 code 的旧接口行为不变。
+        const error = new Error(payload.message || `请求失败（${response.status}）`);
+        if (payload.code) error.code = String(payload.code);
+        error.status = response.status;
+        throw error;
+      }
       return payload;
     });
   } finally { if (write) pendingDesktopWrites -= 1; }
