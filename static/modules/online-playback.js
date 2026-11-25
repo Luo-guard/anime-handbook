@@ -258,13 +258,18 @@ window.onlinePlayback = (() => {
   function watchDownload(session, mediaId) {
     clearInterval(downloadTimer);
     const animeId = Number(session.animeId || 0);
+    // 接口偶尔比 2.5 秒慢：上一拍还没回来就别再发，否则晚到的旧结果会把
+    // 「已入库」的按钮改回「下载 42%」。
+    let busy = false;
     const tick = async () => {
+      if (busy) return;
       // 会话可能是从详情页「从网站下载」临时造的，没有在播的 current；
       // 只要选集对话框还记着它，就继续轮询进度。
       if (current !== session && downloadSheet.session !== session) {
         clearInterval(downloadTimer);
         return;
       }
+      busy = true;
       try {
         const data = await api(`/api/offline/state?anime_id=${animeId}`);
         const job = (data.jobs || []).find(item => Number(item.id) === Number(mediaId));
@@ -286,6 +291,7 @@ window.onlinePlayback = (() => {
         const percent = Math.round(Number(job.progress || 0));
         downloadLabel(job.status === "processing" ? "正在整理…" : `下载 ${percent}%`, true);
       } catch { /* 轮询失败不打扰用户，下一拍再试 */ }
+      finally { busy = false; }
     };
     tick();
     downloadTimer = setInterval(tick, 2500);

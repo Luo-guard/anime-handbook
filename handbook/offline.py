@@ -152,7 +152,15 @@ class OfflineStore:
         error: str | None = None,
         progress: float | None = None,
         archive_retries: int | None = None,
+        allow_from: tuple[str, ...] | None = None,
     ) -> dict[str, Any] | None:
+        """改任务状态。
+
+        ``allow_from`` 给定时只在「当前状态属于这些值」时才写，判断和写入在同一条
+        SQL 里完成（不用先读再写，天然没有竞态）。进度轮询、归档这类后台写入靠它
+        防止把更新的状态盖回去：例如刚入库的任务被一拍旧快照改回「下载中/整理中」，
+        或者失败原因被下一拍清掉。
+        """
         fields: dict[str, Any] = {"status": _check_status(status)}
         if error is not None:
             fields["error"] = str(error)
@@ -160,7 +168,20 @@ class OfflineStore:
             fields["progress"] = max(0.0, min(100.0, float(progress)))
         if archive_retries is not None:
             fields["archive_retries"] = max(0, int(archive_retries))
-        return self.update_job(media_id, **fields)
+        if allow_from is None:
+            return self.update_job(media_id, **fields)
+        allowed = tuple(str(item) for item in allow_from)
+        if not allowed:
+            return self.job(media_id)
+        fields["updated_at"] = now_iso()
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        marks = ", ".join("?" for _ in allowed)
+        with self.db.connect() as db:
+            db.execute(
+                f"UPDATE local_media SET {assignments} WHERE id = ? AND status IN ({marks})",
+                (*fields.values(), int(media_id), *allowed),
+            )
+        return self.job(media_id)
 
     def job(self, media_id: int) -> dict[str, Any] | None:
         with self.db.connect() as db:

@@ -300,6 +300,9 @@ function updateLibrarySubtitle() {
 // 详情页的下载进度：面板本身不刷新，用户只能看到打开那一刻的快照，
 // 于是「下了半天还是 0 集」。有任务在跑时按 3 秒静默重取一次。
 let libDetailTimer = 0;
+// 同一条详情可能同时有两次刷新（轮询 + 删除后刷新）。响应慢的那次如果后到，
+// 会把新数据盖回旧的：用序号丢掉过期结果。
+let libDetailToken = 0;
 
 function stopLibDetailPolling() {
   window.clearTimeout(libDetailTimer);
@@ -313,9 +316,10 @@ function libActiveJobs(jobs) {
 async function refreshLibraryDetail(silent = true) {
   const detail = librarySidebar.detail;
   if (!detail?.animeId) return;
+  const token = (libDetailToken += 1);
   try {
     const data = await api(`/api/offline/state?anime_id=${detail.animeId}`);
-    if (librarySidebar.detail !== detail) return;
+    if (librarySidebar.detail !== detail || token !== libDetailToken) return;
     const activeBefore = libActiveJobs(librarySidebar.jobs).length;
     const raw = data.files || [];
     librarySidebar.files = raw.filter((file) => file.exists !== false);
@@ -327,6 +331,7 @@ async function refreshLibraryDetail(silent = true) {
       loadLibrarySidebar(true).catch(() => {});
     }
   } catch (error) {
+    if (token !== libDetailToken) return;
     if (!silent) throw error;
   }
 }

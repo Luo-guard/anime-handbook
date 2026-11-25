@@ -1,7 +1,12 @@
 // 媒体库批量删除的界面：进批量态、勾选、全选、取消。
 // 这个脚本连本机正在跑的手账，只做选择、不真的删除（删除路径由后端用例覆盖）。
+const fs = require('fs');
 const assert = require('node:assert/strict');
 const { chromium } = require('C:/Users/han/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+
+// 轮询和「删除后刷新」会同时请求同一个详情：晚到的旧响应不能盖掉新数据。
+const librarySource = fs.readFileSync('static/modules/library-view.js', 'utf8');
+assert.ok(librarySource.includes('token !== libDetailToken'), '详情刷新要丢掉过期响应');
 
 (async () => {
   const browser = await chromium.launch({ headless: true });

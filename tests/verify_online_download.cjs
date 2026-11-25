@@ -45,6 +45,10 @@ assert(source.includes('openDownloadSheet({') && source.includes('animeId: Numbe
 assert(source.includes('context.mode === "download"') && source.includes('downloadResult(item)'), '结果点击没有按模式分流');
 assert(source.includes('play(catalogue, source, episode, anime.id'), '原来的播放路径不能丢');
 
+// 下载进度轮询：慢响应不许重叠，否则晚到的旧数据会把「已入库」改回「下载 42%」。
+assert.ok(source.includes('let busy = false;') && source.includes('if (busy) return;'),
+  '下载进度轮询要防止重叠');
+
 const stubs = `
 window.$ = (s, r = document) => r.querySelector(s);
 window.$$ = (s, r = document) => [...r.querySelectorAll(s)];

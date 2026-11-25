@@ -64,7 +64,9 @@ class AutoRetryTests(unittest.TestCase):
         self.service._sync([self.job()])
         self.assertEqual(self.service.scheduled, [7])
         # 重试前先把计数 +1 并记为 processing，避免下一次轮询重复排程。
-        self.assertEqual(self.service.store.statuses, [(7, "processing", {"error": "", "archive_retries": 1})])
+        self.assertEqual(self.service.store.statuses, [
+            (7, "processing", {"error": "", "archive_retries": 1, "allow_from": ("failed",)}),
+        ], "自动重试只允许从 failed 推进，别把已经入库的任务拉回整理中")
 
     def test_other_failures_are_not_retried(self):
         self.service._sync([self.job(error="文件缺失，可能被移动或删除")])

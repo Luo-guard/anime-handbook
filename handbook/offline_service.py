@@ -288,7 +288,9 @@ class OfflineService:
         if not paths["ok"]:
             raise OfflineError(str(paths.get("error") or "媒体库目录不可用"))
         self._clear_archive_abort(media_id)
-        self.store.set_status(media_id, "downloading", error="", progress=0)
+        self.store.set_status(
+            media_id, "downloading", error="", progress=0, allow_from=("failed",),
+        )
         folder = self._web_folder(media_id)
         web_download.clear_folder(folder)
         web_download.start(
@@ -445,12 +447,14 @@ class OfflineService:
                 url, kind, headers = resolve(item["episode_id"])
             except Exception as error:  # noqa: BLE001 - 单集失败不该中断整批
                 self.store.set_status(
-                    media_id, "failed", error=f"解析这一集失败：{error}"
+                    media_id, "failed", error=f"解析这一集失败：{error}", allow_from=("queued",),
                 )
                 continue
             if self.store.job(media_id) is None:
                 continue
-            self.store.set_status(media_id, "downloading", error="", progress=0)
+            self.store.set_status(
+                media_id, "downloading", error="", progress=0, allow_from=("queued",),
+            )
             folder = self._web_folder(media_id)
             web_download.clear_folder(folder)
             web_download.start(self._web_owner(), media_id, str(url), str(kind or ""), dict(headers or {}), folder)
@@ -468,8 +472,13 @@ class OfflineService:
             status = str(task.snapshot().get("status") or "")
             if status in ("done", "failed"):
                 if status == "done":
-                    self.store.set_status(media_id, "processing", progress=100, error="")
-                    self._schedule_archive(media_id)
+                    # 归档可能已经被心跳抢先在跑，甚至已经置成 ready：只在还在下载时推进。
+                    updated = self.store.set_status(
+                        media_id, "processing", progress=100, error="",
+                        allow_from=("queued", "downloading"),
+                    )
+                    if str((updated or {}).get("status") or "") == "processing":
+                        self._schedule_archive(media_id)
                 return
             time.sleep(0.5)
 
@@ -666,15 +675,23 @@ class OfflineService:
                         self.store.set_status(
                             media_id, "failed",
                             error="排队太久没有开始，可能被打断了，请回到播放器重新点下载",
+                            allow_from=("queued",),
                         )
                     continue
                 if current == "processing":
                     # 归档线程接手后会从注册表摘掉任务，这不是中断。
+                    # 但进程重启后归档线程已经没了，任务会永远停在「正在整理」：
+                    # 只有确认没有归档在跑，才补排一次（归档会自己认出「已入库」）。
+                    with _ARCHIVE_LOCK:
+                        archiving = (self._web_owner(), media_id) in _ARCHIVING
+                    if not archiving:
+                        self._schedule_archive(media_id)
                     continue
                 # 进程重启后线程没了，地址也只活在内存里，只能让人重新点一次。
                 self.store.set_status(
                     media_id, "failed",
                     error="下载已中断（程序重启或任务被清理），请回到播放器重新点「下载」",
+                    allow_from=("downloading",),
                 )
                 continue
             snap = task.snapshot()
@@ -701,6 +718,7 @@ class OfflineService:
                     media_id, "failed",
                     error=str(snap.get("error") or "下载失败"),
                     progress=float(snap.get("progress") or 0),
+                    allow_from=("queued", "downloading", "processing"),
                 )
             elif snap.get("status") == "done":
                 # 这一拍拿到的 job 可能是归档前的快照：先看一眼现状，已经入库的别倒回去。
@@ -710,10 +728,13 @@ class OfflineService:
                     continue
                 self._schedule_archive(media_id)
             else:
+                # 只从「排队/下载中」推到下载中：如果归档已经把它置成 processing/ready，
+                # 这一拍是旧快照，写下去就会出现「下完了又变下载中」。
                 self.store.set_status(
                     media_id, "downloading",
                     progress=float(snap.get("progress") or 0),
                     error="",
+                    allow_from=("queued", "downloading"),
                 )
         active = [job for job in active if str(job.get("source_kind") or "") != "web"]
         # 归档失败以前会让任务永远停在 failed，刷新也不再处理。给一个限频的自动重试，
@@ -729,7 +750,8 @@ class OfflineService:
                 if attempts >= MAX_ARCHIVE_RETRIES:
                     continue
                 self.store.set_status(
-                    job["id"], "processing", error="", archive_retries=attempts + 1
+                    job["id"], "processing", error="", archive_retries=attempts + 1,
+                    allow_from=("failed",),
                 )
                 self._schedule_archive(int(job["id"]))
         if not active:
@@ -746,7 +768,8 @@ class OfflineService:
                 continue
             if task is None:
                 self.store.set_status(
-                    job["id"], "failed", error="qBittorrent 里找不到这个任务，可能被手动删除了"
+                    job["id"], "failed", error="qBittorrent 里找不到这个任务，可能被手动删除了",
+                    allow_from=("queued", "downloading", "processing"),
                 )
                 continue
             size = int(task.get("size") or 0)
@@ -766,7 +789,10 @@ class OfflineService:
             status = map_qb_state(str(task.get("state") or ""), task.get("progress") or 0)
             if status == "failed":
                 message = "文件缺失，可能被移动或删除" if task.get("state") == "missingFiles" else "下载出错"
-                self.store.set_status(job["id"], "failed", error=message, progress=progress)
+                self.store.set_status(
+                    job["id"], "failed", error=message, progress=progress,
+                    allow_from=("queued", "downloading", "processing"),
+                )
                 continue
             # 30 分钟没有任何进度就提示可能没人做种。
             if (
@@ -775,11 +801,18 @@ class OfflineService:
                 and _seconds_stale(job.get("created_at") or "") > 1800
             ):
                 self.store.set_status(
-                    job["id"], "downloading", progress=progress, error="长时间没有速度，可能没人在做种"
+                    job["id"], "downloading", progress=progress,
+                    error="长时间没有速度，可能没人在做种",
+                    allow_from=("queued", "downloading"),
                 )
                 continue
-            self.store.set_status(job["id"], status, progress=progress, error="")
-            if status == "processing":
+            # 旧快照不能把已入库的任务推回「整理中/下载中」，也不能清掉失败原因。
+            updated = self.store.set_status(
+                job["id"], status, progress=progress, error="",
+                allow_from=("queued", "downloading", "processing"),
+            )
+            # 只有真的写成了「整理中」才排归档：已经 ready 的任务别再重跑一遍。
+            if status == "processing" and str((updated or {}).get("status") or "") == "processing":
                 self._schedule_archive(int(job["id"]))
         return live
 
@@ -901,7 +934,10 @@ class OfflineService:
             suffix = f"（已自动重试 {attempts}/{MAX_ARCHIVE_RETRIES}，稍后还会自动再试）"
         else:
             suffix = "（点「重试归档」可以立即再试一次）"
-        self.store.set_status(media_id, "failed", error=f"归档失败：{error}{suffix}")
+        self.store.set_status(
+            media_id, "failed", error=f"归档失败：{error}{suffix}",
+            allow_from=("queued", "downloading", "processing", "failed"),
+        )
 
     def _resolve_files(
         self, task: dict[str, Any] | None, job: dict[str, Any], download_root: str
@@ -1057,7 +1093,13 @@ class OfflineService:
             # 清掉中转目录，第二次再来时目录是空的——这时必须认「已完成」，不能判失败。
             if str(job.get("status") or "") == "ready":
                 return
-            self.store.set_status(media_id, "processing", progress=100, error="")
+            updated = self.store.set_status(
+                media_id, "processing", progress=100, error="",
+                allow_from=("queued", "downloading", "failed", "processing"),
+            )
+            # 这一瞬间被另一条归档线程置成 ready：认「已完成」，不要再往下走。
+            if str((updated or {}).get("status") or "") == "ready":
+                return
             # 网站资源没有下载器可问，成品就在自己的临时目录里；找不到就是没下完。
             try:
                 files = self._web_sources(media_id)
@@ -1480,6 +1522,7 @@ class OfflineService:
                     self.store.set_status(
                         media_id, "failed",
                         error="这一集的文件已被删除，归档已取消；需要就回播放器重新下载",
+                        allow_from=("queued", "downloading", "processing"),
                     )
                 except Exception:  # noqa: BLE001 - 任务已被删掉就只停归档
                     pass
@@ -1516,6 +1559,8 @@ class OfflineService:
         job = self.store.job(int(media_id))
         if not job:
             raise OfflineError("下载记录不存在")
+        if str(job.get("status") or "") == "ready":
+            raise OfflineError("这一集已经入库了，不用再重试")
         if str(job.get("source_kind") or "") == "web":
             # 成品还在：只是归档没成功，再整理一次即可；成品没了说明没下完，
             # 只能让内存里的下载线程接着跑，线程也没了就得回播放器重点一次。
@@ -1524,16 +1569,25 @@ class OfflineService:
                 (folder / item).is_file()
                 for item in (web_download.DIRECT_NAME, web_download.PLAYLIST_NAME)
             ):
-                self.store.set_status(int(media_id), "processing", error="", archive_retries=0)
+                self.store.set_status(
+                    int(media_id), "processing", error="", archive_retries=0,
+                    allow_from=("failed", "processing", "downloading", "queued"),
+                )
                 self._schedule_archive(int(media_id))
                 return {"ok": True, "media_id": int(media_id)}
             task = web_download.get(self._web_owner(), int(media_id))
             if task is None:
                 raise OfflineError("原来的下载地址已经失效，请回到播放器重新点「下载」")
             task.resume()
-            self.store.set_status(int(media_id), "downloading", error="", archive_retries=0)
+            self.store.set_status(
+                int(media_id), "downloading", error="", archive_retries=0,
+                allow_from=("failed", "downloading", "queued"),
+            )
             return {"ok": True, "media_id": int(media_id), "restarted": True}
-        self.store.set_status(int(media_id), "processing", error="", archive_retries=0)
+        self.store.set_status(
+            int(media_id), "processing", error="", archive_retries=0,
+            allow_from=("failed", "processing", "downloading", "queued"),
+        )
         self._schedule_archive(int(media_id))
         return {"ok": True, "media_id": int(media_id)}
 
@@ -1556,7 +1610,10 @@ class OfflineService:
                 paused = False
             else:
                 raise ValueError("任务操作无效")
-            self.store.set_status(int(media_id), "downloading", error="")
+            self.store.set_status(
+                int(media_id), "downloading", error="",
+                allow_from=("queued", "downloading"),
+            )
             return {"ok": True, "action": action, "paused": paused}
         torrent_hash = str(job.get("torrent_hash") or "")
         if not torrent_hash:
@@ -1566,11 +1623,16 @@ class OfflineService:
         # 否则下一次 _sync 就把它清掉，DB 里留下一个语义半真半假的字符串。
         if action == "pause":
             client.pause([torrent_hash])
-            self.store.set_status(int(media_id), "downloading")
+            self.store.set_status(
+                int(media_id), "downloading", allow_from=("queued", "downloading"),
+            )
             paused = True
         elif action == "resume":
             client.resume([torrent_hash])
-            self.store.set_status(int(media_id), "downloading", error="")
+            self.store.set_status(
+                int(media_id), "downloading", error="",
+                allow_from=("queued", "downloading"),
+            )
             paused = False
         else:
             raise ValueError("任务操作无效")
