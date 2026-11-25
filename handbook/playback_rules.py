@@ -247,6 +247,9 @@ def _read(url, headers, *, method="GET", body=None):
     try:
         with request_public(url, method=method, headers=headers, body=body) as (response, final_url):
             if response.status != 200:
+                # 403/503 有时是 Cloudflare 的验证页：先看一眼正文，别把它当「站点坏了」。
+                if _is_challenge(response.read(65536)):
+                    raise _challenge_problem()
                 # 404 是「站点上没有这一页」，5xx/403 更像站点本身出问题，分开给前端。
                 code = "not_found" if response.status == 404 else "site_unreachable"
                 raise RequestProblem(f"片源站点返回 HTTP {response.status}", 502, code)
@@ -300,8 +303,11 @@ def _api(rule, config, values):
         body = json.dumps({key: _template(value, values) for key, value in request.get("body", {}).items()}).encode()
     elif method != "GET":
         raise RequestProblem("此规则的接口请求格式暂未支持", 502, "site_changed")
+    raw = _read(url, headers, method=method, body=body)[0]
+    if _is_challenge(raw):
+        raise _challenge_problem()
     try:
-        return json.loads(_read(url, headers, method=method, body=body)[0])
+        return json.loads(raw)
     except (UnicodeError, json.JSONDecodeError):
         raise RequestProblem("站点没有返回可读取的 JSON 数据", 502, "site_changed") from None
 
@@ -328,12 +334,56 @@ def _text(value, limit=180):
     return str(value or "").strip()[:limit] if isinstance(value, (str, int, float)) else ""
 
 
+# 站点挡爬虫时返回的不是内容页，而是「验证一下再继续」。这种页面的链接结构一定
+# 对不上，报「没有可用的选集」会把人带去改规则；直接说「要人机验证」才是对的。
+_CHALLENGE_MESSAGE = "站点要求人机验证：先在浏览器里打开这个站点，通过验证后回来重试"
+# 强信号：只会出现在拦截页上。
+_CHALLENGE_MARKERS = (
+    "cf-browser-verification", "cf_chl_opt", "ddos-guard", "sgcaptcha", "captcha-image",
+    "verify you are human", "checking your browser",
+    "请完成安全验证", "人机验证", "滑动验证", "拖动滑块",
+)
+# 弱信号：正常页面也可能带（Cloudflare 会给普通页面注入 challenge-platform 脚本），
+# 只有「页面很小、一看就不是内容页」时才算拦截页，避免把整站误判成要人机验证。
+_CHALLENGE_WEAK_MARKERS = (
+    "challenge-platform", "/cdn-cgi/challenge", "g-recaptcha", "h-captcha",
+    "recaptcha/api", "geetest",
+)
+_CHALLENGE_TITLE = re.compile(r"<title[^>]*>([^<]{0,160})</title>", re.I)
+_CHALLENGE_TITLE_WORDS = (
+    "just a moment", "attention required", "checking your browser", "cloudflare", "ddos-guard",
+    "安全验证", "人机验证", "验证码", "访问验证", "请稍候",
+)
+
+
+def _is_challenge(raw: bytes) -> bool:
+    """看返回的到底是内容页，还是「请先通过人机验证」这种拦截页。"""
+    text = raw[:262144].decode("utf-8", "ignore").lower()
+    if not text:
+        return False
+    title = _CHALLENGE_TITLE.search(text)
+    if title and any(word in title.group(1) for word in _CHALLENGE_TITLE_WORDS):
+        return True
+    if any(marker in text for marker in _CHALLENGE_MARKERS):
+        return True
+    # 弱信号 + 小页面 + 几乎没有链接：三条同时成立才当拦截页。
+    # 正常内容页通常有大量 href，哪怕只有十几 KB。
+    return (len(text) < 20000 and text.count("href=") < 5
+            and any(marker in text for marker in _CHALLENGE_WEAK_MARKERS))
+
+
+def _challenge_problem():
+    return RequestProblem(_CHALLENGE_MESSAGE, 502, "captcha")
+
+
 def _page(rule, url):
     try:
         from lxml import etree, html
     except ImportError:
         raise RequestProblem("缺少 XPath 解析组件 lxml，请安装桌面播放依赖", 503) from None
     raw, final_url = _read(url, _headers(rule))
+    if _is_challenge(raw):
+        raise _challenge_problem()
     try:
         try:
             raw = raw.decode("utf-8-sig")
@@ -360,27 +410,48 @@ def _node_text(node):
     return _text(node.text_content() if hasattr(node, "text_content") else node)
 
 
-def _link(base, node):
+_SCRIPT_SCHEMES = ("javascript:", "vbscript:", "data:", "magnet:", "ed2k:", "thunder:")
+
+
+def _link_info(base, node):
+    """把节点上的 href 变成可用网址；不行就说清「为什么不行」。
+
+    以前这里只返回空字符串，调用方于是把整条结果/整集丢掉——集数少了、后面
+    没写集号的集还会整体前移一位（点第 5 集播到第 6 集）。现在把原因带出去，
+    界面可以留着这一条并标成「打不开」。
+    """
     href = node.get("href") if hasattr(node, "get") else node
-    if not isinstance(href, str) or not href.strip() or href.strip().startswith("#"):
-        return ""
-    url = urljoin(base, href.strip())
+    if not isinstance(href, str) or not href.strip():
+        return "", "站点没有给出链接"
+    value = href.strip()
+    if value.startswith("#"):
+        return "", "链接只是页内锚点"
+    if value.lower().startswith(_SCRIPT_SCHEMES):
+        return "", "链接是脚本或下载协议，不是网页地址"
+    url = urljoin(base, value)
     try:
         public_url(url)
     except RequestProblem:
-        return ""
-    return url
+        return "", "链接指向本机/内网或格式不合法"
+    return url, ""
+
+
+def _link(base, node):
+    return _link_info(base, node)[0]
 
 
 def search(rule_id, rule, title):
+    """按番名搜索。
+
+    链接解析不出来的条目不再直接丢掉：留着并标 ``playable: False``，界面上显示成
+    「打不开」，同时把 ``skipped``（标题 + 原因）带回去，用户能展开看是哪几条、为什么。
+    一条都打不开时才按「规则过期」报错——那种情况更新规则才有意义。
+    """
     if not title.strip() or len(title) > 200:
         raise RequestProblem("请输入有效的番剧名称")
     values = {"@keyword": title}
     items = []
-    # rows / skipped 用来区分「站点真没有」和「站点有、但链接解析不出来」：
-    # 后者以前是静默返回 0 条，看起来就像站点没这部番。
     rows = 0
-    skipped = 0
     if rule.get("searchMode") == "api":
         config = rule["searchApiConfig"]
         result = _api(rule, config, values)
@@ -391,15 +462,17 @@ def search(rule_id, rule, title):
             template = config.get("sourceTemplate")
             if template and source:
                 source = _template(template, {"@source": source}, encode=True)
-            if name and source:
-                item = {"id": source, "title": name}
-                if config.get("originalPath"):
-                    original = _text(_value(row, config["originalPath"]), 180)
-                    if original:
-                        item["original"] = original
-                items.append(item)
-            elif name or source:
-                skipped += 1
+            if not name:
+                continue
+            # 接口式搜索的 source 通常是番剧编号（不是网址），能拿它读选集就算可用。
+            item = {"id": source, "title": name, "playable": bool(source)}
+            if not source:
+                item["reason"] = "站点没有给出番剧编号"
+            if config.get("originalPath"):
+                original = _text(_value(row, config["originalPath"]), 180)
+                if original:
+                    item["original"] = original
+            items.append(item)
     else:
         url = _template(rule["searchURL"], values, encode=True).replace("{keyword}", quote(title, safe=""))
         page, base = _page(rule, url)
@@ -407,22 +480,32 @@ def search(rule_id, rule, title):
         for row in _xpath(page, rule["searchList"])[:40]:
             rows += 1
             name = _node_text(next(iter(_xpath(row, rule["searchName"], relative=True)), ""))
-            source = _link(base, next(iter(_xpath(row, rule["searchResult"], relative=True)), ""))
-            if name and source:
-                items.append({"id": source, "title": name})
-            elif name or source:
-                skipped += 1
-    unique = list({item["id"]: item for item in items}.values())
-    if rows and not unique:
+            target, reason = _link_info(base, next(iter(_xpath(row, rule["searchResult"], relative=True)), ""))
+            if not name:
+                continue
+            item = {"id": target, "title": name, "playable": bool(target)}
+            if not target:
+                item["reason"] = reason
+            items.append(item)
+    unique = []
+    seen = set()
+    for item in items:
+        key = item["id"] if item["playable"] else f"bad:{item['title']}"
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    playable = [item for item in unique if item["playable"]]
+    if unique and not playable:
         # 列表节点对上了，却一条可用链接都没有：多半是站点把 href 换成了脚本跳转。
-        # 这种情况说「没有结果」会把人带偏（以为是站点没这部番），直接讲清楚。
         raise RequestProblem(
-            f"站点返回了 {rows} 条结果，但一条链接都解析不出来（可能改成了脚本跳转）",
+            f"站点返回了 {len(unique)} 条结果，但一条链接都解析不出来（可能改成了脚本跳转）",
             502, "site_changed",
         )
     data = {"items": unique}
-    if skipped and unique:
-        data["skipped"] = skipped
+    broken = [{"title": item["title"], "reason": item.get("reason", "")} for item in unique if not item["playable"]]
+    if broken:
+        data["skipped"] = broken
     return data
 
 
@@ -433,14 +516,15 @@ def _episode_number(label, index):
     return "" if re.search(r"\b(?:SP|OVA|PV|OP|ED)\d*\b|预告|番外|特典|总集篇", label, re.I) else str(index)
 
 
-def _episodes(pairs, skipped=None):
+def _episodes(pairs):
     """把「标签 + 地址」整理成选集。
 
     规则可以在分集配置里给出真实的集号与集 ID（站点自己有编号字段时用），
     这时直接采用；没给才按标题里的数字/顺序推算。
 
-    ``skipped`` 传一个 ``[0]`` 进来时，会把「有集名、但链接不可用」的条目数记进去：
-    这些集以前会无声消失，导致集数变少、甚至顺序错位。
+    链接不可用的条目**不删除**：留着占住集号，并标 ``playable: False``。删掉会让
+    后面没写集号的集整体前移一位（点第 5 集播到第 6 集）；留着至少集数还是齐的，
+    界面也能显示「这一集打不开」。
     """
     episodes = []
     seen_urls = set()
@@ -450,11 +534,13 @@ def _episodes(pairs, skipped=None):
         label, url = entry[0], entry[1]
         number_hint = str(entry[2] or "").strip() if len(entry) > 2 else ""
         id_hint = str(entry[3] or "").strip() if len(entry) > 3 else ""
-        if not url or url in seen_urls:
-            if skipped is not None and label and not url:
-                skipped[0] += 1
+        reason = str(entry[4] or "").strip() if len(entry) > 4 else ""
+        if not label and not url:
             continue
-        seen_urls.add(url)
+        if url and url in seen_urls:
+            continue   # 同一集在列表里重复出现，不重复计
+        if url:
+            seen_urls.add(url)
         number = number_hint or _episode_number(label, index + 1)
         index += bool(number)
         if id_hint.isdigit():
@@ -464,7 +550,11 @@ def _episodes(pairs, skipped=None):
         if episode_id in seen_ids:
             episode_id += f"-{len(episodes) + 1}"
         seen_ids.add(episode_id)
-        episodes.append({"id": episode_id, "url": url, "number": number, "title": label})
+        episode = {"id": episode_id, "url": url, "number": number, "title": label,
+                   "playable": bool(url)}
+        if not url:
+            episode["reason"] = reason or "站点没有给出这一集的地址"
+        episodes.append(episode)
     return episodes
 
 
@@ -484,7 +574,8 @@ def _api_roads(rule, provider, meta=None):
             for item in road.split(config["episodeSeparator"])[:2000]:
                 name, separator, url = item.partition(config["fieldSeparator"])
                 if separator:
-                    pairs.append((_text(name), _link(rule["baseURL"], url)))
+                    target, reason = _link_info(rule["baseURL"], url)
+                    pairs.append((_text(name), target, "", "", reason))
             yield names[index] if index < len(names) else "", pairs, ""
         return
     for road in _json_nodes(data, config["roadsPath"])[:30]:
@@ -494,15 +585,14 @@ def _api_roads(rule, provider, meta=None):
         for episode in _json_nodes(road, config["episodesPath"])[:2000]:
             label = _text(_value(episode, config["episodeNamePath"]))
             target = _text(_value(episode, config["episodeUrlPath"]), 2000)
-            if not target:
-                continue
             number = _text(_value(episode, config.get("episodeNumberPath")), 12).removesuffix(".0") if config.get("episodeNumberPath") else ""
             episode_id = _text(_value(episode, config.get("episodeIdPath")), 40) if config.get("episodeIdPath") else ""
             page = config.get("episodePage") or {}
-            if page.get("url"):
+            if page.get("url") and target:
                 values = {"@source": provider, "@episodeUrl": target}
                 target = _with_query(_template(page["url"], values, encode=True), page.get("query"), values)
-            pairs.append((label, _link(rule["baseURL"], target), number, episode_id))
+            url, reason = _link_info(rule["baseURL"], target) if target else ("", "站点没有给出这一集的地址")
+            pairs.append((label, url, number, episode_id, reason))
         yield name, pairs, road_id
 
 
@@ -583,8 +673,11 @@ def _html_roads(rule, provider, rule_id=""):
     page, base = _page(rule, provider)
     _remember_host(rule_id, base)
     for road in _xpath(page, rule["chapterRoads"])[:30]:
-        yield "", [(_node_text(row), _link(base, row))
-                   for row in _xpath(road, rule["chapterResult"], relative=True)[:2000]]
+        pairs = []
+        for row in _xpath(road, rule["chapterResult"], relative=True)[:2000]:
+            target, reason = _link_info(base, row)
+            pairs.append((_node_text(row), target, "", "", reason))
+        yield "", pairs
 
 
 def catalogue(rule_id, rule, provider):
@@ -598,23 +691,24 @@ def catalogue(rule_id, rule, provider):
     meta: dict[str, Any] = {}
     roads = _api_roads(rule, provider, meta) if rule.get("chapterMode") == "api" else _html_roads(rule, provider, rule_id)
     sources = []
-    dropped = [0]
     for index, road in enumerate(roads, 1):
         name, pairs = road[0], road[1]
         road_id = str(road[2]).strip() if len(road) > 2 and str(road[2]).strip() else ""
-        episodes = _episodes(pairs, dropped)
+        episodes = _episodes(pairs)
         if episodes:
             sources.append({"id": int(road_id) if road_id.isdigit() else index,
                             "name": name or f"线路 {index}", "episodes": episodes})
+    unplayable = sum(1 for line in sources for episode in line["episodes"] if not episode.get("playable"))
     data = {"id": provider, "sources": sources}
-    if dropped[0]:
-        # 有集名却没链接的条目：告诉前端「少了的那些是解析不出来，不是站点没有」。
-        data["skipped"] = dropped[0]
+    if unplayable:
+        # 条目还在，但打不开：界面要把这件事说清楚（不再是无声少一集）。
+        data["unplayable"] = unplayable
     if meta.get("title"):
         data["title"] = meta["title"]
-    if not data["sources"]:
+    playable_lines = [line for line in sources if any(ep.get("playable") for ep in line["episodes"])]
+    if not playable_lines:
         raise RequestProblem(
-            "页面打开了，但这个站点没有解析出任何选集——多半是站点改版，规则需要更新",
+            "页面打开了，但这个站点没有解析出任何可播放的选集——多半是站点改版，规则需要更新",
             502, "site_changed",
         )
     data["rule"] = rule_id
@@ -682,6 +776,11 @@ def play(rule_id, rule, provider, source_id, episode_id):
     episode = next((item for item in (source or {}).get("episodes", []) if str(item["id"]) == episode_id), None)
     if not episode:
         raise RequestProblem("这条线路没有这一集（可能下架了，也可能这条线路集数不同）", 404, "episode_missing")
+    if not episode.get("playable", True):
+        raise RequestProblem(
+            f"这一集在站点上打不开：{episode.get('reason') or '链接无法识别（可能是脚本跳转）'}",
+            400, "episode_unplayable",
+        )
     url = episode["url"]
     headers = _headers(rule)
     play_cfg = rule.get("_handbook_play") or rule.get("playApiConfig")

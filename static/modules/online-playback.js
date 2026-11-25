@@ -30,10 +30,13 @@ function playbackToken(url) {
 
 // 选集对话框里的一行：勾选框 + 集名 + 状态位。抽出来便于单独验证转义与勾选态。
 function episodePickRow(row, index, checked) {
-  return `<label class="episode-pick-row">
-        <input type="checkbox" data-pick="${index}" ${checked ? "checked" : ""} />
+  // 打不开的集仍然列出来（集号不会错位），但不能勾选下载。
+  const blocked = row.playable === false;
+  const reason = escapeHtml(row.reason || "这一集在站点上打不开");
+  return `<label class="episode-pick-row${blocked ? " is-blocked" : ""}"${blocked ? ` title="${reason}"` : ""}>
+        <input type="checkbox" data-pick="${index}" ${checked && !blocked ? "checked" : ""} ${blocked ? "disabled" : ""} />
         <span class="episode-pick-label">${escapeHtml(row.label)}</span>
-        <span class="episode-pick-state" data-state="${index}"></span>
+        <span class="episode-pick-state" data-state="${index}">${blocked ? "打不开" : ""}</span>
       </label>`;
 }
 
@@ -48,6 +51,8 @@ const PLAYBACK_ERRORS = {
   not_found: { short: "站点上没有", text: "站点上找不到这一部（可能已下架）：换一个站点，或检查链接。" },
   rule_missing: { short: "规则没装", text: "这条规则还没安装：先到「管理规则」里下载它。" },
   site_mismatch: { short: "站点不匹配", text: "这个链接不属于这条规则：换一条规则，或确认链接没贴错。" },
+  episode_unplayable: { short: "这集打不开", text: "这一集在站点上打不开：换一条线路试试。" },
+  captcha: { short: "需要人机验证", text: "站点要求人机验证：先在浏览器里打开这个站点，通过验证后回来重试。" },
 };
 
 function playbackErrorText(error, fallback) {
@@ -117,16 +122,20 @@ function onlineLocalEpisodeNumber(episode, source, first = 1) {
 }
 
 function matchOnlineEpisode(catalogue, target) {
+  let broken = null;
   for (const source of catalogue.sources) {
     const wanted = onlineLineStartsAtOne(source) ? target.number - target.first + 1 : target.number;
     const episode = source.episodes.find(item => Number(item.number) === wanted);
-    if (episode) return { source, episode };
+    if (episode && episode.playable !== false) return { source, episode };
+    if (episode) broken = episode;
   }
-  const skipped = Number(catalogue?.skipped) || 0;
-  // 站点上有这集、但链接解析不出来时，别让人以为是站点没这一集。
-  throw new Error(skipped
-    ? `第 ${target.number} 集没能解析出来（另有 ${skipped} 条链接无法识别，站点可能改成了脚本跳转）：换一条线路，或更新规则。`
-    : `所选规则暂无第 ${target.number} 集的可用线路。`);
+  if (broken) {
+    // 站点上有这一集，但链接用不了：别让人以为是站点没有这一集。
+    const error = new Error(`第 ${target.number} 集：${broken.reason || "链接无法识别（可能是脚本跳转）"}`);
+    error.code = "episode_unplayable";
+    throw error;
+  }
+  throw new Error(`所选规则暂无第 ${target.number} 集的可用线路。`);
 }
 
 window.onlinePlayback = (() => {
@@ -315,6 +324,7 @@ window.onlinePlayback = (() => {
 
   function updateDownloadSheet() {
     const count = downloadSheet.selected.size;
+    const total = downloadSheet.rows.filter((row) => row.playable !== false).length;
     const hint = $("#episodeDownloadHint");
     if (hint) hint.textContent = count ? `已选 ${count} 集` : "还没选";
     const confirm = $("#episodeDownloadConfirm");
@@ -323,7 +333,10 @@ window.onlinePlayback = (() => {
       confirm.textContent = downloadSheet.busy ? "提交中…" : count ? `下载选中（${count} 集）` : "开始下载";
     }
     const all = $("#episodeDownloadSelectAll");
-    if (all) all.textContent = count && count === downloadSheet.rows.length ? "取消全选" : "全选";
+    if (all) {
+      all.textContent = count && count === total ? "取消全选" : "全选";
+      all.disabled = total === 0;
+    }
   }
 
   function renderDownloadSheet() {
@@ -347,6 +360,7 @@ window.onlinePlayback = (() => {
         if (String(job.source_kind || "") === "web") status.set(String(job.episode_key || ""), job.status);
       });
       downloadSheet.rows.forEach((row, index) => {
+        if (row.playable === false) return;   // 打不开的集保留自己的说明
         const node = document.querySelector(`#episodeDownloadList [data-state="${index}"]`);
         if (!node) return;
         const value = status.get(`0:${row.number}`);
@@ -375,7 +389,8 @@ window.onlinePlayback = (() => {
       return;
     }
     // 只有一集、而且就是正在播的那一集：直接走单集下载（有现成的令牌）。
-    if (episodes.length === 1 && !preset) {
+    // 这一集打不开时不能走捷径，得让下面的提示说清楚。
+    if (episodes.length === 1 && !preset && episodes[0].episode.playable !== false) {
       startWebDownload();
       return;
     }
@@ -384,21 +399,32 @@ window.onlinePlayback = (() => {
       id: String(item.episode.id),
       number: item.number,
       episodeTitle: String(item.episode.title || ""),
+      playable: item.episode.playable !== false,
+      reason: String(item.episode.reason || ""),
       label: `第 ${String(item.number).padStart(2, "0")} 集${item.episode.title ? ` · ${item.episode.title}` : ""}`,
     }));
+    const blocked = downloadSheet.rows.filter((row) => !row.playable);
+    if (blocked.length === downloadSheet.rows.length) {
+      downloadSheet.session = null;
+      downloadSheet.rows = [];
+      toast("这条线路的集数在站点上都打不开，换一条线路再下。", "error");
+      return;
+    }
     downloadSheet.selected = new Set(
       downloadSheet.rows.reduce((picked, row, index) => {
-        if (row.number === sheetNumber(session, session.episode)) picked.push(index);
+        if (row.playable && row.number === sheetNumber(session, session.episode)) picked.push(index);
         return picked;
       }, []),
     );
-    if (!downloadSheet.selected.size && downloadSheet.rows.length) downloadSheet.selected.add(0);
+    if (!downloadSheet.selected.size) {
+      const first = downloadSheet.rows.findIndex((row) => row.playable);
+      if (first >= 0) downloadSheet.selected.add(first);
+    }
     downloadSheet.busy = false;
     $("#episodeDownloadTarget").textContent = `${session.catalogue?.title || ""}${session.source?.name ? ` · ${session.source.name}` : ""}`;
-    const skipped = Number(session.catalogue?.skipped) || 0;
-    // 少了集多半不是站点没有，而是链接解析不出来：这里讲清楚，顺便指条路。
-    $("#episodeDownloadStatus").textContent = skipped
-      ? `另有 ${skipped} 条链接无法识别，已跳过（站点可能改成了脚本跳转）；缺的集可以换一条线路再下。`
+    // 打不开的集留在列表里（集号不会错位），这里说明有几集、为什么不能下。
+    $("#episodeDownloadStatus").textContent = blocked.length
+      ? `这条线路有 ${blocked.length} 集打不开（链接无法识别，可能改成了脚本跳转）；它们不会参与下载，缺的集可以换一条线路再下。`
       : "";
     renderDownloadSheet();
     const dialog = $("#episodeDownloadSheet");
@@ -421,7 +447,7 @@ window.onlinePlayback = (() => {
     const picked = [...downloadSheet.selected]
       .sort((a, b) => a - b)
       .map(index => downloadSheet.rows[index])
-      .filter(Boolean);
+      .filter(row => row && row.playable !== false);
     if (!picked.length) {
       toast("先勾选要下载的集", "error");
       return;
@@ -528,7 +554,12 @@ window.onlinePlayback = (() => {
     if (!current) return;
     const { catalogue, source, animeId } = current;
     const episode = source.episodes.find(item => String(item.id) === String(id));
-    if (episode) play(catalogue, source, episode, animeId);
+    if (!episode) return;
+    if (episode.playable === false) {
+      toast(`这一集在站点上打不开：${episode.reason || "链接无法识别"}。换一条线路试试。`, "error");
+      return;
+    }
+    play(catalogue, source, episode, animeId);
   }
 
   async function play(catalogue, source, episode, animeId, context = current?.context, tried = null) {
@@ -630,7 +661,14 @@ window.onlinePlayback = (() => {
       if (animeId && (!$("#progressModal").open || state.progressAnime?.id !== animeId)) return;
       const source = catalogue.sources.find(line => line.episodes.some(item => String(item.id) === selected))
         || catalogue.sources[0];
-      const episode = source.episodes.find(item => String(item.id) === selected) || source.episodes[0];
+      const episode = source.episodes.find(item => String(item.id) === selected)
+        || source.episodes.find(item => item.playable !== false)
+        || source.episodes[0];
+      if (episode?.playable === false) {
+        const error = new Error(`第 ${episode.number || "?"} 集：${episode.reason || "链接无法识别"}`);
+        error.code = "episode_unplayable";
+        throw error;
+      }
       status.textContent = "";
       const anime = animeId ? state.progressAnime : null;
       const context = anime && onlineLocalEpisodeNumber(episode, source)
@@ -921,6 +959,22 @@ window.onlinePlayback = (() => {
     }
   }
 
+  // 「N 条打不开」可以展开看是哪几条、为什么——不猜，但要说话。
+  function skippedReasons(rows) {
+    const box = document.createElement("details");
+    box.className = "online-source-skipped";
+    const summary = document.createElement("summary");
+    summary.textContent = `${rows.length} 条链接无法识别`;
+    const list = document.createElement("ul");
+    for (const row of rows.slice(0, 20)) {
+      const item = document.createElement("li");
+      item.textContent = `${row.title || "（没有标题）"}：${row.reason || "链接无法识别"}`;
+      list.append(item);
+    }
+    box.append(summary, list);
+    return box;
+  }
+
   async function searchRule(rule, titles, { hint, feedback, results, auto }) {
     if (!results.isConnected) return;
     const context = selection;
@@ -935,7 +989,6 @@ window.onlinePlayback = (() => {
     feedback.textContent = "";
     results.replaceChildren();
     let resultCount = 0;
-    let skippedCount = 0;
     let latestForSource;
 
     // 下载模式：拿着搜索结果去读选集，再把选集交给下载对话框（不播放）。
@@ -1014,22 +1067,36 @@ window.onlinePlayback = (() => {
       for (const title of titles) {
         const result = await request("search", { rule, title }, signal);
         if (!isCurrent()) return;
-        skippedCount += Number(result.skipped || 0);
-        for (const item of result.items) matches.set(item.id, item);
+        for (const item of result.items) {
+          // 打不开的结果按标题区分，别让几条 javascript: 链接在 Map 里互相覆盖。
+          matches.set(item.playable === false ? `bad|${item.title}` : item.id, item);
+        }
         if ([...matches.values()].filter(isExact).length === 1) break;
       }
-      resultCount = matches.size;
-      // 有些条目在站点上存在、但链接解析不出来：说出来，别让人以为站点没有这几条。
-      const skippedNote = skippedCount ? ` · ${skippedCount} 条链接无法识别` : "";
-      hint.textContent = matches.size ? `${matches.size} 个结果${skippedNote}` : "无结果";
-      for (const item of matches.values()) {
+      const rows = [...matches.values()];
+      const playableRows = rows.filter(item => item.playable !== false);
+      const brokenRows = rows.filter(item => item.playable === false);
+      resultCount = playableRows.length;
+      const skippedNote = brokenRows.length ? ` · ${brokenRows.length} 条打不开` : "";
+      hint.textContent = rows.length ? `${playableRows.length} 个结果${skippedNote}` : "无结果";
+      // 说明放在结果前面：结果一多，放最后就要滚半天才看到。
+      if (brokenRows.length) results.append(skippedReasons(brokenRows));
+      for (const item of rows) {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = item.title;
-        button.addEventListener("click", () => playResult(item), { signal });
+        if (item.playable === false) {
+          // 站点上有这一条，但链接不可用：显示出来、点不了，理由放在悬停里。
+          button.disabled = true;
+          button.textContent = `${item.title}（打不开）`;
+          button.title = item.reason || "这一条在站点上的链接无法识别";
+          button.dataset.state = "unplayable";
+        } else {
+          button.textContent = item.title;
+          button.addEventListener("click", () => playResult(item), { signal });
+        }
         results.append(button);
       }
-      const exact = [...matches.values()].filter(isExact);
+      const exact = playableRows.filter(isExact);
       if (auto && exact.length === 1 && !$("#settingsModal").open) await playResult(exact[0]);
     } catch (error) {
       if (isCurrent()) {
@@ -1073,6 +1140,11 @@ window.onlinePlayback = (() => {
       || catalogue.sources.find(line => line.episodes.some(item => item.id === entry.episodeId));
     const episode = source?.episodes.find(item => item.id === entry.episodeId);
     if (!episode) throw new Error("这集已不在原片源，请从番剧详情重新搜索。");
+    if (episode.playable === false) {
+      const error = new Error(`这一集：${episode.reason || "链接无法识别"}`);
+      error.code = "episode_unplayable";
+      throw error;
+    }
     if (!$("#jumpHistoryModal").open) return;
     catalogue.title ||= entry.animeTitle;
     const anime = state.animes.find(item => item.id === entry.animeId);
@@ -1158,8 +1230,11 @@ window.onlinePlayback = (() => {
     $("#episodeDownloadClose").addEventListener("click", () => $("#episodeDownloadSheet").close());
     $("#episodeDownloadCancel").addEventListener("click", () => $("#episodeDownloadSheet").close());
     $("#episodeDownloadSelectAll").addEventListener("click", () => {
-      const all = downloadSheet.selected.size === downloadSheet.rows.length;
-      downloadSheet.selected = all ? new Set() : new Set(downloadSheet.rows.map((_row, index) => index));
+      const usable = downloadSheet.rows
+        .map((row, index) => (row.playable === false ? -1 : index))
+        .filter((index) => index >= 0);
+      const all = usable.length > 0 && downloadSheet.selected.size === usable.length;
+      downloadSheet.selected = all ? new Set() : new Set(usable);
       renderDownloadSheet();
     });
     $("#episodeDownloadList").addEventListener("change", (event) => {
@@ -1200,10 +1275,12 @@ window.onlinePlayback = (() => {
       const number = onlineLocalEpisodeNumber(episode, current.source, first);
       const wanted = onlineLineStartsAtOne(source) ? number - first + 1 : number;
       const match = episode.number && source.episodes.find(item => Number(item.number) === wanted);
-      if (match) play(catalogue, source, match, animeId);
+      if (match && match.playable !== false) play(catalogue, source, match, animeId);
       else {
         event.target.value = String(current.source.id);
-        toast("这条线路没有当前这一集。", "error");
+        toast(match
+          ? `这条线路的这一集在站点上打不开：${match.reason || "链接无法识别"}。`
+          : "这条线路没有当前这一集。", "error");
       }
     });
     const video = $("#offlineVideo");

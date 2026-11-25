@@ -35,6 +35,15 @@ window.api = async (url, options = {}) => {
   window.__calls.push([String(url), options.method || 'GET', options.body || '']);
   if (String(url).includes('/api/playback/rules')) return { items: window.__rules, default_rule: '' };
   if (String(url).includes('/api/playback/search')) {
+    if (window.__searchMode === 'mixed') {
+      return {
+        items: [
+          { id: 'https://example.com/a', title: '示例番 第 1 集', playable: true },
+          { id: '', title: '示例番 第 2 集', playable: false, reason: '链接是脚本或下载协议，不是网页地址' },
+        ],
+        skipped: [{ title: '示例番 第 2 集', reason: '链接是脚本或下载协议，不是网页地址' }],
+      };
+    }
     const error = new Error('页面打开了，但这个站点没有解析出任何选集');
     error.code = 'site_changed';
     throw error;
@@ -113,14 +122,69 @@ const pickerDom = `
     assert.equal(JSON.parse(updateCall[2]).action, 'update', '按钮应该走「更新」而不是重新安装');
     assert.equal(JSON.parse(updateCall[2]).id, 'demo');
 
-    // 6) 选集里少了集：告诉用户是解析不出来，而不是站点没有。
-    const missing = await page.evaluate(() => {
+    // 6) 匹配到「打不开」的那一集：说清是链接不可用，而不是站点没有。
+    const broken = await page.evaluate(() => {
+      const catalogue = {
+        sources: [{
+          id: 1, name: '主线',
+          episodes: [
+            { id: 'e4', number: 4, playable: true },
+            { id: 'e5', number: 5, playable: false, reason: '链接是脚本或下载协议，不是网页地址' },
+          ],
+        }],
+      };
       try {
-        matchOnlineEpisode({ sources: [], skipped: 2 }, { number: 5, first: 1 });
-      } catch (error) { return error.message; }
-      return '';
+        matchOnlineEpisode(catalogue, { number: 5, first: 1 });
+      } catch (error) {
+        return { message: error.message, code: error.code };
+      }
+      return {};
     });
-    assert.ok(missing.includes('2 条链接无法识别'), `缺集要说清是链接解析不出来，实际：${missing}`);
+    assert.equal(broken.code, 'episode_unplayable', '打不开的集要有自己的原因码');
+    assert.ok(broken.message.includes('第 5 集'), `要说清是哪一集，实际：${broken.message}`);
+    assert.ok(broken.message.includes('脚本'), '要带上具体原因');
+
+    // 7) 打不开的搜索结果：列出来、点不了、可以展开看原因。
+    await page.evaluate(async () => {
+      window.__searchMode = 'mixed';
+      const anime = {
+        id: 9, display_name: '测试番',
+        episodes: [{ key: '0:1', type: 0, sort: 1 }], episode_count: 3, watched_episode_keys: [],
+      };
+      await window.onlinePlayback.openAnime(anime, '', null, { choose: true });
+      document.querySelector('.online-source').open = true;
+    });
+    await page.waitForTimeout(400);
+    const mixed = await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll('.online-source-results button')];
+      const details = document.querySelector('.online-source-skipped');
+      return {
+        hint: document.querySelector('.online-source-status')?.textContent || '',
+        buttons: buttons.map(button => ({
+          text: button.textContent, disabled: button.disabled, state: button.dataset.state || '', title: button.title,
+        })),
+        summary: details?.querySelector('summary')?.textContent || '',
+        reasons: [...(details?.querySelectorAll('li') || [])].map(item => item.textContent),
+      };
+    });
+    assert.equal(mixed.hint, '1 个结果 · 1 条打不开', `提示要带上打不开的条数，实际：${mixed.hint}`);
+    assert.equal(mixed.buttons.length, 2, '打不开的结果也要列出来');
+    assert.equal(mixed.buttons[0].disabled, false);
+    assert.equal(mixed.buttons[1].disabled, true, '打不开的结果不能点');
+    assert.equal(mixed.buttons[1].state, 'unplayable');
+    assert.match(mixed.buttons[1].text, /（打不开）$/);
+    assert.ok(mixed.buttons[1].title.includes('脚本'), '悬停要能看原因');
+    assert.equal(mixed.summary, '1 条链接无法识别', '要能展开看是哪几条');
+    assert.ok(mixed.reasons[0].includes('第 2 集') && mixed.reasons[0].includes('脚本'));
+
+    // 8) 选集对话框里的打不开条目：列出来但不能勾。
+    const blockedRow = await page.evaluate(() => episodePickRow(
+      { label: '第 02 集', playable: false, reason: '链接是脚本或下载协议，不是网页地址' }, 1, true,
+    ));
+    assert.ok(blockedRow.includes('is-blocked'), '打不开的集要有标记');
+    assert.ok(blockedRow.includes('disabled') && !blockedRow.includes('checked'), '默认不勾选、也不允许勾');
+    assert.ok(blockedRow.includes('打不开'), '要写明打不开');
+    assert.ok(blockedRow.includes('脚本'), '悬停里要有原因');
 
     assert.deepEqual(errors, []);
     console.log('ok: 片源失败按原因码给出四句可照做的提示，规则过期能就地更新');
