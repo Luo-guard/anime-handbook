@@ -216,6 +216,23 @@ const pickerDom = `
     assert.ok(blockedRow.includes('打不开'), '要写明打不开');
     assert.ok(blockedRow.includes('脚本'), '悬停里要有原因');
 
+    // 9) 从播放器退回来时聚焦刚播过的那条规则：面板一打开就在检索，不用再点两下。
+    const focused = await page.evaluate(async () => {
+      window.__searchMode = 'mixed';
+      const anime = {
+        id: 9, display_name: '测试番',
+        episodes: [{ key: '0:1', type: 0, sort: 1 }], episode_count: 3, watched_episode_keys: [],
+      };
+      await window.onlinePlayback.openAnime(anime, '0:1', null, { choose: true, focusRule: 'demo' });
+      await new Promise(resolve => setTimeout(resolve, 400));
+      const group = document.querySelector('.online-source');
+      return { open: group?.open, status: group?.querySelector('.online-source-status')?.textContent };
+    });
+    assert.equal(focused.open, true, '要自动展开刚播过的那一条来源');
+    assert.notEqual(focused.status, '待检索', `要自动检索，实际：${focused.status}`);
+    const hasResume = await page.evaluate(() => typeof window.onlinePlayback?.resumePicker === 'function');
+    assert.ok(hasResume, '退出播放器要能回到来源面板');
+
     assert.deepEqual(errors, []);
     console.log('ok: 片源失败按原因码给出四句可照做的提示，规则过期能就地更新');
   } finally {

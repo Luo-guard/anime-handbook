@@ -667,7 +667,7 @@ function playLocalFile(fileId) {
     refreshOfflineLocal();
     return;
   }
-  if (window.onlinePlayback?.current) closeOfflinePlayer();
+  if (window.onlinePlayback?.current) closeOfflinePlayer({ reopenPicker: false });
   saveOfflineResume();
   offlineView.playing = file;
   offlineView.playingAnimeId = offlineView.animeId;
@@ -794,7 +794,7 @@ async function saveOfflineResume() {
   }
 }
 
-function closeOfflinePlayer() {
+function closeOfflinePlayer({ reopenPicker = true } = {}) {
   const wasOnline = window.onlinePlayback?.close();
   saveOfflineResume();
   clearSubtitleSession();
@@ -812,6 +812,8 @@ function closeOfflinePlayer() {
   offlineView.playing = null;
   offlineView.playingAnimeId = null;
   if (!wasOnline) refreshOfflineLocal();
+  // 在线播放退出后原路回到「播放来源」，方便直接换一条线路，而不是掉回番剧详情。
+  if (wasOnline && reopenPicker) window.onlinePlayback?.resumePicker?.();
 }
 
 async function removeLocalFile(fileId, { animeId = offlineView.animeId, files = offlineView.local.files } = {}) {
@@ -999,8 +1001,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#offlineLibraryBack")?.addEventListener("click", openLibraryView);
   $("#offlineSubtitleToggle")?.addEventListener("click", toggleSubtitleRenderer);
   pcInit();
-  $("#offlinePlayerClose")?.addEventListener("click", closeOfflinePlayer);
-  $("#offlinePlayerBackdrop")?.addEventListener("click", closeOfflinePlayer);
+  $("#offlinePlayerClose")?.addEventListener("click", () => closeOfflinePlayer());
+  $("#offlinePlayerBackdrop")?.addEventListener("click", () => closeOfflinePlayer());
   // 非模态 dialog 按 Esc 不会自动关闭，自己补上（其它弹窗此时已收起）。
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("dialog:modal") && $("#offlinePlayer")?.open) {

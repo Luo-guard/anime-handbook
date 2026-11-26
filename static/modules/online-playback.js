@@ -160,6 +160,8 @@ window.onlinePlayback = (() => {
   let hlsLibrary;
   let managing = false;
   let checkingRules = false;
+  // 关闭播放器后回到「播放来源」而不是掉回番剧详情：记下这一次是在哪一部/哪一集播的。
+  let returnPicker = null;
   // 规则刚更新完要自动再检索一次的那条规则（在 renderInstalled 里消费）。
   let pendingRuleSearch = "";
 
@@ -589,6 +591,12 @@ window.onlinePlayback = (() => {
     const controller = new AbortController();
     const session = { catalogue, source, episode, animeId, controller, context, ready: false };
     current = session;
+    // 记住「从哪一部、哪一集、哪条规则播的」：退出播放器时原路回到播放来源。
+    const pickerNumber = onlineLocalEpisodeNumber(episode, source, context?.target?.first || 1)
+      || Number(context?.target?.number || 0);
+    returnPicker = context?.anime && pickerNumber
+      ? { anime: context.anime, number: pickerNumber, rule: String(catalogue.rule || "") }
+      : null;
     const video = $("#offlineVideo");
     const selector = $("#onlinePlayerSource");
     const options = { signal: controller.signal };
@@ -750,7 +758,7 @@ window.onlinePlayback = (() => {
     feedback.append(button);
   }
 
-  function renderInstalled({ autoPlay = false } = {}) {
+  function renderInstalled({ autoPlay = false, focusRule = "" } = {}) {
     clearSourceSearches();
     const list = $("#onlinePlaybackResults");
     const status = $("#onlineRuleStatus");
@@ -833,6 +841,10 @@ window.onlinePlayback = (() => {
       // 刚点了「更新规则」：重新展开这一条并再检索一次，不用用户自己再点两下。
       if (pendingRuleSearch === rule.id) {
         pendingRuleSearch = "";
+        group.open = true;
+      }
+      // 从播放器退回来：直接展开刚播过的那条规则（展开即自动检索）。
+      if (focusRule && rule.id === focusRule && !group.open) {
         group.open = true;
       }
     }
@@ -1143,7 +1155,18 @@ window.onlinePlayback = (() => {
     }
   }
 
-  async function openAnime(anime, key, _button, { choose = false, mode = "play" } = {}) {
+  // 关闭播放器后原路返回：重新打开来源面板，并直接展开刚播过的那条规则。
+  function resumePicker() {
+    const target = returnPicker;
+    returnPicker = null;
+    if (!target?.anime) return false;
+    openAnime(target.anime, `0:${target.number}`, null, {
+      choose: true, focusRule: target.rule || "",
+    });
+    return true;
+  }
+
+  async function openAnime(anime, key, _button, { choose = false, mode = "play", focusRule = "" } = {}) {
     let target;
     try { target = mainPlaybackEpisode(anime, key); }
     catch (error) { toast(error.message, "error"); return; }
@@ -1158,13 +1181,20 @@ window.onlinePlayback = (() => {
     $("#onlineSourceAnime").textContent = `${anime.display_name || anime.name_cn || anime.name} · 第 ${target.number} 集`;
     $("#onlinePlaybackResults").replaceChildren();
     status.textContent = "正在读取已安装来源…";
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) {
+      dialog.showModal();
+    } else {
+      // 面板已经在下面一层（例如关闭播放器时被恢复、上面还压着别的弹窗）：
+      // 重开一次，才能保证它出现在最上层、点得到。
+      dialog.close();
+      dialog.showModal();
+    }
     try {
       const result = await request("rules", {});
       if (!dialog.open || selection !== context) return;
       installed = result.items;
       defaultRule = result.default_rule || "";
-      renderInstalled({ autoPlay: !choose && mode !== "download" });
+      renderInstalled({ autoPlay: !choose && mode !== "download", focusRule });
     } catch (error) {
       if (dialog.open && selection === context) status.textContent = error.message;
     }
@@ -1286,7 +1316,8 @@ window.onlinePlayback = (() => {
       if (!context) return;
       const episodeNumber = onlineLocalEpisodeNumber(current.episode, current.source, context.target.first)
         || context.target.number;
-      closeOfflinePlayer();
+      // 下面会自己把来源面板打开，关闭播放器时别再多开一次。
+      closeOfflinePlayer({ reopenPicker: false });
       openAnime(context.anime, `0:${episodeNumber}`, null, { choose: true });
     });
     $("#onlinePlaybackForm").addEventListener("submit", event => {
@@ -1339,7 +1370,7 @@ window.onlinePlayback = (() => {
 
   return {
     get current() { return current; },
-    open, openAnime, resume, close, selectEpisode,
+    open, openAnime, resume, close, selectEpisode, resumePicker,
     loadRuleCatalogue() {
       if (!managing) return refreshRuleCatalogue();
     },

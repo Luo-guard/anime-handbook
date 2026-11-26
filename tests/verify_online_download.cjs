@@ -45,6 +45,11 @@ assert(source.includes('openDownloadSheet({') && source.includes('animeId: Numbe
 assert(source.includes('context.mode === "download"') && source.includes('downloadResult(item)'), '结果点击没有按模式分流');
 assert(source.includes('play(catalogue, source, episode, anime.id'), '原来的播放路径不能丢');
 
+// 退出播放器：回到「播放来源」，而不是掉回番剧详情。
+const offlineSource = fs.readFileSync('static/modules/offline.js', 'utf8');
+assert.ok(offlineSource.includes('resumePicker'), '关闭播放器后没有回到来源面板');
+assert.ok(offlineSource.includes('reopenPicker: false'), '切本地播放时不该把来源面板又拉起来');
+
 // 下载进度轮询：慢响应不许重叠，否则晚到的旧数据会把「已入库」改回「下载 42%」。
 assert.ok(source.includes('let busy = false;') && source.includes('if (busy) return;'),
   '下载进度轮询要防止重叠');
