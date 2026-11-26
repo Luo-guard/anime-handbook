@@ -19,17 +19,30 @@ const { isolatedServer } = require('./isolated_server.cjs');
   await page.goto(API, { waitUntil: 'domcontentloaded', timeout: 20000 });
   await page.waitForTimeout(1400);
 
-  // 打开播放器（真实流）
-  await page.evaluate(({ animeId, fileId, stateFiles, jobs }) => {
-    offlineView.animeId = animeId;
-    offlineView.animeName = '学生会也有洞！';
-    offlineView.local = { files: stateFiles, jobs };
-    playLocalFile(fileId);
-  }, { animeId: 554779, fileId: first.id, stateFiles: bootstrap.files || [], jobs: bootstrap.jobs || [] });
-  await page.waitForFunction(() => {
-    const v = document.querySelector('#offlineVideo');
-    return v && Number.isFinite(v.duration) && v.duration > 0;
-  }, { timeout: 15000 });
+  // 打开播放器（真实流）。headless 下偶发「请求发出但元数据一直不来」的抖动
+  // （直接 curl 同一地址秒回，与代码无关），重载页面再试几次就能过去。
+  let videoReady = false;
+  for (let attempt = 1; attempt <= 3 && !videoReady; attempt++) {
+    if (attempt > 1) {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1400);
+    }
+    await page.evaluate(({ animeId, fileId, stateFiles, jobs }) => {
+      offlineView.animeId = animeId;
+      offlineView.animeName = '学生会也有洞！';
+      offlineView.local = { files: stateFiles, jobs };
+      playLocalFile(fileId);
+    }, { animeId: 554779, fileId: first.id, stateFiles: bootstrap.files || [], jobs: bootstrap.jobs || [] });
+    try {
+      await page.waitForFunction(() => {
+        const v = document.querySelector('#offlineVideo');
+        return v && Number.isFinite(v.duration) && v.duration > 0;
+      }, { timeout: 15000 });
+      videoReady = true;
+    } catch (error) {
+      if (attempt === 3) throw error;
+    }
+  }
 
   // 1) 原生 controls 已移除，自绘栏齐全
   const base = await page.evaluate(() => ({
@@ -224,6 +237,24 @@ const { isolatedServer } = require('./isolated_server.cjs');
   await page.waitForFunction(() => document.querySelector('#offlinePlayerVideoWrap').classList.contains('player-idle'));
   await page.keyboard.press('ArrowRight');
   assert.equal(await isIdle(), false, '暂停时使用播放器快捷键也要恢复控制栏');
+
+  // 12.5) Tab 选中的按钮不再挡住自动收起：超时后照样收，并把焦点交还。
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  await page.keyboard.press('Tab'); // 先进键盘模式，之后的焦点才算 :focus-visible
+  let tabbedIntoControls = false;
+  for (let i = 0; i < 60 && !tabbedIntoControls; i++) {
+    await page.keyboard.press('Tab');
+    tabbedIntoControls = await page.evaluate(() =>
+      Boolean(document.querySelector('#offlinePlayerVideoWrap .player-controls :focus-visible, #offlinePlayerVideoWrap .player-topbar :focus-visible')));
+  }
+  assert.ok(tabbedIntoControls, 'Tab 要能把焦点移进播放器控件');
+  await page.mouse.move(550, 400);
+  await page.waitForTimeout(3000);
+  assert.equal(await page.evaluate(() => document.querySelector('#offlinePlayerVideoWrap').classList.contains('player-idle')), true, 'Tab 选中的按钮不能挡住自动收起');
+  assert.equal(await page.evaluate(() =>
+    Boolean(document.querySelector('#offlinePlayerVideoWrap .player-controls :focus, #offlinePlayerVideoWrap .player-topbar :focus'))), false, '收起时要把焦点从控件上拿掉，回车才不会触发看不见的按钮');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.querySelector('#offlinePlayerVideoWrap').classList.contains('player-idle')), false, '收起状态下按 Tab 要把控制栏叫回来');
 
   // 13) Esc 关播放器（原有行为不回归）
   await page.keyboard.press('Escape');

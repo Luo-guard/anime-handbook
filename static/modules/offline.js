@@ -1147,18 +1147,21 @@ function pcSortedFiles() {
 let pcIdleTimer = 0;
 let pcSeeking = false;
 let pcLastWakeAt = 0;
+// 收起时会把焦点从控件上拿掉，focusout 会顺带唤醒控件一次，这里压掉那一拍。
+let pcSuppressWake = 0;
 
-// 这些情况不能自动藏：面板/菜单开着、正在输弹幕、焦点在控件上。
+// 这些情况不能自动藏：面板/菜单开着、正在输弹幕。控件上有键盘焦点（Tab 选中
+// 的按钮）不算——那样焦点停在一个按钮上，进度条就永远不收了。
 function pcHoldControls(wrap) {
   if ($(".danmaku-panel:not(.hidden)")) return true;
   if ($("#pcUpscaleMenu:not(.hidden)")) return true;
   if ($("#pcSpeedMenu") && !$("#pcSpeedMenu").classList.contains("hidden")) return true;
   if ($("#pcPlaylistMenu") && !$("#pcPlaylistMenu").classList.contains("hidden")) return true;
-  if (document.activeElement === $("#dmSendInput")) return true;
-  return Boolean($(".player-controls :focus-visible, .player-topbar :focus-visible", wrap));
+  return document.activeElement === $("#dmSendInput");
 }
 
 function pcWake() {
+  if (pcSuppressWake) return;
   const wrap = $("#offlinePlayerVideoWrap");
   if (wrap) wrap.classList.remove("player-idle");
   window.clearTimeout(pcIdleTimer);
@@ -1182,6 +1185,14 @@ function pcSleep() {
   const video = $("#offlineVideo");
   if (!wrap || !$("#offlinePlayer")?.open || !video?.readyState || video.error || video.ended || pcSeeking) return;
   if (pcHoldControls(wrap)) return;
+  // 控件上还留着焦点（Tab 选中的按钮、点过的按钮）就先拿掉：否则回车/空格
+  // 会触发一个看不见的按钮。blur 触发的 focusout 会唤醒控件，压掉那一拍。
+  const focused = $(".player-controls :focus, .player-topbar :focus", wrap);
+  if (focused) {
+    pcSuppressWake += 1;
+    try { focused.blur(); } catch { /* 已经失焦就算了 */ }
+    setTimeout(() => { pcSuppressWake = Math.max(0, pcSuppressWake - 1); }, 0);
+  }
   wrap.classList.add("player-idle");
 }
 
@@ -1878,6 +1889,14 @@ function pcInit() {
     if (!handler) return;
     event.preventDefault();
     handler(video);
+    pcWake();
+  });
+
+  // 控件收起后键盘用户仍能把它叫回来：按 Tab 先唤醒控制栏（visibility:hidden
+  // 的控件拿不到焦点，得先让它显形，再按一次 Tab 才能到达）。
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab" || !$("#offlinePlayer")?.open) return;
+    if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
     pcWake();
   });
 
