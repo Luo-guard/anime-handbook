@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import json
+import ssl
 import re
 import tempfile
 import threading
@@ -244,21 +245,34 @@ def _write_rule(path, rule):
 
 
 def _read(url, headers, *, method="GET", body=None):
-    try:
-        with request_public(url, method=method, headers=headers, body=body) as (response, final_url):
-            if response.status != 200:
-                # 403/503 有时是 Cloudflare 的验证页：先看一眼正文，别把它当「站点坏了」。
-                if _is_challenge(response.read(65536)):
-                    raise _challenge_problem()
-                # 404 是「站点上没有这一页」，5xx/403 更像站点本身出问题，分开给前端。
-                code = "not_found" if response.status == 404 else "site_unreachable"
-                raise RequestProblem(f"片源站点返回 HTTP {response.status}", 502, code)
-            raw = response.read(_MAX_RESPONSE + 1)
-            if len(raw) > _MAX_RESPONSE:
-                raise RequestProblem("片源站点返回的资料过大", 502)
-            return raw, final_url
-    except (OSError, HTTPException):
-        raise RequestProblem("片源站点连接失败，请重试或切换规则", 502, "site_unreachable") from None
+    # 偶发的连接被重置很常见（尤其连着搜几个词时），重试一次就过去了；
+    # 真连不上再报错，别让用户看到一次抖动就得自己再点一遍。
+    for attempt in range(2):
+        try:
+            with request_public(url, method=method, headers=headers, body=body) as (response, final_url):
+                if response.status != 200:
+                    # 403/503 有时是 Cloudflare 的验证页：先看一眼正文，别把它当「站点坏了」。
+                    if _is_challenge(response.read(65536)):
+                        raise _challenge_problem()
+                    # 404 是「站点上没有这一页」，5xx/403 更像站点本身出问题，分开给前端。
+                    code = "not_found" if response.status == 404 else "site_unreachable"
+                    raise RequestProblem(f"片源站点返回 HTTP {response.status}", 502, code)
+                raw = response.read(_MAX_RESPONSE + 1)
+                if len(raw) > _MAX_RESPONSE:
+                    raise RequestProblem("片源站点返回的资料过大", 502)
+                return raw, final_url
+        except ssl.SSLCertVerificationError:
+            # 站点少发中间证书：Python 校验证书链失败，而浏览器/curl 会自动补链。
+            # 这不是网络问题，别让用户去查自己的网。
+            raise RequestProblem(
+                "站点少发了中间证书，证书链不完整",
+                502, "site_certificate",
+            ) from None
+        except (OSError, HTTPException):
+            if attempt == 0:
+                time.sleep(0.25)
+                continue
+            raise RequestProblem("片源站点连接失败，请重试或切换规则", 502, "site_unreachable") from None
 
 
 _PLACEHOLDER = re.compile(r"@(keyword|source|episodeUrl)\b")

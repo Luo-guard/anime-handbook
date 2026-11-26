@@ -53,6 +53,7 @@ const PLAYBACK_ERRORS = {
   site_mismatch: { short: "站点不匹配", text: "这个链接不属于这条规则：换一条规则，或确认链接没贴错。" },
   episode_unplayable: { short: "这集打不开", text: "这一集在站点上打不开：换一条线路试试。" },
   captcha: { short: "需要人机验证", text: "站点要求人机验证：先在浏览器里打开这个站点，通过验证后回来重试。" },
+  site_certificate: { short: "证书有问题", text: "这个站点的 HTTPS 证书无法验证：换一个站点试试（不是你的网络问题）。" },
 };
 
 function playbackErrorText(error, fallback) {

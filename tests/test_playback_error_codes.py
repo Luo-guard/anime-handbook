@@ -5,6 +5,7 @@
 无声无息。
 """
 import io
+import ssl
 import unittest
 from contextlib import contextmanager
 from email.message import Message
@@ -166,6 +167,32 @@ class PlaybackErrorCodeTest(unittest.TestCase):
             with self.assertRaises(RequestProblem) as caught:
                 rules._read("https://example.com/busy", {})
         self.assertEqual(caught.exception.code, "site_unreachable")
+
+    def test_a_missing_intermediate_certificate_is_its_own_error(self):
+        """站点少发中间证书时，别报「连不上」让人去查自己的网络。"""
+        with patch.object(rules, "request_public", side_effect=ssl.SSLCertVerificationError("no issuer")) as request:
+            with self.assertRaises(RequestProblem) as caught:
+                rules._read("https://www.agedm.io/", {})
+        self.assertEqual(caught.exception.code, "site_certificate")
+        self.assertIn("证书", str(caught.exception))
+        self.assertEqual(request.call_count, 1, "证书问题重试也没用，不要重试")
+
+    def test_a_dropped_connection_is_retried_once(self):
+        """偶发的连接重置：重试一次就能过去，不该让用户看到失败。"""
+        html = b"<html>ok</html>"
+        calls = []
+
+        def flaky(*_args, **_kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ConnectionResetError("reset by peer")
+            return upstream(200, html)
+
+        with patch.object(rules, "request_public", side_effect=flaky):
+            data, final = rules._read("https://example.com/search?q=x", {})
+        self.assertEqual(data, html)
+        self.assertEqual(final, "https://example.com/page")
+        self.assertEqual(len(calls), 2, "应该重试一次")
 
     def test_connection_failure_is_unreachable(self):
         with patch.object(rules, "request_public", side_effect=OSError("boom")):
