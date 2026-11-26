@@ -2164,7 +2164,7 @@ async function migrateMediaRoot() {
     $("#offlineMediaRoot").focus();
     return;
   }
-  if (!window.confirm(`把已入库的文件复制到\n${target}\n\n复制并逐个校验大小，全部成功才切换目录；原文件保留不删。`)) return;
+  if (!window.confirm(`把已入库的文件复制到\n${target}\n\n复制并逐个校验大小，全部成功才切换目录；原文件保留不删。\n有任务正在下载或整理时会先拒绝，等它们完成再试。`)) return;
   const status = "#offlineMigrationStatus";
   offlineSettingsBusy = true;
   renderOfflineSettingsDraft();

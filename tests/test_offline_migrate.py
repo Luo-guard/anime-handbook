@@ -4,7 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from handbook import database, offline_config
+import threading
+import time
+
+from handbook import database, offline_config, offline_service
 from handbook.offline import OfflineStore
 from handbook.offline_service import OfflineError, OfflineService
 
@@ -21,6 +24,8 @@ class MigrateTest(unittest.TestCase):
         self.service = OfflineService(self.db)
 
     def tearDown(self):
+        with offline_service._MIGRATION_LOCK:
+            offline_service._MIGRATION_OWNER = ""
         self.tmp.cleanup()
 
     def make_episode(self, number: int, content: bytes = b"video-bytes") -> dict:
@@ -54,6 +59,53 @@ class MigrateTest(unittest.TestCase):
         self.assertTrue((self.media / "测试番" / "第 01 集.mp4").is_file())
         self.assertEqual(offline_config.resolved(offline_config.load(self.root))["media_root"],
                          str(destination).replace("\\", "/"))
+
+    def test_refuses_while_a_download_is_running(self):
+        """有任务在下：文件会落进旧目录，统计也会对不上，先拒绝。"""
+        self.make_episode(1)
+        self.store.create_job(
+            anime_id=1, episode_key="0:2", status="downloading", source_kind="web",
+        )
+        destination = self.root / "new-media"
+        with self.assertRaises(OfflineError) as caught:
+            self.service.migrate_media_root(str(destination))
+        self.assertIn("还有 1 集在下载或整理", str(caught.exception))
+        # 没有复制、没有切配置，也没有把迁移标记留在身上
+        self.assertFalse((destination / "测试番" / "第 01 集.mp4").exists())
+        self.assertEqual(
+            offline_config.resolved(offline_config.load(self.root))["media_root"],
+            str(self.media).replace("\\", "/"),
+        )
+        self.assertFalse(self.service._migration_running(), "被拒绝后要释放迁移标记")
+
+    def test_refuses_while_an_archive_is_running(self):
+        self.make_episode(1)
+        key = (self.service._web_owner(), 99)
+        with offline_service._ARCHIVE_LOCK:
+            offline_service._ARCHIVING.add(key)
+        try:
+            with self.assertRaises(OfflineError) as caught:
+                self.service.migrate_media_root(str(self.root / "new-media"))
+        finally:
+            with offline_service._ARCHIVE_LOCK:
+                offline_service._ARCHIVING.discard(key)
+        self.assertIn("归档正在整理", str(caught.exception))
+        self.assertFalse(self.service._migration_running())
+
+    def test_archive_waits_for_a_running_migration(self):
+        """换目录期间归档要等一等，否则会按旧目录的路径写回去。"""
+        with offline_service._MIGRATION_LOCK:
+            offline_service._MIGRATION_OWNER = self.service._web_owner()
+
+        def release():
+            time.sleep(0.4)
+            with offline_service._MIGRATION_LOCK:
+                offline_service._MIGRATION_OWNER = ""
+
+        threading.Thread(target=release, daemon=True).start()
+        started = time.monotonic()
+        self.service._wait_for_migration()
+        self.assertGreaterEqual(time.monotonic() - started, 0.3, "归档没有等迁移结束")
 
     def test_same_directory_rejected(self):
         with self.assertRaises(OfflineError) as caught:

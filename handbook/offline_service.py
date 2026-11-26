@@ -20,7 +20,7 @@ from typing import Any
 from . import media as media_tools
 from . import mikan, offline_config, web_download
 from .torrent_meta import TorrentMetaError, torrent_infohash, torrent_name
-from .offline import OfflineStore
+from .offline import ACTIVE_STATUSES, OfflineStore
 from .common import now_iso
 from .qbittorrent import QBError, Client, normalise_base
 
@@ -104,6 +104,12 @@ _ARCHIVE_LOCK = threading.Lock()
 _ARCHIVE_ABORTS: set[tuple[str, int]] = set()
 _ABORT_LOCK = threading.Lock()
 
+# 正在换媒体库目录的是哪一个库（owner）。换目录期间归档线程要等一等，
+# 否则它按旧目录算好的路径会把文件写回旧媒体库；新的下载不受影响（它们写在下载目录）。
+_MIGRATION_LOCK = threading.Lock()
+_MIGRATION_OWNER = ""
+_MIGRATION_WAIT_SECONDS = 120.0
+
 
 class _ArchiveCancelled(Exception):
     """用户在归档途中删掉了任务：安静退出，不写库、不报失败。"""
@@ -160,6 +166,46 @@ class OfflineService:
     def paths(self) -> dict[str, Any]:
         config = self.config()
         return offline_config.ensure_dirs(config)
+
+    def _migration_running(self) -> bool:
+        with _MIGRATION_LOCK:
+            return bool(_MIGRATION_OWNER) and _MIGRATION_OWNER == self._web_owner()
+
+    def _enter_migration(self) -> None:
+        global _MIGRATION_OWNER
+        with _MIGRATION_LOCK:
+            if _MIGRATION_OWNER:
+                raise OfflineError("媒体库正在换目录，请等它完成")
+            _MIGRATION_OWNER = self._web_owner()
+
+    def _leave_migration(self) -> None:
+        global _MIGRATION_OWNER
+        with _MIGRATION_LOCK:
+            if _MIGRATION_OWNER == self._web_owner():
+                _MIGRATION_OWNER = ""
+
+    def _wait_for_migration(self) -> None:
+        """归档线程在换目录期间等一等，等完再按新目录算路径。"""
+        deadline = time.monotonic() + _MIGRATION_WAIT_SECONDS
+        while self._migration_running():
+            if time.monotonic() >= deadline:
+                raise OfflineError("媒体库正在换目录，等它完成后再归档")
+            time.sleep(0.2)
+
+    def _ensure_idle_for_migration(self) -> None:
+        """换目录前确认没有任务在跑：下载中/整理中的文件会落在旧目录，统计也会对不上。"""
+        active = [
+            job for job in self.store.jobs_for_sync()
+            if str(job.get("status") or "") in ACTIVE_STATUSES
+        ]
+        if active:
+            raise OfflineError(
+                f"还有 {len(active)} 集在下载或整理，等它们完成后再换目录"
+            )
+        with _ARCHIVE_LOCK:
+            running = [key for key in _ARCHIVING if key[0] == self._web_owner()]
+        if running:
+            raise OfflineError("有归档正在整理，等它完成后再换目录")
 
     def _archive_slot(self, media_id: int) -> tuple[str, int]:
         return (self._web_owner(), int(media_id))
@@ -1084,6 +1130,8 @@ class OfflineService:
             return
         if self._archive_cancelled(media_id):
             return
+        # 正在换目录：等它结束再读配置，免得按旧目录算出的路径把文件写回旧库。
+        self._wait_for_migration()
         config = self.config()
         paths = offline_config.ensure_dirs(config)
         if not paths["ok"]:
@@ -1995,113 +2043,118 @@ class OfflineService:
         except OSError as error:
             raise OfflineError(f"无法创建目标目录：{error}") from error
 
-        failed: list[dict[str, str]] = []
-        warnings: list[dict[str, str]] = []
-        # 只记「复制成功、准备改指向」的条目；真正写数据库留到全部成功之后。
-        plan: list[tuple[dict[str, Any], str, str]] = []
-        created: list[Path] = []
-        original_files = self.store.all_files()
-        for row in original_files:
-            source = Path(str(row.get("file_path") or ""))
-            if not source.is_file():
-                failed.append({"file": str(source), "reason": "源文件不存在"})
-                continue
-            try:
-                relative = source.relative_to(current_path)
-            except ValueError:
-                # 文件本来就不在媒体库里（手动挪过），平铺到目标根目录。
-                relative = Path(source.name)
-            destination = target_path / relative
-            try:
-                fresh = self._copy_file(source, destination)
-            except OSError as error:
-                failed.append({"file": str(source), "reason": str(error)})
-                continue
-            if fresh:
-                created.append(destination)
-            subtitle_path = str(row.get("subtitle_path") or "")
-            subtitle = Path(subtitle_path)
-            if subtitle_path and subtitle.is_file():
-                try:
-                    subtitle_relative = subtitle.relative_to(current_path)
-                except ValueError:
-                    subtitle_relative = Path(subtitle.name)
-                subtitle_target = target_path / subtitle_relative
-                try:
-                    subtitle_fresh = self._copy_file(subtitle, subtitle_target)
-                except OSError as error:
-                    # 只搬视频不搬字幕，删源之后字幕就成了孤儿；整条算失败更安全。
-                    failed.append({"file": str(subtitle), "reason": f"字幕没复制过去：{error}"})
+        self._enter_migration()
+        try:
+            self._ensure_idle_for_migration()
+            failed: list[dict[str, str]] = []
+            warnings: list[dict[str, str]] = []
+            # 只记「复制成功、准备改指向」的条目；真正写数据库留到全部成功之后。
+            plan: list[tuple[dict[str, Any], str, str]] = []
+            created: list[Path] = []
+            original_files = self.store.all_files()
+            for row in original_files:
+                source = Path(str(row.get("file_path") or ""))
+                if not source.is_file():
+                    failed.append({"file": str(source), "reason": "源文件不存在"})
                     continue
-                if subtitle_fresh:
-                    created.append(subtitle_target)
-                subtitle_path = str(subtitle_target)
-            plan.append((row, str(destination), subtitle_path))
+                try:
+                    relative = source.relative_to(current_path)
+                except ValueError:
+                    # 文件本来就不在媒体库里（手动挪过），平铺到目标根目录。
+                    relative = Path(source.name)
+                destination = target_path / relative
+                try:
+                    fresh = self._copy_file(source, destination)
+                except OSError as error:
+                    failed.append({"file": str(source), "reason": str(error)})
+                    continue
+                if fresh:
+                    created.append(destination)
+                subtitle_path = str(row.get("subtitle_path") or "")
+                subtitle = Path(subtitle_path)
+                if subtitle_path and subtitle.is_file():
+                    try:
+                        subtitle_relative = subtitle.relative_to(current_path)
+                    except ValueError:
+                        subtitle_relative = Path(subtitle.name)
+                    subtitle_target = target_path / subtitle_relative
+                    try:
+                        subtitle_fresh = self._copy_file(subtitle, subtitle_target)
+                    except OSError as error:
+                        # 只搬视频不搬字幕，删源之后字幕就成了孤儿；整条算失败更安全。
+                        failed.append({"file": str(subtitle), "reason": f"字幕没复制过去：{error}"})
+                        continue
+                    if subtitle_fresh:
+                        created.append(subtitle_target)
+                    subtitle_path = str(subtitle_target)
+                plan.append((row, str(destination), subtitle_path))
 
-        if failed:
-            self._rollback(created)
+            if failed:
+                self._rollback(created)
+                return {
+                    "ok": True,
+                    "copied": 0,
+                    "attempted": len(plan),
+                    "failed": failed,
+                    "warnings": warnings,
+                    "target": target_text,
+                    "switched": False,
+                    "rolled_back": True,
+                    "deleted_source": False,
+                    "fonts": 0,
+                }
+
+            # 视频/字幕都齐了再搬字体；字体失败只记 warning，不影响整批成功。
+            fonts_copied = self._migrate_fonts(current_path, target_path, created, warnings)
+            # Ignore playback progress changes, which replace_file preserves.
+            def file_locations(rows):
+                return [(row["id"], row["file_path"], row["subtitle_path"], row["media_id"]) for row in rows]
+
+            try:
+                with (
+                    _ARCHIVE_LOCK,
+                    offline_config.media_root_switch(self.asset_root, current_text, target_text),
+                    self.db.transaction(),
+                ):
+                    if file_locations(self.store.all_files()) != file_locations(original_files):
+                        raise OfflineError("复制期间媒体库文件有变动，请重试迁移")
+                    for row, destination, subtitle_path in plan:
+                        self.store.replace_file(
+                            anime_id=int(row["anime_id"]),
+                            episode_key=str(row["episode_key"]),
+                            file_path=destination,
+                            file_size=int(row.get("file_size") or 0),
+                            duration_ms=int(row.get("duration_ms") or 0),
+                            media_id=int(row.get("media_id") or 0),
+                            subtitle_path=subtitle_path,
+                        )
+            except Exception as error:
+                self._rollback(created)
+                raise OfflineError(f"迁移切换失败：{error}") from error
+            if delete_source:
+                # 删源放在最后：前面任何一步失败都不该让原文件消失。
+                for row, _, _ in plan:
+                    for key in ("file_path", "subtitle_path"):
+                        path = Path(str(row.get(key) or ""))
+                        if path.is_file() and _is_within(path, current_path):
+                            try:
+                                path.unlink()
+                            except OSError:
+                                pass
             return {
                 "ok": True,
-                "copied": 0,
+                "copied": len(plan),
                 "attempted": len(plan),
                 "failed": failed,
                 "warnings": warnings,
                 "target": target_text,
-                "switched": False,
-                "rolled_back": True,
-                "deleted_source": False,
-                "fonts": 0,
+                "switched": True,
+                "rolled_back": False,
+                "deleted_source": delete_source,
+                "fonts": fonts_copied,
             }
-
-        # 视频/字幕都齐了再搬字体；字体失败只记 warning，不影响整批成功。
-        fonts_copied = self._migrate_fonts(current_path, target_path, created, warnings)
-        # Ignore playback progress changes, which replace_file preserves.
-        def file_locations(rows):
-            return [(row["id"], row["file_path"], row["subtitle_path"], row["media_id"]) for row in rows]
-
-        try:
-            with (
-                _ARCHIVE_LOCK,
-                offline_config.media_root_switch(self.asset_root, current_text, target_text),
-                self.db.transaction(),
-            ):
-                if file_locations(self.store.all_files()) != file_locations(original_files):
-                    raise OfflineError("复制期间媒体库文件有变动，请重试迁移")
-                for row, destination, subtitle_path in plan:
-                    self.store.replace_file(
-                        anime_id=int(row["anime_id"]),
-                        episode_key=str(row["episode_key"]),
-                        file_path=destination,
-                        file_size=int(row.get("file_size") or 0),
-                        duration_ms=int(row.get("duration_ms") or 0),
-                        media_id=int(row.get("media_id") or 0),
-                        subtitle_path=subtitle_path,
-                    )
-        except Exception as error:
-            self._rollback(created)
-            raise OfflineError(f"迁移切换失败：{error}") from error
-        if delete_source:
-            # 删源放在最后：前面任何一步失败都不该让原文件消失。
-            for row, _, _ in plan:
-                for key in ("file_path", "subtitle_path"):
-                    path = Path(str(row.get(key) or ""))
-                    if path.is_file() and _is_within(path, current_path):
-                        try:
-                            path.unlink()
-                        except OSError:
-                            pass
-        return {
-            "ok": True,
-            "copied": len(plan),
-            "attempted": len(plan),
-            "failed": failed,
-            "warnings": warnings,
-            "target": target_text,
-            "switched": True,
-            "rolled_back": False,
-            "deleted_source": delete_source,
-            "fonts": fonts_copied,
-        }
+        finally:
+            self._leave_migration()
 
     # ---- 汇总 ---------------------------------------------------------
 
