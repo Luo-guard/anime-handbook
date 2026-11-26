@@ -5812,7 +5812,9 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 
 /* 播放和暂停时的空闲控制栏。 */
 .offline-player-video.player-idle { cursor: none; }
-.player-idle .player-topbar, .player-idle .player-controls { opacity: 0; pointer-events: none; }
+/* visibility 不在 transition 列表里，会立刻生效；opacity 的过渡万一没跑起来
+   （弱显卡/合成器被拖住时见过），也不会留下一层看得见、点得透的控件。 */
+.player-idle .player-topbar, .player-idle .player-controls { opacity: 0; visibility: hidden; pointer-events: none; }
 
 /* 全屏时视频铺满，控制栏浮在画面上 */
 .offline-player-video:fullscreen video { width: 100%; height: 100%; max-height: none; object-fit: contain; }
@@ -7702,3 +7704,22 @@ body.schedule-picking [data-floating-view="schedule"] {
 .online-source-site:focus-visible { outline: 2px solid var(--green-700); outline-offset: 2px; border-radius: 3px; }
 .online-source-arrow { margin-left: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .online-source-site:hover .online-source-arrow { color: var(--green-700); }
+
+/* 播放来源面板里的内联规则管理：入口按钮 + 可展开/收起的操作区 */
+.online-source-toolbar-actions { display: flex; align-items: center; gap: 14px; }
+.online-source-toolbar-actions button { flex: none; }
+.picker-rule-caret { display: inline-block; font-size: 11px; color: var(--muted); transition: transform .18s ease; }
+#pickerRuleToggle[aria-expanded="true"] .picker-rule-caret { transform: rotate(180deg); }
+.picker-rule-manager {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--surface-soft, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+}
+.picker-rule-manager.hidden { display: none; }
+.picker-rule-manager small { color: var(--muted); }
+.picker-rule-list { margin-top: 0; max-height: min(30vh, 260px); }
+.picker-rule-manager .online-rule-row { background: var(--background); }

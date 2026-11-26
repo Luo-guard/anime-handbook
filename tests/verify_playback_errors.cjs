@@ -67,7 +67,11 @@ const pickerDom = `
 <select id="onlineRuleFilter"></select>
 <select id="onlineDefaultRule"></select>
 <div id="onlineRuleCatalogue"></div>
-<button type="button" id="onlineRuleCheckUpdates"></button>`;
+<button type="button" id="onlineRuleCheckUpdates"></button>
+<button type="button" id="pickerRuleToggle"></button>
+<button type="button" id="pickerRuleAddCustom"></button>
+<div id="pickerRuleManager"></div>
+<div id="pickerRuleList"></div>`;
 
 (async () => {
   const browser = await chromium.launch({ headless: true });

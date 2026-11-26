@@ -155,6 +155,25 @@ async function verify() {
     await page.click("#onlinePlayerRule");
     await page.locator("#onlinePlaybackPicker[open]").waitFor();
     assert.match(await page.locator("#onlineSourceAnime").textContent(), /第 6 集/);
+
+    // 面板里的内联规则管理：入口按钮展开/收起操作区，新增与删除都不用进设置页。
+    assert.equal(await page.locator("#pickerRuleManager").isHidden(), true, "操作区默认收起");
+    await page.click("#pickerRuleToggle");
+    await page.getByRole("button", { name: "移除", exact: true }).first().waitFor();
+    assert.equal(await page.locator("#pickerRuleManager").isVisible(), true, "点入口要展开操作区");
+    assert.equal(await page.locator("#pickerRuleToggle").getAttribute("aria-expanded"), "true");
+    assert.match(await page.locator("#pickerRuleList .online-rule-row small").first().textContent(), /已安装/);
+    // 新增规则：直接打开规则编辑器，不用跳设置页。
+    await page.click("#pickerRuleAddCustom");
+    await page.locator("#onlineRuleEditor[open]").waitFor();
+    assert.match(await page.locator("#onlineRuleEditorTitle").textContent(), /新增自定义规则/);
+    await page.click("#onlineRuleEditorCancel");
+    await page.locator("#onlineRuleEditor").waitFor({ state: "hidden" });
+    // 再点一次入口收起。
+    await page.click("#pickerRuleToggle");
+    await page.locator("#pickerRuleManager").waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#pickerRuleToggle").getAttribute("aria-expanded"), "false");
+
     await page.click("#openPlaybackRuleSettings");
     await page.getByRole("button", { name: "检查更新" }).click();
     const update = page.getByRole("button", { name: "更新", exact: true });

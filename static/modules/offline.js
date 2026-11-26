@@ -1095,7 +1095,7 @@ async function pcStartUpscale(video) {
   try {
     const { startPlayerUpscale } = await import("./player-upscale.js?v=2");
     if (generation !== pcUpscaleGeneration || video.currentSrc !== source) return;
-    pcUpscaleSession = startPlayerUpscale(video, $("#pcVideoSurface"), mode, report);
+    pcUpscaleSession = startPlayerUpscale(video, $("#pcVideoSurface"), mode, report, pcCheckIdle);
   } catch (error) {
     console.warn("播放器内置超分启动失败", error);
     report(error.message === "WebGL 2 浮点渲染不可用" || error.message === "浏览器不支持视频帧回调"
@@ -1146,25 +1146,42 @@ function pcSortedFiles() {
 
 let pcIdleTimer = 0;
 let pcSeeking = false;
+let pcLastWakeAt = 0;
+
+// 这些情况不能自动藏：面板/菜单开着、正在输弹幕、焦点在控件上。
+function pcHoldControls(wrap) {
+  if ($(".danmaku-panel:not(.hidden)")) return true;
+  if ($("#pcUpscaleMenu:not(.hidden)")) return true;
+  if ($("#pcSpeedMenu") && !$("#pcSpeedMenu").classList.contains("hidden")) return true;
+  if ($("#pcPlaylistMenu") && !$("#pcPlaylistMenu").classList.contains("hidden")) return true;
+  if (document.activeElement === $("#dmSendInput")) return true;
+  return Boolean($(".player-controls :focus-visible, .player-topbar :focus-visible", wrap));
+}
 
 function pcWake() {
   const wrap = $("#offlinePlayerVideoWrap");
   if (wrap) wrap.classList.remove("player-idle");
   window.clearTimeout(pcIdleTimer);
-  if ($("#offlinePlayer")?.open) pcIdleTimer = window.setTimeout(pcSleep, 2600);
+  if (!$("#offlinePlayer")?.open) return;
+  pcLastWakeAt = Date.now();
+  pcIdleTimer = window.setTimeout(pcSleep, 2600);
+}
+
+// 超分用弱显卡/软件渲染时，一帧能占住主线程几秒，2.6 秒的计时器会被拖到很晚，
+// 控件看起来「一直不收」。播放中的 timeupdate 总会在某一帧结束后跑一次，这里
+// 顺手按「最后一次鼠标活动」判断一次，超时就直接收——最多晚一帧，不会再无限拖。
+function pcCheckIdle() {
+  if (!pcLastWakeAt || Date.now() - pcLastWakeAt < 2600) return;
+  const wrap = $("#offlinePlayerVideoWrap");
+  if (!wrap || wrap.classList.contains("player-idle")) return;
+  pcSleep();
 }
 
 function pcSleep() {
   const wrap = $("#offlinePlayerVideoWrap");
   const video = $("#offlineVideo");
   if (!wrap || !$("#offlinePlayer")?.open || !video?.readyState || video.error || video.ended || pcSeeking) return;
-  // 面板/菜单开着、正在输弹幕时都不自动藏。
-  if ($(".danmaku-panel:not(.hidden)")) return;
-  if ($("#pcUpscaleMenu:not(.hidden)")) return;
-  if ($("#pcSpeedMenu") && !$("#pcSpeedMenu").classList.contains("hidden")) return;
-  if ($("#pcPlaylistMenu") && !$("#pcPlaylistMenu").classList.contains("hidden")) return;
-  if (document.activeElement === $("#dmSendInput")) return;
-  if ($(".player-controls :focus-visible, .player-topbar :focus-visible", wrap)) return;
+  if (pcHoldControls(wrap)) return;
   wrap.classList.add("player-idle");
 }
 
@@ -1186,6 +1203,7 @@ function pcSync() {
     const node = $("#pcBuffered");
     if (node) node.style.width = `${duration ? Math.min(100, (end / duration) * 100) : 0}%`;
   } catch (error) { /* buffered 偶发不可用 */ }
+  pcCheckIdle();
 }
 
 function pcSyncPlayState() {

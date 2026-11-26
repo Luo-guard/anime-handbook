@@ -279,7 +279,7 @@ void main() { color = hook(); }`);
   return { draw, dispose };
 }
 
-export function startPlayerUpscale(video, surface, mode, onState) {
+export function startPlayerUpscale(video, surface, mode, onState, onFrame) {
   if (!video.requestVideoFrameCallback) throw new Error("浏览器不支持视频帧回调");
   const canvas = document.createElement("canvas");
   canvas.className = "pc-native-upscale";
@@ -289,6 +289,7 @@ export function startPlayerUpscale(video, surface, mode, onState) {
   const listeners = new AbortController();
   let frame;
   let stopped = false;
+  let skipUntil = 0;
   surface.append(canvas);
 
   function stop() {
@@ -322,7 +323,18 @@ export function startPlayerUpscale(video, surface, mode, onState) {
 
   function next() {
     frame = undefined;
-    draw();
+    if (!stopped && performance.now() >= skipUntil) {
+      const started = performance.now();
+      const drew = draw();
+      const cost = performance.now() - started;
+      // 弱显卡/软件渲染时一帧可能要一两秒：按耗时跳过接下来一段时间，别把主线程
+      // 占满。占满的后果是播放器控件、提示、自动隐藏全被拖住——比少几帧更糟。
+      // 帧很便宜（正常显卡）时 cost 远小于这个阈值，行为完全不变。
+      if (drew && cost > 120) skipUntil = performance.now() + cost;
+      // 一帧画完、主线程刚空出来：让播放器顺手检查一次「该不该收起控件」。
+      // 计时器被这一帧拖晚时，这里能立刻补上。
+      try { onFrame?.(); } catch { /* 界面回调失败不该影响超分 */ }
+    }
     if (!stopped) frame = video.requestVideoFrameCallback(next);
   }
 

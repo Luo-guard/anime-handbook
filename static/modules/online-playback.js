@@ -880,12 +880,22 @@ window.onlinePlayback = (() => {
     renderRuleCatalogue();
   }
 
+  // 规则管理状态提示同时写在设置页和播放来源面板的内联管理区（谁开着看谁）。
+  function setRuleManagerStatus(text, { show = Boolean(text) } = {}) {
+    for (const node of [$$("#onlineRuleManagerStatus"), $$("#pickerRuleStatus")].flat()) {
+      node.textContent = text;
+      node.hidden = !show;
+    }
+  }
+
+  function setRuleCheckDisabled(disabled) {
+    for (const button of $$("[data-rule-check]")) button.disabled = disabled;
+  }
+
   async function refreshRuleCatalogue({ fresh = false, remote = false } = {}) {
     if (checkingRules || managing) return;
     checkingRules = true;
-    const check = $("#onlineRuleCheckUpdates");
-    const status = $("#onlineRuleManagerStatus");
-    check.disabled = true;
+    setRuleCheckDisabled(true);
     if (fresh) {
       ruleFilter = "installed";
       $("#onlineRuleFilter").value = "";
@@ -893,74 +903,81 @@ window.onlinePlayback = (() => {
     }
     try {
       if (!remote && !fresh) {
-        status.textContent = "";
+        setRuleManagerStatus("");
         applyRuleList(await request("rules", {}));
         return;
       }
-      status.hidden = false;
-      status.textContent = "正在读取 KazumiRules…";
+      setRuleManagerStatus("正在读取 KazumiRules…");
       const result = await request("rules", fresh ? { remote: "1", refresh: "1" } : { remote: "1" });
       applyRuleList(result, true);
       const count = result.items.filter(rule => rule.update).length;
-      status.textContent = count ? `${count} 条规则可更新` : fresh ? "暂无可用更新" : "";
+      setRuleManagerStatus(count ? `${count} 条规则可更新` : fresh ? "暂无可用更新" : "");
     } catch (error) {
-      status.hidden = false;
-      status.textContent = error.message;
+      setRuleManagerStatus(error.message);
     } finally {
       checkingRules = false;
-      check.disabled = false;
+      setRuleCheckDisabled(false);
     }
+  }
+
+  function buildRuleRow(rule) {
+    const row = document.createElement("div");
+    row.className = "online-rule-row";
+    const copy = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = rule.name;
+    const meta = document.createElement("small");
+    const version = rule.update ? `${rule.version} → ${rule.available_version}` : rule.version;
+    meta.textContent = [rule.id === defaultRule && "默认", rule.custom ? "自定义" : rule.installed && "已安装", rule.host, version].filter(Boolean).join(" · ");
+    copy.append(title, meta);
+    const buttons = document.createElement("div");
+    buttons.className = "online-rule-actions";
+    const actions = rule.installed ? [["重命名", "rename"], ["移除", "remove"]] : [["下载", "install"]];
+    if (rule.custom) actions.unshift(["编辑规则", "edit"]);
+    if (rule.update) actions.unshift(["更新", "update"]);
+    for (const [label, action] of actions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary-button compact-button";
+      button.textContent = label;
+      button.addEventListener("click", () => ["rename", "edit"].includes(action)
+        ? openRuleEditor(action, rule) : manageRule({ id: rule.id, action }, button));
+      buttons.append(button);
+    }
+    row.append(copy, buttons);
+    return row;
   }
 
   function renderRuleCatalogue() {
-    const list = $("#onlineRuleCatalogue");
     const query = $("#onlineRuleFilter").value.trim().toLowerCase();
-    const rules = ruleCatalogue.filter(rule =>
+    const matching = rule =>
       Boolean(rule.installed) === (ruleFilter === "installed")
-      && `${rule.name} ${rule.host || ""}`.toLowerCase().includes(query));
+      && `${rule.name} ${rule.host || ""}`.toLowerCase().includes(query);
     for (const button of $$("[data-rule-filter]")) {
       button.setAttribute("aria-pressed", String(button.dataset.ruleFilter === ruleFilter));
     }
-    if (!rules.length) {
-      list.textContent = query ? "没有匹配的规则。" : ruleFilter === "installed"
-        ? "还没有安装规则。可新增自定义规则，或从规则仓库下载。" : "暂无可下载规则。";
-      return;
-    }
-    list.replaceChildren(...rules.map(rule => {
-      const row = document.createElement("div");
-      row.className = "online-rule-row";
-      const copy = document.createElement("div");
-      const title = document.createElement("strong");
-      title.textContent = rule.name;
-      const meta = document.createElement("small");
-      const version = rule.update ? `${rule.version} → ${rule.available_version}` : rule.version;
-      meta.textContent = [rule.id === defaultRule && "默认", rule.custom ? "自定义" : rule.installed && "已安装", rule.host, version].filter(Boolean).join(" · ");
-      copy.append(title, meta);
-      const buttons = document.createElement("div");
-      buttons.className = "online-rule-actions";
-      const actions = rule.installed ? [["重命名", "rename"], ["移除", "remove"]] : [["下载", "install"]];
-      if (rule.custom) actions.unshift(["编辑规则", "edit"]);
-      if (rule.update) actions.unshift(["更新", "update"]);
-      for (const [label, action] of actions) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "secondary-button compact-button";
-        button.textContent = label;
-        button.addEventListener("click", () => ["rename", "edit"].includes(action)
-          ? openRuleEditor(action, rule) : manageRule({ id: rule.id, action }, button));
-        buttons.append(button);
-      }
-      row.append(copy, buttons);
-      return row;
-    }));
+    // 设置页带搜索框；来源面板的内联管理区不搜索，始终展示全部匹配当前筛选的规则。
+    // 空状态文案也分开：面板不受设置页搜索词影响，别出现两处一样的提示。
+    const empty = ruleFilter === "installed"
+      ? "还没有安装规则。可新增自定义规则，或从规则仓库下载。" : "暂无可下载规则。";
+    const settingsList = $("#onlineRuleCatalogue");
+    const pickerList = $("#pickerRuleList");
+    const settingsRules = ruleCatalogue.filter(matching);
+    const pickerRules = ruleCatalogue.filter(rule =>
+      Boolean(rule.installed) === (ruleFilter === "installed"));
+    if (!settingsRules.length) settingsList.textContent = query ? "没有匹配的规则。" : empty;
+    else settingsList.replaceChildren(...settingsRules.map(buildRuleRow));
+    if (!pickerRules.length) pickerList.textContent = empty;
+    else pickerList.replaceChildren(...pickerRules.map(buildRuleRow));
   }
 
-  async function manageRule(payload, button, errorBox = $("#onlineRuleManagerStatus")) {
+  async function manageRule(payload, button, errorBox) {
     if (managing || checkingRules) return false;
     managing = true;
     button.disabled = true;
-    $("#onlineRuleCheckUpdates").disabled = true;
-    errorBox.hidden = true;
+    setRuleCheckDisabled(true);
+    if (errorBox) errorBox.hidden = true;
+    else setRuleManagerStatus("", { show: false });
     try {
       const result = await api("/api/playback/rules", {
         method: "POST", body: JSON.stringify(payload), timeoutMs: 24000,
@@ -969,13 +986,15 @@ window.onlinePlayback = (() => {
       if ($("#onlinePlaybackPicker").open) renderInstalled();
       return true;
     } catch (error) {
-      errorBox.textContent = error.message;
-      errorBox.hidden = false;
+      if (errorBox) {
+        errorBox.textContent = error.message;
+        errorBox.hidden = false;
+      } else setRuleManagerStatus(error.message);
       return false;
     } finally {
       button.disabled = false;
       managing = false;
-      $("#onlineRuleCheckUpdates").disabled = false;
+      setRuleCheckDisabled(false);
     }
   }
 
@@ -1002,9 +1021,7 @@ window.onlinePlayback = (() => {
       editor.showModal();
       (custom ? field : $("#onlineRuleName")).focus();
     } catch (error) {
-      const status = $("#onlineRuleManagerStatus");
-      status.textContent = error.message;
-      status.hidden = false;
+      setRuleManagerStatus(error.message);
     }
   }
 
@@ -1291,7 +1308,24 @@ window.onlinePlayback = (() => {
       if (document.fullscreenElement) await document.exitFullscreen();
       openHandbookSettings("playback", "#playbackRulesHeading");
     });
-    $("#onlineRuleCheckUpdates").addEventListener("click", () => refreshRuleCatalogue({ fresh: true }));
+    // 来源面板里的内联规则管理：展开/收起操作区，不用进设置页。
+    $("#pickerRuleToggle").addEventListener("click", () => {
+      const panel = $("#pickerRuleManager");
+      const show = panel.classList.contains("hidden");
+      panel.classList.toggle("hidden", !show);
+      $("#pickerRuleToggle").setAttribute("aria-expanded", String(show));
+      $(".picker-rule-caret", $("#pickerRuleToggle")).textContent = show ? "▴" : "▾";
+      if (show) {
+        // 每次展开都从「已安装」看起：删除/更新是这里的主用途，别沿用上次在
+        // 设置页留下的仓库筛选。
+        ruleFilter = "installed";
+        refreshRuleCatalogue();
+      }
+    });
+    $("#pickerRuleAddCustom").addEventListener("click", () => openRuleEditor("create"));
+    for (const button of $$("[data-rule-check]")) {
+      button.addEventListener("click", () => refreshRuleCatalogue({ fresh: true }));
+    }
     $("#onlinePlayerDownload").addEventListener("click", openDownloadSheet);
     $("#episodeDownloadForm").addEventListener("submit", submitDownloadSheet);
     $("#episodeDownloadClose").addEventListener("click", () => $("#episodeDownloadSheet").close());
