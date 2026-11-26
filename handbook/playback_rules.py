@@ -142,7 +142,12 @@ def rule_list(remote=False, *, refresh=False):
     preferred = _preferred_rule()
     return {"default_rule": preferred if preferred == "manual" or preferred in installed else "", "items": [
         {"id": rule_id, "name": _display_name(rule_id, rule), "custom": rule_id.startswith("custom-") and rule_id in installed,
-         "host": urlsplit(rule["baseURL"]).hostname, "version": str(rule.get("version", "")),
+         "host": urlsplit(rule["baseURL"]).hostname,
+         # 站点名上的「打开原网页」要用：优先打开站点对这一部的搜索结果，
+         # 没有搜索页（接口型规则）就回站点首页。
+         "base": str(rule.get("baseURL") or ""),
+         "search": str(rule.get("searchURL") or ""),
+         "version": str(rule.get("version", "")),
          "available_version": str(available.get(rule_id, {}).get("version", "")),
          "installed": rule_id in installed,
          "update": rule_id in installed and not rule_id.startswith("custom-") and rule_id in available and _newer_rule(rule, available[rule_id])}

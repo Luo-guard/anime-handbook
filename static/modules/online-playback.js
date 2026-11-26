@@ -17,6 +17,17 @@ function ruleForUrl(value) {
   return "";
 }
 
+// 站点名就是「打开原网页」入口：有这个站点的搜索页就带上番名，否则回首页。
+function ruleOpenUrl(rule, titles) {
+  const base = String(rule?.base || "");
+  if (!/^https?:\/\//i.test(base)) return "";
+  const title = String(titles?.[0] || "").trim();
+  const template = String(rule?.search || "");
+  if (!template || !title) return base;
+  const keyword = encodeURIComponent(title);
+  return template.replaceAll("{keyword}", keyword).replaceAll("@keyword", keyword);
+}
+
 function samplePlaybackLink() {
   const rule = installed.find(item => item.id === "xfdmnext") || installed[0];
   return rule?.host ? `https://${rule.host}/anime/3435/play/203809` : "https://站点/anime/番剧编号/play/集编号";
@@ -753,8 +764,28 @@ window.onlinePlayback = (() => {
       const group = document.createElement("details");
       group.className = "online-source";
       const summary = document.createElement("summary");
-      const title = document.createElement("strong");
-      title.textContent = rule.name;
+      const titles = [...new Set([selection?.anime.name_cn, selection?.anime.display_name, selection?.anime.name].filter(Boolean))];
+      const siteUrl = ruleOpenUrl(rule, titles);
+      let title;
+      if (siteUrl) {
+        // 站点名本身就是「打开原网页」：点它去站点看看，不加额外的字。
+        title = document.createElement("a");
+        title.className = "online-source-site";
+        title.href = siteUrl;
+        title.target = "_blank";
+        title.rel = "noopener noreferrer";
+        title.title = "在新标签打开这个站点";
+        title.textContent = rule.name;
+        const arrow = document.createElement("span");
+        arrow.className = "online-source-arrow";
+        arrow.textContent = "↗";
+        title.append(arrow);
+        // 点链接不该顺带把这一条来源展开/收起。
+        title.addEventListener("click", event => event.stopPropagation());
+      } else {
+        title = document.createElement("strong");
+        title.textContent = rule.name;
+      }
       const hint = document.createElement("span");
       hint.textContent = "待检索";
       hint.className = "online-source-status";
@@ -766,7 +797,6 @@ window.onlinePlayback = (() => {
       const input = document.createElement("input");
       input.type = "search";
       input.setAttribute("aria-label", `${rule.name}的检索词`);
-      const titles = [...new Set([selection?.anime.name_cn, selection?.anime.display_name, selection?.anime.name].filter(Boolean))];
       input.value = titles[0] || "";
       input.required = true;
       const search = document.createElement("button");

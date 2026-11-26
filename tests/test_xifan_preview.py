@@ -177,6 +177,10 @@ class XifanPreviewTest(unittest.TestCase):
                 search.assert_not_called()
             rules.change_rule("example", "install")
             self.assertEqual(rules.installed_rule("example"), rule)
+            # 播放来源里「站点名 → 打开原网页」要用这两个地址。
+            listed = rules.rule_list()["items"][0]
+            self.assertEqual(listed["base"], rule["baseURL"])
+            self.assertEqual(listed["search"], rule["searchURL"])
             html = b'<ul><li><a href="/one">06</a></li></ul><ul><li><a href="/two">07</a></li></ul>'
             with patch.object(rules, "_read", return_value=(html, "https://example.com/show")):
                 data = rules.catalogue("example", rule, "https://example.com/show")

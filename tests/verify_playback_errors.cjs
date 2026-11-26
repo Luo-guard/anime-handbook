@@ -30,7 +30,8 @@ window.$$ = (s, r = document) => [...r.querySelectorAll(s)];
 window.state = { animes: [], progressAnime: null, settings: {} };
 window.toast = (m) => { window.toasts = (window.toasts || []).concat(String(m)); };
 window.__calls = [];
-window.__rules = [{ id: 'demo', name: '示例站点', host: 'example.com', installed: true, version: '1' }];
+window.__rules = [{ id: 'demo', name: '示例站点', host: 'example.com', installed: true, version: '1',
+  base: 'https://example.com/', search: 'https://example.com/search?q=@keyword' }];
 window.api = async (url, options = {}) => {
   window.__calls.push([String(url), options.method || 'GET', options.body || '']);
   if (String(url).includes('/api/playback/rules')) return { items: window.__rules, default_rule: '' };
@@ -113,6 +114,35 @@ const pickerDom = `
     assert.ok(view.feedback.includes('站点改版了'), `提示要是那句能照做的话，实际：${view.feedback}`);
     assert.ok(view.feedback.includes('没有解析出任何选集'), '具体原因也要留着');
     assert.deepEqual(view.buttons, ['更新规则'], '规则过期要给「更新规则」按钮');
+
+    // 4.1) 站点名本身就是「打开原网页」：带箭头的链接，指向站点对这一部的搜索结果。
+    const site = await page.evaluate(() => {
+      const link = document.querySelector('.online-source-site');
+      return link ? {
+        tag: link.tagName, text: link.textContent, href: link.getAttribute('href'),
+        target: link.target, rel: link.rel, title: link.title,
+      } : null;
+    });
+    assert.ok(site, '站点名应该是「打开原网页」的链接');
+    assert.equal(site.tag, 'A');
+    assert.ok(site.text.endsWith('↗'), `站点名后面要有一个箭头，实际：${site.text}`);
+    assert.equal(site.href, 'https://example.com/search?q=%E6%B5%8B%E8%AF%95%E7%95%AA',
+      '应该带上番名打开站点的搜索结果');
+    assert.equal(site.target, '_blank', '要新开标签，别把播放面板顶掉');
+    assert.match(site.rel, /noopener/);
+
+    // 没有站点地址时退回普通文字，不做成死链。
+    assert.equal(await page.evaluate(() => ruleOpenUrl({ base: 'notaurl', search: 'https://x/?q=@keyword' }, ['a'])), '');
+    assert.equal(await page.evaluate(() => ruleOpenUrl({ base: 'https://example.com/' }, ['a'])), 'https://example.com/');
+
+    // 点站点名不应该顺带展开/收起这一条来源。
+    await page.evaluate(() => {
+      document.querySelector('.online-source-site')?.addEventListener('click', event => event.preventDefault(), { once: true });
+    });
+    const beforeOpen = await page.evaluate(() => document.querySelector('.online-source').open);
+    await page.click('.online-source-site');
+    const afterOpen = await page.evaluate(() => document.querySelector('.online-source').open);
+    assert.equal(afterOpen, beforeOpen, '点站点名不该改变展开状态');
 
     // 5) 点「更新规则」→ 真的调了更新接口，而不是只弹个提示。
     await page.evaluate(() => document.querySelector('.online-source-feedback button').click());
