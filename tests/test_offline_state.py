@@ -27,6 +27,42 @@ class OfflineStateMissingTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def make_queued_web_job(self, key: str = "0:2") -> dict:
+        job, _fresh = self.service._web_job_for(
+            11, key, "第 2 集", "测试字幕组", status="queued", ref={"episode": "ep-2"},
+        )
+        return job
+
+    def test_orphaned_queued_job_fails_immediately_after_restart(self):
+        """重启后批次线程没了：排队的集立刻判失败，别让人干等 15 分钟。"""
+        job = self.make_queued_web_job()
+        state = self.service.state(11)
+        row = next(item for item in state["jobs"] if int(item["id"]) == int(job["id"]))
+        self.assertEqual(row["status"], "failed")
+        self.assertIn("程序重启过", str(row.get("error") or ""))
+
+    def test_queued_job_in_a_live_batch_still_waits(self):
+        """活批次里还没轮到的集：保持排队，不被误标成失败。"""
+        job = self.make_queued_web_job()
+        with self.service._web_batch_lock:
+            self.service._web_batch_pending.add(int(job["id"]))
+        state = self.service.state(11)
+        row = next(item for item in state["jobs"] if int(item["id"]) == int(job["id"]))
+        self.assertEqual(row["status"], "queued", "活批次里的排队不该被立刻判失败")
+
+    def test_submitting_a_new_batch_lets_queued_jobs_be_taken_over(self):
+        """重启后重新点下载：先把孤儿判失败，同集才能再次进队列。"""
+        job = self.make_queued_web_job()
+        state = self.service.state(11)
+        row = next(item for item in state["jobs"] if int(item["id"]) == int(job["id"]))
+        self.assertEqual(row["status"], "failed")
+        # 失败后同集可以重新排队（_web_job_for 的 fresh 判定放行 failed）。
+        again, fresh = self.service._web_job_for(
+            11, "0:2", "第 2 集", "测试字幕组", status="queued", ref={"episode": "ep-2"},
+        )
+        self.assertTrue(fresh, "失败后同集要能重新排队")
+        self.assertEqual(int(again["id"]), int(job["id"]))
+
     def make_file(self, key: str, *, name: str, subtitle: str = "", media_id: int = 0) -> dict:
         path = self.media / name
         path.write_bytes(b"x" * 32)

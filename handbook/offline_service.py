@@ -147,12 +147,18 @@ class OfflineService:
         # 免得把旧库的任务写进新库（两边任务号会撞）。
         self._batch_epoch = 0
         self._batch_threads: list[threading.Thread] = []
+        # 活着的批次线程正在排的集：重启后线程没了，不在名单里的排队集就是孤儿，
+        # 同步时立刻判失败，别让人干等 15 分钟。
+        self._web_batch_pending: set[int] = set()
+        self._web_batch_lock = threading.Lock()
 
     def stop_web_batches(self, timeout: float = 15.0) -> None:
         self._batch_epoch += 1
         for thread in list(self._batch_threads):
             thread.join(timeout)
         self._batch_threads.clear()
+        with self._web_batch_lock:
+            self._web_batch_pending.clear()
 
     # ---- 基础设施 -----------------------------------------------------
 
@@ -461,6 +467,8 @@ class OfflineService:
         if not queue:
             raise OfflineError("选中的集都已经在下载或已入库了" if skipped else "没有选中任何一集")
         epoch = self._batch_epoch
+        with self._web_batch_lock:
+            self._web_batch_pending.update(int(item["media_id"]) for item in queue)
         worker = threading.Thread(
             target=self._run_web_batch, args=(queue, resolve, epoch),
             name="handbook-web-batch", daemon=True,
@@ -485,6 +493,10 @@ class OfflineService:
             if epoch != self._batch_epoch or not owner.exists():
                 return
             media_id = int(item["media_id"])
+            # 这一集开始处理（无论成败）就算离开排队：后面 _sync 发现它还挂着
+            # 「排队」却不在名单里，就会把它当孤儿判失败。
+            with self._web_batch_lock:
+                self._web_batch_pending.discard(media_id)
             job = self.store.job(media_id)
             # 排队期间被用户移除或改过状态：跳过，不把删掉的任务又拉起来。
             if not job or str(job.get("status") or "") != "queued":
@@ -715,7 +727,18 @@ class OfflineService:
             if task is None:
                 current = str(job.get("status") or "")
                 if current == "queued":
-                    # 批量选集里还没轮到的：排队线程会来取。只有久到不合理才判失败，
+                    with self._web_batch_lock:
+                        queued_live = media_id in self._web_batch_pending
+                    if not queued_live:
+                        # 进程重启后批次线程已经没了，这个排队永远没人接手：
+                        # 立刻判失败——不然用户干等 15 分钟，还被它挡住重新点下载。
+                        self.store.set_status(
+                            media_id, "failed",
+                            error="程序重启过，这个排队没接上，请回到播放器重新点下载",
+                            allow_from=("queued",),
+                        )
+                        continue
+                    # 活批次里还没轮到的：排队线程会来取。只有久到不合理才判失败，
                     # 否则正常排队会被误标成「下载已中断」。
                     if _seconds_stale(job.get("updated_at") or "") > 900:
                         self.store.set_status(
@@ -1712,6 +1735,9 @@ class OfflineService:
         unfinished = str(job.get("status") or "") != "ready"
         if unfinished:
             self._abort_archive(int(media_id))
+        # 删掉排队中的集也要把它从活批次名单里摘掉，免得后面误判。
+        with self._web_batch_lock:
+            self._web_batch_pending.discard(int(media_id))
         if str(job.get("source_kind") or "") == "web":
             task = web_download.drop(self._web_owner(), int(media_id))
             if task is not None:
