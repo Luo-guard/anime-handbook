@@ -994,36 +994,79 @@ function refreshEpisodeAiringStatus() {
 // 已下载的集数在格子上留一个角标。key 先归一化到「类型:集数」再比较，
 // 兼容 Bangumi 的 bgm:xxx 与归档写入的 0:N 两套标识。
 let episodeDownloadKeys = new Set();
+// storageKey -> { status, progress, paused }：排队/下载中/整理中的任务，驱动格子的「下载中」徽章
+let episodeDownloadingJobs = new Map();
 let episodeMarkToken = 0;
+let episodeMarkPollTimer = 0;
 
-async function syncEpisodeDownloadMarks(animeId = Number(state.progressAnime?.id), files = null) {
+async function syncEpisodeDownloadMarks(animeId = Number(state.progressAnime?.id), payload = null) {
   const anime = state.progressAnime;
   const dialog = $("#progressModal");
   if (!animeId || animeId !== Number(anime?.id) || !dialog.open || typeof episodeStorageKey !== "function") return;
   const token = ++episodeMarkToken;
-  let list = Array.isArray(files) ? files : null;
-  if (!list) {
+  let data = payload;
+  if (!data || !Array.isArray(data.files)) {
     try {
-      const data = await api(`/api/offline/state?anime_id=${animeId}`);
+      data = await api(`/api/offline/state?anime_id=${animeId}`);
       // 慢响应或已经切到别的番：别把旧数据涂到当前格子上。
       if (token !== episodeMarkToken) return;
-      list = data.files || [];
     } catch (_) {
       return; // 离线服务没开就保持无标记
     }
   }
   if (!dialog.open || Number(state.progressAnime?.id) !== animeId) return;
   episodeDownloadKeys = new Set(
-    list.filter((item) => item && item.exists !== false)
+    (data.files || []).filter((item) => item && item.exists !== false)
       .map((item) => episodeStorageKey(item.episode_key, anime))
   );
-  $$(".episode-cell", dialog).forEach((cell) => {
-    const on = episodeDownloadKeys.has(episodeStorageKey(cell.dataset.episodeKey, anime));
-    cell.classList.toggle("downloaded", on);
-    // 首次打开详情时格子已经渲染完、角标是异步补的，title 也要一起补；
-    // 重渲染时 title 里已经带过这句话，先去掉再加，避免越积越长。
-    const base = String(cell.title || "").replace(/(?:^| · )已下载 · 扇区可播放$/, "");
-    cell.title = on ? [base, "已下载 · 扇区可播放"].filter(Boolean).join(" · ") : base;
+  episodeDownloadingJobs = new Map();
+  for (const job of data.jobs || []) {
+    if (!job || !job.episode_key) continue;
+    if (!["queued", "downloading", "processing"].includes(String(job.status || ""))) continue;
+    const key = episodeStorageKey(job.episode_key, anime);
+    if (!key) continue;
+    const live = job.live || {};
+    episodeDownloadingJobs.set(key, {
+      status: String(job.status || ""),
+      progress: Math.max(0, Math.min(100, Number(job.progress ?? live.progress ?? 0))),
+      paused: live.paused === true,
+    });
+  }
+  applyEpisodeDownloadMarks(anime);
+  // 还有集在下载就每隔几秒刷一次进度；面板关掉或全部跑完即停。
+  window.clearTimeout(episodeMarkPollTimer);
+  if (episodeDownloadingJobs.size) {
+    episodeMarkPollTimer = window.setTimeout(() => {
+      if ($("#progressModal").open) syncEpisodeDownloadMarks();
+    }, 4000);
+  }
+}
+
+// 这一集的下载状态文案：下载中带百分比，排队/整理/暂停分开说。
+function episodeDownloadStatusText(key) {
+  const job = episodeDownloadingJobs.get(key);
+  if (job) {
+    if (job.status === "queued") return "排队中";
+    if (job.status === "processing") return "正在整理";
+    if (job.paused) return "下载已暂停";
+    return `下载中 ${Math.round(job.progress)}%`;
+  }
+  if (episodeDownloadKeys.has(key)) return "已下载 · 扇区可播放";
+  return "";
+}
+
+function applyEpisodeDownloadMarks(anime) {
+  $$(".episode-cell", $("#progressModal")).forEach((cell) => {
+    const key = episodeStorageKey(cell.dataset.episodeKey, anime);
+    const job = episodeDownloadingJobs.get(key);
+    // 同一集既有文件又在重新下载：以「下载中」为准（琥珀徽章），别两态打架。
+    const downloaded = episodeDownloadKeys.has(key) && !job;
+    cell.classList.toggle("downloaded", downloaded);
+    cell.classList.toggle("downloading", Boolean(job));
+    // 渲染时把不带状态的标题存在 data-base-title 里，这里拼当前状态，避免越拼越长。
+    const base = cell.dataset.baseTitle || "";
+    const status = episodeDownloadStatusText(key);
+    cell.title = [base, status].filter(Boolean).join(" · ");
   });
   refreshDetailHeader();
 }
@@ -1083,22 +1126,23 @@ function renderEpisodeGrid() {
             ${group.episodes.map((episode) => {
               const key = String(episode.key);
               const watched = state.pendingEpisodes.has(key);
-              const downloaded = typeof episodeStorageKey === "function"
-                && episodeDownloadKeys.has(episodeStorageKey(key, anime));
+              const storageKey = typeof episodeStorageKey === "function"
+                ? episodeStorageKey(key, anime) : "";
+              const status = storageKey ? episodeDownloadStatusText(storageKey) : "";
               const annotations = visibleEpisodeAnnotations(key);
+              const hoverTitle = showEpisodeTitlesOnHover() ? episodeTitle(episode) : "";
               return `
-                <button type="button" class="episode-cell ${watched ? "watched" : ""}${downloaded ? " downloaded" : ""}"
+                <button type="button" class="episode-cell ${watched ? "watched" : ""}${status === "已下载 · 扇区可播放" ? " downloaded" : ""}${status.startsWith("下载中") || ["排队中", "正在整理", "下载已暂停"].includes(status) ? " downloading" : ""}"
                   data-episode-key="${escapeHtml(key)}" data-episode-type="${group.type}" data-detail-episode-label="${escapeHtml(episode.label)}"
+                  data-base-title="${escapeHtml(hoverTitle)}"
                   aria-pressed="${watched}"
-                  title="${escapeHtml([showEpisodeTitlesOnHover() ? episodeTitle(episode) : "", downloaded ? "已下载 · 扇区可播放" : ""].filter(Boolean).join(" · "))}">
+                  title="${escapeHtml([hoverTitle, status].filter(Boolean).join(" · "))}">
                   ${group.type === 2 || group.type === 3 ? `<span class="detail-credit-check" aria-hidden="true"></span><span class="detail-credit-prefix">${escapeHtml(group.type_label)} </span>` : ""}<span class="episode-cell-number">${escapeHtml(episode.label)}</span>
-                  <span class="episode-cell-marks">
-                    ${annotations.length ? `<span class="episode-note-mark" role="img" aria-label="本集有 ${annotations.length} 条记录">
-                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.25 2.75h9.5v7h-5l-3.5 3v-3h-1z"/><path d="M5.75 5.25h4.5M5.75 7.25h3"/></svg>
-                    </span>` : ""}
-                    <span class="episode-download-mark" role="img" aria-label="已下载">
-                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.75v6.5m-2.5-2.5L8 9.25l2.5-2.5M3.25 9.75v2.5h9.5v-2.5"/></svg>
-                    </span>
+                  ${annotations.length ? `<span class="episode-cell-badge note-badge" role="img" aria-label="本集有 ${annotations.length} 条记录">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.25 2.75h9.5v7h-5l-3.5 3v-3h-1z"/><path d="M5.75 5.25h4.5M5.75 7.25h3"/></svg>
+                  </span>` : ""}
+                  <span class="episode-cell-badge dl-badge" aria-hidden="true">
+                    <svg viewBox="0 0 12 12"><path class="dl-tray" d="M2.75 9.75h6.5"/><path class="dl-arrow" d="M6 1.25v5M3.6 4.4 6 6.8l2.4-2.4"/></svg>
                   </span>
                 </button>
               `;

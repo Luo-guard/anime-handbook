@@ -292,7 +292,7 @@ window.onlinePlayback = (() => {
           clearInterval(downloadTimer);
           downloadLabel("已入库", true);
           offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
-          if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(animeId, data.files || []);
+          if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(animeId, data);
           toast("这一集已经存进媒体库");
           return;
         }

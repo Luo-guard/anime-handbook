@@ -283,7 +283,7 @@ async function refreshOfflineLocal() {
     if (data.archive_retry_limit) offlineView.retryLimit = Number(data.archive_retry_limit);
     renderOfflineLocal();
     // 下载/归档完成后立刻把「已下载」角标刷到集数格子上，不用等重开详情。
-    if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(animeId, data.files || []);
+    if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(animeId, data);
   } catch (error) {
     if (token !== offlineView.localToken || animeId !== Number(offlineView.animeId)) return;
     offlineStatus("#offlineLocalStatus", error.message || "读取本地文件失败", true);
@@ -609,7 +609,7 @@ async function localFileForEpisode(key) {
     const data = await api(`/api/offline/state?anime_id=${animeId}`);
     if (animeId !== Number(offlineView.animeId)) return null;
     offlineView.local = { files: data.files || [], jobs: data.jobs || [] };
-    if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(animeId, data.files || []);
+    if (typeof syncEpisodeDownloadMarks === "function") syncEpisodeDownloadMarks(animeId, data);
   } catch (error) {
     return null;
   }

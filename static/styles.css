@@ -2891,35 +2891,60 @@ dialog::backdrop {
   box-shadow: 0 4px 10px var(--detail-watched-shadow, rgba(95, 143, 186, 0.2));
 }
 
-.episode-cell-marks {
+/* 单集状态徽章：一律圆形小徽章浮在格子角上。
+   下载徽章（右上）：绿=已下载（静态），琥珀=下载中（箭头下落循环动画）；
+   记录徽章（紫）：只有它自己时占右上角，和下载徽章同时出现时让出右上、占左上。 */
+.episode-cell-badge {
   position: absolute;
-  left: 50%;
-  top: calc(50% + 4px);
-  transform: translateX(-50%);
-  display: flex;
+  top: -7px;
+  right: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: none;
   align-items: center;
-  gap: 3px;
-  color: inherit;
+  justify-content: center;
+  color: #fff;
   pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .28);
+  z-index: 1;
 }
-.episode-cell-marks svg {
+.episode-cell-badge svg {
   display: block;
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.episode-cell:not(.downloaded) .episode-download-mark,
-.episode-cell:not(.downloaded) .episode-cell-marks:not(:has(.episode-note-mark)) { display: none; }
-.episode-cell:is(.downloaded, :has(.episode-note-mark)) .episode-cell-number {
-  display: inline-block;
-  transform: translateY(-6px);
+.episode-cell-badge.note-badge { background: #8a7bb8; }
+.episode-cell:not(.downloaded):not(.downloading) .episode-cell-badge.note-badge { display: flex; }
+.episode-cell:is(.downloaded, .downloading) .episode-cell-badge.note-badge { display: flex; left: -7px; right: auto; }
+.episode-cell-badge.dl-badge { background: #57a05c; }
+.episode-cell.downloaded .episode-cell-badge.dl-badge { display: flex; }
+.episode-cell.downloading .episode-cell-badge.dl-badge {
+  display: flex;
+  background: #e09b2d;
+}
+/* 下载中的动画：箭头从顶部下落到托盘线，随后淡出重来 */
+.episode-cell.downloading .episode-cell-badge.dl-badge .dl-arrow {
+  animation: episode-dl-drop 1.3s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+@keyframes episode-dl-drop {
+  0% { transform: translateY(-5px); opacity: 0; }
+  35% { opacity: 1; }
+  72% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(1.5px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .episode-cell.downloading .episode-cell-badge.dl-badge .dl-arrow { animation: none; }
 }
 @media (max-width: 480px) {
-  .episode-cell-marks svg { width: 10px; height: 10px; }
+  .episode-cell-badge { width: 16px; height: 16px; top: -6px; right: -6px; }
+  .episode-cell:is(.downloaded, .downloading) .episode-cell-badge.note-badge { left: -6px; }
+  .episode-cell-badge svg { width: 10px; height: 10px; }
 }
 
 .episode-annotation-popover {
@@ -7197,9 +7222,12 @@ body.schedule-picking [data-floating-view="schedule"] {
   aspect-ratio: auto;
   padding: 4px 6px; background: transparent; border-color: transparent; box-shadow: none;
 }
-.detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell-marks {
+.detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell-badge {
   position: static;
-  transform: none;
+  width: 14px;
+  height: 14px;
+  box-shadow: none;
+  flex: none;
 }
 .detail-compact-credits .episode-group:is([data-detail-episode-group="2"], [data-detail-episode-group="3"]) .episode-cell-number {
   transform: none;
