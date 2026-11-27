@@ -1339,6 +1339,16 @@ class OfflineService:
         for job in self.store.active_jobs():
             active.setdefault(int(job.get("anime_id") or 0), []).append(job)
 
+        # 失败的任务数也要按番分好：卡片上要写「N 集失败」，别让用户进了详情才发现。
+        # 重试是原地翻状态（failed → downloading），所以这里数的就是「还没修好的失败」。
+        failed: dict[int, int] = {}
+        with self.store.db.connect() as db:
+            for row in db.execute(
+                "SELECT anime_id, COUNT(*) AS n FROM local_media"
+                " WHERE status = 'failed' AND anime_id > 0 GROUP BY anime_id"
+            ):
+                failed[int(row["anime_id"])] = int(row["n"])
+
         items: list[dict[str, Any]] = []
         with self.store.db.connect() as db:
             for anime_id in sorted(set(grouped) | set(active)):
@@ -1405,6 +1415,8 @@ class OfflineService:
                     # 正在下载的集数 / 平均进度：卡片上直接显示，不用点进去才知道。
                     "active_count": len(jobs),
                     "active_progress": progress,
+                    # 失败的集数：卡片 meta 行红字提示，别等进了详情才发现
+                    "failed_count": failed.get(anime_id, 0),
                     "last_updated": max(
                         [str(row.get("updated_at") or "") for row in rows]
                         + [str(job.get("updated_at") or "") for job in jobs]

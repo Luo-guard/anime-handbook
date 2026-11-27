@@ -38,6 +38,7 @@ window.api = async () => ({ items: [], disk: null });
         {
           anime_id: 11, name: '正在下载的番', collection_type: 1, episode_count: 12,
           file_count: 2, watched_count: 0, size_bytes: 512 << 20, active_count: 3, active_progress: 42.4,
+          failed_count: 1,
           continue_file_id: 7, continue_episode_key: '0:2', continue_resume_ms: 0,
         },
         {
@@ -58,7 +59,8 @@ window.api = async () => ({ items: [], disk: null });
         badgeDownloading: Boolean(card.querySelector('.library-size.library-downloading')),
         activeBar: Boolean(card.querySelector('.library-bar-active')),
         activeWidth: card.querySelector('.library-bar-active i')?.style.width || '',
-        meta: card.querySelector('.library-meta')?.textContent.trim() || '',
+        metas: [...card.querySelectorAll('.library-meta')].map((node) => node.textContent.trim()),
+        failedMark: Boolean(card.querySelector('.library-meta .library-failed')),
         hasContinue: Boolean(card.querySelector('.library-continue')),
       }));
       return { cards, empty: document.querySelector('.offline-empty')?.textContent || '' };
@@ -66,19 +68,23 @@ window.api = async () => ({ items: [], disk: null });
 
     const [busy, fresh, done] = result.cards;
     assert.equal(result.cards.length, 3);
+    // meta 拆两行：第一行「已收/已看」，第二行「下载动态」（正在下载/失败红字）。
+    assert.ok(busy.metas[0].includes('已收 2'), `第一行是收录情况，实际：${busy.metas[0]}`);
+    assert.ok(busy.metas[1] && busy.metas[1].includes('正在下载 3 集'), `第二行要有下载动态，实际：${busy.metas[1]}`);
+    assert.ok(busy.metas[1].includes('1 集失败') && busy.failedMark, '失败数要红字出现在下载动态行');
     assert.ok(busy.badgeDownloading, '下载中的番角标要变成「下载中 xx%」');
     assert.equal(busy.badge, '下载中 42%');
     assert.ok(busy.activeBar && busy.activeWidth === '42%', '下载中的番要有一条额外的进度条');
-    assert.ok(busy.meta.includes('正在下载 3 集'), `元信息要写清在下载几集，实际：${busy.meta}`);
     assert.ok(busy.hasContinue, '已有成品的番仍要能继续观看');
 
     assert.ok(fresh.badgeDownloading, '一集都没有的番也应该是下载中');
     assert.equal(fresh.hasContinue, false, '没有成品时不该出现「继续观看」');
-    assert.ok(fresh.meta.includes('已收 0'), `元信息要如实显示 0 集，实际：${fresh.meta}`);
+    assert.ok(fresh.metas[0].includes('已收 0'), `元信息要如实显示 0 集，实际：${fresh.metas[0]}`);
 
     assert.equal(done.badgeDownloading, false, '下完的番不该显示下载中');
     assert.equal(done.activeBar, false, '下完的番不该有下载进度条');
-    assert.ok(done.meta.startsWith('已收 12'), `下完的番元信息照旧，实际：${done.meta}`);
+    assert.equal(done.metas.length, 1, '下完的番没有下载动态，meta 只有一行');
+    assert.ok(done.metas[0].startsWith('已收 12'), `下完的番元信息照旧，实际：${done.metas[0]}`);
 
     assert.deepEqual(errors, []);
     console.log('ok: 媒体库卡片能显示下载中集数与进度，且不影响已下完的卡片');

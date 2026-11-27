@@ -367,6 +367,11 @@ function libraryCard(item) {
   const watchedPct = Math.min(100, Math.round((item.watched_count / total) * 100));
   const activeCount = Number(item.active_count || 0);
   const activePct = Math.max(0, Math.min(100, Math.round(Number(item.active_progress || 0))));
+  const failedCount = Number(item.failed_count || 0);
+  // 下载动态一行：正在下载 / 失败（红字）；没有动态就不出这一行
+  const downloadBits = [];
+  if (activeCount) downloadBits.push(`正在下载 ${activeCount} 集`);
+  if (failedCount) downloadBits.push(`<span class="library-failed" title="有 ${failedCount} 集下载失败，点开详情可以重试">${failedCount} 集失败</span>`);
   const size = item.size_bytes
     ? (item.size_bytes >= (1 << 30)
       ? `${(item.size_bytes / (1 << 30)).toFixed(1)} GB`
@@ -387,7 +392,8 @@ function libraryCard(item) {
       </div>
       <div class="library-body">
         <p class="library-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</p>
-        <p class="library-meta">${activeCount ? `正在下载 ${activeCount} 集 · ` : ""}已收 ${item.file_count}${item.episode_count ? ` / 全 ${item.episode_count}` : ""} 集 · 已看 ${item.watched_count}</p>
+        <p class="library-meta">已收 ${item.file_count}${item.episode_count ? ` / 全 ${item.episode_count}` : ""} 集 · 已看 ${item.watched_count}</p>
+        ${downloadBits.length ? `<p class="library-meta">${downloadBits.join(" · ")}</p>` : ""}
         <div class="library-bar" title="绿色：已收 ${item.file_count} 集；深色：已看 ${item.watched_count} 集"><i style="width:${downloadPct}%"></i><i class="watched" style="width:${watchedPct}%"></i></div>
         ${activeCount ? `<div class="library-bar library-bar-active" title="正在下载 ${activeCount} 集：${activePct}%"><i style="width:${activePct}%"></i></div>` : ""}
         ${item.continue_file_id ? `<button type="button" class="library-continue" data-continue="${item.continue_file_id}" data-anime="${item.anime_id}">▶ ${escapeHtml(continueLabel)}</button>` : ""}

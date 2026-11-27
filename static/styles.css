@@ -5637,6 +5637,8 @@ dialog.offline-player:focus, dialog.offline-player:focus-visible { outline: none
 }
 .library-card:hover .library-name { color: var(--green-800); }
 .library-meta { margin: 0; color: var(--muted); font-size: 11.5px; }
+/* 下载动态行里的失败提示：红字，和灰色正常信息拉开对比 */
+.library-meta .library-failed { color: #c94f4a; font-weight: 700; }
 .library-bar {
   position: relative; height: 4px; border-radius: 99px;
   background: rgb(var(--theme-rgb) / .12); overflow: hidden;
